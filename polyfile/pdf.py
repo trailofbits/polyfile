@@ -1,4 +1,5 @@
 from . import pdfparser
+from .polyfile import Match, matcher
 
 
 def parse_pdf(file_stream):
@@ -11,3 +12,10 @@ def parse_pdf(file_stream):
             elif object.type == pdfparser.PDF_ELEMENT_COMMENT:
                 print('PDF Comment %s' % pdfparser.FormatOutput(object.comment, False))
                 print('')
+
+
+@matcher('adobe_pdf.trid.xml', 'adobe_pdf-utf8.trid.xml')
+class PdfMatcher(Match):
+    def submatch(self, file_stream):
+        parse_pdf(file_stream)
+        return iter(())

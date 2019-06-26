@@ -1,1 +1,1 @@
-from . import zipmatcher
+from . import pdf, zipmatcher
