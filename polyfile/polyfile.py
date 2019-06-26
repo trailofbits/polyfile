@@ -1,4 +1,19 @@
+from .fileutils import FileStream
 from . import trid
+
+CUSTOM_MATCHERS = {}
+
+
+class matcher:
+    def __init__(self, *filetypes):
+        self.filetypes = filetypes
+
+    def __call__(self, MatcherClass):
+        if not hasattr(MatcherClass, 'submatch'):
+            raise ValueError(f"Matcher class {MatcherClass} must implement the `submatch` function")
+        for ft in self.filetypes:
+            CUSTOM_MATCHERS[ft] = MatcherClass
+        return MatcherClass
 
 
 class Match:
@@ -24,7 +39,19 @@ class Match:
         """The offset of this match relative to its parent"""
         return self._offset
 
+    def __repr__(self):
+        return f"{self.__class__.__name__}(filetype={self.filetype!r}, relative_offset={self._offset}, parent={self._parent!r})"
 
-def match(file_stream):
+    def __str__(self):
+        return f"Match<{self.filetype}>@{self._offset}"
+
+
+def match(file_stream, parent=None):
     for offset, tdef in trid.match(file_stream, try_all_offsets=True):
-        yield Match(tdef, offset)
+        if tdef.name in CUSTOM_MATCHERS:
+            m = CUSTOM_MATCHERS[tdef.name](tdef, offset, parent=parent)
+            yield m
+            with FileStream(file_stream)[offset:] as fs:
+                yield from m.submatch(fs)
+        else:
+            yield Match(tdef, offset, parent=parent)
