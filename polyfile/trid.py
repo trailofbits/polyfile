@@ -4,6 +4,8 @@ from xml.etree import ElementTree
 
 from .fileutils import make_stream, FileStream
 
+TRID_DEFS_URL = 'http://mark0.net/download/triddefs_xml.7z'
+
 DEF_DIR = os.path.join(os.path.dirname(os.path.realpath(__file__)), "defs")
 
 DEFS = None
@@ -71,9 +73,18 @@ class TridDef:
 
 
 def match(*args, **kwargs):
+    load()
     for tdef in DEFS:
         for offset in tdef.match(*args, **kwargs):
             yield offset, tdef
+
+
+def download_defs():
+    import subprocess
+    import urllib.request
+    trid_defs_zip = os.path.join(os.path.dirname(os.path.realpath(__file__)), "triddefs_xml.7z")
+    urllib.request.urlretrieve(TRID_DEFS_URL, trid_defs_zip)
+    subprocess.check_call(['7za', 'x', trid_defs_zip], cwd=os.path.dirname(os.path.realpath(__file__)))
 
 
 def load():
@@ -81,10 +92,11 @@ def load():
     if DEFS is not None:
         return
 
+    if not os.path.exists(DEF_DIR):
+        download_defs()
+
     DEFS = []
 
     for xml_path in glob.glob(os.path.join(DEF_DIR, '**', '*.xml')):
         DEFS.append(TridDef.load(xml_path))
 
-
-load()
