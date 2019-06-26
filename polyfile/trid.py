@@ -8,6 +8,7 @@ DEF_DIR = os.path.join(os.path.dirname(os.path.realpath(__file__)), "defs")
 
 DEFS = None
 
+# These are the file formats that don't have to start at byte offset zero of the file:
 CAN_BE_OFFSET = {'adobe_pdf', 'zip'}
 
 
@@ -23,6 +24,7 @@ class TridDef:
         for cbo in CAN_BE_OFFSET:
             if self.name.startswith(cbo):
                 self.can_be_offset = True
+                break
 
     @staticmethod
     def load(xml_path):

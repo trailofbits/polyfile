@@ -1,5 +1,6 @@
 import mmap
 import os
+import tempfile as tf
 
 
 def make_stream(path_or_stream, mode='rb', close_on_exit=None):
@@ -30,9 +31,9 @@ class FileStream:
                 self._length = min(filesize, length) - start
         if close_on_exit is None:
             close_on_exit = False
+        self._name = self._stream.name
         self.start = start
         self.close_on_exit = close_on_exit
-        self._name = self._stream.name
         self._entries = 0
 
     def __len__(self):
@@ -56,8 +57,14 @@ class FileStream:
             raise IndexError(f"{self!r} is {len(self)} bytes long, but seek was requested for byte {offset}")
         self._stream.seek(self.start + offset)
 
-    def read(self, n):
-        return self._stream.read(n)
+    def tell(self):
+        return self._stream.tell() - self.start
+
+    def read(self, n=None):
+        if n is None:
+            return self._stream.read()[:len(self) - self.tell()]
+        else:
+            return self._stream.read(n)
 
     def contains_all(self, *args):
         if args:
@@ -66,6 +73,26 @@ class FileStream:
                     if filecontent.find(string, self.offset(), self.offset() + len(self)) < 0:
                         return False
         return True
+
+    def tempfile(self, prefix=None, suffix=None):
+        class Tempfile:
+            def __init__(self, file_stream):
+                self._temp = None
+                self._fs = file_stream
+
+            def __enter__(self):
+                self._temp = tf.NamedTemporaryFile(prefix=prefix, suffix=suffix, delete=False)
+                self._fs.seek(0)
+                self._temp.write(self._fs.read(len(self._fs)))
+                self._temp.flush()
+                self._temp.close()
+                return self._temp.name
+
+            def __exit__(self, type, value, traceback):
+                if self._temp is not None:
+                    os.unlink(self._temp.name)
+                    self._temp = None
+        return Tempfile(self)
 
     def __getitem__(self, index):
         if isinstance(index, int):

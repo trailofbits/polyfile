@@ -2,7 +2,8 @@ from . import trid
 
 
 class Match:
-    def __init__(self, relative_offset=0, parent=None):
+    def __init__(self, filetype, relative_offset=0, parent=None):
+        self.filetype = filetype
         self._offset = relative_offset
         self._parent = parent
 
@@ -25,4 +26,5 @@ class Match:
 
 
 def match(file_stream):
-    return trid.match(file_stream, try_all_offsets=True)
+    for offset, tdef in trid.match(file_stream, try_all_offsets=True):
+        yield Match(tdef, offset)
