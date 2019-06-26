@@ -201,9 +201,10 @@ class cPDFDocument:
             self.infile.close()
             return None
         self.position += 1
-        return ord(inbyte)
+        return PDFByte(ord(inbyte), self.position - 1)
 
     def unget(self, byte):
+        assert isinstance(byte, PDFByte)
         self.position -= 1
         self.ungetted.append(byte)
 
@@ -216,6 +217,70 @@ def CharacterClass(byte):
 
 def IsNumeric(str):
     return re.match('^[0-9]+', str)
+
+
+class PDFByte:
+    def __init__(self, byte, offset):
+        self.byte = byte
+        self.offset = offset
+
+    def chr(self):
+        return chr(self.byte)
+
+    def __bytes__(self):
+        return bytes(self.byte)
+
+    def __getattr__(self, key):
+        return getattr(self.byte, key)
+
+    def __eq__(self, other):
+        if isinstance(other, PDFByte):
+            return self.byte == other.byte
+        else:
+            return self.byte == other
+
+    def __ne__(self, other):
+        return not (self == other)
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}(byte={self.byte!r}, offset={self.offset!r})"
+
+
+class PDFToken:
+    def __init__(self, token_type, token, offset):
+        self.token_type = token_type
+        self.token = token
+        self.offset = offset
+
+    def __iter__(self):
+        return iter((self.token_type, self.token))
+
+    def __len__(self):
+        return 2
+
+    def __getitem__(self, key):
+        if key == 0:
+            return self.token_type
+        elif key == 1:
+            return self.token
+        else:
+            raise KeyError()
+
+    def __eq__(self, other):
+        if other is None:
+            return False
+        try:
+            a, b = other
+        except TypeError:
+            return False
+        return self.token_type == a and self.token == b
+
+    def __ne__(self, other):
+        return not (self == other)
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}(token_type={self.token_type!r}, token={self.token!r}, offset={self.offset!r})"
+
 
 class cPDFTokenizer:
     def __init__(self, file):
@@ -234,7 +299,7 @@ class cPDFTokenizer:
         elif CharacterClass(self.byte) == CHAR_WHITESPACE:
             file_str = StringIO()
             while self.byte != None and CharacterClass(self.byte) == CHAR_WHITESPACE:
-                file_str.write(chr(self.byte))
+                file_str.write(self.byte.chr())
                 self.byte = self.oPDF.byte()
             if self.byte != None:
                 self.oPDF.unget(self.byte)
@@ -244,48 +309,50 @@ class cPDFTokenizer:
             return (CHAR_WHITESPACE, self.token)
         elif CharacterClass(self.byte) == CHAR_REGULAR:
             file_str = StringIO()
+            token_offset = self.byte.offset
             while self.byte != None and CharacterClass(self.byte) == CHAR_REGULAR:
-                file_str.write(chr(self.byte))
+                file_str.write(self.byte.chr())
                 self.byte = self.oPDF.byte()
             if self.byte != None:
                 self.oPDF.unget(self.byte)
             else:
                 self.oPDF = None
             self.token = file_str.getvalue()
-            return (CHAR_REGULAR, self.token)
+            return PDFToken(CHAR_REGULAR, self.token, token_offset)
         else:
             if self.byte == 0x3C:
                 self.byte = self.oPDF.byte()
                 if self.byte == 0x3C:
-                    return (CHAR_DELIMITER, '<<')
+                    return PDFToken(CHAR_DELIMITER, '<<', self.byte.offset - 1)
                 else:
                     self.oPDF.unget(self.byte)
-                    return (CHAR_DELIMITER, '<')
+                    return PDFToken(CHAR_DELIMITER, '<', self.byte.offset - 1)
             elif self.byte == 0x3E:
                 self.byte = self.oPDF.byte()
                 if self.byte == 0x3E:
-                    return (CHAR_DELIMITER, '>>')
+                    return PDFToken(CHAR_DELIMITER, '>>', self.byte.offset - 1)
                 else:
                     self.oPDF.unget(self.byte)
-                    return (CHAR_DELIMITER, '>')
+                    return PDFToken(CHAR_DELIMITER, '>', self.byte.offset - 1)
             elif self.byte == 0x25:
                 file_str = StringIO()
+                token_offset = self.byte.offset
                 while self.byte != None:
-                    file_str.write(chr(self.byte))
+                    file_str.write(self.byte.chr())
                     if self.byte == 10 or self.byte == 13:
                         self.byte = self.oPDF.byte()
                         break
                     self.byte = self.oPDF.byte()
                 if self.byte != None:
                     if self.byte == 10:
-                        file_str.write(chr(self.byte))
+                        file_str.write(self.byte.chr())
                     else:
                         self.oPDF.unget(self.byte)
                 else:
                     self.oPDF = None
                 self.token = file_str.getvalue()
-                return (CHAR_DELIMITER, self.token)
-            return (CHAR_DELIMITER, chr(self.byte))
+                return PDFToken(CHAR_DELIMITER, self.token, token_offset)
+            return PDFToken(CHAR_DELIMITER, self.byte.chr(), self.byte.offset)
 
     def TokenIgnoreWhiteSpace(self):
         token = self.Token()
