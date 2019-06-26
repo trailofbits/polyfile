@@ -10,6 +10,26 @@ def make_stream(path_or_stream, mode='rb', close_on_exit=None):
         return FileStream(path_or_stream, mode=mode, close_on_exit=close_on_exit)
 
 
+class Tempfile:
+    def __init__(self, contents, prefix=None, suffix=None):
+        self._temp = None
+        self._data = contents
+        self._prefix = prefix
+        self._suffix = suffix
+
+    def __enter__(self):
+        self._temp = tf.NamedTemporaryFile(prefix=self._prefix, suffix=self._suffix, delete=False)
+        self._temp.write(self._data)
+        self._temp.flush()
+        self._temp.close()
+        return self._temp.name
+
+    def __exit__(self, type, value, traceback):
+        if self._temp is not None:
+            os.unlink(self._temp.name)
+            self._temp = None
+
+
 class FileStream:
     def __init__(self, path_or_stream, start=0, length=None, mode='rb', close_on_exit=None):
         if isinstance(path_or_stream, str):
@@ -17,6 +37,10 @@ class FileStream:
             if close_on_exit is None:
                 close_on_exit = True
         else:
+            if not path_or_stream.seekable():
+                raise ValueError('FileStream can only wrap streams that are seekable')
+            elif not path_or_stream.readable():
+                raise ValueError('FileStream can only wrap streams that are readable')
             self._stream = path_or_stream
         if isinstance(path_or_stream, FileStream):
             if length is None:
@@ -39,6 +63,15 @@ class FileStream:
     def __len__(self):
         return self._length
 
+    def seekable(self):
+        return True
+
+    def writable(self):
+        return False
+
+    def readable(self):
+        return True
+
     @property
     def name(self):
         return self._name
@@ -52,8 +85,12 @@ class FileStream:
         else:
             return self.start
 
-    def seek(self, offset):
-        if offset - self.start + 1 > self._length:
+    def seek(self, offset, from_what=0):
+        if from_what == 1:
+            offset = self.tell() + offset
+        elif from_what == 2:
+            offset = len(self) + offset
+        if offset - self.start > self._length:
             raise IndexError(f"{self!r} is {len(self)} bytes long, but seek was requested for byte {offset}")
         self._stream.seek(self.start + offset)
 
@@ -61,10 +98,14 @@ class FileStream:
         return self._stream.tell() - self.start
 
     def read(self, n=None):
-        if n is None:
-            return self._stream.read()[:len(self) - self.tell()]
+        pos = self.tell()
+        ls = len(self)
+        if pos >= ls:
+            return b''
+        elif n is None:
+            return self._stream.read()[:ls - pos]
         else:
-            return self._stream.read(n)
+            return self._stream.read(min(n, ls - pos))
 
     def contains_all(self, *args):
         if args:
@@ -75,7 +116,7 @@ class FileStream:
         return True
 
     def tempfile(self, prefix=None, suffix=None):
-        class Tempfile:
+        class FSTempfile:
             def __init__(self, file_stream):
                 self._temp = None
                 self._fs = file_stream
@@ -92,7 +133,7 @@ class FileStream:
                 if self._temp is not None:
                     os.unlink(self._temp.name)
                     self._temp = None
-        return Tempfile(self)
+        return FSTempfile(self)
 
     def __getitem__(self, index):
         if isinstance(index, int):
