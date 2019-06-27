@@ -82,6 +82,10 @@ class Match:
         return f"Match<{self.match}>@{self._offset}"
 
 
+class Submatch(Match):
+    pass
+
+
 def match(file_stream, parent=None):
     for offset, tdef in trid.match(file_stream, try_all_offsets=True):
         if tdef.name in CUSTOM_MATCHERS:

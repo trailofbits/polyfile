@@ -27,13 +27,19 @@ def main(argv=None):
 
     matches = []
     for match in polyfile.match(args.FILE):
-        if match.parent is None:
-            sys.stderr.write(f"Found a file of type {match.match.filetype} at byte offset {match.offset}\n")
-            matches.append(match.to_obj())
+        if hasattr(match.match, 'filetype'):
+            filetype = match.match.filetype
         else:
-            sys.stderr.write(f"Found an embedded file of type {match.match.filetype} at byte offset {match.offset}\n")
+            filetype = match.name
+        if match.parent is None:
+            sys.stderr.write(f"Found a file of type {filetype} at byte offset {match.offset}\n")
+            matches.append(match)
+        elif isinstance(match, polyfile.Submatch):
+            sys.stderr.write(f"Found a subregion of type {filetype} at byte offset {match.offset}\n")
+        else:
+            sys.stderr.write(f"Found an embedded file of type {filetype} at byte offset {match.offset}\n")
         sys.stderr.flush()
-    print(json.dumps(matches))
+    print(json.dumps([match.to_obj() for match in matches]))
 
 
 if __name__ == '__main__':
