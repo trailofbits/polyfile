@@ -77,6 +77,7 @@ class TridDef:
 
 def match(*args, **kwargs):
     load()
+    # TODO: Implement a multiple string matching algorithm like Aho–Corasick or Rabin–Karp
     for tdef in DEFS:
         for offset in tdef.match(*args, **kwargs):
             yield offset, tdef
