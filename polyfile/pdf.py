@@ -1,8 +1,47 @@
+from io import BytesIO
+
 from . import pdfparser
 from .logger import getStatusLogger
 from .polyfile import matcher, Match, Submatch
 
 log = getStatusLogger("PDF")
+
+
+def parse_object(object, parent=None):
+    log.info('Parsing PDF obj %d %d' % (object.id, object.version))
+    obj = Submatch("PDFObject", (object.id, object.version), relative_offset=object.content[0].offset.offset, parent=parent)
+    yield obj
+    log.debug(' Type: %s' % pdfparser.ConditionalCanonicalize(object.GetType(), False))
+    log.debug(' Referencing: %s' % ', '.join(map(lambda x: '%s %s %s' % x, object.GetReferences())))
+    dataPrecedingStream = object.ContainsStream()
+    if dataPrecedingStream:
+        log.debug(' Contains stream')
+        log.debug(' %s' % pdfparser.FormatOutput(dataPrecedingStream, False))
+        oPDFParseDictionary = pdfparser.cPDFParseDictionary(dataPrecedingStream, False)
+    else:
+        log.debug(' %s' % pdfparser.FormatOutput(object.content, False))
+        oPDFParseDictionary = pdfparser.cPDFParseDictionary(object.content, False)
+    log.debug('')
+    pp = BytesIO()
+    oPDFParseDictionary.PrettyPrint('  ', stream=pp)
+    pp.flush()
+    dict_content = pp.read()
+    log.debug(dict_content)
+    dict_offset = oPDFParseDictionary.content[0].offset.offset - object.content[0].offset.offset
+    yield Submatch(
+        "PDFDictionary",
+        dict_content,
+        relative_offset=dict_offset,
+        parent=obj
+    )
+    log.debug('')
+    log.debug('')
+    yield Submatch(
+        "PDFObjectContent",
+        len(pdfparser.FormatOutput(object.content, True)),
+        relative_offset=dict_offset + len(oPDFParseDictionary.content),
+        parent=obj
+    )
 
 
 def parse_pdf(file_stream, parent=None):
@@ -18,6 +57,13 @@ def parse_pdf(file_stream, parent=None):
             elif object.type == pdfparser.PDF_ELEMENT_XREF:
                 log.debug('PDF xref')
                 yield Submatch(name='PDFXref', match_obj=object, relative_offset=object.content[0].offset.offset, parent=parent)
+            elif object.type == pdfparser.PDF_ELEMENT_TRAILER:
+                pdfparser.cPDFParseDictionary(object.content[1:], False)
+                yield Submatch(name='PDFTrailer', match_obj=object, relative_offset=object.content[0].offset.offset, parent=parent)
+            elif object.type == pdfparser.PDF_ELEMENT_STARTXREF:
+                yield Submatch(name='PDFStartXRef', match_obj=object.index, relative_offset=object.offset.offset, parent=parent)
+            elif object.type == pdfparser.PDF_ELEMENT_INDIRECT_OBJECT:
+                yield from parse_object(object, parent=parent)
 
 
 @matcher('adobe_pdf.trid.xml', 'adobe_pdf-utf8.trid.xml')

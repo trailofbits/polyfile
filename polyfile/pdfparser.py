@@ -162,7 +162,10 @@ def Obj2Str(content):
 
 class ByteOffset:
     def __init__(self, offset, lineno):
-        self.offset = offset
+        if isinstance(offset, ByteOffset):
+            self.offset = offset.offset
+        else:
+            self.offset = offset
         self.lineno = lineno
 
     def __sub__(self, other):
@@ -170,6 +173,12 @@ class ByteOffset:
 
     def __add__(self, other):
         return ByteOffset(self.offset + other, self.lineno)
+
+    def __radd__(self, other):
+        return self + other
+
+    def __rsub__(self, other):
+        return ByteOffset(other + self.offset, self.lineno)
 
     def __int__(self):
         return self.offset
@@ -322,6 +331,7 @@ class cPDFTokenizer:
             self.oPDF = None
             return None
         elif CharacterClass(self.byte) == CHAR_WHITESPACE:
+            first_offset = self.byte.offset
             file_str = StringIO()
             while self.byte != None and CharacterClass(self.byte) == CHAR_WHITESPACE:
                 file_str.write(self.byte.chr())
@@ -331,7 +341,7 @@ class cPDFTokenizer:
             else:
                 self.oPDF = None
             self.token = file_str.getvalue()
-            return (CHAR_WHITESPACE, self.token)
+            return PDFToken(CHAR_WHITESPACE, self.token, first_offset)
         elif CharacterClass(self.byte) == CHAR_REGULAR:
             file_str = StringIO()
             token_offset = self.byte.offset
@@ -460,7 +470,7 @@ class cPDFParser:
                             self.content.append(self.token)
                     elif self.context == CONTEXT_XREF:
                         if self.token[1] == 'trailer' or self.token[1] == 'xref':
-                            self.oPDFElementXref = cPDFElementXref(self.content)
+                            self.oPDFElementXref = cPDFElementXref(self.content, self.token.offset)
                             self.oPDFTokenizer.unget(self.token)
                             self.context = CONTEXT_NONE
                             self.content = []
@@ -494,17 +504,20 @@ class cPDFParser:
                         elif self.token[1] == 'startxref':
                             self.token2 = self.oPDFTokenizer.TokenIgnoreWhiteSpace()
                             if self.token2 and IsNumeric(self.token2[1]):
-                                return cPDFElementStartxref(eval(self.token2[1]))
+                                return cPDFElementStartxref(eval(self.token2[1]), self.token.offset)
                             else:
                                 self.oPDFTokenizer.unget(self.token2)
                                 if self.verbose:
                                     print('todo 9: %d %s' % (self.token[0], repr(self.token[1])))
                         elif self.extract:
                             self.bytes = ''
+                            first_offset = None
                             while self.token:
+                                if first_offset is None:
+                                    first_offset = self.token.offset
                                 self.bytes += self.token[1]
                                 self.token = self.oPDFTokenizer.Token()
-                            return cPDFElementMalformed(self.bytes)
+                            return cPDFElementMalformed(self.bytes, first_offset)
                         elif self.verbose:
                             print('todo 10: %d %s' % (self.token[0], repr(self.token[1])))
             else:
@@ -521,9 +534,10 @@ class cPDFElementComment:
 #                            print(repr(self.token[1]))
 
 class cPDFElementXref:
-    def __init__(self, content):
+    def __init__(self, content, offset):
         self.type = PDF_ELEMENT_XREF
         self.content = content
+        self.offset = offset
 
 class cPDFElementTrailer:
     def __init__(self, content):
@@ -751,14 +765,16 @@ class cPDFElementIndirectObject:
         return results
 
 class cPDFElementStartxref:
-    def __init__(self, index):
+    def __init__(self, index, offset):
         self.type = PDF_ELEMENT_STARTXREF
         self.index = index
+        self.offset = offset
 
 class cPDFElementMalformed:
-    def __init__(self, content):
+    def __init__(self, content, offset):
         self.type = PDF_ELEMENT_MALFORMED
         self.content = content
+        self.offset = offset
 
 def TrimLWhiteSpace(data):
     while data != [] and data[0][0] == CHAR_WHITESPACE:
@@ -853,9 +869,9 @@ class cPDFParseDictionary:
     def Retrieve(self):
         return self.parsed
 
-    def PrettyPrintSubElement(self, prefix, e):
+    def PrettyPrintSubElement(self, prefix, e, stream=sys.stdout):
         if e[1] == []:
-            print('%s  %s' % (prefix, e[0]))
+            stream.write(f'{prefix}  {e[0]}'.encode('utf-8'))
         elif type(e[1][0]) == type(''):
             if len(e[1]) == 3 and IsNumeric(e[1][0]) and e[1][1] == '0' and e[1][2] == 'R':
                 joiner = ' '
@@ -865,20 +881,20 @@ class cPDFParseDictionary:
             reprValue = repr(value)
             if "'" + value + "'" != reprValue:
                 value = reprValue
-            print('%s  %s %s' % (prefix, e[0], value))
+            stream.write(f'{prefix}  {e[0]} {value}'.encode('utf-8'))
         else:
-            print('%s  %s' % (prefix, e[0]))
-            self.PrettyPrintSub(prefix + '    ', e[1])
+            stream.write(f'{prefix}  {e[0]}'.encode('utf-8'))
+            self.PrettyPrintSub(prefix + '    ', e[1], stream=stream)
 
-    def PrettyPrintSub(self, prefix, dictionary):
+    def PrettyPrintSub(self, prefix, dictionary, stream=sys.stdout.buffer):
         if dictionary != None:
-            print('%s<<' % prefix)
+            stream.write(f'{prefix}<<'.encode('utf-8'))
             for e in dictionary:
-                self.PrettyPrintSubElement(prefix, e)
-            print('%s>>' % prefix)
+                self.PrettyPrintSubElement(prefix, e, stream=stream)
+            stream.write(f'{prefix}>>'.encode('utf-8'))
 
-    def PrettyPrint(self, prefix):
-        self.PrettyPrintSub(prefix, self.parsed)
+    def PrettyPrint(self, prefix, stream=sys.stdout.buffer):
+        self.PrettyPrintSub(prefix, self.parsed, stream=stream)
 
     def Get(self, select):
         for key, value in self.parsed:
