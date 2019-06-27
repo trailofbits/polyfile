@@ -504,7 +504,14 @@ class cPDFParser:
                         elif self.token[1] == 'startxref':
                             self.token2 = self.oPDFTokenizer.TokenIgnoreWhiteSpace()
                             if self.token2 and IsNumeric(self.token2[1]):
-                                return cPDFElementStartxref(eval(self.token2[1]), self.token.offset)
+                                length = len(self.token2[1]) + self.token2.offset - self.token.offset
+                                if isinstance(length, ByteOffset):
+                                    length = length.offset
+                                return cPDFElementStartxref(
+                                    eval(self.token2[1]),
+                                    self.token.offset,
+                                    length=length
+                                )
                             else:
                                 self.oPDFTokenizer.unget(self.token2)
                                 if self.verbose:
@@ -765,10 +772,11 @@ class cPDFElementIndirectObject:
         return results
 
 class cPDFElementStartxref:
-    def __init__(self, index, offset):
+    def __init__(self, index, offset, length):
         self.type = PDF_ELEMENT_STARTXREF
         self.index = index
         self.offset = offset
+        self.length = length
 
 class cPDFElementMalformed:
     def __init__(self, content, offset):

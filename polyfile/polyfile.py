@@ -22,7 +22,7 @@ class matcher:
 
 
 class Match:
-    def __init__(self, name, match_obj, relative_offset=0, parent=None):
+    def __init__(self, name, match_obj, relative_offset=0, length=None, parent=None):
         if parent is not None:
             if not isinstance(parent, Match):
                 raise ValueError("The parent must be an instance of a Match")
@@ -30,6 +30,7 @@ class Match:
         self.name = name
         self.match = match_obj
         self._offset = relative_offset
+        self._length = length
         self._parent = parent
         self._children = []
 
@@ -63,10 +64,16 @@ class Match:
         """The offset of this match relative to its parent"""
         return self._offset
 
+    @property
+    def length(self):
+        """The number of bytes in the match"""
+        return self._length
+
     def to_obj(self):
         return {
             'relative_offset': self.relative_offset,
             'global_offset': self.offset,
+            'length': self.length,
             'type': self.name,
             'match': str(self.match),
             'children': [c.to_obj() for c in self]
@@ -89,9 +96,9 @@ class Submatch(Match):
 def match(file_stream, parent=None):
     for offset, tdef in trid.match(file_stream, try_all_offsets=True):
         if tdef.name in CUSTOM_MATCHERS:
-            m = CUSTOM_MATCHERS[tdef.name](tdef.name, tdef, offset, parent=parent)
+            m = CUSTOM_MATCHERS[tdef.name](tdef.name, tdef, offset, length=len(file_stream) - offset, parent=parent)
             yield m
             with FileStream(file_stream)[offset:] as fs:
                 yield from m.submatch(fs)
         else:
-            yield Match(tdef.name, tdef, offset, parent=parent)
+            yield Match(tdef.name, tdef, offset, length=len(file_stream) - offset, parent=parent)
