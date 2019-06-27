@@ -1,5 +1,8 @@
 from . import pdfparser
+from .logger import getStatusLogger
 from .polyfile import Match, matcher
+
+log = getStatusLogger("PDF")
 
 
 def parse_pdf(file_stream):
@@ -10,9 +13,9 @@ def parse_pdf(file_stream):
             if object is None:
                 break
             elif object.type == pdfparser.PDF_ELEMENT_COMMENT:
-                print(f"PDF comment at {object.offset}, length {len(object.comment)}")
+                log.debug(f"PDF comment at {object.offset}, length {len(object.comment)}")
             elif object.type == pdfparser.PDF_ELEMENT_XREF:
-                print('PDF xref')
+                log.debug('PDF xref')
 
 
 @matcher('adobe_pdf.trid.xml', 'adobe_pdf-utf8.trid.xml')

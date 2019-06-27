@@ -1,3 +1,5 @@
+from json import dumps
+
 from .fileutils import FileStream
 from . import logger
 from . import trid
@@ -20,12 +22,13 @@ class matcher:
 
 
 class Match:
-    def __init__(self, filetype, relative_offset=0, parent=None):
+    def __init__(self, name, match_obj, relative_offset=0, parent=None):
         if parent is not None:
             if not isinstance(parent, Match):
                 raise ValueError("The parent must be an instance of a Match")
             parent._children.append(self)
-        self.filetype = filetype
+        self.name = name
+        self.match = match_obj
         self._offset = relative_offset
         self._parent = parent
         self._children = []
@@ -60,19 +63,31 @@ class Match:
         """The offset of this match relative to its parent"""
         return self._offset
 
+    def to_obj(self):
+        return {
+            'relative_offset': self.relative_offset,
+            'global_offset': self.offset,
+            'type': self.name,
+            'match': str(self.match),
+            'children': [c.to_obj() for c in self]
+        }
+
+    def json(self):
+        return dumps(self.to_obj())
+
     def __repr__(self):
-        return f"{self.__class__.__name__}(filetype={self.filetype!r}, relative_offset={self._offset}, parent={self._parent!r})"
+        return f"{self.__class__.__name__}(match={self.match!r}, relative_offset={self._offset}, parent={self._parent!r})"
 
     def __str__(self):
-        return f"Match<{self.filetype}>@{self._offset}"
+        return f"Match<{self.match}>@{self._offset}"
 
 
 def match(file_stream, parent=None):
     for offset, tdef in trid.match(file_stream, try_all_offsets=True):
         if tdef.name in CUSTOM_MATCHERS:
-            m = CUSTOM_MATCHERS[tdef.name](tdef, offset, parent=parent)
+            m = CUSTOM_MATCHERS[tdef.name](tdef.name, tdef, offset, parent=parent)
             yield m
             with FileStream(file_stream)[offset:] as fs:
                 yield from m.submatch(fs)
         else:
-            yield Match(tdef, offset, parent=parent)
+            yield Match(tdef.name, tdef, offset, parent=parent)
