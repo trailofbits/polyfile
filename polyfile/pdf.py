@@ -11,6 +11,8 @@ def parse_pdf(file_stream):
                 break
             elif object.type == pdfparser.PDF_ELEMENT_COMMENT:
                 print(f"PDF comment at {object.offset}, length {len(object.comment)}")
+            elif object.type == pdfparser.PDF_ELEMENT_XREF:
+                print('PDF xref')
 
 
 @matcher('adobe_pdf.trid.xml', 'adobe_pdf-utf8.trid.xml')
