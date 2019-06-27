@@ -1,6 +1,7 @@
 import argparse
 import sys
 
+from . import logger
 from . import polyfile
 
 
@@ -12,6 +13,8 @@ def main(argv=None):
         argv = sys.argv
     
     args = parser.parse_args(argv[1:])
+
+    logger.setLevel(logger.STATUS)
 
     for match in polyfile.match(args.FILE):
         if match.parent is None:

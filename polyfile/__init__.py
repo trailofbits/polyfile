@@ -1,1 +1,1 @@
-from . import pdf, zipmatcher
+from . import pdf, zipmatcher, trid, polyfile
