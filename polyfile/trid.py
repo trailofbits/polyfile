@@ -93,13 +93,17 @@ def download_defs():
     log.clear_status()
 
 
+def download_defs_if_necessary():
+    if not os.path.exists(DEF_DIR):
+        download_defs()
+
+
 def load():
     global DEFS
     if DEFS is not None:
         return
 
-    if not os.path.exists(DEF_DIR):
-        download_defs()
+    download_defs_if_necessary()
 
     log.status('Loading TRiD file definitions...')
 

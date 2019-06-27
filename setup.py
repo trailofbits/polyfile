@@ -1,6 +1,10 @@
 import os
 from setuptools import setup, find_packages
 
+from polyfile.trid import download_defs_if_necessary
+
+download_defs_if_necessary()
+
 setup(
     name='polyfile',
     description='A utility to recursively map the structure of a file.',
