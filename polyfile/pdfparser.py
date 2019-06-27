@@ -159,6 +159,25 @@ def CopyWithoutWhiteSpace(content):
 def Obj2Str(content):
     return ''.join(map(lambda x: repr(x[1])[1:-1], CopyWithoutWhiteSpace(content)))
 
+
+class ByteOffset:
+    def __init__(self, offset, lineno):
+        self.offset = offset
+        self.lineno = lineno
+
+    def __sub__(self, other):
+        return ByteOffset(self.offset - other, self.lineno)
+
+    def __add__(self, other):
+        return ByteOffset(self.offset + other, self.lineno)
+
+    def __int__(self):
+        return self.offset
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}(offset={self.offset!r}, lineno={self.lineno!r})"
+
+
 class cPDFDocument:
     def __init__(self, file):
         self.file = file
@@ -191,6 +210,7 @@ class cPDFDocument:
                 sys.exit()
         self.ungetted = []
         self.position = -1
+        self.lineno = 1
 
     def byte(self):
         if len(self.ungetted) != 0:
@@ -201,11 +221,16 @@ class cPDFDocument:
             self.infile.close()
             return None
         self.position += 1
-        return PDFByte(ord(inbyte), self.position)
+        ret = PDFByte(ord(inbyte), ByteOffset(self.position, self.lineno))
+        if inbyte == b'\n':
+            self.lineno += 1
+        return ret
 
     def unget(self, byte):
         assert isinstance(byte, PDFByte)
         self.position -= 1
+        if byte == b'\n':
+            self.lineno -= 1
         self.ungetted.append(byte)
 
 def CharacterClass(byte):
