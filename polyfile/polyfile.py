@@ -18,9 +18,27 @@ class matcher:
 
 class Match:
     def __init__(self, filetype, relative_offset=0, parent=None):
+        if parent is not None:
+            if not isinstance(parent, Match):
+                raise ValueError("The parent must be an instance of a Match")
+            parent._children.append(self)
         self.filetype = filetype
         self._offset = relative_offset
         self._parent = parent
+        self._children = []
+
+    @property
+    def children(self):
+        return tuple(self._children)
+
+    def __len__(self):
+        return len(self._children)
+
+    def __iter__(self):
+        return iter(self._children)
+
+    def __getitem__(self, index):
+        return self._children[index]
 
     @property
     def parent(self):
