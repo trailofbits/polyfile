@@ -7,6 +7,9 @@ from . import logger
 from . import polyfile
 
 
+log = logger.getStatusLogger("polyfile")
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description='A utility to recursively map the structure of a file.')
     parser.add_argument('FILE', help='The file to analyze')
@@ -32,13 +35,13 @@ def main(argv=None):
         else:
             filetype = match.name
         if match.parent is None:
-            sys.stderr.write(f"Found a file of type {filetype} at byte offset {match.offset}\n")
+            log.info(f"Found a file of type {filetype} at byte offset {match.offset}")
             matches.append(match)
         elif isinstance(match, polyfile.Submatch):
-            sys.stderr.write(f"Found a subregion of type {filetype} at byte offset {match.offset}\n")
+            log.info(f"Found a subregion of type {filetype} at byte offset {match.offset}")
         else:
-            sys.stderr.write(f"Found an embedded file of type {filetype} at byte offset {match.offset}\n")
-        sys.stderr.flush()
+            log.info(f"Found an embedded file of type {filetype} at byte offset {match.offset}")
+    sys.stderr.flush()
     print(json.dumps([match.to_obj() for match in matches]))
 
 

@@ -8,7 +8,7 @@ log = getStatusLogger("PDF")
 
 
 def parse_object(object, parent=None):
-    log.info('Parsing PDF obj %d %d' % (object.id, object.version))
+    log.status('Parsing PDF obj %d %d' % (object.id, object.version))
     obj = Submatch("PDFObject", (object.id, object.version), relative_offset=object.content[0].offset.offset, parent=parent)
     yield obj
     log.debug(' Type: %s' % pdfparser.ConditionalCanonicalize(object.GetType(), False))
@@ -42,6 +42,7 @@ def parse_object(object, parent=None):
         relative_offset=dict_offset + len(oPDFParseDictionary.content),
         parent=obj
     )
+    log.clear_status()
 
 
 def parse_pdf(file_stream, parent=None):

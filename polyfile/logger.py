@@ -29,11 +29,13 @@ class StatusLogHandler(logging.StreamHandler):
 
 logging.addLevelName(STATUS, "STATUS")
 
+DEFAULT_STATUS_LOG_HANDLER = StatusLogHandler()
+
 
 class StatusLogger(logging.getLoggerClass()):
-    def __init__(self, name, level=logging.NOTSET, stream=sys.stderr.buffer):
+    def __init__(self, name, level=logging.NOTSET):
         super().__init__(name, level)
-        self.addHandler(StatusLogHandler(stream=stream))
+        self.addHandler(DEFAULT_STATUS_LOG_HANDLER)
 
     def status(self, msg, *args, **kwargs):
         if self.isEnabledFor(STATUS):
