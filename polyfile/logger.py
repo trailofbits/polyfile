@@ -1,0 +1,61 @@
+import logging
+import sys
+
+
+STATUS = 15
+
+
+class StatusLogHandler(logging.StreamHandler):
+    def __init__(self, stream=sys.stderr.buffer):
+        super().__init__(stream=stream)
+        self._last_length = 0
+
+    def emit(self, record):
+        isatty = self.stream.isatty()
+        if self._last_length and isatty:
+            self.stream.write(f"\r{' ' * self._last_length}\r".encode('utf-8'))
+        msg = record.getMessage()
+        if isinstance(msg, str):
+            msg = msg.encode('utf-8')
+        if record.levelno == STATUS and isatty:
+            self._last_length = len(msg)
+            self.stream.write(msg)
+        else:
+            self._last_length = 0
+            self.stream.write(msg)
+            self.stream.write(b'\n')
+        self.stream.flush()
+
+
+logging.addLevelName(STATUS, "STATUS")
+
+
+class StatusLogger(logging.getLoggerClass()):
+    def __init__(self, name, level=logging.NOTSET, stream=sys.stderr.buffer):
+        super().__init__(name, level)
+        self.addHandler(StatusLogHandler(stream=stream))
+
+    def status(self, msg, *args, **kwargs):
+        if self.isEnabledFor(STATUS):
+            self._log(STATUS, msg, args, **kwargs)
+
+    def clear_status(self):
+        self.status('')
+
+
+logging.setLoggerClass(StatusLogger)
+
+
+def getStatusLogger(name):
+    return logging.getLogger(name)
+
+
+def get_root_logger():
+    l = getStatusLogger(__name__)
+    while l.parent:
+        l = l.parent
+    return l
+
+
+def setLevel(levelno):
+    get_root_logger().setLevel(levelno)

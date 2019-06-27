@@ -1,7 +1,10 @@
 from .fileutils import FileStream
+from . import logger
 from . import trid
 
 CUSTOM_MATCHERS = {}
+
+log = logger.getStatusLogger("polyfile")
 
 
 class matcher:

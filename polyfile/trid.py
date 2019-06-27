@@ -2,7 +2,10 @@ import glob
 import os
 from xml.etree import ElementTree
 
+from . import logger
 from .fileutils import make_stream, FileStream
+
+log = logger.getStatusLogger("TRiD")
 
 TRID_DEFS_URL = 'http://mark0.net/download/triddefs_xml.7z'
 
@@ -82,9 +85,12 @@ def match(*args, **kwargs):
 def download_defs():
     import subprocess
     import urllib.request
+    log.status('Downloading TRiD file definitions...')
     trid_defs_zip = os.path.join(os.path.dirname(os.path.realpath(__file__)), "triddefs_xml.7z")
     urllib.request.urlretrieve(TRID_DEFS_URL, trid_defs_zip)
+    log.status('Extracting TRiD file definitions...')
     subprocess.check_call(['7za', 'x', trid_defs_zip], cwd=os.path.dirname(os.path.realpath(__file__)))
+    log.clear_status()
 
 
 def load():
@@ -95,8 +101,12 @@ def load():
     if not os.path.exists(DEF_DIR):
         download_defs()
 
+    log.status('Loading TRiD file definitions...')
+
     DEFS = []
 
     for xml_path in glob.glob(os.path.join(DEF_DIR, '**', '*.xml')):
         DEFS.append(TridDef.load(xml_path))
+        log.status(f'Loading TRiD file definitions... {DEFS[-1].name}')
 
+    log.clear_status()
