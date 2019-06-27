@@ -392,7 +392,7 @@ class cPDFParser:
                         if self.context == CONTEXT_OBJ:
                             self.content.append(self.token)
                         else:
-                            return cPDFElementComment(self.token[1])
+                            return cPDFElementComment(self.token[1], offset=self.token.offset)
                     elif self.token[1] == '/':
                         self.token2 = self.oPDFTokenizer.Token()
                         if self.token2[0] == CHAR_REGULAR:
@@ -486,9 +486,10 @@ class cPDFParser:
                 break
 
 class cPDFElementComment:
-    def __init__(self, comment):
+    def __init__(self, comment, offset=None):
         self.type = PDF_ELEMENT_COMMENT
         self.comment = comment
+        self.offset = offset
 #                        if re.match('^%PDF-[0-9]\.[0-9]', self.token[1]):
 #                            print(repr(self.token[1]))
 #                        elif re.match('^%%EOF', self.token[1]):
