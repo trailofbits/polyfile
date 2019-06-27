@@ -159,6 +159,34 @@ def CopyWithoutWhiteSpace(content):
 def Obj2Str(content):
     return ''.join(map(lambda x: repr(x[1])[1:-1], CopyWithoutWhiteSpace(content)))
 
+
+class ByteOffset:
+    def __init__(self, offset, lineno):
+        if isinstance(offset, ByteOffset):
+            self.offset = offset.offset
+        else:
+            self.offset = offset
+        self.lineno = lineno
+
+    def __sub__(self, other):
+        return ByteOffset(self.offset - other, self.lineno)
+
+    def __add__(self, other):
+        return ByteOffset(self.offset + other, self.lineno)
+
+    def __radd__(self, other):
+        return self + other
+
+    def __rsub__(self, other):
+        return ByteOffset(other + self.offset, self.lineno)
+
+    def __int__(self):
+        return self.offset
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}(offset={self.offset!r}, lineno={self.lineno!r})"
+
+
 class cPDFDocument:
     def __init__(self, file):
         self.file = file
@@ -191,6 +219,7 @@ class cPDFDocument:
                 sys.exit()
         self.ungetted = []
         self.position = -1
+        self.lineno = 1
 
     def byte(self):
         if len(self.ungetted) != 0:
@@ -201,10 +230,16 @@ class cPDFDocument:
             self.infile.close()
             return None
         self.position += 1
-        return ord(inbyte)
+        ret = PDFByte(ord(inbyte), ByteOffset(self.position, self.lineno))
+        if inbyte == b'\n':
+            self.lineno += 1
+        return ret
 
     def unget(self, byte):
+        assert isinstance(byte, PDFByte)
         self.position -= 1
+        if byte == b'\n':
+            self.lineno -= 1
         self.ungetted.append(byte)
 
 def CharacterClass(byte):
@@ -216,6 +251,70 @@ def CharacterClass(byte):
 
 def IsNumeric(str):
     return re.match('^[0-9]+', str)
+
+
+class PDFByte:
+    def __init__(self, byte, offset):
+        self.byte = byte
+        self.offset = offset
+
+    def chr(self):
+        return chr(self.byte)
+
+    def __bytes__(self):
+        return bytes(self.byte)
+
+    def __getattr__(self, key):
+        return getattr(self.byte, key)
+
+    def __eq__(self, other):
+        if isinstance(other, PDFByte):
+            return self.byte == other.byte
+        else:
+            return self.byte == other
+
+    def __ne__(self, other):
+        return not (self == other)
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}(byte={self.byte!r}, offset={self.offset!r})"
+
+
+class PDFToken:
+    def __init__(self, token_type, token, offset):
+        self.token_type = token_type
+        self.token = token
+        self.offset = offset
+
+    def __iter__(self):
+        return iter((self.token_type, self.token))
+
+    def __len__(self):
+        return 2
+
+    def __getitem__(self, key):
+        if key == 0:
+            return self.token_type
+        elif key == 1:
+            return self.token
+        else:
+            raise KeyError()
+
+    def __eq__(self, other):
+        if other is None:
+            return False
+        try:
+            a, b = other
+        except TypeError:
+            return False
+        return self.token_type == a and self.token == b
+
+    def __ne__(self, other):
+        return not (self == other)
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}(token_type={self.token_type!r}, token={self.token!r}, offset={self.offset!r})"
+
 
 class cPDFTokenizer:
     def __init__(self, file):
@@ -232,60 +331,63 @@ class cPDFTokenizer:
             self.oPDF = None
             return None
         elif CharacterClass(self.byte) == CHAR_WHITESPACE:
+            first_offset = self.byte.offset
             file_str = StringIO()
             while self.byte != None and CharacterClass(self.byte) == CHAR_WHITESPACE:
-                file_str.write(chr(self.byte))
+                file_str.write(self.byte.chr())
                 self.byte = self.oPDF.byte()
             if self.byte != None:
                 self.oPDF.unget(self.byte)
             else:
                 self.oPDF = None
             self.token = file_str.getvalue()
-            return (CHAR_WHITESPACE, self.token)
+            return PDFToken(CHAR_WHITESPACE, self.token, first_offset)
         elif CharacterClass(self.byte) == CHAR_REGULAR:
             file_str = StringIO()
+            token_offset = self.byte.offset
             while self.byte != None and CharacterClass(self.byte) == CHAR_REGULAR:
-                file_str.write(chr(self.byte))
+                file_str.write(self.byte.chr())
                 self.byte = self.oPDF.byte()
             if self.byte != None:
                 self.oPDF.unget(self.byte)
             else:
                 self.oPDF = None
             self.token = file_str.getvalue()
-            return (CHAR_REGULAR, self.token)
+            return PDFToken(CHAR_REGULAR, self.token, token_offset)
         else:
             if self.byte == 0x3C:
                 self.byte = self.oPDF.byte()
                 if self.byte == 0x3C:
-                    return (CHAR_DELIMITER, '<<')
+                    return PDFToken(CHAR_DELIMITER, '<<', self.byte.offset - 1)
                 else:
                     self.oPDF.unget(self.byte)
-                    return (CHAR_DELIMITER, '<')
+                    return PDFToken(CHAR_DELIMITER, '<', self.byte.offset - 1)
             elif self.byte == 0x3E:
                 self.byte = self.oPDF.byte()
                 if self.byte == 0x3E:
-                    return (CHAR_DELIMITER, '>>')
+                    return PDFToken(CHAR_DELIMITER, '>>', self.byte.offset - 1)
                 else:
                     self.oPDF.unget(self.byte)
-                    return (CHAR_DELIMITER, '>')
+                    return PDFToken(CHAR_DELIMITER, '>', self.byte.offset - 1)
             elif self.byte == 0x25:
                 file_str = StringIO()
+                token_offset = self.byte.offset
                 while self.byte != None:
-                    file_str.write(chr(self.byte))
+                    file_str.write(self.byte.chr())
                     if self.byte == 10 or self.byte == 13:
                         self.byte = self.oPDF.byte()
                         break
                     self.byte = self.oPDF.byte()
                 if self.byte != None:
                     if self.byte == 10:
-                        file_str.write(chr(self.byte))
+                        file_str.write(self.byte.chr())
                     else:
                         self.oPDF.unget(self.byte)
                 else:
                     self.oPDF = None
                 self.token = file_str.getvalue()
-                return (CHAR_DELIMITER, self.token)
-            return (CHAR_DELIMITER, chr(self.byte))
+                return PDFToken(CHAR_DELIMITER, self.token, token_offset)
+            return PDFToken(CHAR_DELIMITER, self.byte.chr(), self.byte.offset)
 
     def TokenIgnoreWhiteSpace(self):
         token = self.Token()
@@ -325,7 +427,7 @@ class cPDFParser:
                         if self.context == CONTEXT_OBJ:
                             self.content.append(self.token)
                         else:
-                            return cPDFElementComment(self.token[1])
+                            return cPDFElementComment(self.token[1], offset=self.token.offset)
                     elif self.token[1] == '/':
                         self.token2 = self.oPDFTokenizer.Token()
                         if self.token2[0] == CHAR_REGULAR:
@@ -368,7 +470,7 @@ class cPDFParser:
                             self.content.append(self.token)
                     elif self.context == CONTEXT_XREF:
                         if self.token[1] == 'trailer' or self.token[1] == 'xref':
-                            self.oPDFElementXref = cPDFElementXref(self.content)
+                            self.oPDFElementXref = cPDFElementXref(self.content, self.token.offset)
                             self.oPDFTokenizer.unget(self.token)
                             self.context = CONTEXT_NONE
                             self.content = []
@@ -402,35 +504,40 @@ class cPDFParser:
                         elif self.token[1] == 'startxref':
                             self.token2 = self.oPDFTokenizer.TokenIgnoreWhiteSpace()
                             if self.token2 and IsNumeric(self.token2[1]):
-                                return cPDFElementStartxref(eval(self.token2[1]))
+                                return cPDFElementStartxref(eval(self.token2[1]), self.token.offset)
                             else:
                                 self.oPDFTokenizer.unget(self.token2)
                                 if self.verbose:
                                     print('todo 9: %d %s' % (self.token[0], repr(self.token[1])))
                         elif self.extract:
                             self.bytes = ''
+                            first_offset = None
                             while self.token:
+                                if first_offset is None:
+                                    first_offset = self.token.offset
                                 self.bytes += self.token[1]
                                 self.token = self.oPDFTokenizer.Token()
-                            return cPDFElementMalformed(self.bytes)
+                            return cPDFElementMalformed(self.bytes, first_offset)
                         elif self.verbose:
                             print('todo 10: %d %s' % (self.token[0], repr(self.token[1])))
             else:
                 break
 
 class cPDFElementComment:
-    def __init__(self, comment):
+    def __init__(self, comment, offset=None):
         self.type = PDF_ELEMENT_COMMENT
         self.comment = comment
+        self.offset = offset
 #                        if re.match('^%PDF-[0-9]\.[0-9]', self.token[1]):
 #                            print(repr(self.token[1]))
 #                        elif re.match('^%%EOF', self.token[1]):
 #                            print(repr(self.token[1]))
 
 class cPDFElementXref:
-    def __init__(self, content):
+    def __init__(self, content, offset):
         self.type = PDF_ELEMENT_XREF
         self.content = content
+        self.offset = offset
 
 class cPDFElementTrailer:
     def __init__(self, content):
@@ -658,14 +765,16 @@ class cPDFElementIndirectObject:
         return results
 
 class cPDFElementStartxref:
-    def __init__(self, index):
+    def __init__(self, index, offset):
         self.type = PDF_ELEMENT_STARTXREF
         self.index = index
+        self.offset = offset
 
 class cPDFElementMalformed:
-    def __init__(self, content):
+    def __init__(self, content, offset):
         self.type = PDF_ELEMENT_MALFORMED
         self.content = content
+        self.offset = offset
 
 def TrimLWhiteSpace(data):
     while data != [] and data[0][0] == CHAR_WHITESPACE:
@@ -760,9 +869,9 @@ class cPDFParseDictionary:
     def Retrieve(self):
         return self.parsed
 
-    def PrettyPrintSubElement(self, prefix, e):
+    def PrettyPrintSubElement(self, prefix, e, stream=sys.stdout):
         if e[1] == []:
-            print('%s  %s' % (prefix, e[0]))
+            stream.write(f'{prefix}  {e[0]}'.encode('utf-8'))
         elif type(e[1][0]) == type(''):
             if len(e[1]) == 3 and IsNumeric(e[1][0]) and e[1][1] == '0' and e[1][2] == 'R':
                 joiner = ' '
@@ -772,20 +881,20 @@ class cPDFParseDictionary:
             reprValue = repr(value)
             if "'" + value + "'" != reprValue:
                 value = reprValue
-            print('%s  %s %s' % (prefix, e[0], value))
+            stream.write(f'{prefix}  {e[0]} {value}'.encode('utf-8'))
         else:
-            print('%s  %s' % (prefix, e[0]))
-            self.PrettyPrintSub(prefix + '    ', e[1])
+            stream.write(f'{prefix}  {e[0]}'.encode('utf-8'))
+            self.PrettyPrintSub(prefix + '    ', e[1], stream=stream)
 
-    def PrettyPrintSub(self, prefix, dictionary):
+    def PrettyPrintSub(self, prefix, dictionary, stream=sys.stdout.buffer):
         if dictionary != None:
-            print('%s<<' % prefix)
+            stream.write(f'{prefix}<<'.encode('utf-8'))
             for e in dictionary:
-                self.PrettyPrintSubElement(prefix, e)
-            print('%s>>' % prefix)
+                self.PrettyPrintSubElement(prefix, e, stream=stream)
+            stream.write(f'{prefix}>>'.encode('utf-8'))
 
-    def PrettyPrint(self, prefix):
-        self.PrettyPrintSub(prefix, self.parsed)
+    def PrettyPrint(self, prefix, stream=sys.stdout.buffer):
+        self.PrettyPrintSub(prefix, self.parsed, stream=stream)
 
     def Get(self, select):
         for key, value in self.parsed:
