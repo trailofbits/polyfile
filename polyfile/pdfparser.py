@@ -201,7 +201,7 @@ class cPDFDocument:
             self.infile.close()
             return None
         self.position += 1
-        return PDFByte(ord(inbyte), self.position - 1)
+        return PDFByte(ord(inbyte), self.position)
 
     def unget(self, byte):
         assert isinstance(byte, PDFByte)
