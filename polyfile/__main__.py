@@ -15,9 +15,9 @@ def main(argv=None):
 
     for match in polyfile.match(args.FILE):
         if match.parent is None:
-            sys.stderr.write(f"Found a file of type {match.filetype} at byte offset {match.offset}")
+            sys.stderr.write(f"Found a file of type {match.filetype.filetype} at byte offset {match.offset}\n")
         else:
-            sys.stderr.write(f"Found an embedded file of type {match.filetype} at byte offset {match.offset}")
+            sys.stderr.write(f"Found an embedded file of type {match.filetype.filetype} at byte offset {match.offset}\n")
         sys.stderr.flush()
 
 
