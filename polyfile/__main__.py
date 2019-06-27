@@ -14,7 +14,11 @@ def main(argv=None):
     args = parser.parse_args(argv[1:])
 
     for match in polyfile.match(args.FILE):
-        print(repr(match))
+        if match.parent is None:
+            sys.stderr.write(f"Found a file of type {match.filetype} at byte offset {match.offset}")
+        else:
+            sys.stderr.write(f"Found an embedded file of type {match.filetype} at byte offset {match.offset}")
+        sys.stderr.flush()
 
 
 if __name__ == '__main__':
