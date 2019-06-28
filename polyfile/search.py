@@ -1,4 +1,4 @@
-from collections import deque
+from collections import deque, Sequence
 from typing import IO, Sequence, Union
 
 
@@ -40,18 +40,25 @@ class TrieNode:
         return self._children[key]
 
     def __contains__(self, value):
-        if len(value) == 1:
+        if not isinstance(value, Sequence) or len(value) == 1:
             return value in self._children
         else:
             return self.find(value)
 
+    @staticmethod
+    def _car_cdr_len(sequence):
+        if isinstance(sequence, Sequence):
+            return sequence[0], sequence[1:], len(sequence)
+        else:
+            return sequence, (), 1
+
     def find(self, sequence):
-        if len(sequence) == 0:
+        first, remainder, n = self._car_cdr_len(sequence)
+        if n == 0:
             return len(self._sources) > 0
-        first = sequence[0]
         if first not in self:
             return False
-        return self[first].find(sequence[1:])
+        return self[first].find(remainder)
 
     @property
     def children(self):
@@ -67,31 +74,30 @@ class TrieNode:
         return new_child
 
     def _add(self, sequence, source):
-        if len(sequence) == 0:
+        first, remainder, n = self._car_cdr_len(sequence)
+        if n == 0:
             self._sources.add(source)
             return self
-
-        first = sequence[0]
         if first in self:
-            return self[first]._add(sequence[1:], source)
-        elif len(sequence) == 1:
+            return self[first]._add(remainder, source)
+        elif n == 1:
             return self._add_child(first, {source})
         else:
             new_child = self._add_child(first)
-            return new_child._add(sequence[1:], source)
+            return new_child._add(remainder, source)
 
     def add(self, sequence):
         return self._add(sequence, sequence)
 
     def find_prefix(self, prefix):
-        if len(prefix) == 0:
+        first, remainder, n = self._car_cdr_len(prefix)
+        if n == 0:
             yield from iter(self._sources)
             for child in self:
                 yield from child.find_prefix(prefix)
         else:
-            first = prefix[0]
             if first in self:
-                yield from self[first].find_prefix(prefix[1:])
+                yield from self[first].find_prefix(remainder)
 
     def bfs(self):
         queue = deque([self])
