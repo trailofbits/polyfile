@@ -83,14 +83,12 @@ class Matcher:
         self.patterns = defaultdict(set)
         log.status("Building multi-string search data structures...")
         for tdef in DEFS:
-            if tdef.can_be_offset:
-                if not tdef.patterns:
-                    log.clear_status()
-                    raise ValueError("TRiDDefs must have at least one pattern for multi-sequence matching")
-                for pos, seq in tdef.patterns:
-                    self.patterns[seq].add((pos, tdef))
-                for string in tdef.strings:
-                    self.patterns[string].add((None, tdef))
+            #if not tdef.can_be_offset:
+            #    continue
+            for pos, seq in tdef.patterns:
+                self.patterns[seq].add((pos, tdef))
+            for string in tdef.strings:
+                self.patterns[string].add((None, tdef))
         self.search = MultiSequenceSearch(*self.patterns.keys())
         log.clear_status()
 
@@ -105,18 +103,21 @@ class Matcher:
                 found_strings[source].add(offset)
                 # see if this constitutes the potential start of a tdef
                 for expected_offset, tdef in self.patterns[source]:
-                    if expected_offset is None or expected_offset <= offset:
+                    if expected_offset is None \
+                        or (tdef.can_be_offset and expected_offset <= offset) \
+                            or (not tdef.can_be_offset and expected_offset == offset):
                         partial_tdefs.add(tdef)
                 # see if this completes any partial tdefs
                 for tdef in partial_tdefs:
                     first_pattern_offset, first_pattern_seq = tdef.patterns[0]
                     for match_pos in found_strings[first_pattern_seq]:
-                        if match_pos in yielded[tdef]:
-                            # We already found this match
-                            continue
-                        if first_pattern_offset > match_pos:
+                        if (tdef.can_be_offset and first_pattern_offset > match_pos)\
+                                or (not tdef.can_be_offset and first_pattern_offset != match_pos):
                             continue
                         potential_start = match_pos - first_pattern_offset
+                        if potential_start in yielded[tdef]:
+                            # We already found this match
+                            continue
                         for pos, seq in tdef.patterns[1:]:
                             if pos + potential_start not in found_strings[seq]:
                                 # We haven't found this other required pattern yet
