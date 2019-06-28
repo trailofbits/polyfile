@@ -40,8 +40,9 @@ class TrieNode:
         return self._children[key]
 
     def __contains__(self, value):
-        if not isinstance(value, Sequence) or len(value) == 1:
-            return value in self._children
+        first, _, n = self._car_cdr_len(value)
+        if n == 1:
+            return first in self._children
         else:
             return self.find(value)
 
@@ -79,17 +80,18 @@ class TrieNode:
         return new_child
 
     def _add(self, sequence, source):
-        first, remainder, n = self._car_cdr_len(sequence)
-        if n == 0:
-            self._sources.add(source)
-            return self
-        if first in self:
-            return self[first]._add(remainder, source)
-        elif n == 1:
-            return self._add_child(first, {source})
-        else:
-            new_child = self._add_child(first)
-            return new_child._add(remainder, source)
+        node = self
+        while True:
+            first, sequence, n = self._car_cdr_len(sequence)
+            if n == 0:
+                break
+            if first in node:
+                node = node[first]
+            else:
+                node = node._add_child(first)
+                break
+        node._sources.add(source)
+        return node
 
     def add(self, sequence):
         return self._add(sequence, sequence)
