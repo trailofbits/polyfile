@@ -165,13 +165,13 @@ class MultiSequenceSearch:
                     b = source_sequence.read(1)
                     if not b:
                         return
-                    yield b
+                    yield b[0]
         else:
             def iterator():
                 return iter(source_sequence)
 
         state = self.trie
-        for offset, c in enumerate(iterator()):
+        for stream_offset, c in enumerate(iterator()):
             n = state
 
             while c not in n and n is not self.trie:
@@ -186,7 +186,7 @@ class MultiSequenceSearch:
             state = n
 
             while n is not self.trie:
-                yield from ((offset - len(source) + 1, source) for source in n.sources)
+                yield from ((stream_offset - len(source) + 1, source) for source in n.sources)
                 n = n.fall
 
 
@@ -200,9 +200,9 @@ if __name__ == '__main__':
     print(root.find('The'))
     print(root.find('The best'))
 
-    mss = MultiSequenceSearch('hack', 'hacker', 'crack', 'ack', 'kool')
-    to_search = 'This is a test to see if hack or hacker is in this string.'\
-                'Can you crack it? If so, please ack, \'cause that would be kool.'
+    mss = MultiSequenceSearch(b'hack', b'hacker', b'crack', b'ack', b'kool')
+    to_search = b'This is a test to see if hack or hacker is in this string.'\
+                b'Can you crack it? If so, please ack, \'cause that would be kool.'
     for offset, match in mss.search(to_search):
         assert to_search[offset:offset+len(match)] == match
         print(offset, match)

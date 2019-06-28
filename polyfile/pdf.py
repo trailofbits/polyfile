@@ -2,7 +2,7 @@ from io import BytesIO
 
 from . import pdfparser
 from .logger import getStatusLogger
-from .polyfile import matcher, Match, Submatch
+from .polyfile import Match, Submatch, submatcher
 
 log = getStatusLogger("PDF")
 
@@ -101,7 +101,7 @@ def parse_pdf(file_stream, parent=None):
                 yield from parse_object(object, parent=parent)
 
 
-@matcher('adobe_pdf.trid.xml', 'adobe_pdf-utf8.trid.xml')
-class PdfMatcher(Match):
+@submatcher('adobe_pdf.trid.xml', 'adobe_pdf-utf8.trid.xml')
+class PDF(Match):
     def submatch(self, file_stream):
         yield from parse_pdf(file_stream, parent=self)

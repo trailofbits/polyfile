@@ -29,7 +29,8 @@ def main(argv=None):
         logger.setLevel(logger.STATUS)
 
     matches = []
-    for match in polyfile.match(args.FILE):
+    matcher = polyfile.Matcher()
+    for match in matcher.match(args.FILE):
         if hasattr(match.match, 'filetype'):
             filetype = match.match.filetype
         else:

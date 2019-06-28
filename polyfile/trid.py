@@ -1,9 +1,11 @@
+from collections import defaultdict
 import glob
 import os
 from xml.etree import ElementTree
 
 from . import logger
 from .fileutils import make_stream, FileStream
+from .search import MultiSequenceSearch
 
 log = logger.getStatusLogger("TRiD")
 
@@ -46,7 +48,7 @@ class TRiDDef:
                 elif data.tag == "Bytes":
                     if len(data.text) % 2:
                         data.text = '0' + data.text
-                    pbytes = bytearray.fromhex(data.text)
+                    pbytes = bytes.fromhex(data.text)
             patterns.append((ppos, pbytes))
         if xml.findtext("General/CheckStrings", default="False").strip() == "True":
             strings = tuple(string.text.replace("'", "\x00").encode('utf-8') for string in xml.findall("GlobalStrings/String"))
@@ -75,12 +77,59 @@ class TRiDDef:
         return f"{self.__class__.__name__}(name={self.name!r}, filetype={self.filetype!r}, ext={self.ext!r}, mime={self.mime!r}, patterns={self.patterns!r}, strings={self.strings!r})"
 
 
-def match(*args, **kwargs):
-    load()
-    # TODO: Implement a multiple string matching algorithm like Aho–Corasick or Rabin–Karp
-    for tdef in DEFS:
-        for offset in tdef.match(*args, **kwargs):
-            yield offset, tdef
+class Matcher:
+    def __init__(self):
+        load()
+        self.patterns = defaultdict(set)
+        log.status("Building multi-string search data structures...")
+        for tdef in DEFS:
+            if tdef.can_be_offset:
+                if not tdef.patterns:
+                    log.clear_status()
+                    raise ValueError("TRiDDefs must have at least one pattern for multi-sequence matching")
+                for pos, seq in tdef.patterns:
+                    self.patterns[seq].add((pos, tdef))
+                for string in tdef.strings:
+                    self.patterns[string].add((None, tdef))
+        self.search = MultiSequenceSearch(*self.patterns.keys())
+        log.clear_status()
+
+    def match(self, file_stream):
+        with make_stream(file_stream) as fs:
+            found_strings = defaultdict(set)
+            partial_tdefs = set()
+            yielded = defaultdict(set)
+            for offset, source in self.search.search(fs):
+                log.debug(f"Found byte sequence {source!r} at offset {offset} potentially matching "
+                          f"{''.join(set(tdef.filetype for _, tdef in self.patterns[source]))}")
+                found_strings[source].add(offset)
+                # see if this constitutes the potential start of a tdef
+                for expected_offset, tdef in self.patterns[source]:
+                    if expected_offset is None or expected_offset <= offset:
+                        partial_tdefs.add(tdef)
+                # see if this completes any partial tdefs
+                for tdef in partial_tdefs:
+                    first_pattern_offset, first_pattern_seq = tdef.patterns[0]
+                    for match_pos in found_strings[first_pattern_seq]:
+                        if match_pos in yielded[tdef]:
+                            # We already found this match
+                            continue
+                        if first_pattern_offset > match_pos:
+                            continue
+                        potential_start = match_pos - first_pattern_offset
+                        for pos, seq in tdef.patterns[1:]:
+                            if pos + potential_start not in found_strings[seq]:
+                                # We haven't found this other required pattern yet
+                                break
+                        else:
+                            # Check that all of the strings have been found
+                            if all(
+                                any(
+                                    pos >= potential_start for pos in found_strings[string]
+                                ) for string in tdef.strings
+                            ):
+                                yield potential_start, tdef
+                                yielded[tdef].add(potential_start)
 
 
 def download_defs():

@@ -9,7 +9,7 @@ CUSTOM_MATCHERS = {}
 log = logger.getStatusLogger("polyfile")
 
 
-class matcher:
+class submatcher:
     def __init__(self, *filetypes):
         self.filetypes = filetypes
 
@@ -22,11 +22,16 @@ class matcher:
 
 
 class Match:
-    def __init__(self, name, match_obj, relative_offset=0, length=None, parent=None):
+    def __init__(self, name, match_obj, relative_offset=0, length=None, parent=None, matcher=None):
         if parent is not None:
             if not isinstance(parent, Match):
                 raise ValueError("The parent must be an instance of a Match")
             parent._children.append(self)
+            if matcher is None:
+                matcher = parent.matcher
+        if matcher is None:
+            raise(ValueError("A Match must be initialized with `parent` and/or `matcher` not being None"))
+        self.matcher = matcher
         self.name = name
         self.match = match_obj
         self._offset = relative_offset
@@ -93,12 +98,32 @@ class Submatch(Match):
     pass
 
 
-def match(file_stream, parent=None):
-    for offset, tdef in trid.match(file_stream, try_all_offsets=True):
-        if tdef.name in CUSTOM_MATCHERS:
-            m = CUSTOM_MATCHERS[tdef.name](tdef.name, tdef, offset, length=len(file_stream) - offset, parent=parent)
-            yield m
-            with FileStream(file_stream)[offset:] as fs:
-                yield from m.submatch(fs)
-        else:
-            yield Match(tdef.name, tdef, offset, length=len(file_stream) - offset, parent=parent)
+class Matcher:
+    def __init__(self):
+        self.trid_matcher = None
+
+    def match(self, file_stream, parent=None):
+        if self.trid_matcher is None:
+            self.trid_matcher = trid.Matcher()
+        for offset, tdef in self.trid_matcher.match(file_stream):
+            if tdef.name in CUSTOM_MATCHERS:
+                m = CUSTOM_MATCHERS[tdef.name](
+                    tdef.name,
+                    tdef,
+                    offset,
+                    length=len(file_stream) - offset,
+                    parent=parent,
+                    matcher=self
+                )
+                yield m
+                with FileStream(file_stream)[offset:] as fs:
+                    yield from m.submatch(fs)
+            else:
+                yield Match(
+                    tdef.name,
+                    tdef,
+                    offset,
+                    length=len(file_stream) - offset,
+                    parent=parent,
+                    matcher=self
+                )
