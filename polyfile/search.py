@@ -138,7 +138,7 @@ class ACNode(TrieNode):
                     n._fall = self
 
 
-class MultiStringSearch:
+class MultiSequenceSearch:
     """A datastructure for efficiently searching a sequence for multiple strings"""
     def __init__(self, *sequences_to_find):
         self.trie = ACNode()
@@ -189,7 +189,7 @@ if __name__ == '__main__':
     print(root.find('The'))
     print(root.find('The best'))
 
-    mss = MultiStringSearch('hack', 'hacker', 'crack', 'ack', 'kool')
+    mss = MultiSequenceSearch('hack', 'hacker', 'crack', 'ack', 'kool')
     to_search = 'This is a test to see if hack or hacker is in this string.'\
                 'Can you crack it? If so, please ack, \'cause that would be kool.'
     for offset, match in mss.search(to_search):
