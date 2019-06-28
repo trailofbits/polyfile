@@ -1,3 +1,4 @@
+import itertools
 from json import dumps
 
 from .fileutils import FileStream
@@ -19,6 +20,10 @@ class submatcher:
         for ft in self.filetypes:
             CUSTOM_MATCHERS[ft] = MatcherClass
         return MatcherClass
+
+
+class InvalidMatch(ValueError):
+    pass
 
 
 class Match:
@@ -115,9 +120,22 @@ class Matcher:
                     parent=parent,
                     matcher=self
                 )
-                yield m
-                with FileStream(file_stream)[offset:] as fs:
-                    yield from m.submatch(fs)
+                # Don't yield this custom match until we've tried its submatch function
+                # (which may throw an InvalidMatch, meaning that this match is invalid)
+                try:
+                    with FileStream(file_stream)[offset:] as fs:
+                        submatch_iter = m.submatch(fs)
+                        try:
+                            first_submatch = next(submatch_iter)
+                            has_first = True
+                        except StopIteration:
+                            has_first = False
+                        yield m
+                        if has_first:
+                            yield first_submatch
+                            yield from submatch_iter
+                except InvalidMatch:
+                    pass
             else:
                 yield Match(
                     tdef.name,
