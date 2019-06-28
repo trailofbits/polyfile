@@ -188,7 +188,7 @@ class MultiSequenceSearch:
             state = n
 
             while n is not self.trie:
-                yield from ((stream_offset - len(source) + 1, source) for source in n.sources)
+                yield from ((stream_offset, source) for source in n.sources)
                 n = n.fall
 
 
