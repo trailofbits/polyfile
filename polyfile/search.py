@@ -1,4 +1,5 @@
-from collections import deque, Sequence
+from collections import deque
+import collections.abc
 from typing import IO, Sequence, Union
 
 
@@ -48,7 +49,7 @@ class TrieNode:
 
     @staticmethod
     def _car_cdr_len(sequence):
-        if isinstance(sequence, Sequence):
+        if isinstance(sequence, collections.abc.Sequence):
             n = len(sequence)
             if n == 0:
                 first = None
@@ -89,7 +90,6 @@ class TrieNode:
                 node = node[first]
             else:
                 node = node._add_child(first)
-                break
         node._sources.add(source)
         return node
 
@@ -188,7 +188,7 @@ class MultiSequenceSearch:
             state = n
 
             while n is not self.trie:
-                yield from ((stream_offset, source) for source in n.sources)
+                yield from ((stream_offset - len(source) + 1, source) for source in n.sources)
                 n = n.fall
 
 
@@ -197,14 +197,14 @@ if __name__ == '__main__':
     root.add('The quick brown fox jumps over the lazy dog')
     root.add('The quick person')
     root.add('The best')
-    print(list(root.find_prefix('The')))
-    print(list(root.find_prefix('The quick')))
-    print(root.find('The'))
-    print(root.find('The best'))
+    assert len(list(root.find_prefix('The'))) == 3
+    assert len(list(root.find_prefix('The quick'))) == 2
+    assert not root.find('The')
+    assert root.find('The best')
 
     mss = MultiSequenceSearch(b'hack', b'hacker', b'crack', b'ack', b'kool')
     to_search = b'This is a test to see if hack or hacker is in this string.'\
                 b'Can you crack it? If so, please ack, \'cause that would be kool.'
     for offset, match in mss.search(to_search):
-        assert to_search[offset:offset+len(match)] == match
         print(offset, match)
+        assert to_search[offset:offset+len(match)] == match
