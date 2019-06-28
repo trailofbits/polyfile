@@ -48,7 +48,12 @@ class TrieNode:
     @staticmethod
     def _car_cdr_len(sequence):
         if isinstance(sequence, Sequence):
-            return sequence[0], sequence[1:], len(sequence)
+            n = len(sequence)
+            if n == 0:
+                first = None
+            else:
+                first = sequence[0]
+            return first, sequence[1:], n
         else:
             return sequence, (), 1
 
