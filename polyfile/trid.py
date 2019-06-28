@@ -17,7 +17,7 @@ DEFS = None
 CAN_BE_OFFSET = {'adobe_pdf', 'zip'}
 
 
-class TridDef:
+class TRiDDef:
     def __init__(self, name, filetype, ext, mime, patterns, strings=()):
         self.name = name
         self.filetype = filetype
@@ -52,7 +52,7 @@ class TridDef:
             strings = tuple(string.text.replace("'", "\x00").encode('utf-8') for string in xml.findall("GlobalStrings/String"))
         else:
             strings = ()
-        return TridDef(os.path.split(xml_path)[-1], filetype, ext, mime, patterns, strings)
+        return TRiDDef(os.path.split(xml_path)[-1], filetype, ext, mime, patterns, strings)
 
     def match(self, file_stream, try_all_offsets=False):
         with make_stream(file_stream) as fs:
@@ -111,7 +111,7 @@ def load():
     DEFS = []
 
     for xml_path in glob.glob(os.path.join(DEF_DIR, '**', '*.xml')):
-        DEFS.append(TridDef.load(xml_path))
+        DEFS.append(TRiDDef.load(xml_path))
         log.status(f'Loading TRiD file definitions... {DEFS[-1].name}')
 
     log.clear_status()
