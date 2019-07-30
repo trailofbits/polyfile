@@ -31,12 +31,21 @@ def main(argv=None):
     if args.quiet:
         progress_callback = None
     else:
-        def progress_callback(pos, length):
-            if length == 0:
-                percent = 0.0
-            else:
-                percent = pos / length * 100.0
-            log.status(f"{percent:.2f}%")
+        class ProgressCallback:
+            def __init__(self):
+                self.last_percent = -1
+
+            def __call__(self, pos, length):
+                if length == 0:
+                    percent = 0.0
+                else:
+                    percent = int(pos / length * 10000.0) / 100.0
+
+                if percent > self.last_percent:
+                    log.status(f"{percent:.2f}% {pos}/{length}")
+                    self.last_percent = percent
+
+        progress_callback = ProgressCallback()
 
     matches = []
     matcher = polyfile.Matcher()
