@@ -1,12 +1,12 @@
 from collections import deque
 import collections.abc
-from typing import IO, Sequence, Union
+from typing import IO, Mapping, Sequence, Union
 
 
 class TrieNode:
     def __init__(self, value=None, sources=None, _children=None):
         if _children is None:
-            self._children = {}
+            self._children : Mapping[object, TrieNode] = {}
         else:
             self._children = _children
         self.value = value
@@ -37,32 +37,36 @@ class TrieNode:
         return self._children[key]
 
     def __contains__(self, value):
-        first, _, n = self._car_cdr_len(value)
+        if not isinstance(value, collections.abc.Sequence):
+            first, remainder, n = value, (), 1
+        else:
+            first, remainder, n = self._car_cdr_len(value)
         if n == 1:
             return first in self._children
         else:
-            return self.find(value)
+            return self._find(first, remainder, n)
 
     @staticmethod
     def _car_cdr_len(sequence):
-        try:
-            n = len(sequence)
-            if n == 0:
-                first = None
-            else:
-                first = sequence[0]
-            return first, sequence[1:], n
-        except TypeError:
-            # sequence is not a sequence
-            return sequence, (), 1
+        n = len(sequence)
+        if n == 0:
+            first = None
+        else:
+            first = sequence[0]
+        return first, sequence[1:], n
 
-    def find(self, sequence):
-        first, remainder, n = self._car_cdr_len(sequence)
+    def _find(self, first, remainder, n):
         if n == 0:
             return len(self._sources) > 0
-        if first not in self:
+        if first not in self._children:
             return False
-        return self[first].find(remainder)
+        return self[first]._find(*self._car_cdr_len(remainder))
+
+    def find(self, key):
+        if isinstance(key, collections.abc.Sequence):
+            return self._find(*self._car_cdr_len(key))
+        else:
+            return self._find(key, (), 1)
 
     @property
     def children(self):
@@ -100,7 +104,7 @@ class TrieNode:
             for child in self:
                 yield from child.find_prefix(prefix)
         else:
-            if first in self:
+            if first in self._children:
                 yield from self[first].find_prefix(remainder)
 
     def bfs(self):
