@@ -9,15 +9,11 @@ class TrieNode:
             self._children = {}
         else:
             self._children = _children
-        self._value = value
+        self.value = value
         if sources is not None:
             self._sources = set(sources)
         else:
             self._sources = set()
-
-    @property
-    def value(self):
-        return self._value
 
     def __repr__(self):
         return f"{self.__class__.__name__}(value={self.value!r}, sources={self.sources!r}, _children={self._children!r})"
@@ -29,7 +25,7 @@ class TrieNode:
         return iter(self._children.values())
 
     def __hash__(self):
-        return hash(self._value)
+        return hash(self.value)
 
     def __eq__(self, other):
         return self.value == other.value
@@ -49,14 +45,15 @@ class TrieNode:
 
     @staticmethod
     def _car_cdr_len(sequence):
-        if isinstance(sequence, collections.abc.Sequence):
+        try:
             n = len(sequence)
             if n == 0:
                 first = None
             else:
                 first = sequence[0]
             return first, sequence[1:], n
-        else:
+        except TypeError:
+            # sequence is not a sequence
             return sequence, (), 1
 
     def find(self, sequence):
@@ -118,16 +115,8 @@ class ACNode(TrieNode):
     """A data structure for implementing the Aho-Corasick multi-string matching algorithm"""
     def __init__(self, value=None, sources=None, _children=None, parent=None):
         super().__init__(value=value, sources=sources, _children=_children)
-        self._parent = parent
-        self._fall = None
-
-    @property
-    def parent(self):
-        return self._parent
-
-    @property
-    def fall(self):
-        return self._fall
+        self.parent = parent
+        self.fall = None
 
     def _add_child(self, value, sources=None):
         new_child = ACNode(value, sources, parent=self)
@@ -135,7 +124,7 @@ class ACNode(TrieNode):
         return new_child
 
     def finalize(self):
-        self._fall = self
+        self.fall = self
         for n in self.bfs():
             if n is self:
                 continue
@@ -144,11 +133,11 @@ class ACNode(TrieNode):
                 new_fall = new_fall.fall
             if n.value not in new_fall:
                 # there is no suffix
-                n._fall = self
+                n.fall = self
             else:
-                n._fall = new_fall[n.value]
+                n.fall = new_fall[n.value]
                 if n.fall is n:
-                    n._fall = self
+                    n.fall = self
 
 
 class MultiSequenceSearch:
