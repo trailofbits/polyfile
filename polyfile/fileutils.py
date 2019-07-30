@@ -59,7 +59,7 @@ class FileStream:
         self.start = start
         self.close_on_exit = close_on_exit
         self._entries = 0
-        self._position_listeners = []
+        self._listeners = []
 
     def __len__(self):
         return self._length
