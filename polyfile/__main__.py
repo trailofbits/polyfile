@@ -28,9 +28,19 @@ def main(argv=None):
     else:
         logger.setLevel(logger.STATUS)
 
+    if args.quiet:
+        progress_callback = None
+    else:
+        def progress_callback(pos, length):
+            if length == 0:
+                percent = 0.0
+            else:
+                percent = pos / length * 100.0
+            log.status(f"{percent:.2f}%")
+
     matches = []
     matcher = polyfile.Matcher()
-    for match in matcher.match(args.FILE):
+    for match in matcher.match(args.FILE, progress_callback=progress_callback):
         if hasattr(match.match, 'filetype'):
             filetype = match.match.filetype
         else:

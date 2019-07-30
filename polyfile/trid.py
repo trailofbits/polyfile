@@ -92,8 +92,12 @@ class Matcher:
         self.search = MultiSequenceSearch(*self.patterns.keys())
         log.clear_status()
 
-    def match(self, file_stream):
+    def match(self, file_stream, progress_callback=None):
         with make_stream(file_stream) as fs:
+            if progress_callback is not None:
+                def callback(stream, pos):
+                    progress_callback(pos, len(stream))
+                fs.add_listener(callback)
             found_strings = defaultdict(set)
             partial_tdefs = set()
             yielded = defaultdict(set)

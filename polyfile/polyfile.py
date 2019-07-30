@@ -107,10 +107,10 @@ class Matcher:
     def __init__(self):
         self.trid_matcher = None
 
-    def match(self, file_stream, parent=None):
+    def match(self, file_stream, parent=None, progress_callback=None):
         if self.trid_matcher is None:
             self.trid_matcher = trid.Matcher()
-        for offset, tdef in self.trid_matcher.match(file_stream):
+        for offset, tdef in self.trid_matcher.match(file_stream, progress_callback=progress_callback):
             if tdef.name in CUSTOM_MATCHERS:
                 m = CUSTOM_MATCHERS[tdef.name](
                     tdef.name,
