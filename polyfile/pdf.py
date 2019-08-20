@@ -7,14 +7,29 @@ from .polyfile import matcher, Match, Submatch
 log = getStatusLogger("PDF")
 
 
+def token_length(tok):
+    if hasattr(tok, 'token'):
+        return len(tok.token)
+    else:
+        return len(tok[1])
+
+
+def content_length(content):
+    return content[-1].offset.offset - content[0].offset.offset + token_length(content[-1])
+
+
 def parse_object(object, parent=None):
     log.status('Parsing PDF obj %d %d' % (object.id, object.version))
     objtoken, objid, objversion, endobj = object.objtokens
     pdf_length=endobj.offset.offset - object.content[0].offset.offset + 1 + len(endobj.token)
+    if parent is None:
+        parent_offset = 0
+    else:
+        parent_offset = parent.offset
     obj = Submatch(
         "PDFObject",
         (object.id, object.version),
-        relative_offset=objid.offset.offset,
+        relative_offset=objid.offset.offset - parent_offset,
         length=pdf_length + object.content[0].offset.offset - objid.offset.offset,
         parent=parent
     )
@@ -50,12 +65,7 @@ def parse_object(object, parent=None):
     dict_content = pp.read()
     log.debug(dict_content)
     dict_offset = oPDFParseDictionary.content[0].offset.offset - objid.offset.offset
-    def token_length(tok):
-        if hasattr(tok, 'token'):
-            return len(tok.token)
-        else:
-            return len(tok[1])
-    dict_length = sum(token_length(tok) for tok in oPDFParseDictionary.content)
+    dict_length = content_length(oPDFParseDictionary.content)
     yield Submatch(
         "PDFDictionary",
         dict_content,
@@ -79,6 +89,10 @@ def parse_object(object, parent=None):
 
 
 def parse_pdf(file_stream, parent=None):
+    if parent is None:
+        parent_offset = 0
+    else:
+        parent_offset = parent.offset
     with file_stream.tempfile(suffix='.pdf') as pdf_path:
         parser = pdfparser.cPDFParser(pdf_path, True)
         while True:
@@ -90,7 +104,7 @@ def parse_pdf(file_stream, parent=None):
                 yield Submatch(
                     name='PDFComment',
                     match_obj=object,
-                    relative_offset=object.offset.offset,
+                    relative_offset=object.offset.offset - parent_offset,
                     length=len(object.comment),
                     parent=parent
                 )
@@ -99,8 +113,8 @@ def parse_pdf(file_stream, parent=None):
                 yield Submatch(
                     name='PDFXref',
                     match_obj=object,
-                    relative_offset=object.content[0].offset.offset,
-                    length=len(object.content),
+                    relative_offset=object.content[0].offset.offset - parent_offset,
+                    length=content_length(object.content),
                     parent=parent
                 )
             elif object.type == pdfparser.PDF_ELEMENT_TRAILER:
@@ -108,15 +122,15 @@ def parse_pdf(file_stream, parent=None):
                 yield Submatch(
                     name='PDFTrailer',
                     match_obj=object,
-                    relative_offset=object.content[0].offset.offset,
-                    length=len(object.content),
+                    relative_offset=object.content[0].offset.offset - parent_offset,
+                    length=content_length(object.content),
                     parent=parent
                 )
             elif object.type == pdfparser.PDF_ELEMENT_STARTXREF:
                 yield Submatch(
                     name='PDFStartXRef',
                     match_obj=object.index,
-                    relative_offset=object.offset.offset,
+                    relative_offset=object.offset.offset - parent_offset,
                     length=object.length,
                     parent=parent
                 )
