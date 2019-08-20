@@ -21,14 +21,14 @@
 <li>
     {% if 'children' in match and match['children'] %}
     <input type="checkbox" {{'checked="checked" ' if first}}id="match{{ match['uid'] }}" />
-    <label class="tree_label" for="match{{ match['uid'] }}">{{ match['type'] }}</label>
+    <label class="tree_label" for="match{{ match['uid'] }}" matchbyte="{{ match['global_offset'] }}" matchlength="{{ match['length'] }}">{{ match['type'] }}</label>
     <ul>
         {% for child in match['children'] %}
         {{ render_match(child, False) }}
         {% endfor %}
     </ul>
     {% else %}
-    <span class="tree_label">{{ match['type'] }}</span>
+    <span class="tree_label" matchbyte="{{ match['global_offset'] }}" matchlength="{{ match['length'] }}">{{ match['type'] }}</span>
     {% endif %}
 </li>
 {%- endmacro %}
@@ -44,14 +44,14 @@
         {% for col in range(16) %}<span class="byte" style="color:gray">{{ '%02x' % col }}</span>{% endfor %}
         <br />
 {% for row in range(input_bytes // 16 + 1) %}
-<span class="byterow">{{ '%05x' % row }}</span>
-{% for col in range(16) %}<span class="byte" id="hexbyte{{ input_file.tell() }}">{{ input_file.read(1).hex() }}</span>{% endfor %}<br />
+<div class="byteline"><span class="byterow">{{ '%05x' % row }}</span>
+{% for col in range(16) %}<span class="byte" id="hexbyte{{ input_file.tell() }}">{{ input_file.read(1).hex() }}</span>{% endfor %}</div>
 {% endfor %}
     </div>
     <div class="bytes">
         <br />
 {% for row in range(input_bytes // 16 + 1) %}
-{% for col in range(16) %}<span class="byte" id="byte{{ read_unicode.tell() }}">{{ read_unicode() }}</span>{% endfor %}<br />
+        <div class="byteline">{% for col in range(16) %}<span class="byte" id="byte{{ read_unicode.tell() }}">{{ read_unicode() }}</span>{% endfor %}</div>
 {% endfor %}
     </div>
 </div>

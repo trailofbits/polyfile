@@ -43,8 +43,8 @@ def generate(file_path, matches):
                     input_file.seek(0)
                     self.reset = True
                 b = input_file.read(1)
-                if b is None or len(b) == 0:
-                    return ' '
+                if b is None or len(b) == 0 or b == b' ':
+                    return '&nbsp;'
                 elif b == b'\n':
                     return '\u2424'
                 elif b == b'\t':

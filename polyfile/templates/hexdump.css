@@ -3,7 +3,11 @@ body {
   font-family: sans-serif;
 }
 
-.tree { margin: 1em; }
+.tree {
+  margin: 1em;
+  display: inline-block;
+  vertical-align: top;
+}
 
 .tree input {
   position: absolute;
@@ -107,21 +111,23 @@ label.tree_label:after { border-bottom: 0; }
 .hexeditor {
   font-family: monospace;
   display: inline-block;
+  vertical-align:top;
 }
 
 .hexeditor .hexdump {
   display: inline-block;
   padding: 0px;
+  vertical-align: top;
 }
 
 .hexeditor .bytes {
   display: inline-block;
   padding: 0px;
+  vertical-align: top;
 }
 
 .byte {
   display: inline-block;
-  height: 1.1em;
   text-align: center;
 }
 
@@ -140,7 +146,21 @@ label.tree_label:after { border-bottom: 0; }
 }
 
 .highlighted {
+  background-color: #42bff5;
+  color: white;
+}
+
+.manually-focused {
+  background-color: #FF0000;
+  color: white;
+}
+
+.cursor {
   background-color: #0000FF;
   color: white;
   cursor: none;
+}
+
+.byteline {
+  height: 1.2em;
 }
