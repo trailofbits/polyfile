@@ -14,6 +14,7 @@ setup(
     packages=find_packages(),
     python_requires='>=3.6',
     install_requires=[
+        'jinja2',
         'setuptools'
     ],
     entry_points={
@@ -21,7 +22,7 @@ setup(
             'polyfile = polyfile.__main__:main'
         ]
     },
-    package_data={'polyfile': [os.path.join('defs', '**', '*.xml')]},
+    package_data={'polyfile': [os.path.join('defs', '**', '*.xml'), os.path.join('templates', 'template.html')]},
     include_package_data=True,
     classifiers=[
         'Development Status :: 4 - Beta',

@@ -3,6 +3,7 @@ import json
 import logging
 import sys
 
+from . import html
 from . import logger
 from . import polyfile
 
@@ -13,6 +14,8 @@ log = logger.getStatusLogger("polyfile")
 def main(argv=None):
     parser = argparse.ArgumentParser(description='A utility to recursively map the structure of a file.')
     parser.add_argument('FILE', help='The file to analyze')
+    parser.add_argument('--html', '-t', type=argparse.FileType('wb'), required=False,
+                        help='Path to write an interactive HTML file for exploring the PDF')
     parser.add_argument('--debug', '-d', action='store_true', help='Print debug information')
     parser.add_argument('--quiet', '-q', action='store_true', help='Suppress all log output (overrides --debug)')
 
@@ -42,7 +45,11 @@ def main(argv=None):
         else:
             log.info(f"Found an embedded file of type {filetype} at byte offset {match.offset}")
     sys.stderr.flush()
-    print(json.dumps([match.to_obj() for match in matches]))
+    matches = [match.to_obj() for match in matches]
+    print(json.dumps(matches))
+    if args.html:
+        html.generate(args.FILE, matches)
+        log.info(f"Saved HTML output to {args.html.name}")
 
 
 if __name__ == '__main__':
