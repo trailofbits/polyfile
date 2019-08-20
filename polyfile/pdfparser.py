@@ -453,7 +453,8 @@ class cPDFParser:
                 else:
                     if self.context == CONTEXT_OBJ:
                         if self.token[1] == 'endobj':
-                            self.oPDFElementIndirectObject = cPDFElementIndirectObject(self.objectId, self.objectVersion, self.content, self.objstm)
+                            self.objtokens = self.objtokens + (self.token,)
+                            self.oPDFElementIndirectObject = cPDFElementIndirectObject(self.objectId, self.objectVersion, self.content, self.objtokens, self.objstm)
                             self.context = CONTEXT_NONE
                             self.content = []
                             return self.oPDFElementIndirectObject
@@ -483,6 +484,7 @@ class cPDFParser:
                             if IsNumeric(self.token2[1]):
                                 self.token3 = self.oPDFTokenizer.TokenIgnoreWhiteSpace()
                                 if self.token3[1] == 'obj':
+                                    self.objtokens = (self.token3, self.token, self.token2)
                                     self.objectId = eval(self.token[1])
                                     self.objectVersion = eval(self.token2[1])
                                     self.context = CONTEXT_OBJ
@@ -567,12 +569,13 @@ def IIf(expr, truepart, falsepart):
         return falsepart
 
 class cPDFElementIndirectObject:
-    def __init__(self, id, version, content, objstm=None):
+    def __init__(self, id, version, content, objtokens, objstm=None):
         self.type = PDF_ELEMENT_INDIRECT_OBJECT
         self.id = id
         self.version = version
         self.content = content
         self.objstm = objstm
+        self.objtokens = objtokens
         #fix stream for Ghostscript bug reported by Kurt
         if self.ContainsStream():
             position = len(self.content) - 1

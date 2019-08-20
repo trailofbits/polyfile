@@ -9,15 +9,30 @@ log = getStatusLogger("PDF")
 
 def parse_object(object, parent=None):
     log.status('Parsing PDF obj %d %d' % (object.id, object.version))
-    pdf_length=object.content[-1].offset.offset - object.content[0].offset.offset + 1
+    objtoken, objid, objversion, endobj = object.objtokens
+    pdf_length=endobj.offset.offset - object.content[0].offset.offset + 1 + len(endobj.token)
     obj = Submatch(
         "PDFObject",
         (object.id, object.version),
-        relative_offset=object.content[0].offset.offset,
-        length=pdf_length,
+        relative_offset=objid.offset.offset,
+        length=pdf_length + object.content[0].offset.offset - objid.offset.offset,
         parent=parent
     )
     yield obj
+    yield Submatch(
+        "PDFObjectID",
+        object.id,
+        relative_offset=0,
+        length=len(objid.token),
+        parent=obj
+    )
+    yield Submatch(
+        "PDFObjectVersion",
+        object.version,
+        relative_offset=objversion.offset.offset - objid.offset.offset,
+        length=len(objversion.token),
+        parent=obj
+    )
     log.debug(' Type: %s' % pdfparser.ConditionalCanonicalize(object.GetType(), False))
     log.debug(' Referencing: %s' % ', '.join(map(lambda x: '%s %s %s' % x, object.GetReferences())))
     dataPrecedingStream = object.ContainsStream()
@@ -34,8 +49,13 @@ def parse_object(object, parent=None):
     pp.flush()
     dict_content = pp.read()
     log.debug(dict_content)
-    dict_offset = oPDFParseDictionary.content[0].offset.offset - object.content[0].offset.offset
-    dict_length = len(oPDFParseDictionary.content)
+    dict_offset = oPDFParseDictionary.content[0].offset.offset - objid.offset.offset
+    def token_length(tok):
+        if hasattr(tok, 'token'):
+            return len(tok.token)
+        else:
+            return len(tok[1])
+    dict_length = sum(token_length(tok) for tok in oPDFParseDictionary.content)
     yield Submatch(
         "PDFDictionary",
         dict_content,
@@ -45,13 +65,16 @@ def parse_object(object, parent=None):
     )
     log.debug('')
     log.debug('')
-    yield Submatch(
-        "PDFObjectContent",
-        (),
-        relative_offset=dict_offset + dict_length,
-        length=len(pdfparser.FormatOutput(object.content, True)),
-        parent=obj
-    )
+    content_start = dict_offset + dict_length
+    content_len = endobj.offset.offset - content_start - objid.offset.offset
+    if content_len > 0:
+        yield Submatch(
+            "PDFObjectContent",
+            (),
+            relative_offset=content_start,
+            length=content_len,
+            parent=obj
+        )
     log.clear_status()
 
 
