@@ -45,13 +45,13 @@
         <br />
 {% for row in range(input_bytes // 16 + 1) %}
 <div class="byteline"><span class="byterow">{{ '%05x' % row }}</span>
-{% for col in range(16) %}<span class="byte" id="hexbyte{{ input_file.tell() }}">{{ input_file.read(1).hex() }}</span>{% endfor %}</div>
+{% for col in range(16) %}<span class="byte" byteid="{{ input_file.tell() }}">{{ input_file.read(1).hex() }}</span>{% endfor %}</div>
 {% endfor %}
     </div>
     <div class="bytes">
         <br />
 {% for row in range(input_bytes // 16 + 1) %}
-        <div class="byteline">{% for col in range(16) %}<span class="byte" id="byte{{ read_unicode.tell() }}">{{ read_unicode() }}</span>{% endfor %}</div>
+        <div class="byteline">{% for col in range(16) %}<span class="byte" byteid="{{ read_unicode.tell() }}">{{ read_unicode() }}</span>{% endfor %}</div>
 {% endfor %}
     </div>
 </div>
