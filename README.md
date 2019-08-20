@@ -14,23 +14,30 @@ This will automatically install the `polyfile` executable in your path.
 
 ```
 $ polyfile --help
-usage: polyfile [-h] [--debug] [--quiet] FILE
+usage: polyfile [-h] [--html HTML] [--debug] [--quiet] FILE
 
 A utility to recursively map the structure of a file.
 
 positional arguments:
-  FILE         The file to analyze
+  FILE                  The file to analyze
 
 optional arguments:
-  -h, --help   show this help message and exit
-  --debug, -d  Print debug information
-  --quiet, -q  Suppress all log output (overrides --debug)
+  -h, --help            show this help message and exit
+  --html HTML, -t HTML  Path to write an interactive HTML file for exploring
+                        the PDF
+  --debug, -d           Print debug information
+  --quiet, -q           Suppress all log output (overrides --debug)
 ```
 
 To generate a JSON mapping of a file, run:
 
 ```
 polyfile INPUT_FILE > output.json
+```
+
+You can optionally have PolyFile output an interactive HTML page containing a labeled hexdump of the file:
+```
+polyfile INPUT_FILE --html output.html > output.json
 ```
 
 ## License
