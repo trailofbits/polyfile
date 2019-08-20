@@ -22,7 +22,7 @@ setup(
             'polyfile = polyfile.__main__:main'
         ]
     },
-    package_data={'polyfile': [os.path.join('defs', '**', '*.xml'), os.path.join('templates', 'template.html')]},
+    package_data={'polyfile': [os.path.join('defs', '**', '*.xml'), os.path.join('templates', '*')]},
     include_package_data=True,
     classifiers=[
         'Development Status :: 4 - Beta',
