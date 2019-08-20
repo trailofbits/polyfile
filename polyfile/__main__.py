@@ -48,7 +48,7 @@ def main(argv=None):
     matches = [match.to_obj() for match in matches]
     print(json.dumps(matches))
     if args.html:
-        args.html.write(html.generate(args.FILE, matches))
+        args.html.write(html.generate(args.FILE, matches).encode('utf-8'))
         args.html.close()
         log.info(f"Saved HTML output to {args.html.name}")
 
