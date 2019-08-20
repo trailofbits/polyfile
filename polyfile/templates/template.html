@@ -55,5 +55,9 @@
 {% endfor %}
     </div>
 </div>
+
+<div class="rawdump">
+{% for i, byte in read_unicode %}<span class="byte" byteid="{{ i }}">{{ byte|safe }}</span>{% endfor %}
+</div>
 </body>
 </html>

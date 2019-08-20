@@ -164,3 +164,7 @@ label.tree_label:after { border-bottom: 0; }
 .byteline {
   height: 1.2em;
 }
+
+.rawdump {
+  font-family: monospace;
+}

@@ -38,17 +38,19 @@ def generate(file_path, matches):
                 else:
                     return input_file.tell()
 
-            def __call__(self):
-                if not self.reset:
-                    input_file.seek(0)
-                    self.reset = True
-                b = input_file.read(1)
+            def translate(self, b, monospace=True):
                 if b is None or len(b) == 0 or b == b' ':
                     return '&nbsp;'
                 elif b == b'\n':
-                    return '\u2424'
+                    if monospace:
+                        return '\u2424'
+                    else:
+                        return '\u2424</span><br /><span>'
                 elif b == b'\t':
-                    return b'\u2b7e'
+                    if monospace:
+                        return b'\u2b7e'
+                    else:
+                        return '\t'
                 elif b == b'\r':
                     return '\u240d'
                 try:
@@ -60,6 +62,24 @@ def generate(file_path, matches):
                         return u
                 except UnicodeDecodeError:
                     return '\ufffd'
+
+            def __iter__(self):
+                input_file.seek(0)
+                i = 0
+                while True:
+                    b = input_file.read(1)
+                    if b is None or len(b) < 1:
+                        break
+                    yield i, self.translate(b, monospace=False)
+                    i += 1
+
+            def __call__(self):
+                if not self.reset:
+                    input_file.seek(0)
+                    self.reset = True
+                b = input_file.read(1)
+                return self.translate(b)
+
         return TEMPLATE.render(
             file_path=file_path,
             matches=matches,
