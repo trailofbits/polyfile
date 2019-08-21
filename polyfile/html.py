@@ -1,3 +1,4 @@
+import base64
 import os
 import unicodedata
 
@@ -80,8 +81,12 @@ def generate(file_path, matches):
                 b = input_file.read(1)
                 return self.translate(b)
 
+        with open(file_path, 'rb') as f:
+            encoded = base64.b64encode(f.read()).decode('utf-8')
+
         return TEMPLATE.render(
             file_path=file_path,
+            encoded=encoded,
             matches=matches,
             input_file=input_file,
             input_bytes=input_bytes,

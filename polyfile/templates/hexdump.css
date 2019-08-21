@@ -112,18 +112,22 @@ label.tree_label:after { border-bottom: 0; }
   font-family: monospace;
   display: inline-block;
   vertical-align:top;
+  overflow-x: auto;
+  height: 80vh;
+  overflow-y: hidden;
 }
 
 .hexeditor .hexdump {
-  display: inline-block;
   padding: 0px;
   vertical-align: top;
+  display: inline-block;
 }
 
 .hexeditor .bytes {
-  display: inline-block;
   padding: 0px;
+  padding-right: 2em;
   vertical-align: top;
+  display: inline-block;
 }
 
 .byte {
@@ -167,4 +171,43 @@ label.tree_label:after { border-bottom: 0; }
 
 .rawdump {
   font-family: monospace;
+}
+
+.scrollbar {
+  min-height: 80vh;
+}
+
+.hexeditor .scrollcontainer {
+  overflow-y: scroll;
+  display: inline-block;
+  width: 3em;
+  vertical-align: top;
+  height: 100%;
+}
+
+.hexeditor .scrollcapture {
+  display: inline-block;
+  vertical-align: top;
+}
+
+.Div1
+{
+    border: 1px solid #ddd;width:24%; background-color: white;border: 2px solid #c00;margin-right:5px;
+    min-height:50px;
+    position:absolute;
+    top:0px;
+}
+
+.Div2
+{
+min-height: 20000px; width: 1%;margin-right: 5px;position:static;
+}
+
+.Div3
+{
+    border: 1px solid #ddd;width:24%; background-color: white;border: 2px solid #c00;
+    min-height:50px;
+    position:absolute;
+    right:0px;
+    top:0px;
 }
