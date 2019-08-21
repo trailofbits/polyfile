@@ -127,8 +127,9 @@ function scrollToRow(row) {
         $("#ascii" + (i - startOffset)).html(bytestring);
     }
     /* update the row labels */
+    var requiredDigits = Math.ceil(Math.log(rawBytes.length) / Math.log(16));
     for(var i=0; i<VISIBLE_ROWS; ++i) {
-        $("#byterow" + i).text(((i + ROW_OFFSET) * 16).toString(16).padStart(5, '0'));
+        $("#byterow" + i).text(((i + ROW_OFFSET) * 16).toString(16).padStart(requiredDigits, '0'));
     }
     updateHighlights();
     $(".hexeditor .scrollcontainer").scrollTop(BYTE_HEIGHT * ROW_OFFSET);
