@@ -126,6 +126,10 @@ function scrollToRow(row) {
         $("#byte" + (i - startOffset)).text(bytecode);
         $("#ascii" + (i - startOffset)).html(bytestring);
     }
+    /* update the row labels */
+    for(var i=0; i<VISIBLE_ROWS; ++i) {
+        $("#byterow" + i).text(((i + ROW_OFFSET) * 16).toString(16).padStart(5, '0'));
+    }
     updateHighlights();
     $(".hexeditor .scrollcontainer").scrollTop(BYTE_HEIGHT * ROW_OFFSET);
 }
@@ -134,9 +138,7 @@ function resizeWindow() {
     var newVisible = Math.floor($('.hexeditor .scrollcontainer').first().innerHeight() / BYTE_HEIGHT) - 2;
     while(VISIBLE_ROWS < newVisible) {
         /* add a new row */
-        var rowHtml = '<div class="byteline"><span class="byterow">'
-            + (VISIBLE_ROWS * 16).toString(16).padStart(5, '0') +
-            '</span>';
+        var rowHtml = '<div class="byteline"><span class="byterow" id="byterow' + VISIBLE_ROWS + '"></span>';
         var offset = VISIBLE_ROWS * 16;
         for(var i=0; i<16; ++i) {
             rowHtml += '<span class="byte" id="byte' + (offset + i) + '"></span>';
