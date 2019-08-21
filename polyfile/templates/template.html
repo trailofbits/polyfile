@@ -42,7 +42,7 @@
 <div class="hexeditor">
     <div class="scrollcapture">
         <div class="hexdump">
-            <span class="byterow">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>{% for col in range(16) %}<span class="byte" style="color:gray">{{ '%02x' % col }}</span>{% endfor %}
+            <span class="byterow">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>{% for col in range(16) %}<span class="byte" style="color:gray">{{ '%x' % col }}</span>{% endfor %}
             <br />
             {#
     {% for row in range(input_bytes // 16 + 1) %}
