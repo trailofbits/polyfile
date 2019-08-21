@@ -173,6 +173,7 @@ $(document).ready(function() {
     $(".scrollheightproxy").height(BYTE_HEIGHT * ROWS);
     $(window).resize(resizeWindow());
     resizeWindow();
+    $('#loading').remove();
     $(".hexeditor .scrollcontainer").scroll(function() {
         scrollToRow(Math.floor($(this).scrollTop() / BYTE_HEIGHT));
     });

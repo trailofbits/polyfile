@@ -42,6 +42,9 @@
 <div class="hexeditor">
     <div class="scrollcapture">
         <div class="hexdump">
+            <center id="loading" style="cursor: wait;">
+                <br />Loading…<br />
+            </center>
             <span class="byterow">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>{% for col in range(16) %}<span class="byte" style="color:gray">{{ '%x' % col }}</span>{% endfor %}
             <br />
             {#
