@@ -51,9 +51,9 @@
     {% endfor %}
             #}
         </div>
-        <div class="bytes">{#
+        <div class="bytes">
             <br />
-    {% for row in range(input_bytes // 16 + 1) %}
+    {#{% for row in range(input_bytes // 16 + 1) %}
             <div class="byteline">{% for col in range(16) %}<span class="byte" byteid="{{ read_unicode.tell() }}">{{ read_unicode() }}</span>{% endfor %}</div>
     {% endfor %}#}
         </div>

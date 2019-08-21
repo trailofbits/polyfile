@@ -32,6 +32,7 @@ function removeHighlight(css_class) {
         var cell_id = highlights[css_class][i][0];
         var byte_id = highlights[css_class][i][1];
         $('#byte' + cell_id).removeClass(css_class);
+        $('#ascii' + cell_id).removeClass(css_class);
     }
     highlights[css_class] = [];
 }
@@ -56,12 +57,14 @@ function updateHighlights(css_class) {
         if(current_cell_id != cell_id) {
             if(cell_id >= 0) {
                 $('#byte' + cell_id).removeClass(css_class);
+                $('#ascii' + cell_id).removeClass(css_class);
                 highlights[css_class][i][0] = -1;
             }
         }
 
         if(current_cell_id >= 0 && current_cell_id < VISIBLE_ROWS * 16) {
             $("#byte" + current_cell_id).addClass(css_class);
+            $("#ascii" + current_cell_id).addClass(css_class);
             highlights[css_class][i][0] = current_cell_id;
         }
     }
@@ -73,6 +76,30 @@ function cursor(byte_id) {
 
 function scrollToByte(byte_id) {
     scrollToRow(Math.floor(byte_id / 16));
+}
+
+function formatChar(c, monospace) {
+    if(typeof monospace === 'undefined') {
+        monospace = true;
+    }
+    if(typeof c === 'undefined' || c.length == 0 || c == ' ') {
+        return '&nbsp;';
+    } else if(c == '\n') {
+        if(monospace) {
+            return '\u2424';
+        } else {
+            '\u2424</span><br /><span>';
+        }
+    } else if(c == '\t') {
+        if(monospace) {
+            return '\u2b7e';
+        } else {
+            return '\t';
+        }
+    } else if(c == '\r') {
+        return '\u240d';
+    }
+    return c.replace('>', '&gt;').replace('<', '&lt;');
 }
 
 function scrollToRow(row) {
@@ -88,6 +115,7 @@ function scrollToRow(row) {
     var startOffset = ROW_OFFSET * 16;
     for(var i=startOffset; i < Math.min(rawBytes.length, startOffset + VISIBLE_ROWS * 16); ++i) {
         $("#byte" + (i - startOffset)).text(rawBytes.charCodeAt(i).toString(16).padStart(2, '0'));
+        $("#ascii" + (i - startOffset)).html(formatChar(rawBytes[i]));
     }
     updateHighlights();
     $(".hexeditor .scrollcontainer").scrollTop(BYTE_HEIGHT * ROW_OFFSET);
@@ -106,10 +134,21 @@ function resizeWindow() {
         }
         rowHtml += "</div>";
         $('.hexdump').append(rowHtml);
+        /* now make the ASCII rows: */
+        rowHtml = '<div class="byteline">';
+        for(var i=0; i<16; ++i) {
+           rowHtml += '<span class="byte" id="ascii' + (offset + i) + '"></span>';
+        }
+        rowHtml += "</div>";
+        $('.bytes').append(rowHtml);
+        /* add the event listeners: */
         for(var i=0; i<16; ++i) {
             var byte_id = offset + i;
             $("#byte" + byte_id).css("cursor", "none").hover(function() {
                 highlight(parseInt($(this)[0].id.substring(4)) + ROW_OFFSET * 16, 1, "cursor");
+            });
+            $("#ascii" + byte_id).css("cursor", "none").hover(function() {
+                highlight(parseInt($(this)[0].id.substring(5)) + ROW_OFFSET * 16, 1, "cursor");
             });
         }
         ++VISIBLE_ROWS;
