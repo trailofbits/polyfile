@@ -207,6 +207,7 @@ $(document).ready(function() {
         var length = parseInt($(this).attr('matchlength'));
         highlight(offset, length, "manually-focused");
         $(this).addClass("manually-focused");
+        scrollToByte(offset);
     });
     $(".tree_label").mouseout(function() {
         $(".highlighted").removeClass("highlighted");
