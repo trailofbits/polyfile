@@ -106,16 +106,25 @@ function scrollToRow(row) {
     if(typeof row === 'undefined') {
         row = ROW_OFFSET;
     }
-    if(row < 0) {
+    if(row < 0 || ROWS <= VISIBLE_ROWS) {
         row = 0;
     } else if(row > ROWS - VISIBLE_ROWS) {
         row = ROWS - VISIBLE_ROWS;
     }
     ROW_OFFSET = row;
     var startOffset = ROW_OFFSET * 16;
-    for(var i=startOffset; i < Math.min(rawBytes.length, startOffset + VISIBLE_ROWS * 16); ++i) {
-        $("#byte" + (i - startOffset)).text(rawBytes.charCodeAt(i).toString(16).padStart(2, '0'));
-        $("#ascii" + (i - startOffset)).html(formatChar(rawBytes[i]));
+    for(var i=startOffset; i < startOffset + VISIBLE_ROWS * 16; ++i) {
+        var bytecode;
+        var bytestring;
+        if(i >= rawBytes.length) {
+            bytecode = '';
+            bytestring = '';
+        } else {
+            bytecode = rawBytes.charCodeAt(i).toString(16).padStart(2, '0');
+            bytestring = formatChar(rawBytes[i]);
+        }
+        $("#byte" + (i - startOffset)).text(bytecode);
+        $("#ascii" + (i - startOffset)).html(bytestring);
     }
     updateHighlights();
     $(".hexeditor .scrollcontainer").scrollTop(BYTE_HEIGHT * ROW_OFFSET);
