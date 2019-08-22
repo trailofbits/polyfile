@@ -189,7 +189,11 @@ $(document).ready(function() {
         }
         e.preventDefault();
         scrollToRow();
-    });
+    }).on("mouseleave", function() {
+        /* have the cursor disappear when our mouse leaves the hex dump */
+        removeHighlight('cursor');
+        updateHighlights('cursor');
+    });;
 //    $(".bytes .byte").css("cursor", "none").hover(function() {
 //        cursor($(this).attr('byteid'));
 //    })
