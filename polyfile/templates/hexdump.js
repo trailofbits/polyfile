@@ -51,6 +51,7 @@ function removeHighlight(css_class) {
         var byte_id = highlights[css_class][i][1];
         $('#byte' + cell_id).removeClass(css_class);
         $('#ascii' + cell_id).removeClass(css_class);
+        $('#rbyte' + cell_id).removeClass(css_class);
     }
     highlights[css_class] = [];
 }
@@ -76,6 +77,7 @@ function updateHighlights(css_class) {
             if(cell_id >= 0) {
                 $('#byte' + cell_id).removeClass(css_class);
                 $('#ascii' + cell_id).removeClass(css_class);
+                $('#rbyte' + cell_id).removeClass(css_class);
                 highlights[css_class][i][0] = -1;
             }
         }
@@ -83,6 +85,7 @@ function updateHighlights(css_class) {
         if(current_cell_id >= 0 && current_cell_id < VISIBLE_ROWS * 16) {
             $("#byte" + current_cell_id).addClass(css_class);
             $("#ascii" + current_cell_id).addClass(css_class);
+            $("#rbyte" + current_cell_id).addClass(css_class);
             highlights[css_class][i][0] = current_cell_id;
         }
     }
@@ -139,7 +142,7 @@ function updateRendering() {
         if(rawBytes.charCodeAt(i) == 10) {
             html += '<br />' + newline(++line);
         } else {
-            html += formatChar(rawBytes[i], false);
+            html += '<span id="rbyte' + (i - startOffset) + '">' + formatChar(rawBytes[i], false) + "</span>";
         }
     }
 
