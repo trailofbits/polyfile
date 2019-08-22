@@ -201,25 +201,3 @@ label.tree_label:after { border-bottom: 0; }
   display: inline-block;
   vertical-align: top;
 }
-
-.Div1
-{
-    border: 1px solid #ddd;width:24%; background-color: white;border: 2px solid #c00;margin-right:5px;
-    min-height:50px;
-    position:absolute;
-    top:0px;
-}
-
-.Div2
-{
-min-height: 20000px; width: 1%;margin-right: 5px;position:static;
-}
-
-.Div3
-{
-    border: 1px solid #ddd;width:24%; background-color: white;border: 2px solid #c00;
-    min-height:50px;
-    position:absolute;
-    right:0px;
-    top:0px;
-}
