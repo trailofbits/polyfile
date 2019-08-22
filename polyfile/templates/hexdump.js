@@ -40,7 +40,7 @@ function removeHighlight(css_class) {
 function updateHighlights(css_class) {
     if(typeof css_class === 'undefined') {
         /* update all types */
-        for(var css_class in highlights.keys) {
+        for(var css_class in highlights) {
             updateHighlights(css_class);
         }
         return;
@@ -202,6 +202,7 @@ $(document).ready(function() {
     $(".tree_label:not([for])").css("cursor", "zoom-in").click(function() {
         if($(this).hasClass("manually-focused")) {
             removeHighlight("manually-focused");
+            $(this).removeClass("manually-focused");
             return;
         }
         $(".manually-focused").removeClass("manually-focused");
