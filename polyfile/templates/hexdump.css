@@ -132,6 +132,16 @@ label.tree_label:after { border-bottom: 0; }
   display: inline-block;
 }
 
+.readablebyteswrapper {
+  padding: 0px;
+  padding-right: 2em;
+  vertical-align: top;
+  display: inline-block;
+  max-width: 300px;
+  overflow: auto;
+  height: 100%;
+}
+
 .byte {
   display: inline-block;
   text-align: center;
@@ -145,7 +155,7 @@ label.tree_label:after { border-bottom: 0; }
   width: 10px;
 }
 
-.hexeditor .hexdump .byterow {
+.byterow {
   display: inline-block;
   height: 1.1em;
   color: gray;

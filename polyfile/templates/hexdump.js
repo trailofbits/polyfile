@@ -4,6 +4,24 @@ var BYTE_HEIGHT;
 var ROW_OFFSET = 0;
 var VISIBLE_ROWS = 0;
 var highlights = {};
+var linesByRow = [1];
+var LINE_DIGITS = 1;
+
+function assignLines() {
+    var line = 1;
+    for(var i=0; i<rawBytes.length; ++i) {
+        if(rawBytes.charCodeAt(i) == 10) {
+            ++line;
+        }
+        if(i % 16 == 15) {
+            linesByRow.push(line);
+        }
+    }
+    if(rawBytes % 16 != 15) {
+        linesByRow.push(line);
+    }
+    LINE_DIGITS = Math.ceil(Math.log(linesByRow[linesByRow.length-1]) / Math.log(10));
+}
 
 function highlight(byte_id, length, css_class) {
     if(typeof length === 'undefined') {
@@ -102,6 +120,32 @@ function formatChar(c, monospace) {
     return c.replace('>', '&gt;').replace('<', '&lt;');
 }
 
+function updateRendering() {
+    if(linesByRow.length <= ROW_OFFSET) {
+        assignLines();
+    }
+
+    function newline(n) {
+        return '<div class="byteline"><span class="byterow">'
+            + n.toString(10).padStart(LINE_DIGITS, '0')
+            + ':&nbsp;</span>';
+    }
+
+    var startOffset = ROW_OFFSET * 16;
+    var line = linesByRow[ROW_OFFSET];
+    var html = newline(line);
+
+    for(var i=startOffset; i < startOffset + VISIBLE_ROWS * 16; ++i) {
+        if(rawBytes.charCodeAt(i) == 10) {
+            html += '<br />' + newline(++line);
+        } else {
+            html += formatChar(rawBytes[i], false);
+        }
+    }
+
+    $('.readablebytes').html(html).scrollTop(0);
+}
+
 function scrollToRow(row) {
     if(typeof row === 'undefined') {
         row = ROW_OFFSET;
@@ -131,6 +175,7 @@ function scrollToRow(row) {
     for(var i=0; i<VISIBLE_ROWS; ++i) {
         $("#byterow" + i).text(((i + ROW_OFFSET) * 16).toString(16).padStart(requiredDigits, '0'));
     }
+    updateRendering();
     updateHighlights();
     $(".hexeditor .scrollcontainer").scrollTop(BYTE_HEIGHT * ROW_OFFSET);
 }
