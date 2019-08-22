@@ -1,4 +1,5 @@
 import base64
+import math
 import os
 import unicodedata
 
@@ -90,6 +91,7 @@ def generate(file_path, matches):
             matches=matches,
             input_file=input_file,
             input_bytes=input_bytes,
+            math=math,
             read_unicode=ReadUnicode()
         )
 

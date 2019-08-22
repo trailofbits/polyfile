@@ -45,7 +45,7 @@
             <center id="loading" style="cursor: wait;">
                 <br />Loading…<br />
             </center>
-            <span class="byterow">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>{% for col in range(16) %}<span class="byte" style="color:gray">{{ '%x' % col }}</span>{% endfor %}
+            <span class="byterow">{% for i in range(math.ceil(math.log(input_bytes)/math.log(16))) %}&nbsp;{% endfor %}</span>{% for col in range(16) %}<span class="byte" style="color:gray">{{ '%x' % col }}</span>{% endfor %}
             <br />
             {#
     {% for row in range(input_bytes // 16 + 1) %}
