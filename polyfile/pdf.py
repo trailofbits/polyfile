@@ -22,7 +22,7 @@ def parse_object(object, parent=None):
     log.status('Parsing PDF obj %d %d' % (object.id, object.version))
     objtoken, objid, objversion, endobj = object.objtokens
     pdf_length=endobj.offset.offset - object.content[0].offset.offset + 1 + len(endobj.token)
-    if parent is None:
+    if parent is None or isinstance(parent, PdfMatcher):
         parent_offset = 0
     else:
         parent_offset = parent.offset
@@ -89,7 +89,7 @@ def parse_object(object, parent=None):
 
 
 def parse_pdf(file_stream, parent=None):
-    if parent is None:
+    if parent is None or isinstance(parent, PdfMatcher):
         parent_offset = 0
     else:
         parent_offset = parent.offset

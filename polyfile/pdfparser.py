@@ -225,11 +225,11 @@ class cPDFDocument:
         if len(self.ungetted) != 0:
             self.position += 1
             return self.ungetted.pop()
+        self.position = self.infile.tell()
         inbyte = self.infile.read(1)
         if not inbyte or inbyte == '':
             self.infile.close()
             return None
-        self.position += 1
         ret = PDFByte(ord(inbyte), ByteOffset(self.position, self.lineno))
         if inbyte == b'\n':
             self.lineno += 1
