@@ -142,7 +142,10 @@ function updateRendering() {
         if(rawBytes.charCodeAt(i) == 10) {
             html += '<br />' + newline(++line);
         } else {
-            html += '<span id="rbyte' + (i - startOffset) + '">' + formatChar(rawBytes[i], false) + "</span>";
+            html += '<span id="rbyte'
+                + (i - startOffset)
+                + '" onmouseover="highlight(' + i + ', 1, \'cursor\')">'
+                + formatChar(rawBytes[i], false) + "</span>";
         }
     }
 
