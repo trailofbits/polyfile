@@ -22,12 +22,16 @@ class matcher:
 
 
 class Match:
-    def __init__(self, name, match_obj, relative_offset=0, length=None, parent=None):
+    def __init__(self, name, match_obj, relative_offset=0, length=None, parent=None, display_name=None):
         if parent is not None:
             if not isinstance(parent, Match):
                 raise ValueError("The parent must be an instance of a Match")
             parent._children.append(self)
         self.name = name
+        if display_name is None:
+            self.display_name = name
+        else:
+            self.display_name = display_name
         self.match = match_obj
         self._offset = relative_offset
         self._length = length
@@ -75,6 +79,7 @@ class Match:
             'global_offset': self.offset,
             'length': self.length,
             'type': self.name,
+            'display_name': self.display_name,
             'match': str(self.match),
             'children': [c.to_obj() for c in self]
         }

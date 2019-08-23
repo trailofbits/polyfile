@@ -38,7 +38,8 @@ def parse_ines_header(header, parent=None):
     )
     for i in range(6,8):
         yield Submatch(
-            name=f'Flags{i}',
+            name='Flags',
+            display_name=f'Flags{i}',
             match_obj=header[i],
             relative_offset=i,
             length=1,
@@ -53,7 +54,8 @@ def parse_ines_header(header, parent=None):
     )
     for i in range(9,11):
         yield Submatch(
-            name=f'Flags{i}',
+            name='Flags',
+            display_name=f'Flags{i}',
             match_obj=header[i],
             relative_offset=i,
             length=1,
@@ -85,7 +87,8 @@ def parse_ines(file_stream, parent=None):
         offset = file_stream.tell()
         file_stream.read(16384)
         yield Submatch(
-            name=f'PRGBank{i}',
+            name='PRGBank',
+            display_name=f'PRGBank{i}',
             match_obj='',
             relative_offset=offset,
             length=16384,
@@ -96,7 +99,8 @@ def parse_ines(file_stream, parent=None):
         offset = file_stream.tell()
         file_stream.read(8192)
         yield Submatch(
-            name=f'CHRBank{i}',
+            name='CHRBank',
+            display_name=f'CHRBank{i}',
             match_obj='',
             relative_offset=offset,
             length=8192,
