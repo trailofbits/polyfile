@@ -27,8 +27,9 @@ def parse_object(object, parent=None):
     else:
         parent_offset = parent.offset
     obj = Submatch(
-        "PDFObject",
-        (object.id, object.version),
+        name="PDFObject",
+        display_name=f"PDFObject{object.id}.{object.version}",
+        match_obj=(object.id, object.version),
         relative_offset=objid.offset.offset - parent_offset,
         length=pdf_length + object.content[0].offset.offset - objid.offset.offset,
         parent=parent
