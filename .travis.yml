@@ -1,0 +1,15 @@
+language: python
+
+python:
+- '3.6'
+- '3.7'
+- '3.8-dev'
+
+before_install:
+- sudo apt-get install p7zip-full
+
+install:
+- pip install .
+
+script:
+- polyfile --debug testdata/javascript.pdf
