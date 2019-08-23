@@ -42,6 +42,19 @@ function highlight(byte_id, length, css_class) {
     updateHighlights(css_class);
 }
 
+function mouseOverByte(byte_id) {
+    $('.tree_label').removeClass("highlighted");
+    cursor(byte_id);
+    $('.tree_label').filter(function() {
+        var start = parseInt($(this).attr('matchbyte'));
+        if(start > byte_id) {
+            return false;
+        }
+        var length = parseInt($(this).attr('matchlength'));
+        return byte_id < start + length;
+    }).addClass('highlighted');
+}
+
 function removeHighlight(css_class) {
     if(!(css_class in highlights)) {
         return;
@@ -144,7 +157,7 @@ function updateRendering() {
         } else {
             html += '<span id="rbyte'
                 + (i - startOffset)
-                + '" onmouseover="highlight(' + i + ', 1, \'cursor\')">'
+                + '" onmouseover="mouseOverByte(' + i + ')">'
                 + formatChar(rawBytes[i], false) + "</span>";
         }
     }
@@ -208,10 +221,10 @@ function resizeWindow() {
         for(var i=0; i<16; ++i) {
             var byte_id = offset + i;
             $("#byte" + byte_id).css("cursor", "none").hover(function() {
-                highlight(parseInt($(this)[0].id.substring(4)) + ROW_OFFSET * 16, 1, "cursor");
+                mouseOverByte(parseInt($(this)[0].id.substring(4)) + ROW_OFFSET * 16);
             });
             $("#ascii" + byte_id).css("cursor", "none").hover(function() {
-                highlight(parseInt($(this)[0].id.substring(5)) + ROW_OFFSET * 16, 1, "cursor");
+                mouseOverByte(parseInt($(this)[0].id.substring(5)) + ROW_OFFSET * 16);
             });
         }
         ++VISIBLE_ROWS;
@@ -242,6 +255,7 @@ $(document).ready(function() {
         scrollToRow();
     }).on("mouseleave", function() {
         /* have the cursor disappear when our mouse leaves the hex dump */
+        $('.tree_label').removeClass('highlighted');
         removeHighlight('cursor');
         updateHighlights('cursor');
     });;
