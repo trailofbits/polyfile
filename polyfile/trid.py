@@ -78,13 +78,13 @@ class TRiDDef:
 
 
 class Matcher:
-    def __init__(self):
+    def __init__(self, try_all_offsets=False):
         load()
         self.patterns = defaultdict(set)
         log.status("Building multi-string search data structures...")
         for tdef in DEFS:
-            #if not tdef.can_be_offset:
-            #    continue
+            if not try_all_offsets and not tdef.can_be_offset:
+                continue
             for pos, seq in tdef.patterns:
                 self.patterns[seq].add((pos, tdef))
             for string in tdef.strings:

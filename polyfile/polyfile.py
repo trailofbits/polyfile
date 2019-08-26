@@ -108,12 +108,13 @@ class Submatch(Match):
 
 
 class Matcher:
-    def __init__(self):
+    def __init__(self, try_all_offsets=False):
         self.trid_matcher = None
+        self.try_all_offsets = try_all_offsets
 
     def match(self, file_stream, parent=None, progress_callback=None):
         if self.trid_matcher is None:
-            self.trid_matcher = trid.Matcher()
+            self.trid_matcher = trid.Matcher(try_all_offsets=self.try_all_offsets)
         for offset, tdef in self.trid_matcher.match(file_stream, progress_callback=progress_callback):
             if tdef.name in CUSTOM_MATCHERS:
                 m = CUSTOM_MATCHERS[tdef.name](
