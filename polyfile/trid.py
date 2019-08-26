@@ -95,8 +95,10 @@ class Matcher:
     def match(self, file_stream, progress_callback=None):
         with make_stream(file_stream) as fs:
             if progress_callback is not None:
+                fslen = len(fs)
+
                 def callback(stream, pos):
-                    progress_callback(pos, len(stream))
+                    progress_callback(pos, fslen)
                 fs.add_listener(callback)
             found_strings = defaultdict(set)
             partial_tdefs = set()
