@@ -1,7 +1,10 @@
-from .polyfile import submatcher, Match, Submatch
+from .polyfile import submatcher, InvalidMatch, Match, Submatch
 
 
 def parse_ines_header(header, parent=None):
+    magic = header[:4]
+    if magic != b'NES\x1A':
+        raise InvalidMatch(f"Expected \"NES\\x1A\" magic at the beginning of the file, but found {magic!r}")
     parent = Submatch(
         name='iNESHeader',
         match_obj=header,
@@ -10,9 +13,6 @@ def parse_ines_header(header, parent=None):
         parent=parent
     )
     yield parent
-    magic = header[:4]
-    if magic != b'NES\x1A':
-        raise Exception(f"Expected \"NES\\x1A\" magic at the beginning of the file, but found {magic!r}")
     yield Submatch(
         name='iNESMagic',
         match_obj="NES",
