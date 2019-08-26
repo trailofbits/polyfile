@@ -117,10 +117,16 @@ class Matcher:
             self.trid_matcher = trid.Matcher(try_all_offsets=self.try_all_offsets)
         for offset, tdef in self.trid_matcher.match(file_stream, progress_callback=progress_callback):
             if tdef.name in CUSTOM_MATCHERS:
+                display_name = tdef.name.upper()
+                if display_name.endswith('.XML'):
+                    display_name = display_name[:-4]
+                if display_name.endswith('.TRID'):
+                    display_name = display_name[:-5]
                 m = CUSTOM_MATCHERS[tdef.name](
                     tdef.name,
                     tdef,
                     offset,
+                    display_name=display_name,
                     length=len(file_stream) - offset,
                     parent=parent,
                     matcher=self
