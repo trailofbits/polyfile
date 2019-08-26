@@ -81,6 +81,7 @@ class Matcher:
     def __init__(self, try_all_offsets=False):
         load()
         self.patterns = defaultdict(set)
+        self.try_all_offsets = try_all_offsets
         log.status("Building multi-string search data structures...")
         for tdef in DEFS:
             if not try_all_offsets and not tdef.can_be_offset:
@@ -100,6 +101,12 @@ class Matcher:
                 def callback(stream, pos):
                     progress_callback(pos, fslen)
                 fs.add_listener(callback)
+            if not self.try_all_offsets:
+                # See if any of the TDEFs occur at offset zero
+                for tdef in DEFS:
+                    if not tdef.can_be_offset:
+                        for offset in tdef.match(fs):
+                            yield offset, tdef
             found_strings = defaultdict(set)
             partial_tdefs = set()
             yielded = defaultdict(set)

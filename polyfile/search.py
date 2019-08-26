@@ -94,8 +94,10 @@ class TrieNode:
         node._sources.add(source)
         return node
 
-    def add(self, sequence):
-        return self._add(sequence, sequence)
+    def add(self, sequence, source=None):
+        if source is None:
+            source = sequence
+        return self._add(sequence, source)
 
     def find_prefix(self, prefix):
         first, remainder, n = self._car_cdr_len(prefix)
@@ -185,6 +187,35 @@ class MultiSequenceSearch:
                 n = n.fall
 
 
+class StartsWithMatcher:
+    def __init__(self, *sequences_to_find):
+        self.trie = TrieNode()
+        for seq in sequences_to_find:
+            self.trie.add(seq)
+
+    def search(self, source_sequence: Union[Sequence, IO]):
+        if hasattr(source_sequence, 'read'):
+            def iterator():
+                while True:
+                    b = source_sequence.read(1)
+                    if not b:
+                        return
+                    yield b[0]
+        else:
+            def iterator():
+                return iter(source_sequence)
+
+        state = self.trie
+        yield from ((0, s) for s in state.sources)
+
+        for c in iterator():
+            if c not in state:
+                return
+
+            state = state[c]
+            yield from ((0, s) for s in state.sources)
+
+
 if __name__ == '__main__':
     root = TrieNode()
     root.add('The quick brown fox jumps over the lazy dog')
@@ -201,3 +232,7 @@ if __name__ == '__main__':
     for offset, match in mss.search(to_search):
         print(offset, match)
         assert to_search[offset:offset+len(match)] == match
+
+    swm = StartsWithMatcher(b'hack', b'hacker', b'crack', b'ack', b'kool')
+    for match in swm.search(b'hacker'):
+        print(match)
