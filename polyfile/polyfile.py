@@ -1,4 +1,3 @@
-import itertools
 from json import dumps
 
 from .fileutils import FileStream
