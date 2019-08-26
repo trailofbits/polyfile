@@ -1,4 +1,4 @@
-from .polyfile import matcher, Match, Submatch
+from .polyfile import submatcher, Match, Submatch
 
 
 def parse_ines_header(header, parent=None):
@@ -108,7 +108,7 @@ def parse_ines(file_stream, parent=None):
         )
 
 
-@matcher('rom-nes.trid.xml')
+@submatcher('rom-nes.trid.xml')
 class INESMatcher(Match):
     def submatch(self, file_stream):
         yield from parse_ines(file_stream, parent=self)
