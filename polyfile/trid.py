@@ -1,9 +1,11 @@
+from collections import defaultdict
 import glob
 import os
 from xml.etree import ElementTree
 
 from . import logger
 from .fileutils import make_stream, FileStream
+from .search import MultiSequenceSearch
 
 log = logger.getStatusLogger("TRiD")
 
@@ -17,7 +19,7 @@ DEFS = None
 CAN_BE_OFFSET = {'adobe_pdf', 'zip'}
 
 
-class TridDef:
+class TRiDDef:
     def __init__(self, name, filetype, ext, mime, patterns, strings=()):
         self.name = name
         self.filetype = filetype
@@ -46,13 +48,13 @@ class TridDef:
                 elif data.tag == "Bytes":
                     if len(data.text) % 2:
                         data.text = '0' + data.text
-                    pbytes = bytearray.fromhex(data.text)
+                    pbytes = bytes.fromhex(data.text)
             patterns.append((ppos, pbytes))
         if xml.findtext("General/CheckStrings", default="False").strip() == "True":
             strings = tuple(string.text.replace("'", "\x00").encode('utf-8') for string in xml.findall("GlobalStrings/String"))
         else:
             strings = ()
-        return TridDef(os.path.split(xml_path)[-1], filetype, ext, mime, patterns, strings)
+        return TRiDDef(os.path.split(xml_path)[-1], filetype, ext, mime, patterns, strings)
 
     def match(self, file_stream, try_all_offsets=False):
         with make_stream(file_stream) as fs:
@@ -75,12 +77,64 @@ class TridDef:
         return f"{self.__class__.__name__}(name={self.name!r}, filetype={self.filetype!r}, ext={self.ext!r}, mime={self.mime!r}, patterns={self.patterns!r}, strings={self.strings!r})"
 
 
-def match(*args, **kwargs):
-    load()
-    # TODO: Implement a multiple string matching algorithm like Aho–Corasick or Rabin–Karp
-    for tdef in DEFS:
-        for offset in tdef.match(*args, **kwargs):
-            yield offset, tdef
+class Matcher:
+    def __init__(self):
+        load()
+        self.patterns = defaultdict(set)
+        log.status("Building multi-string search data structures...")
+        for tdef in DEFS:
+            #if not tdef.can_be_offset:
+            #    continue
+            for pos, seq in tdef.patterns:
+                self.patterns[seq].add((pos, tdef))
+            for string in tdef.strings:
+                self.patterns[string].add((None, tdef))
+        self.search = MultiSequenceSearch(*self.patterns.keys())
+        log.clear_status()
+
+    def match(self, file_stream, progress_callback=None):
+        with make_stream(file_stream) as fs:
+            if progress_callback is not None:
+                def callback(stream, pos):
+                    progress_callback(pos, len(stream))
+                fs.add_listener(callback)
+            found_strings = defaultdict(set)
+            partial_tdefs = set()
+            yielded = defaultdict(set)
+            for offset, source in self.search.search(fs):
+                log.debug(f"Found byte sequence {source!r} at offset {offset} potentially matching "
+                          f"{''.join(set(tdef.filetype for _, tdef in self.patterns[source]))}")
+                found_strings[source].add(offset)
+                # see if this constitutes the potential start of a tdef
+                for expected_offset, tdef in self.patterns[source]:
+                    if expected_offset is None \
+                        or (tdef.can_be_offset and expected_offset <= offset) \
+                            or (not tdef.can_be_offset and expected_offset == offset):
+                        partial_tdefs.add(tdef)
+                # see if this completes any partial tdefs
+                for tdef in partial_tdefs:
+                    first_pattern_offset, first_pattern_seq = tdef.patterns[0]
+                    for match_pos in found_strings[first_pattern_seq]:
+                        if (tdef.can_be_offset and first_pattern_offset > match_pos)\
+                                or (not tdef.can_be_offset and first_pattern_offset != match_pos):
+                            continue
+                        potential_start = match_pos - first_pattern_offset
+                        if potential_start in yielded[tdef]:
+                            # We already found this match
+                            continue
+                        for pos, seq in tdef.patterns[1:]:
+                            if pos + potential_start not in found_strings[seq]:
+                                # We haven't found this other required pattern yet
+                                break
+                        else:
+                            # Check that all of the strings have been found
+                            if all(
+                                any(
+                                    pos >= potential_start for pos in found_strings[string]
+                                ) for string in tdef.strings
+                            ):
+                                yield potential_start, tdef
+                                yielded[tdef].add(potential_start)
 
 
 def download_defs():
@@ -111,7 +165,7 @@ def load():
     DEFS = []
 
     for xml_path in glob.glob(os.path.join(DEF_DIR, '**', '*.xml')):
-        DEFS.append(TridDef.load(xml_path))
+        DEFS.append(TRiDDef.load(xml_path))
         log.status(f'Loading TRiD file definitions... {DEFS[-1].name}')
 
     log.clear_status()

@@ -59,9 +59,21 @@ class FileStream:
         self.start = start
         self.close_on_exit = close_on_exit
         self._entries = 0
+        self._listeners = []
 
     def __len__(self):
         return self._length
+
+    def add_listener(self, listener):
+        self._listeners.append(listener)
+
+    def remove_listener(self, listener):
+        ret = False
+        for i in reversed(range(len(self._listeners))):
+            if self._listeners[i] == listener:
+                del self._listeners[i]
+                ret = True
+        return ret
 
     def seekable(self):
         return True
@@ -99,6 +111,8 @@ class FileStream:
 
     def read(self, n=None):
         pos = self.tell()
+        for listener in self._listeners:
+            listener(self, pos)
         ls = len(self)
         if pos >= ls:
             return b''
