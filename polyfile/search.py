@@ -116,6 +116,16 @@ class TrieNode:
             yield head
             queue.extend(head._children.values())
 
+    def dfs(self):
+        stack = [self]
+        visited = set()
+        while stack:
+            tail = stack.pop()
+            yield tail
+            children = tail._children.values()
+            stack.extend(child for child in children if id(child) not in visited)
+            visited |= set(id(c) for c in children)
+
 
 class ACNode(TrieNode):
     """A data structure for implementing the Aho-Corasick multi-string matching algorithm"""
@@ -144,6 +154,33 @@ class ACNode(TrieNode):
                 n.fall = new_fall[n.value]
                 if n.fall is n:
                     n.fall = self
+
+    def to_dot(self):
+        """Returns a Graphviz/Dot representation of this Trie"""
+        dot = "digraph G {\n"
+        node_ids = {}
+        for node in self.dfs():
+            assert node not in node_ids
+            nid = len(node_ids)
+            node_ids[id(node)] = nid
+            dot += f"    node{nid}"
+            if node.value is None:
+                dot += f"[label=\"Root\"]"
+            else:
+                if node.value == ord('"'):
+                    c = '\\"'
+                elif node.value == ord('\\'):
+                    c = '\\\\'
+                elif 32 <= node.value <= 126:
+                    c = chr(node.value)
+                else:
+                    c = f"\\\\x{hex(node.value)[2:]}"
+                dot += f"[label=\"{c}\"]"
+            dot += ";\n"
+            if node.parent is not None:
+                dot += f"    node{node_ids[id(node.parent)]} -> node{nid};\n"
+        dot += "}\n"
+        return dot
 
 
 class MultiSequenceSearch:
