@@ -155,10 +155,11 @@ class ACNode(TrieNode):
                 if n.fall is n:
                     n.fall = self
 
-    def to_dot(self):
+    def to_dot(self, include_falls=False):
         """Returns a Graphviz/Dot representation of this Trie"""
         dot = "digraph G {\n"
         node_ids = {}
+        falls = {}
         for node in self.dfs():
             assert node not in node_ids
             nid = len(node_ids)
@@ -179,6 +180,11 @@ class ACNode(TrieNode):
             dot += ";\n"
             if node.parent is not None:
                 dot += f"    node{node_ids[id(node.parent)]} -> node{nid};\n"
+            if include_falls and node.fall is not None and node.fall is not node:
+                falls[id(node)] = id(node.fall)
+
+        for nodeid, fallid in falls.items():
+            dot += f"    node{node_ids[nodeid]} -> node{node_ids[fallid]} [style=dashed,label=\"fall\"];\n"
         dot += "}\n"
         return dot
 
