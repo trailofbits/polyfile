@@ -86,10 +86,12 @@ class Matcher:
         for tdef in DEFS:
             if not try_all_offsets and not tdef.can_be_offset:
                 continue
+            log.status(f"Building multi-string search data structures... {tdef.name}")
             for pos, seq in tdef.patterns:
                 self.patterns[seq].add((pos, tdef))
             for string in tdef.strings:
                 self.patterns[string].add((None, tdef))
+        log.status("Constructing the Aho-Corasick Trie...")
         self.search = MultiSequenceSearch(*self.patterns.keys())
         log.clear_status()
 
@@ -103,10 +105,12 @@ class Matcher:
                 fs.add_listener(callback)
             if not self.try_all_offsets:
                 # See if any of the TDEFs occur at offset zero
+                prev_pos = fs.tell()
                 for tdef in DEFS:
                     if not tdef.can_be_offset:
                         for offset in tdef.match(fs):
                             yield offset, tdef
+                fs.seek(prev_pos)
             found_strings = defaultdict(set)
             partial_tdefs = set()
             yielded = defaultdict(set)
