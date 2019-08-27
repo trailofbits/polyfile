@@ -52,7 +52,7 @@ def main(argv=None):
         progress_callback = ProgressCallback()
 
     matches = []
-    matcher = polyfile.Matcher()
+    matcher = polyfile.Matcher(args.try_all_offsets)
     for match in matcher.match(args.FILE, progress_callback=progress_callback):
         if hasattr(match.match, 'filetype'):
             filetype = match.match.filetype
