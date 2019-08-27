@@ -307,6 +307,8 @@ class PDFToken:
             a, b = other
         except TypeError:
             return False
+        except ValueError:
+            return False
         return self.token_type == a and self.token == b
 
     def __ne__(self, other):
@@ -432,7 +434,8 @@ class cPDFParser:
                         self.token2 = self.oPDFTokenizer.Token()
                         if self.token2[0] == CHAR_REGULAR:
                             if self.context != CONTEXT_NONE:
-                                self.content.append((CHAR_DELIMITER, self.token[1] + self.token2[1]))
+                                #self.content.append((CHAR_DELIMITER, self.token[1] + self.token2[1]))
+                                self.content.append(PDFToken(CHAR_DELIMITER, self.token[1] + self.token2[1], self.token.offset))
                             elif self.verbose:
                                 print('todo 1: %s' % (self.token[1] + self.token2[1]))
                         else:
@@ -797,6 +800,20 @@ def TrimRWhiteSpace(data):
         data = data[:-1]
     return data
 
+
+class ParsedDictionary:
+    def __init__(self):
+        self.start = None
+        self.end = None
+        self.kvs = []
+
+    def append(self, key, value):
+        self.kvs.append((key, value))
+
+    def __iter__(self):
+        return iter(self.kvs)
+
+
 class cPDFParseDictionary:
     def __init__(self, content, nocanonicalizedoutput):
         self.content = content
@@ -820,61 +837,70 @@ class cPDFParseDictionary:
 
     def ParseDictionary(self, tokens):
         state = 0 # start
-        dictionary = []
+        dictionary = ParsedDictionary()
         while tokens != []:
             if state == 0:
                 if self.isOpenDictionary(tokens[0]):
                     state = 1
+                    dictionary.start = tokens[0]
                 else:
                     return None, tokens
             elif state == 1:
                 if self.isOpenDictionary(tokens[0]):
                     pass
                 elif self.isCloseDictionary(tokens[0]):
+                    dictionary.end = tokens[0]
                     return dictionary, tokens
                 elif tokens[0][0] != CHAR_WHITESPACE:
-                    key = ConditionalCanonicalize(tokens[0][1], self.nocanonicalizedoutput)
+                    # Removed by Evan; we want to retain the original raw token
+                    #key = ConditionalCanonicalize(tokens[0][1], self.nocanonicalizedoutput)
+                    key = tokens[0]
                     value = []
                     state = 2
             elif state == 2:
                 if self.isOpenDictionary(tokens[0]):
                     value, tokens = self.ParseDictionary(tokens)
-                    dictionary.append((key, value))
+                    dictionary.append(key, value)
                     state = 1
                 elif self.isCloseDictionary(tokens[0]):
-                    dictionary.append((key, value))
+                    dictionary.append(key, value)
+                    dictionary.end = tokens[0]
                     return dictionary, tokens
                 elif value == [] and tokens[0][0] == CHAR_WHITESPACE:
                     pass
                 elif value == [] and tokens[0][1] == '[':
-                    value.append(tokens[0][1])
+                    value.append(tokens[0])
                 elif value != [] and value[0] == '[' and tokens[0][1] != ']':
-                    value.append(tokens[0][1])
+                    value.append(tokens[0])
                 elif value != [] and value[0] == '[' and tokens[0][1] == ']':
-                    value.append(tokens[0][1])
-                    dictionary.append((key, value))
+                    value.append(tokens[0])
+                    dictionary.append(key, value)
                     value = []
                     state = 1
                 elif value == [] and tokens[0][1] == '(':
-                    value.append(tokens[0][1])
+                    value.append(tokens[0])
                 elif value != [] and value[0] == '(' and tokens[0][1] != ')':
                     if tokens[0][1][0] == '%':
                         tokens = [tokens[0]] + cPDFTokenizer(StringIO(tokens[0][1][1:])).Tokens() + tokens[1:]
                         value.append('%')
                     else:
-                        value.append(tokens[0][1])
+                        value.append(tokens[0])
                 elif value != [] and value[0] == '(' and tokens[0][1] == ')':
-                    value.append(tokens[0][1])
-                    dictionary.append((key, value))
+                    value.append(tokens[0])
+                    dictionary.append(key, value)
                     value = []
                     state = 1
                 elif value != [] and tokens[0][1][0] == '/':
-                    dictionary.append((key, value))
-                    key = ConditionalCanonicalize(tokens[0][1], self.nocanonicalizedoutput)
+                    dictionary.append(key, value)
+                    # Removed by Evan; we want to retain the raw key
+                    #key = ConditionalCanonicalize(tokens[0][1], self.nocanonicalizedoutput)
+                    key = tokens[0]
                     value = []
                     state = 2
                 else:
-                    value.append(ConditionalCanonicalize(tokens[0][1], self.nocanonicalizedoutput))
+                    # Removed by Evan; we want to retain the raw value
+                    #value.append(ConditionalCanonicalize(tokens[0][1], self.nocanonicalizedoutput))
+                    value.append(tokens[0])
             tokens = tokens[1:]
 
     def Retrieve(self):
