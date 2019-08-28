@@ -19,6 +19,9 @@ DEF_DIR = os.path.join(os.path.dirname(os.path.realpath(__file__)), "defs")
 
 SERIALIZED_DEFS_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), "defs.json.bz2")
 
+SERIALIZED_FULL_TRIE = os.path.join(os.path.dirname(os.path.realpath(__file__)), "full_trie.json.bz2")
+SERIALIZED_PARTIAL_TRIE = os.path.join(os.path.dirname(os.path.realpath(__file__)), "partial_trie.json.bz2")
+
 DEFS = None
 
 # These are the file formats that don't have to start at byte offset zero of the file:
@@ -120,8 +123,20 @@ class Matcher:
                 self.patterns[seq].add((pos, tdef))
             for string in tdef.strings:
                 self.patterns[string].add((None, tdef))
-        log.status("Constructing the Aho-Corasick Trie...")
-        self.search = MultiSequenceSearch(*self.patterns.keys())
+        if try_all_offsets:
+            trie_path = SERIALIZED_FULL_TRIE
+        else:
+            trie_path = SERIALIZED_PARTIAL_TRIE
+        if os.path.exists(trie_path):
+            log.status("Loading the Cached Aho-Corasick Trie...")
+            with bz2.open(trie_path, 'rb') as f:
+                self.search = MultiSequenceSearch.load(codecs.getreader('utf-8')(f))
+        else:
+            log.status("Constructing the Aho-Corasick Trie...")
+            self.search = MultiSequenceSearch(*self.patterns.keys())
+            log.status("Caching the Aho-Corasick Trie...")
+            with bz2.open(trie_path, 'wb') as f:
+                self.search.save(codecs.getwriter('utf-8')(f))
         log.clear_status()
 
     def match(self, file_stream, progress_callback=None):

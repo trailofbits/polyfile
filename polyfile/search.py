@@ -1,3 +1,4 @@
+import base64
 from collections import deque
 import collections.abc
 import json
@@ -129,22 +130,17 @@ class TrieNode:
 
     def _serialize(self):
         value_encoding = None
-        value = self.value
-        if isinstance(value, bytes):
-            value = value.decode('utf-8')
-            value_encoding = 'utf-8'
-        sources = []
-        source_encodings = []
-        for source in self._sources:
-            if isinstance(source, bytes):
-                source = source.decode('utf-8')
-                source_encodings.append('utf-8')
+        if self.value is not None:
+            if isinstance(self.value, bytes):
+                value = base64.b64encode(self.value).decode('utf-8')
+                value_encoding = 'bytes'
             else:
-                source_encodings.append['']
-            sources.append(source)
+                value = self.value
+        else:
+            value = None
+        sources = [base64.b64encode(source).decode('utf-8') for source in self._sources]
         ret = {
             'sources': sources,
-            'source_encodings': source_encodings,
             'children': [ child._serialize() for child in self._children.values() ]
         }
         if value is not None:
@@ -161,14 +157,14 @@ class TrieNode:
     def _deserialize_value_and_sources(serialized: dict):
         value = None
         if 'value' in serialized:
-            value = serialized['value']
             if 'value_encoding' in serialized:
-                value = value.encode(serialized['value_encoding'])
-        sources = []
-        for source, encoding in zip(serialized['sources'], serialized['source_encodings']):
-            if encoding:
-                source = source.encode(encoding)
-            sources.append(source)
+                if serialized['value_encoding'] == 'bytes':
+                    value = base64.b64decode(serialized['value'])
+                else:
+                    raise Exception(f"Unsupported 'value_encoding' \"{serialized['value_encoding']}\"")
+            else:
+                value = serialized['value']
+        sources = [base64.b64decode(source) for source in serialized['sources']]
         return value, sources
 
     @staticmethod
@@ -267,7 +263,7 @@ class ACNode(TrieNode):
         # Construct the falls
         for node, serialized in nodes_by_uid.values():
             if 'fall' in serialized:
-                node.fall = nodes_by_uid[serialized['fall']]
+                node.fall = nodes_by_uid[serialized['fall']][0]
         return root
 
     def _serialize(self):
