@@ -1,5 +1,3 @@
-from io import BytesIO
-
 from . import pdfparser
 from .logger import getStatusLogger
 from .polyfile import Match, Submatch, submatcher
