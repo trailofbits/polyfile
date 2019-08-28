@@ -128,7 +128,7 @@ class TrieNode:
             stack.extend(child for child in children if id(child) not in visited)
             visited |= set(id(c) for c in children)
 
-    def _serialize(self):
+    def _serialize_node(self):
         value_encoding = None
         if self.value is not None:
             if isinstance(self.value, bytes):
@@ -141,12 +141,23 @@ class TrieNode:
         sources = [base64.b64encode(source).decode('utf-8') for source in self._sources]
         ret = {
             'sources': sources,
-            'children': [ child._serialize() for child in self._children.values() ]
+            'children': []
         }
         if value is not None:
             ret['value'] = value
         if value_encoding is not None:
             ret['value_encoding'] = value_encoding
+        return ret
+
+    def _serialize(self):
+        ret = self._serialize_node()
+        nodes = [(self, ret)]
+        while nodes:
+            node, serialized = nodes.pop()
+            for child in node._children.values():
+                child_serialized = child._serialize_node()
+                serialized['children'].append(child_serialized)
+                nodes.append((child, child_serialized))
         return ret
 
     def serialize(self):
@@ -266,8 +277,8 @@ class ACNode(TrieNode):
                 node.fall = nodes_by_uid[serialized['fall']][0]
         return root
 
-    def _serialize(self):
-        serialized = super()._serialize()
+    def _serialize_node(self):
+        serialized = super()._serialize_node()
         serialized['uid'] = id(self)
         if self.fall is not None:
             serialized['fall'] = id(self.fall)

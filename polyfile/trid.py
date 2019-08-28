@@ -19,8 +19,8 @@ DEF_DIR = os.path.join(os.path.dirname(os.path.realpath(__file__)), "defs")
 
 SERIALIZED_DEFS_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), "defs.json.bz2")
 
-SERIALIZED_FULL_TRIE = os.path.join(os.path.dirname(os.path.realpath(__file__)), "full_trie.json.bz2")
-SERIALIZED_PARTIAL_TRIE = os.path.join(os.path.dirname(os.path.realpath(__file__)), "partial_trie.json.bz2")
+SERIALIZED_FULL_TRIE = os.path.join(os.path.dirname(os.path.realpath(__file__)), "trie_full.json.bz2")
+SERIALIZED_PARTIAL_TRIE = os.path.join(os.path.dirname(os.path.realpath(__file__)), "trie_partial.json.bz2")
 
 DEFS = None
 
