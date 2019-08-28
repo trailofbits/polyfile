@@ -1,12 +1,13 @@
 from collections import deque
 import collections.abc
+import json
 from typing import IO, Mapping, Sequence, Union
 
 
 class TrieNode:
     def __init__(self, value=None, sources=None, _children=None):
         if _children is None:
-            self._children : Mapping[object, TrieNode] = {}
+            self._children: Mapping[object, TrieNode] = {}
         else:
             self._children = _children
         self.value = value
@@ -126,6 +127,65 @@ class TrieNode:
             stack.extend(child for child in children if id(child) not in visited)
             visited |= set(id(c) for c in children)
 
+    def _serialize(self):
+        value_encoding = None
+        value = self.value
+        if isinstance(value, bytes):
+            value = value.decode('utf-8')
+            value_encoding = 'utf-8'
+        sources = []
+        source_encodings = []
+        for source in self._sources:
+            if isinstance(source, bytes):
+                source = source.decode('utf-8')
+                source_encodings.append('utf-8')
+            else:
+                source_encodings.append['']
+            sources.append(source)
+        ret = {
+            'sources': sources,
+            'source_encodings': source_encodings,
+            'children': [ child._serialize() for child in self._children.values() ]
+        }
+        if value is not None:
+            ret['value'] = value
+        if value_encoding is not None:
+            ret['value_encoding'] = value_encoding
+        return ret
+
+    def serialize(self):
+        """Serializes this Trie as a JSON file. All node values and sources must be JSON serializable."""
+        return json.dumps(self._serialize())
+
+    @staticmethod
+    def _deserialize_value_and_sources(serialized: dict):
+        value = None
+        if 'value' in serialized:
+            value = serialized['value']
+            if 'value_encoding' in serialized:
+                value = value.encode(serialized['value_encoding'])
+        sources = []
+        for source, encoding in zip(serialized['sources'], serialized['source_encodings']):
+            if encoding:
+                source = source.encode(encoding)
+            sources.append(source)
+        return value, sources
+
+    @staticmethod
+    def _deserialize_node(serialized: dict, parent=None):
+        value, sources = TrieNode._deserialize_value_and_sources(serialized)
+        node = TrieNode(value=value, sources=sources)
+        if parent is not None:
+            parent._children[node.value] = node
+        for child in serialized['children']:
+            TrieNode._deserialize_node(child, parent=node)
+        return node
+
+    @staticmethod
+    def load(serialized):
+        serialized = json.loads(serialized)
+        return TrieNode._deserialize_node(serialized)
+
 
 class ACNode(TrieNode):
     """A data structure for implementing the Aho-Corasick multi-string matching algorithm"""
@@ -188,6 +248,35 @@ class ACNode(TrieNode):
         dot += "}\n"
         return dot
 
+    @staticmethod
+    def _deserialize_node(serialized: dict, nodes_by_uid: dict, parent=None):
+        value, sources = TrieNode._deserialize_value_and_sources(serialized)
+        node = ACNode(value=value, sources=sources, parent=parent)
+        nodes_by_uid[serialized['uid']] = (node, serialized)
+        if parent is not None:
+            parent._children[node.value] = node
+        for child in serialized['children']:
+            ACNode._deserialize_node(child, nodes_by_uid, parent=node)
+        return node
+
+    @staticmethod
+    def load(serialized):
+        serialized = json.loads(serialized)
+        nodes_by_uid = {}
+        root = ACNode._deserialize_node(serialized, nodes_by_uid)
+        # Construct the falls
+        for node, serialized in nodes_by_uid.values():
+            if 'fall' in serialized:
+                node.fall = nodes_by_uid[serialized['fall']]
+        return root
+
+    def _serialize(self):
+        serialized = super()._serialize()
+        serialized['uid'] = id(self)
+        if self.fall is not None:
+            serialized['fall'] = id(self.fall)
+        return serialized
+
 
 class MultiSequenceSearch:
     """A datastructure for efficiently searching a sequence for multiple strings"""
@@ -196,6 +285,15 @@ class MultiSequenceSearch:
         for seq in sequences_to_find:
             self.trie.add(seq)
         self.trie.finalize()
+
+    def save(self, output_stream: IO):
+        output_stream.write(self.trie.serialize())
+
+    @staticmethod
+    def load(input_stream: IO):
+        mss = MultiSequenceSearch()
+        mss.trie = ACNode.load(input_stream.read())
+        return mss
 
     def search(self, source_sequence: Union[Sequence, IO]):
         """The Aho-Corasick Algorithm"""
@@ -279,3 +377,5 @@ if __name__ == '__main__':
     swm = StartsWithMatcher(b'hack', b'hacker', b'crack', b'ack', b'kool')
     for match in swm.search(b'hacker'):
         print(match)
+
+    print(ACNode.load(mss.trie.serialize()))
