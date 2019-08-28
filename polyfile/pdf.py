@@ -16,11 +16,11 @@ def content_length(content):
     return content[-1].offset.offset - content[0].offset.offset + token_length(content[-1])
 
 
-def _emit_dict(parsed, parent):
+def _emit_dict(parsed, parent, pdf_offset):
     dict_obj = Submatch(
         "PDFDictionary",
         '',
-        relative_offset=parsed.start.offset.offset - parent.offset,
+        relative_offset=parsed.start.offset.offset - parent.offset + pdf_offset,
         length=parsed.end.offset.offset - parsed.start.offset.offset + len(parsed.end.token),
         parent=parent
     )
@@ -34,7 +34,7 @@ def _emit_dict(parsed, parent):
         pair = Submatch(
             "KeyValuePair",
             '',
-            relative_offset=pair_offset,
+            relative_offset=pair_offset + pdf_offset,
             length=value_end - key.offset.offset,
             parent=dict_obj
         )
@@ -47,7 +47,7 @@ def _emit_dict(parsed, parent):
             parent=pair
         )
         if isinstance(value, pdfparser.ParsedDictionary):
-            yield from _emit_dict(value, pair)
+            yield from _emit_dict(value, pair, pdf_offset)
         else:
             value_length = value[-1].offset.offset + len(value[-1].token) - value[0].offset.offset
             yield Submatch(
@@ -109,7 +109,7 @@ def parse_object(object, parent=None):
     dict_offset = oPDFParseDictionary.content[0].offset.offset - objid.offset.offset
     dict_length = content_length(oPDFParseDictionary.content)
     if oPDFParseDictionary.parsed is not None:
-        yield from _emit_dict(oPDFParseDictionary.parsed, obj)
+        yield from _emit_dict(oPDFParseDictionary.parsed, obj, parent.offset)
     #log.debug('')
     #log.debug('')
     content_start = dict_offset + dict_length
