@@ -1,4 +1,5 @@
 polyfile/triddefs_xml.7z
 polyfile/defs/*
+polyfile/defs.json.bz2
 ~*
 *.pyc

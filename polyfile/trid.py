@@ -1,5 +1,9 @@
+import base64
+import bz2
+import codecs
 from collections import defaultdict
 import glob
+import json
 import os
 from xml.etree import ElementTree
 
@@ -12,6 +16,8 @@ log = logger.getStatusLogger("TRiD")
 TRID_DEFS_URL = 'http://mark0.net/download/triddefs_xml.7z'
 
 DEF_DIR = os.path.join(os.path.dirname(os.path.realpath(__file__)), "defs")
+
+SERIALIZED_DEFS_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), "defs.json.bz2")
 
 DEFS = None
 
@@ -32,6 +38,29 @@ class TRiDDef:
             if self.name.startswith(cbo):
                 self.can_be_offset = True
                 break
+
+    @staticmethod
+    def deserialize(json):
+        patterns = [(ppos, base64.b64decode(pbytes)) for ppos, pbytes in json['patterns']]
+        strings = tuple(base64.b64decode(s) for s in json['strings'])
+        return TRiDDef(
+            name=json['name'],
+            filetype=json['filetype'],
+            ext=json['ext'],
+            mime=json['mime'],
+            patterns=patterns,
+            strings=strings
+        )
+
+    def serialize(self):
+        return {
+            'name': self.name,
+            'filetype': self.filetype,
+            'ext': self.ext,
+            'mime': self.mime,
+            'patterns': [[ppos, base64.b64encode(pbytes).decode('utf-8')] for ppos, pbytes in self.patterns],
+            'strings': [base64.b64encode(s).decode('utf-8') for s in self.strings]
+        }
 
     @staticmethod
     def load(xml_path):
@@ -171,14 +200,25 @@ def load():
     if DEFS is not None:
         return
 
-    download_defs_if_necessary()
+    if not os.path.exists(SERIALIZED_DEFS_PATH):
+        download_defs_if_necessary()
 
-    log.status('Loading TRiD file definitions...')
+        log.status('Loading TRiD file definitions...')
 
-    DEFS = []
+        DEFS = []
 
-    for xml_path in glob.glob(os.path.join(DEF_DIR, '**', '*.xml')):
-        DEFS.append(TRiDDef.load(xml_path))
-        log.status(f'Loading TRiD file definitions... {DEFS[-1].name}')
+        for xml_path in glob.glob(os.path.join(DEF_DIR, '**', '*.xml')):
+            DEFS.append(TRiDDef.load(xml_path))
+            log.status(f'Loading TRiD file definitions... {DEFS[-1].name}')
 
-    log.clear_status()
+        log.status('Serializing TRiD definitions...')
+
+        with bz2.open(SERIALIZED_DEFS_PATH, 'wb') as f:
+            json.dump([d.serialize() for d in DEFS], codecs.getwriter('utf-8')(f))
+
+        log.clear_status()
+    else:
+        log.status('Loading cached TRiD file definitions...')
+        with bz2.open(SERIALIZED_DEFS_PATH, 'rb') as f:
+            DEFS = [TRiDDef.deserialize(tdef) for tdef in json.load(codecs.getreader('utf-8')(f))]
+        log.clear_status()
