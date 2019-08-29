@@ -172,17 +172,25 @@ def encode(obj, stream):
         already_expanded = id(s) in obj_ids
         if already_expanded:
             old_id = obj_ids[id(s)]
+        # We add one to new_id here because obj_id zero is reserved
         new_id = len(objs)
         obj_ids[id(s)] = new_id
-        objs.append((s, new_id, encoding))
+        objs.append((s, encoding))
         if already_expanded:
-            objs[old_id] = (None, None, None)
-        else:
-            stack.extend(encoding.children(s))
+            objs[old_id] = (None, None)
+            # Remove all of the dependencies, since they now need to be added after:
+            # TODO: eventually do cycle detection here, and throw an error instead of livelock
+            for child in encoding.children(s):
+                if id(child) in obj_ids:
+                    objs[obj_ids[id(child)]] = (None, None)
+                    del obj_ids[id(child)]
+        stack.extend(encoding.children(s))
 
     # write the objects to the stream in reverse
-    for s, obj_id, encoding in reversed(objs):
-        if obj_id is None:
+    n = len(objs)
+    for i, (s, encoding) in enumerate(reversed(objs)):
+        obj_id = n - i - 1
+        if encoding is None:
             # This object was referenced twice, and this was a duplicate
             continue
         write_int(obj_id, stream)
@@ -227,23 +235,28 @@ def loads(string:bytes):
 
 
 if __name__ == '__main__':
+    ref = ["list", "used", "twice"]
     test_obj = {
         'testing': {
             'foo': {10},
-            'bar': [1, 2, 3, b'1234\xFF', True, False]
+            'bar': [1, 2, 3, b'1234\xFF', True, False],
+            'ref': ref
         },
         'baz': [
             'a', ('b',), 'c',
             {'d': 5},
             None,
             frozenset([1, 1, 2, 3, 5, 8])
-        ]
+        ],
+        'ref': ref
     }
+
     #print(test_obj)
     #encoded = encode(test_obj)
     #print(encoded)
     #decoded = decode(encoded)
     #print(decoded)
+
     for i in range(0, 2048):
         assert loads(dumps(i)) == i
 
