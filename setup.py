@@ -1,9 +1,9 @@
 import os
 from setuptools import setup, find_packages
 
-from polyfile.trid import download_defs_if_necessary
+from polyfile.trid import build_defs_cache_if_necessary
 
-download_defs_if_necessary()
+build_defs_cache_if_necessary()
 
 setup(
     name='polyfile',
@@ -22,7 +22,7 @@ setup(
             'polyfile = polyfile.__main__:main'
         ]
     },
-    package_data={'polyfile': [os.path.join('defs', '**', '*.xml'), os.path.join('templates', '*')]},
+    package_data={'polyfile': ['defs.json.gz', os.path.join('templates', '*')]},
     include_package_data=True,
     classifiers=[
         'Development Status :: 4 - Beta',

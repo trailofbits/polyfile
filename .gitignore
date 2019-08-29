@@ -1,6 +1,5 @@
 polyfile/triddefs_xml.7z
 polyfile/defs/*
-polyfile/defs.json.gz
 poyfile/trie_full.gz
 polyfile/trie_partial.gz
 ~*

@@ -212,6 +212,11 @@ def download_defs_if_necessary():
         download_defs()
 
 
+def build_defs_cache_if_necessary():
+    if not os.path.exists(SERIALIZED_DEFS_PATH):
+        load()
+
+
 def load():
     global DEFS
     if DEFS is not None:
