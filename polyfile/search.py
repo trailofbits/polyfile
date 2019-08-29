@@ -1,8 +1,8 @@
-import base64
 from collections import deque
 import collections.abc
-import json
 from typing import IO, Mapping, Sequence, Union
+
+from . import serialization
 
 
 class TrieNode:
@@ -130,21 +130,12 @@ class TrieNode:
 
     def _serialize_node(self):
         value_encoding = None
-        if self.value is not None:
-            if isinstance(self.value, bytes):
-                value = base64.b64encode(self.value).decode('utf-8')
-                value_encoding = 'bytes'
-            else:
-                value = self.value
-        else:
-            value = None
-        sources = [base64.b64encode(source).decode('utf-8') for source in self._sources]
         ret = {
-            'sources': sources,
+            'sources': list(self._sources),
             'children': []
         }
-        if value is not None:
-            ret['value'] = value
+        if self.value is not None:
+            ret['value'] = self.value
         if value_encoding is not None:
             ret['value_encoding'] = value_encoding
         return ret
@@ -162,20 +153,14 @@ class TrieNode:
 
     def serialize(self):
         """Serializes this Trie as a JSON file. All node values and sources must be JSON serializable."""
-        return json.dumps(self._serialize())
+        return serialization.dumps(self._serialize())
 
     @staticmethod
     def _deserialize_value_and_sources(serialized: dict):
         value = None
         if 'value' in serialized:
-            if 'value_encoding' in serialized:
-                if serialized['value_encoding'] == 'bytes':
-                    value = base64.b64decode(serialized['value'])
-                else:
-                    raise Exception(f"Unsupported 'value_encoding' \"{serialized['value_encoding']}\"")
-            else:
-                value = serialized['value']
-        sources = [base64.b64decode(source) for source in serialized['sources']]
+            value = serialized['value']
+        sources = [source for source in serialized['sources']]
         return value, sources
 
     @staticmethod
@@ -190,7 +175,7 @@ class TrieNode:
 
     @staticmethod
     def load(serialized):
-        serialized = json.loads(serialized)
+        serialized = serialization.loads(serialized)
         return TrieNode._deserialize_node(serialized)
 
 
@@ -268,7 +253,7 @@ class ACNode(TrieNode):
 
     @staticmethod
     def load(serialized):
-        serialized = json.loads(serialized)
+        serialized = serialization.loads(serialized)
         nodes_by_uid = {}
         root = ACNode._deserialize_node(serialized, nodes_by_uid)
         # Construct the falls
