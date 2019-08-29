@@ -1,5 +1,9 @@
+import base64
+import codecs
 from collections import defaultdict
 import glob
+import gzip
+import json
 import os
 from xml.etree import ElementTree
 
@@ -12,6 +16,11 @@ log = logger.getStatusLogger("TRiD")
 TRID_DEFS_URL = 'http://mark0.net/download/triddefs_xml.7z'
 
 DEF_DIR = os.path.join(os.path.dirname(os.path.realpath(__file__)), "defs")
+
+SERIALIZED_DEFS_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), "defs.json.gz")
+
+SERIALIZED_FULL_TRIE = os.path.join(os.path.dirname(os.path.realpath(__file__)), "trie_full.gz")
+SERIALIZED_PARTIAL_TRIE = os.path.join(os.path.dirname(os.path.realpath(__file__)), "trie_partial.gz")
 
 DEFS = None
 
@@ -32,6 +41,29 @@ class TRiDDef:
             if self.name.startswith(cbo):
                 self.can_be_offset = True
                 break
+
+    @staticmethod
+    def deserialize(json):
+        patterns = [(ppos, base64.b64decode(pbytes)) for ppos, pbytes in json['patterns']]
+        strings = tuple(base64.b64decode(s) for s in json['strings'])
+        return TRiDDef(
+            name=json['name'],
+            filetype=json['filetype'],
+            ext=json['ext'],
+            mime=json['mime'],
+            patterns=patterns,
+            strings=strings
+        )
+
+    def serialize(self):
+        return {
+            'name': self.name,
+            'filetype': self.filetype,
+            'ext': self.ext,
+            'mime': self.mime,
+            'patterns': [[ppos, base64.b64encode(pbytes).decode('utf-8')] for ppos, pbytes in self.patterns],
+            'strings': [base64.b64encode(s).decode('utf-8') for s in self.strings]
+        }
 
     @staticmethod
     def load(xml_path):
@@ -91,8 +123,22 @@ class Matcher:
                 self.patterns[seq].add((pos, tdef))
             for string in tdef.strings:
                 self.patterns[string].add((None, tdef))
+        if try_all_offsets:
+            trie_path = SERIALIZED_FULL_TRIE
+        else:
+            trie_path = SERIALIZED_PARTIAL_TRIE
+        # This is currently slower than just building the Trie from scratch every time!
+        #if os.path.exists(trie_path):
+        #    log.status("Loading the Cached Aho-Corasick Trie...")
+        #   with gzip.open(trie_path, 'rb') as f:
+        #        self.search = MultiSequenceSearch.load(f)
+        #else:
         log.status("Constructing the Aho-Corasick Trie...")
         self.search = MultiSequenceSearch(*self.patterns.keys())
+            # Commented out the caching because it is slower than just rebuilding the Trie every time:
+            #log.status("Caching the Aho-Corasick Trie...")
+            #with gzip.open(trie_path, 'wb') as f:
+            #    self.search.save(f)
         log.clear_status()
 
     def match(self, file_stream, progress_callback=None):
@@ -166,19 +212,35 @@ def download_defs_if_necessary():
         download_defs()
 
 
+def build_defs_cache_if_necessary():
+    if not os.path.exists(SERIALIZED_DEFS_PATH):
+        load()
+
+
 def load():
     global DEFS
     if DEFS is not None:
         return
 
-    download_defs_if_necessary()
+    if not os.path.exists(SERIALIZED_DEFS_PATH):
+        download_defs_if_necessary()
 
-    log.status('Loading TRiD file definitions...')
+        log.status('Loading TRiD file definitions...')
 
-    DEFS = []
+        DEFS = []
 
-    for xml_path in glob.glob(os.path.join(DEF_DIR, '**', '*.xml')):
-        DEFS.append(TRiDDef.load(xml_path))
-        log.status(f'Loading TRiD file definitions... {DEFS[-1].name}')
+        for xml_path in glob.glob(os.path.join(DEF_DIR, '**', '*.xml')):
+            DEFS.append(TRiDDef.load(xml_path))
+            log.status(f'Loading TRiD file definitions... {DEFS[-1].name}')
 
-    log.clear_status()
+        log.status('Serializing TRiD definitions...')
+
+        with gzip.open(SERIALIZED_DEFS_PATH, 'wb') as f:
+            json.dump([d.serialize() for d in DEFS], codecs.getwriter('utf-8')(f))
+
+        log.clear_status()
+    else:
+        log.status('Loading cached TRiD file definitions...')
+        with gzip.open(SERIALIZED_DEFS_PATH, 'rb') as f:
+            DEFS = [TRiDDef.deserialize(tdef) for tdef in json.load(codecs.getreader('utf-8')(f))]
+        log.clear_status()

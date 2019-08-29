@@ -2,11 +2,14 @@ from collections import deque
 import collections.abc
 from typing import IO, Mapping, Sequence, Union
 
+from . import serialization
 
+
+@serialization.serializable
 class TrieNode:
     def __init__(self, value=None, sources=None, _children=None):
         if _children is None:
-            self._children : Mapping[object, TrieNode] = {}
+            self._children: Mapping[object, TrieNode] = {}
         else:
             self._children = _children
         self.value = value
@@ -126,13 +129,23 @@ class TrieNode:
             stack.extend(child for child in children if id(child) not in visited)
             visited |= set(id(c) for c in children)
 
+    def serialize(self):
+        return self.value, self._sources, self._children
 
+
+@serialization.serializable
 class ACNode(TrieNode):
     """A data structure for implementing the Aho-Corasick multi-string matching algorithm"""
-    def __init__(self, value=None, sources=None, _children=None, parent=None):
+    def __init__(self, value=None, sources=None, _children=None, parent=None, _fall=None):
         super().__init__(value=value, sources=sources, _children=_children)
         self.parent = parent
-        self.fall = None
+        self.fall = _fall
+
+    def serialize(self):
+        return super().serialize() + (self.parent, self.fall)
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}(value={self.value!r}, sources={self.sources!r}, _children={self._children!r}), parent={self.parent!r}, _fall={self.fall!r}"
 
     def _add_child(self, value, sources=None):
         new_child = ACNode(value, sources, parent=self)
@@ -196,6 +209,17 @@ class MultiSequenceSearch:
         for seq in sequences_to_find:
             self.trie.add(seq)
         self.trie.finalize()
+
+    def save(self, output_stream: IO):
+        serialization.dump(self.trie, output_stream)
+
+    @staticmethod
+    def load(input_stream: IO):
+        mss = MultiSequenceSearch()
+        mss.trie = serialization.load(input_stream)
+        print(mss.trie)
+        exit(0)
+        return mss
 
     def search(self, source_sequence: Union[Sequence, IO]):
         """The Aho-Corasick Algorithm"""
@@ -279,3 +303,5 @@ if __name__ == '__main__':
     swm = StartsWithMatcher(b'hack', b'hacker', b'crack', b'ack', b'kool')
     for match in swm.search(b'hacker'):
         print(match)
+
+    print(ACNode.load(mss.trie.serialize()))
