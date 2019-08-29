@@ -53,9 +53,9 @@ def decode_string(_, stream):
 
 
 def encode_list(lst, obj_ids, stream):
-    write_int(len(lst), stream)
     for obj in lst:
         write_int(obj_ids[id(obj)], stream)
+    write_int(EncodeTypes.END.encoding_id, stream)
 
 
 encode_tuple = encode_list
@@ -67,9 +67,25 @@ encode_set = encode_list
 encode_frozenset = encode_list
 
 
+def _decode_to_end(stream):
+    while True:
+        i = read_int(stream)
+        if i == EncodeTypes.END.encoding_id:
+            break
+        yield i
+
+
+def pairwise(iterable):
+    while True:
+        try:
+            a, b = next(iterable), next(iterable)
+        except StopIteration:
+            break
+        yield a, b
+
+
 def decode_list(objs, stream):
-    length = read_int(stream)
-    return [objs[read_int(stream)] for _ in range(length)]
+    return [objs[i] for i in _decode_to_end(stream)]
 
 
 def decode_tuple(*args, **kwargs):
@@ -85,17 +101,14 @@ def decode_frozenset(*args, **kwargs):
 
 
 def encode_dict(d: dict, obj_ids, stream):
-    write_int(len(d), stream)
     for k, v in d.items():
         write_int(obj_ids[id(k)], stream)
         write_int(obj_ids[id(v)], stream)
+    write_int(EncodeTypes.END.encoding_id, stream)
 
 
 def decode_dict(objs, stream):
-    length = read_int(stream)
-    # We can't use a dict comprenension here because the interpreter
-    # isn't guaranteed to evaluate the key before the value
-    return dict((objs[read_int(stream)], objs[read_int(stream)]) for _ in range(length))
+    return {objs[k]: objs[v] for k, v in pairwise(_decode_to_end(stream))}
 
 
 def encode_none(*args, **kwargs):
@@ -160,8 +173,13 @@ class EncodingError(RuntimeError):
 
 def encode(obj, stream):
     stack = [obj]
-    obj_ids = {}
-    objs = []
+    # Object ID 0 is reserved
+    obj_ids = {
+        0: None
+    }
+    objs = [
+        (None, None)
+    ]
 
     # Do a DFS traversal to assign IDs
     while stack:
@@ -212,7 +230,7 @@ def decode(stream):
         if encoding is None:
             raise EncodingError(f"Unexpected encoded object of type #{obj_id}")
         objs[obj_id] = encoding.decode(objs, stream)
-    return objs[0]
+    return objs[1]
 
 
 def dump(obj, stream):
@@ -268,4 +286,7 @@ if __name__ == '__main__':
     lst = list(range(1024))
     assert loads(dumps(lst)) == lst
 
-    print(loads(dumps(test_obj)))
+    encoded = dumps(test_obj)
+    print(f"Encoded bytes: {len(encoded)}")
+
+    print(loads(encoded))
