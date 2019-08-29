@@ -3,7 +3,8 @@ import math
 import os
 import unicodedata
 
-from jinja2 import Environment, FileSystemLoader, Template
+jinja2 = None
+
 
 TEMPLATE_DIR = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'templates')
 TEMPLATE = None
@@ -22,9 +23,14 @@ def assign_ids(matches):
 
 
 def generate(file_path, matches):
-    global TEMPLATE
+    global TEMPLATE, jinja2
+    if jinja2 is None:
+        # Dynamically load jinja2 at runtime so it is not an installation dependency for setup.py
+        import jinja2 as j2
+        jinja2 = j2
+
     if TEMPLATE is None:
-        TEMPLATE = Environment(loader=FileSystemLoader(TEMPLATE_DIR)).get_template('template.html')
+        TEMPLATE = jinja2.Environment(loader=jinja2.FileSystemLoader(TEMPLATE_DIR)).get_template('template.html')
 
     matches = assign_ids(matches)
 
