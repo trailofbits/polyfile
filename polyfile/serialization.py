@@ -64,6 +64,9 @@ encode_tuple = encode_list
 encode_set = encode_list
 
 
+encode_frozenset = encode_list
+
+
 def decode_list(objs, stream):
     length = read_int(stream)
     return [objs[read_int(stream)] for _ in range(length)]
@@ -75,6 +78,10 @@ def decode_tuple(*args, **kwargs):
 
 def decode_set(*args, **kwargs):
     return set(decode_list(*args, **kwargs))
+
+
+def decode_frozenset(*args, **kwargs):
+    return frozenset(decode_list(*args, **kwargs))
 
 
 def encode_dict(d: dict, obj_ids, stream):
@@ -91,14 +98,38 @@ def decode_dict(objs, stream):
     return dict((objs[read_int(stream)], objs[read_int(stream)]) for _ in range(length))
 
 
+def encode_none(*args, **kwargs):
+    pass
+
+
+def decode_none(*args, **kwargs):
+    return None
+
+
+def encode_bool(b: bool, _, stream):
+    write_int(int(b), stream)
+
+
+def decode_bool(_, stream):
+    return bool(read_int(stream))
+
+
+class _EndObject:
+    pass
+
+
 class EncodeTypes(Enum):
-    INT = (0, int, encode_int, decode_int, lambda _: ())
-    STRING = (1, str, encode_string, decode_string, lambda _: ())
-    BYTES = (2, bytes, encode_bytes, decode_bytes, lambda _: ())
-    LIST = (3, list, encode_list, decode_list, iter)
-    TUPLE = (4, tuple, encode_tuple, decode_tuple, iter)
-    DICT = (5, dict, encode_dict, decode_dict, lambda d: chain(d.keys(), d.values()))
-    SET = (6, set, None, None, iter)
+    END = (0, _EndObject, None, None, None)
+    NONE = (1, type(None), encode_none, decode_none, lambda _: ())
+    BOOL = (2, bool, encode_bool, decode_bool, lambda _: ())
+    INT = (3, int, encode_int, decode_int, lambda _: ())
+    STRING = (4, str, encode_string, decode_string, lambda _: ())
+    BYTES = (5, bytes, encode_bytes, decode_bytes, lambda _: ())
+    LIST = (6, list, encode_list, decode_list, iter)
+    TUPLE = (7, tuple, encode_tuple, decode_tuple, iter)
+    DICT = (8, dict, encode_dict, decode_dict, lambda d: chain(d.keys(), d.values()))
+    SET = (9, set, encode_set, decode_set, iter)
+    FROZENSET = (10, frozenset, encode_frozenset, decode_frozenset, iter)
 
     def __init__(self, encoding_id, source_type, encoding_function, decoding_function, children):
         self.encoding_id = encoding_id
@@ -198,12 +229,14 @@ def loads(string:bytes):
 if __name__ == '__main__':
     test_obj = {
         'testing': {
-            'foo': 10,
-            'bar': [1, 2, 3, b'1234\xFF']
+            'foo': {10},
+            'bar': [1, 2, 3, b'1234\xFF', True, False]
         },
         'baz': [
-            'a', 'b', 'c',
-            {'d': 5}
+            'a', ('b',), 'c',
+            {'d': 5},
+            None,
+            frozenset([1, 1, 2, 3, 5, 8])
         ]
     }
     #print(test_obj)
