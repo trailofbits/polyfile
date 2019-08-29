@@ -1,8 +1,8 @@
 import base64
-import bz2
 import codecs
 from collections import defaultdict
 import glob
+import gzip
 import json
 import os
 from xml.etree import ElementTree
@@ -17,10 +17,10 @@ TRID_DEFS_URL = 'http://mark0.net/download/triddefs_xml.7z'
 
 DEF_DIR = os.path.join(os.path.dirname(os.path.realpath(__file__)), "defs")
 
-SERIALIZED_DEFS_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), "defs.json.bz2")
+SERIALIZED_DEFS_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), "defs.json.gz")
 
-SERIALIZED_FULL_TRIE = os.path.join(os.path.dirname(os.path.realpath(__file__)), "trie_full.json.bz2")
-SERIALIZED_PARTIAL_TRIE = os.path.join(os.path.dirname(os.path.realpath(__file__)), "trie_partial.json.bz2")
+SERIALIZED_FULL_TRIE = os.path.join(os.path.dirname(os.path.realpath(__file__)), "trie_full.gz")
+SERIALIZED_PARTIAL_TRIE = os.path.join(os.path.dirname(os.path.realpath(__file__)), "trie_partial.gz")
 
 DEFS = None
 
@@ -129,14 +129,14 @@ class Matcher:
             trie_path = SERIALIZED_PARTIAL_TRIE
         if os.path.exists(trie_path):
             log.status("Loading the Cached Aho-Corasick Trie...")
-            with bz2.open(trie_path, 'rb') as f:
-                self.search = MultiSequenceSearch.load(codecs.getreader('utf-8')(f))
+            with gzip.open(trie_path, 'rb') as f:
+                self.search = MultiSequenceSearch.load(f)
         else:
             log.status("Constructing the Aho-Corasick Trie...")
             self.search = MultiSequenceSearch(*self.patterns.keys())
             log.status("Caching the Aho-Corasick Trie...")
-            with bz2.open(trie_path, 'wb') as f:
-                self.search.save(codecs.getwriter('utf-8')(f))
+            with gzip.open(trie_path, 'wb') as f:
+                self.search.save(f)
         log.clear_status()
 
     def match(self, file_stream, progress_callback=None):
@@ -228,12 +228,12 @@ def load():
 
         log.status('Serializing TRiD definitions...')
 
-        with bz2.open(SERIALIZED_DEFS_PATH, 'wb') as f:
+        with gzip.open(SERIALIZED_DEFS_PATH, 'wb') as f:
             json.dump([d.serialize() for d in DEFS], codecs.getwriter('utf-8')(f))
 
         log.clear_status()
     else:
         log.status('Loading cached TRiD file definitions...')
-        with bz2.open(SERIALIZED_DEFS_PATH, 'rb') as f:
+        with gzip.open(SERIALIZED_DEFS_PATH, 'rb') as f:
             DEFS = [TRiDDef.deserialize(tdef) for tdef in json.load(codecs.getreader('utf-8')(f))]
         log.clear_status()

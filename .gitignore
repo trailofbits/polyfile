@@ -1,7 +1,7 @@
 polyfile/triddefs_xml.7z
 polyfile/defs/*
-polyfile/defs.json.bz2
-poyfile/full_trie.json.bz2
-polyfile/partial_trie.json.bz2
+polyfile/defs.json.gz
+poyfile/trie_full.gz
+polyfile/trie_partial.gz
 ~*
 *.pyc

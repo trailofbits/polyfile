@@ -151,9 +151,12 @@ class TrieNode:
                 nodes.append((child, child_serialized))
         return ret
 
-    def serialize(self):
+    def serialize(self, stream=None):
         """Serializes this Trie as a JSON file. All node values and sources must be JSON serializable."""
-        return serialization.dumps(self._serialize())
+        if stream is None:
+            return serialization.dumps(self._serialize())
+        else:
+            return serialization.dump(self._serialize(), stream)
 
     @staticmethod
     def _deserialize_value_and_sources(serialized: dict):
@@ -175,7 +178,7 @@ class TrieNode:
 
     @staticmethod
     def load(serialized):
-        serialized = serialization.loads(serialized)
+        serialized = serialization.load(serialized)
         return TrieNode._deserialize_node(serialized)
 
 
@@ -253,7 +256,7 @@ class ACNode(TrieNode):
 
     @staticmethod
     def load(serialized):
-        serialized = serialization.loads(serialized)
+        serialized = serialization.load(serialized)
         nodes_by_uid = {}
         root = ACNode._deserialize_node(serialized, nodes_by_uid)
         # Construct the falls
@@ -279,12 +282,12 @@ class MultiSequenceSearch:
         self.trie.finalize()
 
     def save(self, output_stream: IO):
-        output_stream.write(self.trie.serialize())
+        self.trie.serialize(output_stream)
 
     @staticmethod
     def load(input_stream: IO):
         mss = MultiSequenceSearch()
-        mss.trie = ACNode.load(input_stream.read())
+        mss.trie = ACNode.load(input_stream)
         return mss
 
     def search(self, source_sequence: Union[Sequence, IO]):
