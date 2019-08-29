@@ -73,6 +73,17 @@ class Match:
             return self.relative_offset
 
     @property
+    def root(self):
+        if self.parent is None:
+            return self
+        else:
+            return self.parent.root
+
+    @property
+    def root_offset(self):
+        return self.offset - self.root.offset
+
+    @property
     def relative_offset(self):
         """The offset of this match relative to its parent"""
         return self._offset
