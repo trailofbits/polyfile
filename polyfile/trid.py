@@ -127,16 +127,18 @@ class Matcher:
             trie_path = SERIALIZED_FULL_TRIE
         else:
             trie_path = SERIALIZED_PARTIAL_TRIE
-        if os.path.exists(trie_path):
-            log.status("Loading the Cached Aho-Corasick Trie...")
-            with gzip.open(trie_path, 'rb') as f:
-                self.search = MultiSequenceSearch.load(f)
-        else:
-            log.status("Constructing the Aho-Corasick Trie...")
-            self.search = MultiSequenceSearch(*self.patterns.keys())
-            log.status("Caching the Aho-Corasick Trie...")
-            with gzip.open(trie_path, 'wb') as f:
-                self.search.save(f)
+        # This is currently slower than just building the Trie from scratch every time!
+        #if os.path.exists(trie_path):
+        #    log.status("Loading the Cached Aho-Corasick Trie...")
+        #   with gzip.open(trie_path, 'rb') as f:
+        #        self.search = MultiSequenceSearch.load(f)
+        #else:
+        log.status("Constructing the Aho-Corasick Trie...")
+        self.search = MultiSequenceSearch(*self.patterns.keys())
+            # Commented out the caching because it is slower than just rebuilding the Trie every time:
+            #log.status("Caching the Aho-Corasick Trie...")
+            #with gzip.open(trie_path, 'wb') as f:
+            #    self.search.save(f)
         log.clear_status()
 
     def match(self, file_stream, progress_callback=None):
