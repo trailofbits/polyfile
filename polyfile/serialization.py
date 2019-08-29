@@ -24,6 +24,8 @@ def read_int(stream):
 
 ENCODINGS_BY_TYPE = {}
 ENCODINGS_BY_ID = {}
+CUSTOM_ENCODINGS = {}
+CUSTOM_ENCODINGS_BY_ID = {}
 
 
 def encode_int(i, _, stream):
@@ -127,8 +129,32 @@ def decode_bool(_, stream):
     return bool(read_int(stream))
 
 
+def encode_custom(c, obj_ids, stream):
+    write_int(CUSTOM_ENCODINGS[type(c)], stream)
+    encode_list(c.serialize(), obj_ids, stream)
+
+
+def decode_custom(objs, stream):
+    custom_type = CUSTOM_ENCODINGS_BY_ID[read_int(stream)]
+    args = decode_list(objs, stream)
+    return custom_type(*args)
+
+
 class _EndObject:
     pass
+
+
+class _CustomObject:
+    pass
+
+
+def serializable(SerializableClass):
+    if not hasattr(SerializableClass, 'serialize'):
+        raise ValueError(f'Serializable class {SerializableClass} must implement the `serialize` member function')
+    new_id = len(CUSTOM_ENCODINGS)
+    CUSTOM_ENCODINGS[SerializableClass] = new_id
+    CUSTOM_ENCODINGS_BY_ID[new_id] = SerializableClass
+    return SerializableClass
 
 
 class EncodeTypes(Enum):
@@ -143,6 +169,7 @@ class EncodeTypes(Enum):
     DICT = (8, dict, encode_dict, decode_dict, lambda d: chain(d.keys(), d.values()))
     SET = (9, set, encode_set, decode_set, iter)
     FROZENSET = (10, frozenset, encode_frozenset, decode_frozenset, iter)
+    CUSTOM = (11, _CustomObject, encode_custom, decode_custom, lambda c: c.serialize())
 
     def __init__(self, encoding_id, source_type, encoding_function, decoding_function, children):
         self.encoding_id = encoding_id
@@ -186,7 +213,11 @@ def encode(obj, stream):
         s = stack.pop()
         encoding = EncodeTypes.get_by_type(type(s))
         if encoding is None:
-            raise EncodingError(f"No encoding implemented for objects of type {type(s)}")
+            # See if there is a custom encoding:
+            if type(s) in CUSTOM_ENCODINGS:
+                encoding = EncodeTypes.CUSTOM
+            else:
+                raise EncodingError(f"No encoding implemented for objects of type {type(s)}")
         already_expanded = id(s) in obj_ids
         if already_expanded:
             old_id = obj_ids[id(s)]

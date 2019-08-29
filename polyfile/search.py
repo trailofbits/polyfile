@@ -5,6 +5,7 @@ from typing import IO, Mapping, Sequence, Union
 from . import serialization
 
 
+@serialization.serializable
 class TrieNode:
     def __init__(self, value=None, sources=None, _children=None):
         if _children is None:
@@ -128,66 +129,23 @@ class TrieNode:
             stack.extend(child for child in children if id(child) not in visited)
             visited |= set(id(c) for c in children)
 
-    def _serialize_node(self):
-        value_encoding = None
-        ret = {
-            'sources': list(self._sources),
-            'children': []
-        }
-        if self.value is not None:
-            ret['value'] = self.value
-        if value_encoding is not None:
-            ret['value_encoding'] = value_encoding
-        return ret
-
-    def _serialize(self):
-        ret = self._serialize_node()
-        nodes = [(self, ret)]
-        while nodes:
-            node, serialized = nodes.pop()
-            for child in node._children.values():
-                child_serialized = child._serialize_node()
-                serialized['children'].append(child_serialized)
-                nodes.append((child, child_serialized))
-        return ret
-
-    def serialize(self, stream=None):
-        """Serializes this Trie as a JSON file. All node values and sources must be JSON serializable."""
-        if stream is None:
-            return serialization.dumps(self._serialize())
-        else:
-            return serialization.dump(self._serialize(), stream)
-
-    @staticmethod
-    def _deserialize_value_and_sources(serialized: dict):
-        value = None
-        if 'value' in serialized:
-            value = serialized['value']
-        sources = [source for source in serialized['sources']]
-        return value, sources
-
-    @staticmethod
-    def _deserialize_node(serialized: dict, parent=None):
-        value, sources = TrieNode._deserialize_value_and_sources(serialized)
-        node = TrieNode(value=value, sources=sources)
-        if parent is not None:
-            parent._children[node.value] = node
-        for child in serialized['children']:
-            TrieNode._deserialize_node(child, parent=node)
-        return node
-
-    @staticmethod
-    def load(serialized):
-        serialized = serialization.load(serialized)
-        return TrieNode._deserialize_node(serialized)
+    def serialize(self):
+        return self.value, self._sources, self._children
 
 
+@serialization.serializable
 class ACNode(TrieNode):
     """A data structure for implementing the Aho-Corasick multi-string matching algorithm"""
-    def __init__(self, value=None, sources=None, _children=None, parent=None):
+    def __init__(self, value=None, sources=None, _children=None, parent=None, _fall=None):
         super().__init__(value=value, sources=sources, _children=_children)
         self.parent = parent
-        self.fall = None
+        self.fall = _fall
+
+    def serialize(self):
+        return super().serialize() + (self.parent, self.fall)
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}(value={self.value!r}, sources={self.sources!r}, _children={self._children!r}), parent={self.parent!r}, _fall={self.fall!r}"
 
     def _add_child(self, value, sources=None):
         new_child = ACNode(value, sources, parent=self)
@@ -243,35 +201,6 @@ class ACNode(TrieNode):
         dot += "}\n"
         return dot
 
-    @staticmethod
-    def _deserialize_node(serialized: dict, nodes_by_uid: dict, parent=None):
-        value, sources = TrieNode._deserialize_value_and_sources(serialized)
-        node = ACNode(value=value, sources=sources, parent=parent)
-        nodes_by_uid[serialized['uid']] = (node, serialized)
-        if parent is not None:
-            parent._children[node.value] = node
-        for child in serialized['children']:
-            ACNode._deserialize_node(child, nodes_by_uid, parent=node)
-        return node
-
-    @staticmethod
-    def load(serialized):
-        serialized = serialization.load(serialized)
-        nodes_by_uid = {}
-        root = ACNode._deserialize_node(serialized, nodes_by_uid)
-        # Construct the falls
-        for node, serialized in nodes_by_uid.values():
-            if 'fall' in serialized:
-                node.fall = nodes_by_uid[serialized['fall']][0]
-        return root
-
-    def _serialize_node(self):
-        serialized = super()._serialize_node()
-        serialized['uid'] = id(self)
-        if self.fall is not None:
-            serialized['fall'] = id(self.fall)
-        return serialized
-
 
 class MultiSequenceSearch:
     """A datastructure for efficiently searching a sequence for multiple strings"""
@@ -282,12 +211,14 @@ class MultiSequenceSearch:
         self.trie.finalize()
 
     def save(self, output_stream: IO):
-        self.trie.serialize(output_stream)
+        serialization.dump(self.trie, output_stream)
 
     @staticmethod
     def load(input_stream: IO):
         mss = MultiSequenceSearch()
-        mss.trie = ACNode.load(input_stream)
+        mss.trie = serialization.load(input_stream)
+        print(mss.trie)
+        exit(0)
         return mss
 
     def search(self, source_sequence: Union[Sequence, IO]):
