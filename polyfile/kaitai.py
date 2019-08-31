@@ -6,6 +6,7 @@ import yaml
 
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 
+from . import expressions
 
 KSY_DIR = os.path.join(os.path.realpath(os.path.dirname(__file__)), 'kaitai_defs')
 
@@ -81,9 +82,7 @@ def get_primitive_type(type_name:str, endianness:Endianness=None):
 
 class Expression:
     def __init__(self, expr):
-        import ast
-        print(ast.parse(expr))
-        raise RuntimeError("TODO: Implement expressions!")
+        self.expr = expressions.parse(expr)
 
 
 class Attribute:
