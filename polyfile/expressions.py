@@ -300,6 +300,9 @@ class Expression:
             raise RuntimeError(f"Unexpected extra tokens: {values[:-1]}")
         return values[0]
 
+    def __repr__(self):
+        return f"{self.__class__.__name__}(rpn={self.tokens!r})"
+
 
 def parse(expression_str: str) -> Expression:
     return Expression(infix_to_rpn(tokenize(expression_str)))
