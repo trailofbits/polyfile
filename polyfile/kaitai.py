@@ -7,6 +7,9 @@ import yaml
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 
 from . import expressions
+from . import logger
+
+log = logger.getStatusLogger("Kaitai")
 
 KSY_DIR = os.path.join(os.path.realpath(os.path.dirname(__file__)), 'kaitai_defs')
 
@@ -105,7 +108,6 @@ class Attribute:
         if self.if_expr is not None:
             self.if_expr = Expression(self.if_expr)
 
-
     @property
     def type(self):
         if self._type is None:
@@ -186,14 +188,14 @@ class Type:
 
 def load():
     for ksy_path in glob.glob(os.path.join(KSY_DIR, '*.ksy')):
-        #log.status(f'Loading TRiD file definitions... {DEFS[-1].name}')
+        log.status(f'Loading KSY file definitions... {DEFS[-1].name}')
         with open(ksy_path, 'r') as f:
             ksy = Type(yaml.safe_load(f))
             DEFS[ksy.uid] = ksy
 
-    for t in DEFS.values():
-        for attr in t.seq:
-            print(attr, attr.type)
+    #for t in DEFS.values():
+    #    for attr in t.seq:
+    #        print(attr, attr.type)
 
 
 if __name__ == '__main__':
