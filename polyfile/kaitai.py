@@ -25,29 +25,93 @@ class Endianness(Enum):
 PRIMITIVE_TYPES_BY_NAME = {}
 
 
-class IntegerTypes(Enum):
-    U1 = ('u1', 8, False, Endianness.NONE, 0, 255)
-    U2LE = ('u2le', 16, False, Endianness.LITTLE, 0, 65535)
-    U2BE = ('u2be', 16, False, Endianness.BIG, 0, 65535)
-    U4LE = ('u4le', 32, False, Endianness.LITTLE, 0, 4294967295)
-    U4BE = ('u4be', 32, False, Endianness.BIG, 0, 4294967295)
-    U8LE = ('u8le', 64, False, Endianness.LITTLE, 0, 18446744073709551615)
-    U8BE = ('u8be', 64, False, Endianness.BIG, 0, 18446744073709551615)
-    S1 = ('s1', 8, True, Endianness.NONE, -128, 127)
-    S2LE = ('s2le', 16, False, Endianness.LITTLE, -32768, 32767)
-    S2BE = ('s2be', 16, False, Endianness.BIG, -32768, 32767)
-    S4LE = ('s4le', 32, False, Endianness.LITTLE, -2147483648, 2147483647)
-    S4BE = ('s4be', 32, False, Endianness.BIG, -2147483648, 2147483647)
-    S8LE = ('s8le', 64, False, Endianness.LITTLE, -9223372036854775808, 9223372036854775807)
-    S8BE = ('s8be', 64, False, Endianness.BIG, -9223372036854775808, 9223372036854775807)
+class AST:
+    def __init__(self, obj, parent=None):
+        self.obj = obj
+        self.parent = parent
+        self._children = []
+        self._offset = None
+        self._length = None
 
-    def __init__(self, typename, bitwidth, signed, endianness, min_value, max_value):
+    @property
+    def offset(self):
+        if self._offset is None:
+            if self._children:
+                self._offset = self._children[0].offset
+            elif self.parent is not None:
+                self._offset = self.parent.offset + self.parent.length
+            else:
+                self._offset = 0
+        return self._offset
+
+    @property
+    def length(self):
+        if self._length is None:
+            if self._children:
+                self._length = self._children[-1].offset + self._children[-1].length - self.offset
+            else:
+                self._length = 0
+        return self._length
+
+    def add_child(self, child):
+        self._children.append(child)
+        if child.parent is not None:
+            breakpoint()
+        child.parent = self
+        self._offset = None
+        self._length = None
+
+    @property
+    def children(self):
+        return self._children
+
+    def __len__(self):
+        return len(self._children)
+
+
+class RawBytes(AST):
+    def __init__(self, raw_bytes, offset, parent: AST=None):
+        super().__init__(raw_bytes, parent)
+        self._offset = offset
+        self._length = len(self.obj)
+
+
+class Integer(AST):
+    def __init__(self, value:int, offset:int, length:int, parent: AST=None):
+        super().__init__(value, parent)
+        self._offset = offset
+        self._length = length
+
+
+class IntegerTypes(Enum):
+    U1 = ('u1', 8, False, Endianness.NONE, 0, 255, KaitaiStream.read_u1)
+    U2LE = ('u2le', 16, False, Endianness.LITTLE, 0, 65535, KaitaiStream.read_u2le)
+    U2BE = ('u2be', 16, False, Endianness.BIG, 0, 65535, KaitaiStream.read_u2be)
+    U4LE = ('u4le', 32, False, Endianness.LITTLE, 0, 4294967295, KaitaiStream.read_u4le)
+    U4BE = ('u4be', 32, False, Endianness.BIG, 0, 4294967295, KaitaiStream.read_u4be)
+    U8LE = ('u8le', 64, False, Endianness.LITTLE, 0, 18446744073709551615, KaitaiStream.read_u8le)
+    U8BE = ('u8be', 64, False, Endianness.BIG, 0, 18446744073709551615, KaitaiStream.read_u8be)
+    S1 = ('s1', 8, True, Endianness.NONE, -128, 127, KaitaiStream.read_s1)
+    S2LE = ('s2le', 16, False, Endianness.LITTLE, -32768, 32767, KaitaiStream.read_s2le)
+    S2BE = ('s2be', 16, False, Endianness.BIG, -32768, 32767, KaitaiStream.read_s2be)
+    S4LE = ('s4le', 32, False, Endianness.LITTLE, -2147483648, 2147483647, KaitaiStream.read_s4le)
+    S4BE = ('s4be', 32, False, Endianness.BIG, -2147483648, 2147483647, KaitaiStream.read_s4be)
+    S8LE = ('s8le', 64, False, Endianness.LITTLE, -9223372036854775808, 9223372036854775807, KaitaiStream.read_s8le)
+    S8BE = ('s8be', 64, False, Endianness.BIG, -9223372036854775808, 9223372036854775807, KaitaiStream.read_s8be)
+
+    def parse(self, stream: KaitaiStream):
+        offset = stream.pos()
+        b = self.reader(stream)
+        return Integer(b, offset, self.bitwidth//8)
+
+    def __init__(self, typename, bitwidth, signed, endianness, min_value, max_value, reader):
         self.typename = typename
         self.bitwidth = bitwidth
         self.signed = signed
         self.endianness = endianness
         self.min_value = min_value
         self.max_value = max_value
+        self.reader = reader
 
         PRIMITIVE_TYPES_BY_NAME[self.typename] = self
 
@@ -75,7 +139,7 @@ class Repeat(Enum):
     UNTIL = 'until'
 
 
-def get_primitive_type(type_name:str, endianness:Endianness=None):
+def get_primitive_type(type_name: str, endianness: Endianness=None):
     if type_name in PRIMITIVE_TYPES_BY_NAME:
         return PRIMITIVE_TYPES_BY_NAME[type_name]
     elif endianness is not None and type_name + endianness.value in PRIMITIVE_TYPES_BY_NAME:
@@ -87,14 +151,59 @@ class Expression:
     def __init__(self, expr):
         self.expr = expressions.parse(expr)
 
+    def interpret(self):
+        return self.expr.interpret()
+
+
+class ByteMatch:
+    def __init__(self, contents):
+        if isinstance(contents, bytes):
+            self.contents = contents
+        elif isinstance(contents, bytearray):
+            self.contents = bytes(contents)
+        elif isinstance(contents, list):
+            self.contents = bytes(contents)
+        else:
+            raise RuntimeError(f"TODO: Implement support for `contents` of type {type(contents)}")
+
+    def parse(self, stream: KaitaiStream):
+        offset = stream.pos()
+        c = stream.read_bytes(len(self.contents))
+        assert c == self.contents
+        return RawBytes(c, offset)
+
+
+class Switch:
+    def __init__(self, raw_yaml, parent):
+        self.parent = parent
+        self.switch_on = raw_yaml['switch-on']
+        self.cases = {}
+        for k, v in raw_yaml['cases'].items():
+            if isinstance(k, int):
+                self.cases[Expression(str(k))] = v
+            else:
+                self.cases[Expression(k)] = v
+            # TODO: Test for duplicate cases
+
+    def parse(self, stream: KaitaiStream) -> AST:
+        # TODO: Implement
+        return
+
 
 class Attribute:
     def __init__(self, raw_yaml, parent):
         self.parent = parent
         self.uid = raw_yaml.get('id', None)
         self.contents = raw_yaml.get('contents', None)
+        if self.contents is not None:
+            self.contents = ByteMatch(self.contents)
         self._type_name = raw_yaml.get('type', None)
         self._type = None
+        if isinstance(self._type_name, dict):
+            if 'switch-on' in self._type_name:
+                self._type = Switch(self._type_name, parent=self)
+            else:
+                raise ValueError(f"Unknown type: {self._type_name!r}")
         self.repeat = raw_yaml.get('repeat', 'norepeat')
         for r in Repeat:
             if r.value == self.repeat:
@@ -103,7 +212,11 @@ class Attribute:
         else:
             self.repeat = Repeat.NONE
         self.repeat_expr = raw_yaml.get('repeat-expr', None)
+        if self.repeat_expr is not None:
+            self.repeat_expr = Expression(self.repeat_expr)
         self.repeat_until = raw_yaml.get('repeat-until', None)
+        if self.repeat_until is not None:
+            self.repeat_until = Expression(self.repeat_until)
         self.if_expr = raw_yaml.get('if', None)
         if self.if_expr is not None:
             self.if_expr = Expression(self.if_expr)
@@ -111,8 +224,26 @@ class Attribute:
     @property
     def type(self):
         if self._type is None:
-            self._type = self.parent.get_type(self._type_name)
+            if self.contents is not None:
+                self._type = self.contents
+            else:
+                self._type = self.parent.get_type(self._type_name)
         return self._type
+
+    def parse(self, stream: KaitaiStream) -> AST:
+        ast = AST(self)
+        if self.repeat == Repeat.EOS:
+            while not stream.is_eof():
+                ast.add_child(self.type.parse(stream))
+        elif self.repeat == Repeat.EXPR:
+            while self.repeat_expr.interpret():
+                ast.add_child(self.type.parse(stream))
+        elif self.repeat == Repeat.UNTIL:
+            while not self.repeat_until.interpret():
+                ast.add_child(self.type.parse(stream))
+        else:
+            ast.add_child(self.type.parse(stream))
+        return ast
 
     def __repr__(self):
         raw_yaml = {
@@ -129,7 +260,7 @@ class Type:
         self.meta = raw_yaml.get('meta', {})
         if uid is None:
             uid = self.meta['id']
-        self.uid = id
+        self.uid = uid
         self._endianness = self.meta.get('endian', None)
         if self._endianness == 'be':
             self._endianness = Endianness.BIG
@@ -185,10 +316,22 @@ class Type:
         else:
             return get_primitive_type(type_name, self.endianness)
 
+    def parse(self, stream: KaitaiStream) -> AST:
+        ast = AST(self)
+        for attr in self.seq:
+            ast.add_child(attr.parse(stream))
+        return ast
+
+
+def parse(typename, bytes_like) -> AST:
+    if typename not in DEFS:
+        load()
+    return DEFS[typename].parse(KaitaiStream(BytesIO(bytes_like)))
+
 
 def load():
     for ksy_path in glob.glob(os.path.join(KSY_DIR, '*.ksy')):
-        log.status(f'Loading KSY file definitions... {DEFS[-1].name}')
+        log.status(f'Loading KSY file definitions... {os.path.split(ksy_path)[-1]}')
         with open(ksy_path, 'r') as f:
             ksy = Type(yaml.safe_load(f))
             DEFS[ksy.uid] = ksy
