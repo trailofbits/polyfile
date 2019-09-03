@@ -145,7 +145,10 @@ class ACNode(TrieNode):
         return super().serialize() + (self.parent, self.fall)
 
     def __repr__(self):
-        return f"{self.__class__.__name__}(value={self.value!r}, sources={self.sources!r}, _children={self._children!r}), parent={self.parent!r}, _fall={self.fall!r}"
+        if self.fall is not self:
+            return f"{self.__class__.__name__}(value={self.value!r}, sources={self.sources!r}, _children={self._children!r}), parent={self.parent!r}, _fall={self.fall!r}"
+        else:
+            return f"{self.__class__.__name__}(value={self.value!r}, sources={self.sources!r}, _children={self._children!r}), parent={self.parent!r}, _fall=self"
 
     def _add_child(self, value, sources=None):
         new_child = ACNode(value, sources, parent=self)
