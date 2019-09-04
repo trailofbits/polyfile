@@ -1,4 +1,4 @@
-from enum import Enum
+from enum import Enum as PyEnum
 import glob
 import os
 
@@ -16,7 +16,7 @@ KSY_DIR = os.path.join(os.path.realpath(os.path.dirname(__file__)), 'kaitai_defs
 DEFS = {}
 
 
-class Endianness(Enum):
+class Endianness(PyEnum):
     BIG = 'be'
     LITTLE = 'le'
     NONE = ''
@@ -28,10 +28,90 @@ PRIMITIVE_TYPES_BY_NAME = {}
 class AST:
     def __init__(self, obj, parent=None):
         self.obj = obj
-        self.parent = parent
+        self.parent = None
         self._children = []
         self._offset = None
         self._length = None
+        if parent is not None:
+            parent.add_child(self)
+
+    def __bytes__(self):
+        ret = bytearray()
+        for c in self._children:
+            if isinstance(c, bytes):
+                ret.extend(c)
+            elif isinstance(c, int):
+                ret.append(c)
+            else:
+                ret.extend(bytes(c))
+        return bytes(ret)
+
+    def __contains__(self, key):
+        try:
+            self[key]
+            return True
+        except KeyError:
+            return False
+
+    @property
+    def left_siblings(self):
+        if self.parent is None:
+            return
+        for c in self.parent.children:
+            if c is self:
+                break
+            yield c
+
+    @property
+    def descendants(self):
+        for c in self.children:
+            yield c
+            yield from c.descendants
+
+    @property
+    def ancestors(self):
+        if self.parent is None:
+            return
+        found_self = False
+        for c in reversed(self.parent.children):
+            if found_self:
+                yield from reversed(list(c.descendants))
+                yield c
+            elif c is self:
+                found_self = True
+        if self.parent.children[0] is self:
+            yield self.parent
+            yield from self.parent.ancestors
+
+    def __getitem__(self, key):
+        if hasattr(self.obj, 'uid') and self.obj.uid == key:
+            return bytes(self)
+
+        elif isinstance(self.obj, Attribute):
+            try:
+                t = self.obj.parent.get_type(key)
+                if t is not None and isinstance(t, Enum):
+                    return t
+            except KeyError:
+                pass
+
+        elif isinstance(self.obj, Type):
+            try:
+                t = self.obj.get_type(key)
+                if t is not None and isinstance(t, Enum):
+                    return t
+            except KeyError:
+                pass
+
+        for d in self.descendants:
+            if hasattr(d.obj, 'uid') and d.obj.uid == key:
+                return bytes(d)
+
+        for a in self.ancestors:
+            if hasattr(a.obj, 'uid') and a.obj.uid == key:
+                return bytes(a)
+
+        raise KeyError(key)
 
     @property
     def offset(self):
@@ -53,17 +133,54 @@ class AST:
                 self._length = 0
         return self._length
 
+    def add_sibling(self, sibling):
+        if sibling is None:
+            return None
+        assert self.parent._children[-1] is self
+        if sibling.parent is self.parent:
+            return sibling
+        assert sibling.parent is None
+        sibling.parent = self.parent
+        self.parent._children.append(sibling)
+        self.parent._offset = None
+        self.parent._length = None
+        return sibling
+
     def add_child(self, child):
-        self._children.append(child)
-        if child.parent is not None:
-            breakpoint()
-        child.parent = self
-        self._offset = None
-        self._length = None
+        if child is None:
+            return None
+        if child.parent is self:
+            return child
+        assert child.parent is None
+        if self._children:
+            return self._children[-1].add_sibling(child)
+        else:
+            self._children = [child]
+            child.parent = self
+            self._offset = None
+            self._length = None
+            return child
 
     @property
     def children(self):
         return self._children
+
+    @property
+    def root(self):
+        if self.parent is None:
+            return self
+        else:
+            return self.parent.root
+
+    def to_dict(self):
+        if not hasattr(self.obj, 'uid'):
+            return self.obj
+        elif len(self.children) == 1:
+            return {self.obj.uid: self.children[0].to_dict()}
+        else:
+            return {
+                self.obj.uid: [c.to_dict() for c in self.children]
+            }
 
     def __len__(self):
         return len(self._children)
@@ -75,6 +192,17 @@ class RawBytes(AST):
         self._offset = offset
         self._length = len(self.obj)
 
+    def add_sibling(self, sibling):
+        if isinstance(sibling, RawBytes):
+            self.obj += sibling.obj
+            self._length += len(sibling.obj)
+            return self
+        else:
+            return super().add_sibling(sibling)
+
+    def __bytes__(self):
+        return self.obj
+
 
 class Integer(AST):
     def __init__(self, value:int, offset:int, length:int, parent: AST=None):
@@ -82,8 +210,11 @@ class Integer(AST):
         self._offset = offset
         self._length = length
 
+    def __bytes__(self):
+        return bytes([self.obj])
 
-class IntegerTypes(Enum):
+
+class IntegerTypes(PyEnum):
     U1 = ('u1', 8, False, Endianness.NONE, 0, 255, KaitaiStream.read_u1)
     U2LE = ('u2le', 16, False, Endianness.LITTLE, 0, 65535, KaitaiStream.read_u2le)
     U2BE = ('u2be', 16, False, Endianness.BIG, 0, 65535, KaitaiStream.read_u2be)
@@ -99,7 +230,7 @@ class IntegerTypes(Enum):
     S8LE = ('s8le', 64, False, Endianness.LITTLE, -9223372036854775808, 9223372036854775807, KaitaiStream.read_s8le)
     S8BE = ('s8be', 64, False, Endianness.BIG, -9223372036854775808, 9223372036854775807, KaitaiStream.read_s8be)
 
-    def parse(self, stream: KaitaiStream):
+    def parse(self, stream: KaitaiStream, context: AST):
         offset = stream.pos()
         b = self.reader(stream)
         return Integer(b, offset, self.bitwidth//8)
@@ -116,7 +247,7 @@ class IntegerTypes(Enum):
         PRIMITIVE_TYPES_BY_NAME[self.typename] = self
 
 
-class FloatTypes(Enum):
+class FloatTypes(PyEnum):
     F4LE = ('f4le', 32, Endianness.LITTLE, 24, 8)
     F4BE = ('f4be', 32, Endianness.BIG, 24, 8)
     F8LE = ('f8le', 32, Endianness.LITTLE, 53, 11)
@@ -132,7 +263,7 @@ class FloatTypes(Enum):
         PRIMITIVE_TYPES_BY_NAME[self.typename] = self
 
 
-class Repeat(Enum):
+class Repeat(PyEnum):
     NONE = 'norepeat'
     EXPR = 'expr'
     EOS = 'eos'
@@ -151,8 +282,8 @@ class Expression:
     def __init__(self, expr):
         self.expr = expressions.parse(expr)
 
-    def interpret(self):
-        return self.expr.interpret()
+    def interpret(self, context):
+        return self.expr.interpret(assignments=context)
 
 
 class ByteMatch:
@@ -166,28 +297,63 @@ class ByteMatch:
         else:
             raise RuntimeError(f"TODO: Implement support for `contents` of type {type(contents)}")
 
-    def parse(self, stream: KaitaiStream):
+    def parse(self, stream: KaitaiStream, context: AST):
         offset = stream.pos()
         c = stream.read_bytes(len(self.contents))
         assert c == self.contents
         return RawBytes(c, offset)
 
 
-class Switch:
+class SwitchedType:
     def __init__(self, raw_yaml, parent):
         self.parent = parent
-        self.switch_on = raw_yaml['switch-on']
-        self.cases = {}
+        self.switch_on = expressions.parse(raw_yaml['switch-on'])
+        self.cases = []
         for k, v in raw_yaml['cases'].items():
             if isinstance(k, int):
-                self.cases[Expression(str(k))] = v
+                self.cases.append((str(k), v))
+            elif k == '_':
+                self.cases.append(None, v)
             else:
-                self.cases[Expression(k)] = v
+                self.cases.append((k, v))
             # TODO: Test for duplicate cases
 
-    def parse(self, stream: KaitaiStream) -> AST:
-        # TODO: Implement
-        return
+    def parse(self, stream: KaitaiStream, context: AST) -> AST:
+        default_case = None
+        switch_on_value = self.parent.to_bytes(self.switch_on.interpret(context))
+        for case, typename in self.cases:
+            if case is None:
+                default_case = typename
+                continue
+            case_value = self.parent.to_bytes(expressions.parse(str(case)).interpret(context))
+            if switch_on_value == case_value:
+                return self.parent.get_type(typename).parse(stream, context)
+        if default_case is not None:
+            return self.parent.get_type(default_case).parse(stream, context)
+        else:
+            # TODO: Make this error prettier
+            raise RuntimeError()
+
+
+class Enum:
+    def __init__(self, mapping, uid, parent, type_binding=None):
+        self.parent = parent
+        self.uid = uid
+        self.values = mapping
+        self.binding = type_binding
+
+    def __getitem__(self, key):
+        return self.values[key]
+
+    def bind(self, to_type):
+        return Enum(self.values, self.uid, self.parent, type_binding=to_type)
+
+    def parse(self, stream: KaitaiStream, context: AST) -> AST:
+        if self.binding is None:
+            raise RuntimeError(f"Enum {self} is not bound")
+        parsed = self.binding.parse(stream, context)
+        # TODO: Make sure parsed is in this enum
+        return parsed
 
 
 class Attribute:
@@ -201,7 +367,7 @@ class Attribute:
         self._type = None
         if isinstance(self._type_name, dict):
             if 'switch-on' in self._type_name:
-                self._type = Switch(self._type_name, parent=self)
+                self._type = SwitchedType(self._type_name, parent=self)
             else:
                 raise ValueError(f"Unknown type: {self._type_name!r}")
         self.repeat = raw_yaml.get('repeat', 'norepeat')
@@ -220,6 +386,21 @@ class Attribute:
         self.if_expr = raw_yaml.get('if', None)
         if self.if_expr is not None:
             self.if_expr = Expression(self.if_expr)
+        self.enum = raw_yaml.get('enum', None)
+
+    @property
+    def endianness(self):
+        return self.parent.endianness
+
+    @property
+    def encoding(self):
+        return self.parent.encoding
+
+    def to_bytes(self, *args, **kwargs):
+        return self.parent.to_bytes(*args, **kwargs)
+
+    def get_type(self, *args, **kwargs):
+        return self.parent.get_type(*args, **kwargs)
 
     @property
     def type(self):
@@ -228,21 +409,26 @@ class Attribute:
                 self._type = self.contents
             else:
                 self._type = self.parent.get_type(self._type_name)
+            if self.enum is not None:
+                self._type = self.parent.get_type(self.enum).bind(self._type)
         return self._type
 
-    def parse(self, stream: KaitaiStream) -> AST:
-        ast = AST(self)
+    def parse(self, stream: KaitaiStream, context: AST=None) -> AST:
+        if self.if_expr is not None:
+            if not self.if_expr.interpret(context):
+                return None
+        ast = AST(self, parent=context)
         if self.repeat == Repeat.EOS:
             while not stream.is_eof():
-                ast.add_child(self.type.parse(stream))
+                ast.add_child(self.type.parse(stream, ast))
         elif self.repeat == Repeat.EXPR:
-            while self.repeat_expr.interpret():
-                ast.add_child(self.type.parse(stream))
+            while self.repeat_expr.interpret(context):
+                ast.add_child(self.type.parse(stream, ast))
         elif self.repeat == Repeat.UNTIL:
-            while not self.repeat_until.interpret():
-                ast.add_child(self.type.parse(stream))
+            while not self.repeat_until.interpret(context):
+                ast.add_child(self.type.parse(stream, ast))
         else:
-            ast.add_child(self.type.parse(stream))
+            ast.add_child(self.type.parse(stream, ast))
         return ast
 
     def __repr__(self):
@@ -278,6 +464,25 @@ class Type:
             typename: Type(raw_type, uid=typename, parent=self)
             for typename, raw_type in raw_yaml.get('types', {}).items()
         }
+        for eid, raw_enum in raw_yaml.get('enums', {}).items():
+            self.types[eid] = Enum({v: self.to_bytes(k) for k, v in raw_enum.items()}, uid=eid, parent=self)
+
+    def to_bytes(self, v):
+        if isinstance(v, int):
+            if self.endianness is None or self.endianness == Endianness.BIG:
+                e = 'big'
+            else:
+                e = 'little'
+            return v.to_bytes((v.bit_length() + 7) // 8, e)
+        elif isinstance(v, str):
+            if self.encoding is None:
+                return v.encode('ascii')
+            else:
+                return v.encode(self.encoding)
+        elif isinstance(v, bytes):
+            return v
+        else:
+            raise RuntimeError(f"No support for converting {v!r} to bytes")
 
     @property
     def endianness(self):
@@ -316,10 +521,10 @@ class Type:
         else:
             return get_primitive_type(type_name, self.endianness)
 
-    def parse(self, stream: KaitaiStream) -> AST:
-        ast = AST(self)
+    def parse(self, stream: KaitaiStream, context: AST=None) -> AST:
+        ast = AST(self, parent=context)
         for attr in self.seq:
-            ast.add_child(attr.parse(stream))
+            ast.add_child(attr.parse(stream, ast))
         return ast
 
 

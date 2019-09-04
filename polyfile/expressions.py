@@ -298,6 +298,8 @@ class Expression:
                 values.append(t)
         if len(values) != 1:
             raise RuntimeError(f"Unexpected extra tokens: {values[:-1]}")
+        if isinstance(values[0], IdentifierToken):
+            return self.get_value(values[0], assignments)
         return values[0]
 
     def __repr__(self):
