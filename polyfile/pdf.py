@@ -60,6 +60,27 @@ def _emit_dict(parsed, parent, pdf_offset):
             )
 
 
+def ast_to_matches(ast: kaitai.AST, parent: Submatch):
+    stack = [(parent, ast)]
+    while stack:
+        parent, node = stack.pop()
+        if not hasattr(node.obj, 'uid'):
+            continue
+        if len(node.children) == 1 and not hasattr(node.children[0], 'uid'):
+            match = node.children[0].obj
+        else:
+            match = ''
+        new_node = Submatch(
+            name=node.obj.uid,
+            match_obj=match,
+            relative_offset=node.relative_offset,
+            length=node.length,
+            parent=parent
+        )
+        yield new_node
+        stack.extend(reversed([(new_node, c) for c in node.children]))
+
+
 def parse_object(file_stream, object, matcher: Matcher, parent=None):
     log.status('Parsing PDF obj %d %d' % (object.id, object.version))
     objtoken, objid, objversion, endobj = object.objtokens
@@ -184,9 +205,15 @@ def parse_object(file_stream, object, matcher: Matcher, parent=None):
                         #         )
                         if is_dct_decode and raw_content[:1] == b'\xff':
                             # This is most likely a JPEG image
-                            ast = kaitai.parse('jpeg', raw_content)
-                            print(ast)
-                            exit(0)
+                            with open('/Users/evan/Downloads/test.jpg', 'wb') as f:
+                                f.write(raw_content)
+                            try:
+                                ast = kaitai.parse('jpeg', raw_content)
+                            except Exception as e:
+                                log.error(str(e))
+                                ast = None
+                            if ast is not None:
+                                yield from ast_to_matches(ast, parent=streamcontent)
                         yield Submatch(
                            "EndStream",
                             endtoken,

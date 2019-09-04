@@ -35,6 +35,13 @@ class AST:
         if parent is not None:
             parent.add_child(self)
 
+    @property
+    def relative_offset(self):
+        if self.parent is None:
+            return self.offset
+        else:
+            return self.offset - self.parent.offset
+
     def __bytes__(self):
         ret = bytearray()
         for c in self._children:
@@ -211,7 +218,7 @@ class Integer(AST):
         self._length = length
 
     def __bytes__(self):
-        return bytes([self.obj])
+        return self.obj.to_bytes((self.obj.bit_length() + 7) // 8, 'big')
 
 
 class IntegerTypes(PyEnum):
@@ -232,7 +239,11 @@ class IntegerTypes(PyEnum):
 
     def parse(self, stream: KaitaiStream, context: AST):
         offset = stream.pos()
-        b = self.reader(stream)
+        try:
+            b = self.reader(stream)
+        except EOFError as e:
+            print(context.root.to_dict())
+            raise e
         return Integer(b, offset, self.bitwidth//8)
 
     def __init__(self, typename, bitwidth, signed, endianness, min_value, max_value, reader):
@@ -300,7 +311,9 @@ class ByteMatch:
     def parse(self, stream: KaitaiStream, context: AST):
         offset = stream.pos()
         c = stream.read_bytes(len(self.contents))
-        assert c == self.contents
+        if c != self.contents:
+            print(context.root.to_dict())
+            raise RuntimeError(f"File offset {offset}: Expected {self.contents!r} but instead got {c!r}")
         return RawBytes(c, offset)
 
 
@@ -331,8 +344,12 @@ class SwitchedType:
         if default_case is not None:
             return self.parent.get_type(default_case).parse(stream, context)
         else:
-            # TODO: Make this error prettier
-            raise RuntimeError()
+            return ByteArray(
+                size=self.parent.size,
+                size_eos=self.parent.size,
+                terminator=self.parent.terminator,
+                parent=self.parent
+            ).parse(stream, context)
 
 
 class Enum:
@@ -354,6 +371,65 @@ class Enum:
         parsed = self.binding.parse(stream, context)
         # TODO: Make sure parsed is in this enum
         return parsed
+
+
+class ByteArray:
+    def __init__(self, size=None, size_eos=False, terminator=None, parent=None):
+        if size is None:
+            self.size = None
+        elif isinstance(size, int):
+            self.size = Expression(str(size))
+        else:
+            self.size = Expression(size)
+        self.size_eos = size_eos
+        if terminator is not None:
+            terminator = parent.to_bytes(terminator)
+        self.terminator = terminator
+        self.parent = parent
+
+    def _size_met(self, parsed: bytearray, size: int) -> bool:
+        return len(parsed) >= size
+
+    def parse(self, stream: KaitaiStream, context: AST) -> RawBytes:
+        offset = stream.pos()
+        ret = bytearray()
+        if self.size is None:
+            size = None
+        else:
+            size = int(self.size.interpret(context))
+        while self.size is None or not self._size_met(ret, size):
+            try:
+                b = stream.read_bytes(1)
+            except EOFError:
+                if self.size_eos:
+                    break
+                else:
+                    raise RuntimeError("Unexpected end of stream")
+            ret.extend(b)
+            if self.terminator is not None and b == self.terminator:
+                break
+        return RawBytes(bytes(ret), offset)
+
+
+class String(ByteArray):
+    def __init__(self, encoding, *args, **kwargs):
+        self.encoding = encoding
+        super().__init__(*args, **kwargs)
+
+    def _decoded_length(self, parsed: bytearray) -> int:
+        try:
+            return len(parsed.decode(self.encoding))
+        except Exception:
+            return len(parsed)
+
+    def _size_met(self, parsed: bytearray, size: int) -> bool:
+        return self._decoded_length(parsed) >= size
+
+    def parse(self, *args, **kwargs) -> RawBytes:
+        ret = super().parse(*args, **kwargs)
+        # make sure the parsed bytes decode properly:
+        ret.obj.decode(self.encoding)
+        return ret
 
 
 class Attribute:
@@ -386,7 +462,11 @@ class Attribute:
         self.if_expr = raw_yaml.get('if', None)
         if self.if_expr is not None:
             self.if_expr = Expression(self.if_expr)
+        self._encoding = raw_yaml.get('encoding', None)
         self.enum = raw_yaml.get('enum', None)
+        self.size = raw_yaml.get('size', None)
+        self.size_eos = raw_yaml.get('size-eos', False)
+        self.terminator = raw_yaml.get('terminator', None)
 
     @property
     def endianness(self):
@@ -394,6 +474,8 @@ class Attribute:
 
     @property
     def encoding(self):
+        if self._encoding is not None:
+            return self._encoding
         return self.parent.encoding
 
     def to_bytes(self, *args, **kwargs):
@@ -407,6 +489,24 @@ class Attribute:
         if self._type is None:
             if self.contents is not None:
                 self._type = self.contents
+            elif self._type_name is None:
+                self._type = ByteArray(size=self.size, size_eos=self.size_eos, terminator=self.terminator, parent=self)
+            elif self._type_name == 'str':
+                self._type = String(
+                    encoding=self.encoding,
+                    size=self.size,
+                    size_eos=self.size_eos,
+                    terminator=self.terminator,
+                    parent=self
+                )
+            elif self._type_name == 'strz':
+                self._type = String(
+                    encoding=self.encoding,
+                    size=self.size,
+                    size_eos=self.size_eos,
+                    terminator=0,
+                    parent=self
+                )
             else:
                 self._type = self.parent.get_type(self._type_name)
             if self.enum is not None:
@@ -422,7 +522,8 @@ class Attribute:
             while not stream.is_eof():
                 ast.add_child(self.type.parse(stream, ast))
         elif self.repeat == Repeat.EXPR:
-            while self.repeat_expr.interpret(context):
+            iterations = int.from_bytes(self.repeat_expr.interpret(context), byteorder='big')
+            for i in range(iterations):
                 ast.add_child(self.type.parse(stream, ast))
         elif self.repeat == Repeat.UNTIL:
             while not self.repeat_until.interpret(context):
@@ -506,20 +607,24 @@ class Type:
     def imports(self):
         return [DEFS[i] for i in self._imports]
 
-    def get_type(self, type_name):
+    def get_type(self, type_name, allow_primitive=True):
         if type_name in self.types:
             return self.types[type_name]
         # see if it is defined in an import
         for t in self.imports:
             try:
-                return t.get_type(type_name)
+                return t.get_type(type_name, allow_primitive=False)
             except KeyError:
                 # this import did not have the type
                 pass
         if self.parent is not None:
-            return self.parent.get_type(type_name)
-        else:
+            parent_type = self.parent.get_type(type_name, allow_primitive=False)
+            if parent_type is not None:
+                return parent_type
+        if allow_primitive:
             return get_primitive_type(type_name, self.endianness)
+        else:
+            KeyError(type_name)
 
     def parse(self, stream: KaitaiStream, context: AST=None) -> AST:
         ast = AST(self, parent=context)

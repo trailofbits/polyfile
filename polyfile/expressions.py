@@ -11,29 +11,43 @@ def function_call(obj, function_name):
     raise RuntimeError("TODO: Implement")
 
 
+def to_int(v, byteorder='big') -> int:
+    if isinstance(v, int):
+        return v
+    elif isinstance(v, bytes) or isinstance(v, str) or isinstance(v, bytearray):
+        if len(v) == 0:
+            return 0
+        elif len(v) == 1:
+            return int(v[0])
+        else:
+            # Assume big endian
+            return int.from_bytes(v, byteorder=byteorder)
+    raise ValueError(f"Cannot convert {v!r} to an integer")
+
+
 class Operator(Enum):
     ENUM_ACCESSOR = ('::', 0, lambda a, b: a[b.name], True, 2, False, (True, False))
     MEMBER_ACCESS = ('.', 1, lambda a, b: None, True, 2, False, (True, False))
     UNARY_PLUS = ('+', 2, lambda a: a, False, 1, True)
-    UNARY_MINUS = ('-', 2, lambda a: -a, False, 1, True)
+    UNARY_MINUS = ('-', 2, lambda a: -to_int(a), False, 1, True)
     LOGICAL_NOT = ('not', 2, lambda a: not a, False, 1)
-    BITWISE_NOT = ('~', 2, lambda a: ~a, False, 1)
-    MULTIPLICATION = ('*', 3, lambda a, b: a * b)
-    DIVISION = ('/', 3, lambda a, b: a // b)
-    REMAINDER = ('%', 3, lambda a, b: a % b)
+    BITWISE_NOT = ('~', 2, lambda a: ~to_int(a), False, 1)
+    MULTIPLICATION = ('*', 3, lambda a, b: to_int(a) * to_int(b))
+    DIVISION = ('/', 3, lambda a, b: to_int(a) // to_int(b))
+    REMAINDER = ('%', 3, lambda a, b: to_int(a) % to_int(b))
     ADDITION = ('+', 4, lambda a, b: a + b)
-    SUBTRACTION = ('-', 4, lambda a, b: a - b)
-    BITWISE_LEFT_SHIFT = ('<<', 5, lambda a, b: a << b)
-    BITWISE_RIGHT_SHIFT = ('>>', 5, lambda a, b: a >> b)
+    SUBTRACTION = ('-', 4, lambda a, b: to_int(a) - to_int(b))
+    BITWISE_LEFT_SHIFT = ('<<', 5, lambda a, b: to_int(a) << to_int(b))
+    BITWISE_RIGHT_SHIFT = ('>>', 5, lambda a, b: to_int(a) >> to_int(b))
     LESS_THAN = ('<', 6, lambda a, b: a < b)
     GREATER_THAN = ('>', 6, lambda a, b: a > b)
     LESS_THAN_EQUAL = ('<=', 6, lambda a, b: a <= b)
     GREATER_THAN_EQUAL = ('>=', 6, lambda a, b: a >= b)
     EQUALS = ('==', 7, lambda a, b: a == b)
     NOT_EQUAL = ('!=', 7, lambda a, b: a != b)
-    BITWISE_AND = ('&', 8, lambda a, b: a & b)
-    BITWISE_XOR = ('^', 9, lambda a, b: a ^ b)
-    BITWISE_OR = ('|', 10, lambda a, b: a | b)
+    BITWISE_AND = ('&', 8, lambda a, b: to_int(a) & to_int(b))
+    BITWISE_XOR = ('^', 9, lambda a, b: to_int(a) ^ to_int(b))
+    BITWISE_OR = ('|', 10, lambda a, b: to_int(a) | to_int(b))
     LOGICAL_AND = ('and', 11, lambda a, b: a and b)
     LOGICAL_OR = ('or', 12, lambda a, b: a or b)
     TERNARY_ELSE = (':', 13, lambda a, b: (a, b), False)
@@ -126,6 +140,9 @@ class IntegerToken(Token):
     def __init__(self, raw_str, value):
         super().__init__(raw_str)
         self.value = value
+
+    def __int__(self):
+        return self.value
 
     def __repr__(self):
         return f"{self.__class__.__name__}(raw_str={self.raw_token!r}, value={self.value!r})"
