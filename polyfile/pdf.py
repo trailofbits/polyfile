@@ -1,8 +1,9 @@
 import base64
 
 from . import pdfparser
+from . import kaitai
 from .logger import getStatusLogger
-from .polyfile import Match, Submatch, submatcher
+from .polyfile import Match, Matcher, Submatch, submatcher
 
 log = getStatusLogger("PDF")
 
@@ -61,7 +62,28 @@ def _emit_dict(parsed, parent, pdf_offset):
             )
 
 
-def parse_object(file_stream, object, parent=None):
+def ast_to_matches(ast: kaitai.AST, parent: Submatch):
+    stack = [(parent, ast)]
+    while stack:
+        parent, node = stack.pop()
+        if not hasattr(node.obj, 'uid'):
+            continue
+        if len(node.children) == 1 and not hasattr(node.children[0], 'uid'):
+            match = node.children[0].obj
+        else:
+            match = ''
+        new_node = Submatch(
+            name=node.obj.uid,
+            match_obj=match,
+            relative_offset=node.relative_offset,
+            length=node.length,
+            parent=parent
+        )
+        yield new_node
+        stack.extend(reversed([(new_node, c) for c in node.children]))
+
+
+def parse_object(file_stream, object, matcher: Matcher, parent=None):
     log.status('Parsing PDF obj %d %d' % (object.id, object.version))
     objtoken, objid, objversion, endobj = object.objtokens
     pdf_length=endobj.offset.offset - object.content[0].offset.offset + 1 + len(endobj.token)
@@ -175,18 +197,33 @@ def parse_object(file_stream, object, parent=None):
                             parent=content
                         )
                         yield streamcontent
+                        # Temporarily disabled this until we figure out how to handle incorrect matches:
+                        # with file_stream.save_pos() as fs:
+                        #     with fs[streamcontent.offset:streamcontent.offset + streamcontent.length] as f:
+                        #         f.seek(0)
+                        #         yield from matcher.match(
+                        #             f,
+                        #             streamcontent
+                        #         )
                         if is_dct_decode and raw_content[:1] == b'\xff':
                             # This is most likely a JPEG image
-                            #from . import jpeg
-                            #print(jpeg.parse(raw_content))
-                            yield Submatch(
-                                "JPEG",
-                                raw_content,
-                                relative_offset=0,
-                                length=len(raw_content),
-                                parent=streamcontent,
-                                img_data=f"data:image/jpeg;base64,{base64.b64encode(raw_content).decode('utf-8')}"
-                            )
+                            with open('/Users/evan/Downloads/test.jpg', 'wb') as f:
+                                f.write(raw_content)
+                            try:
+                                ast = kaitai.parse('jpeg', raw_content)
+                            except Exception as e:
+                                log.error(str(e))
+                                ast = None
+                            if ast is not None:
+                                iterator = ast_to_matches(ast, parent=streamcontent)
+                                try:
+                                    jpeg_match = next(iterator)
+                                    jpeg_match.img_data = f"data:image/jpeg;base64,{base64.b64encode(raw_content).decode('utf-8')}"
+                                    yield jpeg_match
+                                    yield from iterator
+                                except StopIteration:
+                                    pass
+
                         yield Submatch(
                            "EndStream",
                             endtoken,
@@ -197,7 +234,7 @@ def parse_object(file_stream, object, parent=None):
     log.clear_status()
 
 
-def parse_pdf(file_stream, parent=None):
+def parse_pdf(file_stream, matcher: Matcher, parent=None):
     if parent is None or isinstance(parent, PDF):
         parent_offset = 0
     else:
@@ -244,10 +281,10 @@ def parse_pdf(file_stream, parent=None):
                     parent=parent
                 )
             elif object.type == pdfparser.PDF_ELEMENT_INDIRECT_OBJECT:
-                yield from parse_object(file_stream, object, parent=parent)
+                yield from parse_object(file_stream, object, matcher=matcher, parent=parent)
 
 
 @submatcher('adobe_pdf.trid.xml', 'adobe_pdf-utf8.trid.xml')
 class PDF(Match):
     def submatch(self, file_stream):
-        yield from parse_pdf(file_stream, parent=self)
+        yield from parse_pdf(file_stream, matcher=self.matcher, parent=self)

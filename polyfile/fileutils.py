@@ -60,6 +60,7 @@ class FileStream:
         self.close_on_exit = close_on_exit
         self._entries = 0
         self._listeners = []
+        self._root = None
 
     def __len__(self):
         return self._length
@@ -87,6 +88,30 @@ class FileStream:
     @property
     def name(self):
         return self._name
+
+    @property
+    def root(self):
+        if self._root is None:
+            if isinstance(self._stream, FileStream):
+                self._root = self._stream.root
+            else:
+                self._root = self._stream
+        return self._root
+
+    def save_pos(self):
+        f = self
+
+        class SP:
+            def __init__(self):
+                self.pos = f.root.tell()
+
+            def __enter__(self, *args, **kwargs):
+                return f
+
+            def __exit__(self, *args, **kwargs):
+                f.root.seek(self.pos)
+
+        return SP()
 
     def fileno(self):
         return self._stream.fileno()

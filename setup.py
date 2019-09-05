@@ -1,10 +1,6 @@
 import os
 from setuptools import setup, find_packages
 
-from polyfile.trid import build_defs_cache_if_necessary
-
-build_defs_cache_if_necessary()
-
 setup(
     name='polyfile',
     description='A utility to recursively map the structure of a file.',
@@ -15,6 +11,8 @@ setup(
     python_requires='>=3.6',
     install_requires=[
         'jinja2',
+        'kaitaistruct>=0.7',
+        'pyyaml>=3.13',
         'setuptools'
     ],
     entry_points={
