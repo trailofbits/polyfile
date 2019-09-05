@@ -1,3 +1,5 @@
+import base64
+
 from . import pdfparser
 from .logger import getStatusLogger
 from .polyfile import Match, Submatch, submatcher
@@ -177,10 +179,14 @@ def parse_object(file_stream, object, parent=None):
                             # This is most likely a JPEG image
                             #from . import jpeg
                             #print(jpeg.parse(raw_content))
-                            #yield Submatch(
-                            #    "JPEG"
-                            #)
-                            pass
+                            yield Submatch(
+                                "JPEG",
+                                raw_content,
+                                relative_offset=0,
+                                length=len(raw_content),
+                                parent=streamcontent,
+                                img_data=f"data:image/jpeg;base64,{base64.b64encode(raw_content).decode('utf-8')}"
+                            )
                         yield Submatch(
                            "EndStream",
                             endtoken,
