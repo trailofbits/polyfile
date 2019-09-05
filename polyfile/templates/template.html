@@ -2,8 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>PolyFile | {{file_path}}</title>
-    <script type="text/javascript" async="" src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js"></script>
+    <title>PolyFile | {{ filename }}</title>
     <style>
 {% include "hexdump.css" %}
     </style>
@@ -13,10 +12,17 @@
         /* END JQUERY */
     </script>
     <script type="text/javascript">
+        /* BEGIN download.js */
+{% include "download.js" %}
+        /* END download.js */
+    </script>
+    <script type="text/javascript">
 {% include "hexdump.js" %}
     </script>
 </head>
 <body>
+<input type="button" onclick="downloadFile()" value="Download File" /><br />
+
 {% macro render_match(match, first) -%}
 <li>
     {% if 'children' in match and match['children'] %}

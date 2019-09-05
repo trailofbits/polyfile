@@ -1,5 +1,6 @@
 import base64
 import math
+import mimetypes
 import os
 import unicodedata
 
@@ -91,14 +92,19 @@ def generate(file_path, matches):
         with open(file_path, 'rb') as f:
             encoded = base64.b64encode(f.read()).decode('utf-8')
 
+        mime_type = mimetypes.guess_type(file_path)[0]
+        if mime_type is None:
+            mime_type = 'application/octet-stream'
+
         return TEMPLATE.render(
-            file_path=file_path,
+            filename=os.path.split(file_path)[-1],
             encoded=encoded,
             matches=matches,
             input_file=input_file,
             input_bytes=input_bytes,
             math=math,
-            read_unicode=ReadUnicode()
+            read_unicode=ReadUnicode(),
+            mime_type=mime_type
         )
 
 

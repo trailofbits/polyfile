@@ -7,6 +7,10 @@ var highlights = {};
 var linesByRow = [1];
 var LINE_DIGITS = 1;
 
+function downloadFile() {
+    download('data:{{ mime_type }};base64,'+ btoa(rawBytes), '{{ filename.replace("'", "\\'") }}', '{{ mime_type }}');
+}
+
 function assignLines() {
     var line = 1;
     for(var i=0; i<rawBytes.length; ++i) {
