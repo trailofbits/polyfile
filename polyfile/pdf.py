@@ -1,3 +1,5 @@
+import base64
+
 from . import pdfparser
 from .logger import getStatusLogger
 from .polyfile import Match, Submatch, submatcher
@@ -59,7 +61,7 @@ def _emit_dict(parsed, parent, pdf_offset):
             )
 
 
-def parse_object(object, parent=None):
+def parse_object(file_stream, object, parent=None):
     log.status('Parsing PDF obj %d %d' % (object.id, object.version))
     objtoken, objid, objversion, endobj = object.objtokens
     pdf_length=endobj.offset.offset - object.content[0].offset.offset + 1 + len(endobj.token)
@@ -115,13 +117,83 @@ def parse_object(object, parent=None):
     content_start = dict_offset + dict_length
     content_len = endobj.offset.offset - content_start - objid.offset.offset
     if content_len > 0:
-        yield Submatch(
+        content = Submatch(
             "PDFObjectContent",
             (),
             relative_offset=content_start,
             length=content_len,
             parent=obj
         )
+        yield content
+        stream_len = None
+        if oPDFParseDictionary.parsed is not None:
+            is_dct_decode = '/Filter' in oPDFParseDictionary.parsed \
+                and oPDFParseDictionary.parsed['/Filter'].strip() == '/DCTDecode'
+            if '/Length' in oPDFParseDictionary.parsed:
+                try:
+                    stream_len = int(oPDFParseDictionary.parsed['/Length'])
+                except ValueError:
+                    pass
+        old_pos = file_stream.tell()
+        try:
+            file_stream.seek(content.root_offset)
+            raw_content = file_stream.read(content_len)
+        finally:
+            file_stream.seek(old_pos)
+        streamtoken = b'stream'
+        if raw_content.startswith(streamtoken):
+            raw_content = raw_content[len(streamtoken):]
+            if raw_content.startswith(b'\r'):
+                streamtoken += b'\r'
+                raw_content = raw_content[1:]
+            if raw_content.startswith(b'\n'):
+                streamtoken += b'\n'
+                raw_content = raw_content[1:]
+                if raw_content.endswith(b'\n'):
+                    endtoken = b'endstream'
+                    if raw_content.endswith(b'\r\n'):
+                        endtoken += b'\r\n'
+                    else:
+                        endtoken += b'\n'
+                    if raw_content.endswith(endtoken):
+                        raw_content = raw_content[:-len(endtoken)]
+                        if raw_content.endswith(b'\n') and stream_len is not None and len(raw_content) > stream_len:
+                            endtoken = b'\n' + endtoken
+                            raw_content = raw_content[:-1]
+                        yield Submatch(
+                            "StartStream",
+                            streamtoken,
+                            relative_offset=0,
+                            length=len(streamtoken),
+                            parent=content
+                        )
+                        streamcontent = Submatch(
+                            "StreamContent",
+                            raw_content,
+                            relative_offset=len(streamtoken),
+                            length=len(raw_content),
+                            parent=content
+                        )
+                        yield streamcontent
+                        if is_dct_decode and raw_content[:1] == b'\xff':
+                            # This is most likely a JPEG image
+                            #from . import jpeg
+                            #print(jpeg.parse(raw_content))
+                            yield Submatch(
+                                "JPEG",
+                                raw_content,
+                                relative_offset=0,
+                                length=len(raw_content),
+                                parent=streamcontent,
+                                img_data=f"data:image/jpeg;base64,{base64.b64encode(raw_content).decode('utf-8')}"
+                            )
+                        yield Submatch(
+                           "EndStream",
+                            endtoken,
+                            relative_offset=len(streamtoken) + len(raw_content),
+                            length=len(endtoken),
+                            parent=content
+                        )
     log.clear_status()
 
 
@@ -172,7 +244,7 @@ def parse_pdf(file_stream, parent=None):
                     parent=parent
                 )
             elif object.type == pdfparser.PDF_ELEMENT_INDIRECT_OBJECT:
-                yield from parse_object(object, parent=parent)
+                yield from parse_object(file_stream, object, parent=parent)
 
 
 @submatcher('adobe_pdf.trid.xml', 'adobe_pdf-utf8.trid.xml')

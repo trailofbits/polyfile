@@ -26,7 +26,15 @@ class InvalidMatch(ValueError):
 
 
 class Match:
-    def __init__(self, name, match_obj, relative_offset=0, length=None, parent=None, matcher=None, display_name=None):
+    def __init__(self,
+                 name,
+                 match_obj,
+                 relative_offset=0,
+                 length=None,
+                 parent=None,
+                 matcher=None,
+                 display_name=None,
+                 img_data=None):
         if parent is not None:
             if not isinstance(parent, Match):
                 raise ValueError("The parent must be an instance of a Match")
@@ -42,6 +50,7 @@ class Match:
         else:
             self.display_name = display_name
         self.match = match_obj
+        self.img_data = img_data
         self._offset = relative_offset
         self._length = length
         self._parent = parent
@@ -73,6 +82,17 @@ class Match:
             return self.relative_offset
 
     @property
+    def root(self):
+        if self.parent is None:
+            return self
+        else:
+            return self.parent.root
+
+    @property
+    def root_offset(self):
+        return self.offset - self.root.offset
+
+    @property
     def relative_offset(self):
         """The offset of this match relative to its parent"""
         return self._offset
@@ -83,7 +103,7 @@ class Match:
         return self._length
 
     def to_obj(self):
-        return {
+        ret = {
             'relative_offset': self.relative_offset,
             'global_offset': self.offset,
             'length': self.length,
@@ -92,6 +112,9 @@ class Match:
             'match': str(self.match),
             'children': [c.to_obj() for c in self]
         }
+        if self.img_data is not None:
+            ret['img_data'] = self.img_data
+        return ret
 
     def json(self):
         return dumps(self.to_obj())

@@ -806,9 +806,27 @@ class ParsedDictionary:
         self.start = None
         self.end = None
         self.kvs = []
+        self._kvs = {}
+
+    def __contains__(self, key):
+        return key in self._kvs
+
+    def __getitem__(self, key):
+        return self._kvs[key]
 
     def append(self, key, value):
         self.kvs.append((key, value))
+        start_offset = None
+        raw_v = ''
+        for v in value:
+            if not hasattr(v, 'token'):
+                return
+            if start_offset is None:
+                start_offset = v.offset.offset
+            else:
+                raw_v += ' ' * (v.offset.offset > len(raw_v) + start_offset)
+            raw_v += v.token
+        self._kvs[key.token] = raw_v
 
     def __iter__(self):
         return iter(self.kvs)
