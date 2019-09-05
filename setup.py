@@ -12,6 +12,7 @@ setup(
     install_requires=[
         'jinja2',
         'kaitaistruct>=0.7',
+        'pyyaml>=3.13',
         'setuptools'
     ],
     entry_points={
