@@ -1,3 +1,5 @@
+import base64
+
 from . import pdfparser
 from . import kaitai
 from .logger import getStatusLogger
@@ -213,7 +215,15 @@ def parse_object(file_stream, object, matcher: Matcher, parent=None):
                                 log.error(str(e))
                                 ast = None
                             if ast is not None:
-                                yield from ast_to_matches(ast, parent=streamcontent)
+                                iterator = ast_to_matches(ast, parent=streamcontent)
+                                try:
+                                    jpeg_match = next(iterator)
+                                    jpeg_match.img_data = f"data:image/jpeg;base64,{base64.b64encode(raw_content).decode('utf-8')}"
+                                    yield jpeg_match
+                                    yield from iterator
+                                except StopIteration:
+                                    pass
+
                         yield Submatch(
                            "EndStream",
                             endtoken,
