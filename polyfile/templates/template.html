@@ -21,7 +21,8 @@
     </script>
 </head>
 <body>
-<input type="button" onclick="downloadFile()" value="Download File" /><br />
+<input type="button" onclick="downloadFile()" value="Download File" />
+<span style="display:none;" id="clickinfo">Double-click to jump to an address</span><br />
 
 {% macro render_match(match, first) -%}
 <li>

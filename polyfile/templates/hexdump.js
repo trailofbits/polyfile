@@ -236,6 +236,8 @@ function resizeWindow() {
     scrollToRow();
 }
 
+var doubleClicked = false;
+
 $(document).ready(function() {
     BYTE_HEIGHT = $('.hexeditor .byte').first().outerHeight();
     $(".scrollheightproxy").height(BYTE_HEIGHT * ROWS);
@@ -287,5 +289,32 @@ $(document).ready(function() {
     });
     $(".tree_label").mouseout(function() {
         $(".highlighted").removeClass("highlighted");
+    });
+
+    $(".byterow").css("cursor", "zoom-in").attr('title', 'Double-Click to Jump to Address').dblclick(function() {
+        doubleClicked = true;
+        var addr = prompt('To what address would you like to jump?', $(this).text());
+        if(addr !== null) {
+            addr = parseInt(addr, 16);
+            scrollToByte(addr);
+            setTimeout(function() {
+                $('#byte' + (addr - ROW_OFFSET * 16))
+                    .fadeOut("fast")
+                    .css('font-weight', 'bold')
+                    .fadeIn(3000);
+                setTimeout(function() {
+                    $('#byte' + (addr - ROW_OFFSET * 16)).css('font-weight', 'normal');
+                }, 5000);
+            }, 1000);
+        }
+    }).click(function() {
+        doubleClicked = false;
+        setTimeout(function() {
+            if(!doubleClicked) {
+                $('#clickinfo').fadeIn("slow", function() {
+                    $('#clickinfo').delay(1000).fadeOut("slow");
+                });
+            }
+        }, 1000);
     });
 });
