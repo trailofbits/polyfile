@@ -1,3 +1,8 @@
+import base64
+from io import BytesIO
+
+from PIL import Image, ImageDraw
+
 from .polyfile import submatcher, InvalidMatch, Match, Submatch
 
 
@@ -97,15 +102,45 @@ def parse_ines(file_stream, parent=None):
     chr_size = header[5]
     for i in range(chr_size):
         offset = file_stream.tell()
-        file_stream.read(8192)
-        yield Submatch(
-            name='CHRBank',
-            display_name=f'CHRBank{i}',
-            match_obj='',
-            relative_offset=offset,
-            length=8192,
-            parent=parent
-        )
+        chr_bytes = file_stream.read(8192)
+        chr_img = render_chr(chr_bytes)
+        with BytesIO() as img_data:
+            chr_img.save(img_data, "PNG")
+            yield Submatch(
+                name='CHRBank',
+                display_name=f'CHRBank{i}',
+                match_obj='',
+                relative_offset=offset,
+                length=8192,
+                parent=parent,
+                img_data=f"data:image/png;base64,{base64.b64encode(img_data.getvalue()).decode('utf-8')}"
+            )
+
+
+def chr_values(chr_bytes: bytes):
+    for i, offset in enumerate(range(0, len(chr_bytes), 16)):
+        base_x = (i % 16) * 8
+        base_y = (i // 16) * 8
+        for y in range(8):
+            for x in range(8):
+                shift = 7 - x
+                yield base_x + x,\
+                      base_y + y,\
+                      ((((chr_bytes[offset + y + 8] >> shift) & 0b1)) << 1) | ((chr_bytes[offset + y] >> shift) & 0b1)
+
+
+def render_chr(chr_bytes: bytes) -> Image:
+    img = Image.new(mode='L', size=(8*16, 8*32))
+    d = ImageDraw.Draw(img)
+    for x, y, pixel in chr_values(chr_bytes):
+        if pixel == 1:
+            pixel = 0xFF//3
+        elif pixel == 2:
+            pixel = 0xFF//3*2
+        elif pixel == 3:
+            pixel = 0xFF
+        d.point((x, y), pixel)
+    return img
 
 
 @submatcher('rom-nes.trid.xml')
