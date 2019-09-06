@@ -22,7 +22,14 @@
 </head>
 <body>
 <input type="button" onclick="downloadFile()" value="Download File" />
-<span style="display:none;" id="clickinfo">Double-click to jump to an address</span><br />
+<input type="search" placeholder="search" id="search" onsearch="pageSearch()" />
+<span id="searchinfo"></span>
+<span id="searchbuttons" style="display:none;">
+    <input type="button" value="⬆" id="searchup" onclick="searchUp()" />
+    <input type="button" value="⬇" id="searchdown" onclick="searchDown()" />
+</span>
+<span style="display:none;" id="clickinfo">Double-click to jump to an address</span>
+<br />
 
 {% macro render_match(match, first) -%}
 <li>

@@ -201,3 +201,10 @@ label.tree_label:after { border-bottom: 0; }
   display: inline-block;
   vertical-align: top;
 }
+
+.searchresult {
+    -webkit-box-shadow:0 0 20px #FFFF00;
+    -moz-box-shadow: 0 0 20px #FFFF00;
+    box-shadow:0 0 20px #FFFF00;
+    background-color:#FFFF00;
+}
