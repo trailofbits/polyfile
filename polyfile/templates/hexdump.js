@@ -236,6 +236,15 @@ function resizeWindow() {
     scrollToRow();
 }
 
+function clearSelection() {
+    if(document.selection && document.selection.empty) {
+        document.selection.empty();
+    } else if(window.getSelection) {
+        var sel = window.getSelection();
+        sel.removeAllRanges();
+    }
+}
+
 var doubleClicked = false;
 
 $(document).ready(function() {
@@ -293,20 +302,31 @@ $(document).ready(function() {
 
     $(".byterow").css("cursor", "zoom-in").attr('title', 'Double-Click to Jump to Address').dblclick(function() {
         doubleClicked = true;
-        var addr = prompt('To what address would you like to jump?', $(this).text());
-        if(addr !== null) {
-            addr = parseInt(addr, 16);
-            scrollToByte(addr);
-            setTimeout(function() {
-                $('#byte' + (addr - ROW_OFFSET * 16))
-                    .fadeOut("fast")
-                    .css('font-weight', 'bold')
-                    .fadeIn(3000);
+        clearSelection();
+        var clickedRow = this;
+        $(this).css('font-weight', 'bold').css('background-color', 'black').css('color', 'white');
+        setTimeout(function() {
+            /* use a timeout here to give the browser time to render the results of clearSelection() before the popup */
+            var addr = prompt('To what address would you like to jump?', $(clickedRow).text());
+            if(addr !== null) {
+                $(clickedRow).css('font-weight', '').css('background-color', '').css('color', '');
+                addr = parseInt(addr, 16);
+                scrollToByte(addr);
                 setTimeout(function() {
-                    $('#byte' + (addr - ROW_OFFSET * 16)).css('font-weight', 'normal');
-                }, 5000);
-            }, 1000);
-        }
+                    $('#byte' + (addr - ROW_OFFSET * 16))
+                        .fadeOut("fast")
+                        .css('font-weight', 'bold')
+                        .fadeIn(3000);
+                    setTimeout(function() {
+                        $('#byte' + (addr - ROW_OFFSET * 16)).css('font-weight', 'normal');
+                    }, 5000);
+                }, 1000);
+            } else {
+                setTimeout(function() {
+                    $(clickedRow).css('font-weight', '').css('background-color', '').css('color', '');
+                }, 500);
+            }
+        }, 100);
     }).click(function() {
         doubleClicked = false;
         setTimeout(function() {
