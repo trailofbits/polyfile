@@ -312,6 +312,8 @@ function kmp_search(source, find, caseSensitive) {
     return result;
 }
 
+var hexMatcher = new RegExp('^(0[xX])?([0-9a-fA-F]+)$');
+
 function pageSearch() {
     searchMatches = [];
     currentMatch = 0;
@@ -326,6 +328,25 @@ function pageSearch() {
     for(var index of kmp_search(rawBytes, query)) {
         highlight(index, query.length, 'searchresult', false);
         searchMatches.push(index);
+    }
+
+    if(hexMatcher.test(query)) {
+        /* also test for the byte sequence */
+        var match = query;
+        if(match.substring(0, 2).toLowerCase() == "0x") {
+            match = match.substring(2);
+        }
+        var str = '';
+        if(match.length % 2 == 1) {
+            match = '0' + match;
+        }
+        for(var i=0; i<match.length; i+=2) {
+            str += String.fromCharCode(parseInt(match[i] + match[i+1], 16))
+        }
+        for(var index of kmp_search(rawBytes, str, true)) {
+            highlight(index, str.length, 'searchresult', false);
+            searchMatches.push(index);
+        }
     }
 
     if(searchMatches.length == 0) {
