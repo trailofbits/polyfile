@@ -209,7 +209,7 @@ function scrollToRow(row) {
 }
 
 function resizeWindow() {
-    var newVisible = Math.floor($('.hexeditor .scrollcontainer').first().innerHeight() / BYTE_HEIGHT) - 2;
+    var newVisible = Math.max(1, Math.floor($('.hexeditor .scrollcontainer').first().innerHeight() / BYTE_HEIGHT) - 2);
     while(VISIBLE_ROWS < newVisible) {
         /* add a new row */
         var rowHtml = '<div class="byteline"><span class="byterow" id="byterow' + VISIBLE_ROWS + '"></span>';
@@ -384,7 +384,7 @@ var doubleClicked = false;
 
 $(document).ready(function() {
     BYTE_HEIGHT = $('.hexeditor .byte').first().outerHeight();
-    $(".scrollheightproxy").height(BYTE_HEIGHT * ROWS);
+    $(".scrollheightproxy").height(BYTE_HEIGHT * (ROWS + 2));
     $(window).resize(resizeWindow());
     resizeWindow();
     $('#loading').remove();
