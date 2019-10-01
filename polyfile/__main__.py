@@ -6,6 +6,7 @@ import sys
 from . import html
 from . import logger
 from . import polyfile
+from . import version
 from .fileutils import PathOrStdin
 
 
@@ -14,17 +15,30 @@ log = logger.getStatusLogger("polyfile")
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description='A utility to recursively map the structure of a file.')
-    parser.add_argument('FILE', help='The file to analyze, or \'-\' to read from STDIN')
+    parser.add_argument('FILE', nargs='?', default='-', help='The file to analyze; pass \'-\' or omit to read from STDIN')
     parser.add_argument('--html', '-t', type=argparse.FileType('wb'), required=False,
                         help='Path to write an interactive HTML file for exploring the PDF')
     parser.add_argument('--try-all-offsets', '-a', action='store_true', help='Search for a file match at every possible offset; this can be very slow for larger files')
     parser.add_argument('--debug', '-d', action='store_true', help='Print debug information')
     parser.add_argument('--quiet', '-q', action='store_true', help='Suppress all log output (overrides --debug)')
+    parser.add_argument('--version', '-v', action='store_true', help='Print PolyFile\'s version information to STDERR')
+    parser.add_argument('-dumpversion', action='store_true', help='Print PolyFile\'s raw version information to STDOUT and exit')
 
     if argv is None:
         argv = sys.argv
     
     args = parser.parse_args(argv[1:])
+
+    if args.dumpversion:
+        print(' '.join(map(str, version.__version__)))
+        exit(0)
+
+    if args.version:
+        sys.stderr.write(f"PolyFile version {version.VERSION_STRING}\n")
+        if args.FILE == '-' and sys.stdin.isatty():
+            # No file argument was provided and it doesn't look like anything was piped into STDIN,
+            # so instead of blocking on STDIN just exit
+            exit(0)
 
     if args.debug:
         logger.setLevel(logging.DEBUG)

@@ -1,12 +1,22 @@
 import os
 from setuptools import setup, find_packages
 
+VERSION_MODULE_PATH = os.path.join(os.path.realpath(os.path.dirname(__file__)), "polyfile", "version.py")
+
+
+def get_version_string():
+    version = {}
+    with open(VERSION_MODULE_PATH) as f:
+        exec(f.read(), version)
+    return version['VERSION_STRING']
+
+
 setup(
     name='polyfile',
     description='A utility to recursively map the structure of a file.',
     url='https://github.com/trailofbits/polyfile',
     author='Trail of Bits',
-    version='0.0.1',
+    version=get_version_string(),
     packages=find_packages(),
     python_requires='>=3.6',
     install_requires=[
