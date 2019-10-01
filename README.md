@@ -60,6 +60,11 @@ For an example that exercises all of these file formats, run:
 curl -v --silent https://www.sultanik.com/files/ESultanikResume.pdf | polyfile --html ESultanikResume.html - > ESultanikResume.json
 ```
 
+## Current Status and Known Deficiencies
+* The instrumented Kaitai Struct parser generator implementation has only been tested on the JPEG/JFIF grammar;
+  other KSY definitions may exercise portions of the KSY specification that have not yet been implemented
+* The JSON output schema will soon be replaced with the similar [SBuD](https://github.com/corkami/sbud) format
+
 ## License and Acknowledgements
 
 This research was developed by [Trail of
