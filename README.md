@@ -1,4 +1,9 @@
 # PolyFile
+<p align="center">
+  <img src="logo/polyfile.png?raw=true" width="256" title="PolyFile">
+</p>
+<br />
+
 A utility to identify and map the semantic structure of files, including polyglots, chimeras, and schizophrenic files.
 
 ## Quickstart
@@ -40,6 +45,13 @@ You can optionally have PolyFile output an interactive HTML page containing a la
 polyfile INPUT_FILE --html output.html > output.json
 ```
 
-## License
+## License and Acknowledgements
 
-PolyFile was created by Trail of Bits under subcontract to Galois on the DARPA SafeDocs project. Licensing TBD.
+This research was developed by [Trail of
+Bits](https://www.trailofbits.com/) with funding from the Defense
+Advanced Research Projects Agency (DARPA) under the SafeDocs program
+as a subcontractor to [Galois](https://galois.com). This code is in
+the process of being open-sourced with the goal of distribution under
+an Apache license. However, until that happens, it is only to be used
+and distributed under the cooperative agreement between SafeDocs
+performers. © 2019, Trail of Bits.
