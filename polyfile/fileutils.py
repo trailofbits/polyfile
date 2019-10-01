@@ -1,6 +1,7 @@
 import mmap
 import os
 import tempfile as tf
+import sys
 
 
 def make_stream(path_or_stream, mode='rb', close_on_exit=None):
@@ -28,6 +29,25 @@ class Tempfile:
         if self._temp is not None:
             os.unlink(self._temp.name)
             self._temp = None
+
+
+class PathOrStdin:
+    def __init__(self, path):
+        self._path = path
+        if self._path == '-':
+            self._tempfile = Tempfile(sys.stdin.buffer.read())
+        else:
+            self._tempfile = None
+
+    def __enter__(self):
+        if self._tempfile is None:
+            return self._path
+        else:
+            return self._tempfile.__enter__()
+
+    def __exit__(self, *args, **kwargs):
+        if self._tempfile is not None:
+            return self._tempfile.__exit__(*args, **kwargs)
 
 
 class FileStream:

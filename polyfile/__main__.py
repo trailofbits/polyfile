@@ -6,6 +6,7 @@ import sys
 from . import html
 from . import logger
 from . import polyfile
+from .fileutils import PathOrStdin
 
 
 log = logger.getStatusLogger("polyfile")
@@ -13,7 +14,7 @@ log = logger.getStatusLogger("polyfile")
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description='A utility to recursively map the structure of a file.')
-    parser.add_argument('FILE', help='The file to analyze')
+    parser.add_argument('FILE', help='The file to analyze, or \'-\' to read from STDIN')
     parser.add_argument('--html', '-t', type=argparse.FileType('wb'), required=False,
                         help='Path to write an interactive HTML file for exploring the PDF')
     parser.add_argument('--try-all-offsets', '-a', action='store_true', help='Search for a file match at every possible offset; this can be very slow for larger files')
@@ -51,27 +52,28 @@ def main(argv=None):
 
         progress_callback = ProgressCallback()
 
-    matches = []
-    matcher = polyfile.Matcher(args.try_all_offsets)
-    for match in matcher.match(args.FILE, progress_callback=progress_callback):
-        if hasattr(match.match, 'filetype'):
-            filetype = match.match.filetype
-        else:
-            filetype = match.name
-        if match.parent is None:
-            log.info(f"Found a file of type {filetype} at byte offset {match.offset}")
-            matches.append(match)
-        elif isinstance(match, polyfile.Submatch):
-            log.info(f"Found a subregion of type {filetype} at byte offset {match.offset}")
-        else:
-            log.info(f"Found an embedded file of type {filetype} at byte offset {match.offset}")
-    sys.stderr.flush()
-    matches = [match.to_obj() for match in matches]
-    print(json.dumps(matches))
-    if args.html:
-        args.html.write(html.generate(args.FILE, matches).encode('utf-8'))
-        args.html.close()
-        log.info(f"Saved HTML output to {args.html.name}")
+    with PathOrStdin(args.FILE) as file_path:
+        matches = []
+        matcher = polyfile.Matcher(args.try_all_offsets)
+        for match in matcher.match(file_path, progress_callback=progress_callback):
+            if hasattr(match.match, 'filetype'):
+                filetype = match.match.filetype
+            else:
+                filetype = match.name
+            if match.parent is None:
+                log.info(f"Found a file of type {filetype} at byte offset {match.offset}")
+                matches.append(match)
+            elif isinstance(match, polyfile.Submatch):
+                log.info(f"Found a subregion of type {filetype} at byte offset {match.offset}")
+            else:
+                log.info(f"Found an embedded file of type {filetype} at byte offset {match.offset}")
+        sys.stderr.flush()
+        matches = [match.to_obj() for match in matches]
+        print(json.dumps(matches))
+        if args.html:
+            args.html.write(html.generate(file_path, matches).encode('utf-8'))
+            args.html.close()
+            log.info(f"Saved HTML output to {args.html.name}")
 
 
 if __name__ == '__main__':
