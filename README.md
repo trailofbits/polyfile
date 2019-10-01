@@ -40,9 +40,24 @@ To generate a JSON mapping of a file, run:
 polyfile INPUT_FILE > output.json
 ```
 
-You can optionally have PolyFile output an interactive HTML page containing a labeled hexdump of the file:
+You can optionally have PolyFile output an interactive HTML page containing a labeled, interactive hexdump of the file:
 ```
 polyfile INPUT_FILE --html output.html > output.json
+```
+
+## File Support
+
+PolyFile can identify all 10,000+ file formats in the [TrID database](http://mark0.net/soft-trid-deflist.html).
+It currently has support for parsing and semantically mapping the following formats:
+* PDF, using an instrumented version of [Didier Stevens' public domain, permissive, forensic parser](https://blog.didierstevens.com/programs/pdf-tools/)
+* ZIP, including reursive identification of all ZIP contents
+* JPEG/JFIF, using its [Kaitai Struct grammar](https://formats.kaitai.io/jpeg/index.html)
+* [iNES](https://wiki.nesdev.com/w/index.php/INES)
+* [Any other format](https://formats.kaitai.io/index.html) specified in a [KSY grammar](https://doc.kaitai.io/user_guide.html)
+
+For an example that exercises all of these file formats, run:
+```bash
+curl -v --silent https://www.sultanik.com/files/ESultanikResume.pdf | polyfile --html ESultanikResume.html - > ESultanikResume.json
 ```
 
 ## License and Acknowledgements
