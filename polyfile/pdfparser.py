@@ -72,6 +72,10 @@ Todo:
 
 """
 
+from .logger import getStatusLogger
+
+log = getStatusLogger("PDF")
+
 import re
 import optparse
 import zlib
@@ -199,23 +203,20 @@ class cPDFDocument:
                 else:
                     self.infile = urllib23.urlopen(file)
             except urllib23.HTTPError:
-                print('Error accessing URL %s' % file)
-                print(sys.exc_info()[1])
+                log.error(f'Error accessing URL {file}: {sys.exec_info()[1]}')
                 sys.exit()
         elif file.lower().endswith('.zip'):
             try:
                 self.zipfile = zipfile.ZipFile(file, 'r')
                 self.infile = self.zipfile.open(self.zipfile.infolist()[0], 'r', C2BIP3('infected'))
             except:
-                print('Error opening file %s' % file)
-                print(sys.exc_info()[1])
+                log.error(f'Error opening file {file}: {sys.exec_info()[1]}')
                 sys.exit()
         else:
             try:
                 self.infile = open(file, 'rb')
             except:
-                print('Error opening file %s' % file)
-                print(sys.exc_info()[1])
+                log.error(f'Error opening file {file}: {sys.exec_info()[1]}')
                 sys.exit()
         self.ungetted = []
         self.position = -1
@@ -437,22 +438,22 @@ class cPDFParser:
                                 #self.content.append((CHAR_DELIMITER, self.token[1] + self.token2[1]))
                                 self.content.append(PDFToken(CHAR_DELIMITER, self.token[1] + self.token2[1], self.token.offset))
                             elif self.verbose:
-                                print('todo 1: %s' % (self.token[1] + self.token2[1]))
+                                log.warn('todo 1: %s' % (self.token[1] + self.token2[1]))
                         else:
                             self.oPDFTokenizer.unget(self.token2)
                             if self.context != CONTEXT_NONE:
                                 self.content.append(self.token)
                             elif self.verbose:
-                                print('todo 2: %d %s' % (self.token[0], repr(self.token[1])))
+                                log.warn('todo 2: %d %s' % (self.token[0], repr(self.token[1])))
                     elif self.context != CONTEXT_NONE:
                         self.content.append(self.token)
                     elif self.verbose:
-                        print('todo 3: %d %s' % (self.token[0], repr(self.token[1])))
+                        log.warn('todo 3: %d %s' % (self.token[0], repr(self.token[1])))
                 elif self.token[0] == CHAR_WHITESPACE:
                     if self.context != CONTEXT_NONE:
                         self.content.append(self.token)
                     elif self.verbose:
-                        print('todo 4: %d %s' % (self.token[0], repr(self.token[1])))
+                        log.warn('todo 4: %d %s' % (self.token[0], repr(self.token[1])))
                 else:
                     if self.context == CONTEXT_OBJ:
                         if self.token[1] == 'endobj':
@@ -495,11 +496,11 @@ class cPDFParser:
                                     self.oPDFTokenizer.unget(self.token3)
                                     self.oPDFTokenizer.unget(self.token2)
                                     if self.verbose:
-                                        print('todo 6: %d %s' % (self.token[0], repr(self.token[1])))
+                                        log.warn('todo 6: %d %s' % (self.token[0], repr(self.token[1])))
                             else:
                                 self.oPDFTokenizer.unget(self.token2)
                                 if self.verbose:
-                                    print('todo 7: %d %s' % (self.token[0], repr(self.token[1])))
+                                    log.warn('todo 7: %d %s' % (self.token[0], repr(self.token[1])))
                         elif self.token[1] == 'trailer':
                             self.context = CONTEXT_TRAILER
                             self.content = [self.token]
@@ -520,7 +521,7 @@ class cPDFParser:
                             else:
                                 self.oPDFTokenizer.unget(self.token2)
                                 if self.verbose:
-                                    print('todo 9: %d %s' % (self.token[0], repr(self.token[1])))
+                                    log.warn('todo 9: %d %s' % (self.token[0], repr(self.token[1])))
                         elif self.extract:
                             self.bytes = ''
                             first_offset = None
@@ -531,7 +532,7 @@ class cPDFParser:
                                 self.token = self.oPDFTokenizer.Token()
                             return cPDFElementMalformed(self.bytes, first_offset)
                         elif self.verbose:
-                            print('todo 10: %d %s' % (self.token[0], repr(self.token[1])))
+                            log.warn('todo 10: %d %s' % (self.token[0], repr(self.token[1])))
             else:
                 break
 
@@ -766,7 +767,7 @@ class cPDFElementIndirectObject:
                 oDecoder = cDecoder(streamData, decoderoptions)
                 oDecoders.append(oDecoder)
             except Exception as e:
-                print('Error instantiating decoder: %s' % cDecoder.name)
+                log.error('Error instantiating decoder: %s' % cDecoder.name)
                 raise e
         results = []
         for oDecoder in oDecoders:
@@ -1347,7 +1348,7 @@ def LoadDecoders(decoders, verbose):
                         decoder = scriptDecoder
             exec(open(decoder, 'r').read(), globals(), globals())
         except Exception as e:
-            print('Error loading decoder: %s' % decoder)
+            log.error('Error loading decoder: %s' % decoder)
             if verbose:
                 raise e
 
