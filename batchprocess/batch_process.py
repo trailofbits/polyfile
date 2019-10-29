@@ -1,3 +1,5 @@
+import csv
+import json
 import os
 import platform
 import shutil
@@ -24,10 +26,17 @@ def get_gnu_util(name, cmdtest=None):
 
 SCRIPT_DIR = os.path.abspath(os.path.dirname(__file__))
 TIME_PATH = get_gnu_util('time', cmdtest=[None, '--version'][platform.system() == 'Darwin'])
+DEFAULT_DB_NAME = 'batch_process.db'
 
-conn = sqlite3.connect('batch_process.db')
+conn = None
+def get_connection(db_path=None):
+    if db_path is None:
+        db_path = DEFAULT_DB_NAME
+    global conn
+    if conn is None:
+        conn = sqlite3.connect(db_path)
 
-conn.execute('''CREATE TABLE IF NOT EXISTS pdfs (
+        conn.execute('''CREATE TABLE IF NOT EXISTS pdfs (
 filename TEXT,
 start TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 command TEXT NOT NULL,
@@ -41,6 +50,7 @@ json TEXT NULL,
 timing TEXT NULL,
 UNIQUE (filename, command) ON CONFLICT REPLACE
 )''')
+    return conn
 
 
 def read_if_exists(path):
@@ -55,7 +65,7 @@ def read_if_exists(path):
 
 def process_pdf(path, timeout_seconds=60*3):
     command = 'pdfinfo.py'
-    cur = conn.cursor()
+    cur = get_connection().cursor()
     filename = os.path.basename(path)
     row = cur.execute("SELECT start, retcode, timeout, timed_out FROM pdfs WHERE filename = ? AND command = ?",
                       (filename, command)).fetchone()
@@ -161,15 +171,60 @@ def process_zip(path):
                     process_pdf(os.path.join(tmpdir, name))
 
 
+def to_csv(db_path=None, out=None):
+    if db_path is None:
+        db_path = DEFAULT_DB_NAME
+    if not os.path.exists(db_path):
+        sys.stderr.write(f"Error opening database at {db_path}\n\n")
+        return False
+    if out is None:
+        out = sys.stdout
+    cur = get_connection(db_path).cursor()
+    command = 'pdfinfo.py'
+    columns = None
+    c = csv.writer(out, delimiter=',', quoting=csv.QUOTE_MINIMAL)
+    for row in cur.execute(
+            "SELECT filename, json, timing FROM pdfs WHERE command = ? AND retcode = 0", (command,)).fetchall():
+        info = json.loads(row[1])
+        if columns is None:
+            columns = ('filename', 'timing') + tuple(info.keys())
+            c.writerow(columns)
+        if isinstance(row[2], bytes):
+            timing = row[2].decode('utf-8').strip().replace('\n', ' ')
+        else:
+            timing = row[2]
+        c.writerow([row[0], timing] + [info[col] for col in columns[2:]])
+    return True
+
+
 if __name__ == '__main__':
     import sys
 
-    if len(sys.argv) < 2:
-        sys.stderr.write(f"Usage: {sys.argv[0]} PDF_OR_ZIP [PDF_OR_ZIP ...]\n\n")
-        exit(1)
+    print_usage = len(sys.argv) < 2
 
-    for path in sys.argv[1:]:
-        if path[-4:] == '.zip':
-            process_zip(path)
+    if not print_usage:
+        if sys.argv[1] == '--csv':
+            if len(sys.argv) > 3:
+                print_usage = True
+            else:
+                if len(sys.argv) > 2:
+                    path = sys.argv[2]
+                else:
+                    path = None
+                print_usage = not to_csv(path)
         else:
-            process_pdf(path)
+            for path in sys.argv[1:]:
+                if path[-4:] == '.zip':
+                    process_zip(path)
+                else:
+                    process_pdf(path)
+
+    if print_usage:
+        sys.stderr.write(f"""Usage:
+    {sys.argv[0]} PDF_OR_ZIP [PDF_OR_ZIP ...])    Saves results to a sqlite3 database called `batch_process.db`
+                                                  in the current directory
+
+    {sys.argv[0]} --csv [DB_PATH]                 Converts the given results database to a CSV printed to STDOUT
+
+""")
+        exit(1)
