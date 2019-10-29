@@ -19,10 +19,32 @@ def content_length(content):
     return content[-1].offset.offset - content[0].offset.offset + token_length(content[-1])
 
 
+class PDFDictionary(Submatch):
+    def __init__(self, relative_offset, length, parent):
+        super().__init__(
+            'PDFDictionary',
+            '',
+            relative_offset=relative_offset,
+            length=length,
+            parent=parent
+        )
+
+    def items(self):
+        for child in self.children:
+            if child.name == 'KeyValuePair':
+                key = None
+                value = None
+                for kv in child.children:
+                    if kv.name == 'Key':
+                        key = kv
+                    elif kv.name == 'Value':
+                        value = kv
+                if key is not None or value is not None:
+                    yield key, value
+
+
 def _emit_dict(parsed, parent, pdf_offset):
-    dict_obj = Submatch(
-        "PDFDictionary",
-        '',
+    dict_obj = PDFDictionary(
         relative_offset=parsed.start.offset.offset - parent.offset + pdf_offset,
         length=parsed.end.offset.offset - parsed.start.offset.offset + len(parsed.end.token),
         parent=parent
