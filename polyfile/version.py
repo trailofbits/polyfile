@@ -1,4 +1,4 @@
-__version__ = (0, 1, 2, "SafeDocs-Internal")
+__version__ = (0, 1, 3)
 
 VERSION_STRING = ''
 
