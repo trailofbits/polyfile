@@ -73,8 +73,6 @@ curl -v --silent https://www.sultanik.com/files/ESultanikResume.pdf | polyfile -
 This research was developed by [Trail of
 Bits](https://www.trailofbits.com/) with funding from the Defense
 Advanced Research Projects Agency (DARPA) under the SafeDocs program
-as a subcontractor to [Galois](https://galois.com). This code is in
-the process of being open-sourced with the goal of distribution under
-an Apache license. However, until that happens, it is only to be used
-and distributed under the cooperative agreement between SafeDocs
-performers. © 2019, Trail of Bits.
+as a subcontractor to [Galois](https://galois.com). It is licensed under the [Apache 2.0 lisense](LICENSE).
+The [PDF parser](polyfile/pdfparser.py) is modified from the parser developed by Didier Stevens and released into the
+ public domain. © 2019, Trail of Bits.
