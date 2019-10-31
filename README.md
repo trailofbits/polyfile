@@ -1,6 +1,6 @@
 # PolyFile
 <p align="center">
-  <img src="logo/polyfile.png?raw=true" width="256" title="PolyFile">
+  <img src="logo/polyfile_name.png?raw=true" width="256" title="PolyFile">
 </p>
 <br />
 
