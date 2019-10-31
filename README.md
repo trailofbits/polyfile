@@ -4,6 +4,9 @@
 </p>
 <br />
 
+[![Slack Status](https://empireslacking.herokuapp.com/badge.svg)](https://empireslacking.herokuapp.com)
+[![PyPI version](https://badge.fury.io/py/polyfile.svg)](https://badge.fury.io/py/polyfile)
+
 A utility to identify and map the semantic structure of files, including polyglots, chimeras, and schizophrenic files.
 
 ## Quickstart
