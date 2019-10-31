@@ -7,7 +7,13 @@
 [![Slack Status](https://empireslacking.herokuapp.com/badge.svg)](https://empireslacking.herokuapp.com)
 [![PyPI version](https://badge.fury.io/py/polyfile.svg)](https://badge.fury.io/py/polyfile)
 
-A utility to identify and map the semantic structure of files, including polyglots, chimeras, and schizophrenic files.
+A utility to identify and map the semantic structure of files,
+including polyglots, chimeras, and schizophrenic files. It can be used
+in conjunction with its sister tool
+[PolyTracker](https://github.com/trailofbits/polytracker) for
+_Automated Lexical Annotation and Navigation of Parsers_, a backronym
+devised solely for the purpose of collectively referring to the tools
+as _The ALAN Parsers Project_.
 
 ## Quickstart
 
