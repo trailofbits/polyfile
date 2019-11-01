@@ -36,9 +36,11 @@ setup(
     classifiers=[
         'Development Status :: 4 - Beta',
         'Environment :: Console',
-        'Intended Audience :: Developers',
-        'License :: OSI Approved :: GNU Affero General Public License v3',
+        'Intended Audience :: Science/Research',
+        'License :: OSI Approved :: Apache Software License',
+        'Programming Language :: Python :: 3 :: Only',
         'Topic :: Security',
-        'Topic :: Software Development :: Testing'
+        'Topic :: Software Development :: Testing',
+        'Topic :: Utilities'
     ]
 )
