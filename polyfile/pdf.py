@@ -207,8 +207,6 @@ def parse_object(file_stream, object, matcher: Matcher, parent=None):
                         #         )
                         if is_dct_decode and raw_content[:1] == b'\xff':
                             # This is most likely a JPEG image
-                            with open('/Users/evan/Downloads/test.jpg', 'wb') as f:
-                                f.write(raw_content)
                             try:
                                 ast = kaitai.parse('jpeg', raw_content)
                             except Exception as e:
