@@ -154,17 +154,27 @@ class FileStream:
     def tell(self):
         return self._stream.tell() - self.start
 
-    def read(self, n=None):
+    def peek(self, n=None):
+        old_pos = self.tell()
+        ret = self.read(n, update_listeners=False)
+        self.seek(old_pos)
+        return ret
+
+    def read(self, n=None, update_listeners=True):
         pos = self.tell()
-        for listener in self._listeners:
-            listener(self, pos)
+        if update_listeners:
+            for listener in self._listeners:
+                listener(self, pos)
         ls = len(self)
+        stream_args = {}
+        if isinstance(self._stream, FileStream):
+            stream_args['update_listeners'] = update_listeners
         if pos >= ls:
             return b''
         elif n is None:
-            return self._stream.read()[:ls - pos]
+            return self._stream.read(**stream_args)[:ls - pos]
         else:
-            return self._stream.read(min(n, ls - pos))
+            return self._stream.read(min(n, ls - pos), **stream_args)
 
     def contains_all(self, *args):
         if args:
