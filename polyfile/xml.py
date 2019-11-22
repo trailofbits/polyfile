@@ -34,11 +34,16 @@ class CompoundToken(Token):
         super().__init__([t for t in tokens if len(t) > 0], offset, **kwargs)
 
     def collapse(self):
+        if not self.token:
+            return self
         new_tokens = []
         for t in self.token:
             if isinstance(t, CompoundToken):
                 t = t.collapse()
-            if not isinstance(t, CompoundToken) and new_tokens and not isinstance(new_tokens[-1], CompoundToken):
+            if not isinstance(t, CompoundToken) \
+                    and new_tokens \
+                    and not isinstance(new_tokens[-1], CompoundToken) \
+                    and new_tokens[-1].token_type == t.token_type:
                 new_tokens[-1].token += t.token
             else:
                 new_tokens.append(t)
@@ -46,8 +51,12 @@ class CompoundToken(Token):
         if len(new_tokens) == 1:
             if isinstance(new_tokens[0], CompoundToken):
                 assert self.offset == new_tokens[0].offset
-                self.token = new_tokens[0].token
-                return self
+                if self.token_type == new_tokens[0].token_type:
+                    self.token = new_tokens[0].token
+                    return self
+                else:
+                    self.token = new_tokens
+                    return self
             else:
                 if new_tokens[0].token_type is None and self.token_type is not None:
                     new_tokens[0].token_type = self.token_type
@@ -439,10 +448,70 @@ version_info = rule_sequence(whitespace, 'version', eq, production(
     ["'", version_num, "'"],
     ['"', version_num, '"'],
 ), token_type='VersionInfo')
-xml_decl = rule_sequence('<?xml', version_info, optional(encoding_decl), optional(sd_decl), optional(whitespace), '?>')
+# xml_decl = rule_sequence('<?xml', version_info, optional(encoding_decl), optional(sd_decl), optional(whitespace), '?>')
+
+# Attribute	   ::=   	Name Eq AttValue
+attribute = rule_sequence(name, eq, att_value)
+
+# EmptyElemTag	   ::=   	'<' Name (S Attribute)* S? '/>'
+empty_elem_tag = rule_sequence(
+    '<', name, star([whitespace, attribute]), optional(whitespace), '/>',
+    token_type='EmptyElemTag'
+)
+
+# STag	   ::=   	'<' Name (S Attribute)* S? '>'
+stag = rule_sequence('<', name, star(whitespace, attribute), optional(whitespace), '>', token_type='STag')
+
+# ETag	   ::=   	'</' Name S? '>'
+etag = rule_sequence('</', name, optional(whitespace), '>', token_type='ETag')
+
+content = None
+
+
+def element(file_stream: FileStream):
+    # content	   ::=   	CharData? ((element | Reference | CDSect | PI | Comment) CharData?)*
+    global content
+    if content is None:
+        content = rule_sequence(
+            optional(char_data),
+            star(
+                production(
+                    element, reference, cd_sect, pi, comment
+                ),
+                optional(char_data)
+            )
+        )
+
+    start = file_stream.tell()
+    t = empty_elem_tag(file_stream)
+    if t is not None:
+        return t
+    else:
+        end = file_stream.tell()
+        s = stag(file_stream)
+        if s is None:
+            file_stream.seek(end)
+            return None
+        c = content(file_stream)
+        if c is None:
+            file_stream.seek(end)
+            return None
+        e = etag(file_stream)
+        if e is None:
+            file_stream.seek(end)
+            return None
+        return CompoundToken([s, c, e], start, token_type='element')
+
+
+parse_permissive = star(production(
+    element,
+    misc,
+    minus(char, restricted_char)
+))
+
 
 if __name__ == '__main__':
     from .fileutils import make_stream, Tempfile
 
-    with Tempfile(b'<?foo asdf?>?>') as tmpfile:
-        print(pi(make_stream(tmpfile)))
+    with Tempfile(b'<a>foo</r>asf') as tmpfile:
+        print(repr(parse_permissive(make_stream(tmpfile))))
