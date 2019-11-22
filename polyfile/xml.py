@@ -1,4 +1,4 @@
-from .ebnf import char_rule, Token, CompoundToken, star, plus, minus, optional, rule_sequence, star_until, reject_if, production
+from .ebnf import char_rule, Token, CompoundToken, star, plus, minus, optional, rule_sequence, star_until, reject_if, production, string_match
 from .fileutils import FileStream
 
 
