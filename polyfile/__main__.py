@@ -6,6 +6,7 @@ import sys
 from . import html
 from . import logger
 from . import polyfile
+from . import trid
 from . import version
 from .fileutils import PathOrStdin
 
@@ -16,6 +17,8 @@ log = logger.getStatusLogger("polyfile")
 def main(argv=None):
     parser = argparse.ArgumentParser(description='A utility to recursively map the structure of a file.')
     parser.add_argument('FILE', nargs='?', default='-', help='The file to analyze; pass \'-\' or omit to read from STDIN')
+    parser.add_argument('--filetype', '-f', action='append', help='Explicitly match against the given filetype (default is to match against all filetypes)')
+    parser.add_argument('--list', '-l', action='store_true', help='list the supported filetypes (for the `--filetype` argument) and exit')
     parser.add_argument('--html', '-t', type=argparse.FileType('wb'), required=False,
                         help='Path to write an interactive HTML file for exploring the PDF')
     parser.add_argument('--try-all-offsets', '-a', action='store_true', help='Search for a file match at every possible offset; this can be very slow for larger files')
@@ -31,6 +34,20 @@ def main(argv=None):
 
     if args.dumpversion:
         print(' '.join(map(str, version.__version__)))
+        exit(0)
+
+    if args.list:
+        trid.load()
+        longest_name = max(map(len, (d.name for d in trid.DEFS)))
+        for name, filetype in sorted((d.name, d.filetype) for d in trid.DEFS):
+            if name.endswith('.trid.xml'):
+                name = name[:-len('.trid.xml')]
+            sys.stdout.write(f"{name}")
+            sys.stdout.flush()
+            sys.stderr.write(f' {"." * (longest_name - len(name) - 2)} \x1B[3m{filetype}\x1B[23m')
+            sys.stderr.flush()
+            sys.stdout.write('\n')
+            sys.stdout.flush()
         exit(0)
 
     if args.version:
@@ -66,10 +83,16 @@ def main(argv=None):
 
         progress_callback = ProgressCallback()
 
+    if args.filetype:
+        trid.load()
+        trid_defs = [d for d in trid.DEFS if d.name[:-len('.trid.xml')] in args.filetype]
+    else:
+        trid_defs = None
+
     with PathOrStdin(args.FILE) as file_path:
         matches = []
         matcher = polyfile.Matcher(args.try_all_offsets)
-        for match in matcher.match(file_path, progress_callback=progress_callback):
+        for match in matcher.match(file_path, progress_callback=progress_callback, trid_defs=trid_defs):
             if hasattr(match.match, 'filetype'):
                 filetype = match.match.filetype
             else:

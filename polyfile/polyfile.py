@@ -135,9 +135,9 @@ class Matcher:
         self.trid_matcher = None
         self.try_all_offsets = try_all_offsets
 
-    def match(self, file_stream, parent=None, progress_callback=None):
+    def match(self, file_stream, parent=None, progress_callback=None, trid_defs=None):
         if self.trid_matcher is None:
-            self.trid_matcher = trid.Matcher(try_all_offsets=self.try_all_offsets)
+            self.trid_matcher = trid.Matcher(try_all_offsets=self.try_all_offsets, defs=None)
         for offset, tdef in self.trid_matcher.match(file_stream, progress_callback=progress_callback):
             if tdef.name in CUSTOM_MATCHERS:
                 display_name = tdef.name.upper()
