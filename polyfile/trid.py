@@ -25,7 +25,7 @@ SERIALIZED_PARTIAL_TRIE = os.path.join(os.path.dirname(os.path.realpath(__file__
 DEFS = None
 
 # These are the file formats that don't have to start at byte offset zero of the file:
-CAN_BE_OFFSET = {'adobe_pdf', 'zip'}
+CAN_BE_OFFSET = {'adobe_pdf', 'zip', 'html'}
 
 
 class TRiDDef:
@@ -110,12 +110,14 @@ class TRiDDef:
 
 
 class Matcher:
-    def __init__(self, try_all_offsets=False):
+    def __init__(self, try_all_offsets=False, defs=None):
         load()
+        if defs is None:
+            defs = DEFS
         self.patterns = defaultdict(set)
         self.try_all_offsets = try_all_offsets
         log.status("Building multi-string search data structures...")
-        for tdef in DEFS:
+        for tdef in defs:
             if not try_all_offsets and not tdef.can_be_offset:
                 continue
             log.status(f"Building multi-string search data structures... {tdef.name}")
