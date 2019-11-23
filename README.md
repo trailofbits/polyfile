@@ -28,20 +28,34 @@ This will automatically install the `polyfile` executable in your path.
 ## Usage
 
 ```
-$ polyfile --help
-usage: polyfile [-h] [--html HTML] [--debug] [--quiet] FILE
+usage: polyfile [-h] [--filetype FILETYPE] [--list] [--html HTML]
+                [--try-all-offsets] [--debug] [--quiet] [--version]
+                [-dumpversion]
+                [FILE]
 
 A utility to recursively map the structure of a file.
 
 positional arguments:
-  FILE                  The file to analyze
+  FILE                  The file to analyze; pass '-' or omit to read from
+                        STDIN
 
 optional arguments:
   -h, --help            show this help message and exit
+  --filetype FILETYPE, -f FILETYPE
+                        Explicitly match against the given filetype (default
+                        is to match against all filetypes)
+  --list, -l            list the supported filetypes (for the `--filetype`
+                        argument) and exit
   --html HTML, -t HTML  Path to write an interactive HTML file for exploring
                         the PDF
+  --try-all-offsets, -a
+                        Search for a file match at every possible offset; this
+                        can be very slow for larger files
   --debug, -d           Print debug information
   --quiet, -q           Suppress all log output (overrides --debug)
+  --version, -v         Print PolyFile's version information to STDERR
+  -dumpversion          Print PolyFile's raw version information to STDOUT and
+                        exit
 ```
 
 To generate a JSON mapping of a file, run:
