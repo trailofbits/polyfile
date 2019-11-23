@@ -1,6 +1,9 @@
 import argparse
+import base64
+import hashlib
 import json
 import logging
+import os
 import sys
 
 from . import html
@@ -105,10 +108,35 @@ def main(argv=None):
             else:
                 log.info(f"Found an embedded file of type {filetype} at byte offset {match.offset}")
         sys.stderr.flush()
-        matches = [match.to_obj() for match in matches]
-        print(json.dumps(matches))
+        md5 = hashlib.md5()
+        sha1 = hashlib.sha1()
+        sha256 = hashlib.sha256()
+        with open(file_path, 'rb') as hash_file:
+            data = hash_file.read()
+            md5.update(data)
+            sha1.update(data)
+            sha256.update(data)
+            b64contents = base64.b64encode(data)
+            file_length = len(data)
+            data = None
+        if args.FILE == '-':
+            filename = 'STDIN',
+        else:
+            filename = os.path.split(args.FILE)
+        sbud = {
+            'MD5': md5.hexdigest(),
+            'SHA1': sha1.hexdigest(),
+            'SHA256': sha256.hexdigest(),
+            'b64contents': b64contents.decode('utf-8'),
+            'fileName': filename,
+            'length': file_length,
+            'struc': [
+                match.to_obj() for match in matches
+            ]
+        }
+        print(json.dumps(sbud))
         if args.html:
-            args.html.write(html.generate(file_path, matches).encode('utf-8'))
+            args.html.write(html.generate(file_path, sbud).encode('utf-8'))
             args.html.close()
             log.info(f"Saved HTML output to {args.html.name}")
 

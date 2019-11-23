@@ -105,12 +105,12 @@ class Match:
     def to_obj(self):
         ret = {
             'relative_offset': self.relative_offset,
-            'global_offset': self.offset,
-            'length': self.length,
+            'offset': self.offset,
+            'size': self.length,
             'type': self.name,
-            'display_name': self.display_name,
-            'match': str(self.match),
-            'children': [c.to_obj() for c in self]
+            'name': self.display_name,
+            'value': str(self.match),
+            'subEls': [c.to_obj() for c in self]
         }
         if self.img_data is not None:
             ret['img_data'] = self.img_data
