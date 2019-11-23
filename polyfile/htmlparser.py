@@ -120,7 +120,7 @@ class PolyFileHTMLParser(HTMLParser):
                 self._tags[-1].data += data
 
 
-@submatcher('html.trid.xml')
-class HTMLMatcher(Match):
-    def submatch(self, file_stream):
-        yield from PolyFileHTMLParser(self).parse(file_stream)
+#@submatcher('html.trid.xml')
+#class HTMLMatcher(Match):
+#    def submatch(self, file_stream):
+#        yield from PolyFileHTMLParser(self).parse(file_stream)

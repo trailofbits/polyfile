@@ -1,5 +1,6 @@
 from .ebnf import char_rule, Token, CompoundToken, star, plus, minus, optional, rule_sequence, star_until, reject_if, production, string_match
 from .fileutils import FileStream
+from .polyfile import InvalidMatch, Match, submatcher
 
 
 def whitespace(file_stream: FileStream):
@@ -225,8 +226,18 @@ parse_permissive = star(production(
 ))
 
 
-if __name__ == '__main__':
-    from .fileutils import make_stream, Tempfile
+@submatcher('xml.trid.xml')
+@submatcher('html.trid.xml')
+class XMLMatcher(Match):
+    def submatch(self, file_stream):
+        parsed = parse_permissive(file_stream)
+        if parsed is None:
+            raise InvalidMatch()
+        yield from parsed.to_matches(parent=self)
 
-    with Tempfile(b'<a>foo</r>asf') as tmpfile:
-        print(repr(parse_permissive(make_stream(tmpfile))))
+
+# if __name__ == '__main__':
+#     from .fileutils import make_stream, Tempfile
+#
+#     with Tempfile(b'<a>foo</r>asf') as tmpfile:
+#         print(repr(parse_permissive(make_stream(tmpfile))))

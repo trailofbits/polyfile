@@ -1,6 +1,7 @@
 from collections.abc import Sequence
 
 from .fileutils import FileStream
+from .polyfile import Submatch
 
 
 class Token:
@@ -15,6 +16,23 @@ class Token:
     @property
     def text(self):
         return self.token
+
+    def to_matches(self, parent):
+        if self.token_type is None:
+            name = 'Token'
+        else:
+            name = str(self.token_type)
+        if isinstance(self.token, bytes):
+            obj = self.token
+        else:
+            obj = str(self.token)
+        yield Submatch(
+            name=name,
+            relative_offset=self.offset - parent.offset,
+            length=len(self),
+            match_obj=obj,
+            parent=parent
+        )
 
     def __str__(self):
         if self.token_type is not None:
@@ -32,6 +50,12 @@ class CompoundToken(Token):
         if not isinstance(tokens, Sequence):
             raise ValueError(f"A {self.__class__.__name__} must be instantiated with a sequence of tokens, not {tokens!r}")
         super().__init__([t for t in tokens if len(t) > 0], offset, **kwargs)
+
+    def to_matches(self, parent):
+        m = next(super().to_matches(parent))
+        yield m
+        for c in self.token:
+            yield from c.to_matches(m)
 
     def collapse(self):
         if not self.token:
