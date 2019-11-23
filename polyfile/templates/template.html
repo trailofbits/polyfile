@@ -33,22 +33,22 @@
 
 {% macro render_match(match, first) -%}
 <li>
-    {% if 'children' in match and match['children'] %}
+    {% if 'subEls' in match and match['subEls'] %}
     <input type="checkbox" {{'checked="checked" ' if first}}id="match{{ match['uid'] }}" />
-    <label class="tree_label" for="match{{ match['uid'] }}" matchbyte="{{ match['global_offset'] }}" matchlength="{{ match['length'] }}">
-        {{ match['display_name'] }}{% if match['img_data'] %}
+    <label class="tree_label" for="match{{ match['uid'] }}" matchbyte="{{ match['offset'] }}" matchlength="{{ match['size'] }}">
+        {{ match['name'] }}{% if match['img_data'] %}
         <span class="tree_custom">
             <img src="{{ match['img_data'] }}" style="max-width: 8em;" />
         </span>{% endif %}
     </label>
     <ul>
-        {% for child in match['children'] %}
+        {% for child in match['subEls'] %}
         {{ render_match(child, False) }}
         {% endfor %}
     </ul>
     {% else %}
-    <span class="tree_label" matchbyte="{{ match['global_offset'] }}" matchlength="{{ match['length'] }}">
-        {{ match['type'] }}{% if match['img_data'] %}
+    <span class="tree_label" matchbyte="{{ match['offset'] }}" matchlength="{{ match['size'] }}">
+        {{ match['name'] }}{% if match['img_data'] %}
         <span class="tree_custom">
             <img src="{{ match['img_data'] }}" style="max-width: 8em;" />
         </span>{% endif %}
