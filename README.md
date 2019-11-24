@@ -28,20 +28,34 @@ This will automatically install the `polyfile` executable in your path.
 ## Usage
 
 ```
-$ polyfile --help
-usage: polyfile [-h] [--html HTML] [--debug] [--quiet] FILE
+usage: polyfile [-h] [--filetype FILETYPE] [--list] [--html HTML]
+                [--try-all-offsets] [--debug] [--quiet] [--version]
+                [-dumpversion]
+                [FILE]
 
 A utility to recursively map the structure of a file.
 
 positional arguments:
-  FILE                  The file to analyze
+  FILE                  The file to analyze; pass '-' or omit to read from
+                        STDIN
 
 optional arguments:
   -h, --help            show this help message and exit
+  --filetype FILETYPE, -f FILETYPE
+                        Explicitly match against the given filetype (default
+                        is to match against all filetypes)
+  --list, -l            list the supported filetypes (for the `--filetype`
+                        argument) and exit
   --html HTML, -t HTML  Path to write an interactive HTML file for exploring
                         the PDF
+  --try-all-offsets, -a
+                        Search for a file match at every possible offset; this
+                        can be very slow for larger files
   --debug, -d           Print debug information
   --quiet, -q           Suppress all log output (overrides --debug)
+  --version, -v         Print PolyFile's version information to STDERR
+  -dumpversion          Print PolyFile's raw version information to STDOUT and
+                        exit
 ```
 
 To generate a JSON mapping of a file, run:
@@ -70,10 +84,13 @@ For an example that exercises all of these file formats, run:
 curl -v --silent https://www.sultanik.com/files/ESultanikResume.pdf | polyfile --html ESultanikResume.html - > ESultanikResume.json
 ```
 
+## Output Format
+
+PolyFile outputs its mapping in an extension of the [SBuD](https://github.com/corkami/sbud) JSON format described [in the documentation](docs/json_format.md).
+
 ## Current Status and Known Deficiencies
 * The instrumented Kaitai Struct parser generator implementation has only been tested on the JPEG/JFIF grammar;
   other KSY definitions may exercise portions of the KSY specification that have not yet been implemented
-* The JSON output schema will soon be replaced with the similar [SBuD](https://github.com/corkami/sbud) format
 
 ## License and Acknowledgements
 

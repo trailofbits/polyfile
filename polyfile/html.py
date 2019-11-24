@@ -11,19 +11,20 @@ TEMPLATE_DIR = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'templa
 TEMPLATE = None
 
 
-def assign_ids(matches):
+def assign_ids(sbud):
     i = 0
+    matches = list(sbud['struc'])
     stack = list(matches)
     while stack:
         m = stack.pop()
         assert 'uid' not in m
         m['uid'] = i
         i += 1
-        stack += list(m['children'])
+        stack += list(m['subEls'])
     return matches
 
 
-def generate(file_path, matches):
+def generate(file_path, sbud):
     global TEMPLATE, jinja2
     if jinja2 is None:
         # Dynamically load jinja2 at runtime so it is not an installation dependency for setup.py
@@ -33,9 +34,9 @@ def generate(file_path, matches):
     if TEMPLATE is None:
         TEMPLATE = jinja2.Environment(loader=jinja2.FileSystemLoader(TEMPLATE_DIR)).get_template('template.html')
 
-    matches = assign_ids(matches)
+    matches = assign_ids(sbud)
 
-    input_bytes = os.stat(file_path).st_size
+    input_bytes = sbud['length']
     with open(file_path, 'rb') as input_file:
         class ReadUnicode():
             def __init__(self):
@@ -89,16 +90,13 @@ def generate(file_path, matches):
                 b = input_file.read(1)
                 return self.translate(b)
 
-        with open(file_path, 'rb') as f:
-            encoded = base64.b64encode(f.read()).decode('utf-8')
-
         mime_type = mimetypes.guess_type(file_path)[0]
         if mime_type is None:
             mime_type = 'application/octet-stream'
 
         return TEMPLATE.render(
             filename=os.path.split(file_path)[-1],
-            encoded=encoded,
+            encoded=sbud['b64contents'],
             matches=matches,
             input_file=input_file,
             input_bytes=input_bytes,
