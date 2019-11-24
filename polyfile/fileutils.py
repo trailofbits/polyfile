@@ -73,6 +73,7 @@ class FileStream:
                 self._length = filesize - start
             else:
                 self._length = min(filesize, length) - start
+        self._length = max(self._length, 0)
         if close_on_exit is None:
             close_on_exit = False
         self._name = self._stream.name

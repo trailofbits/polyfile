@@ -20,6 +20,17 @@ def char(b: int):
 
 
 @char_rule
+def ascii_char(b: int):
+    return (ord('A') <= b <= ord('Z')) or (ord('a') <= b <= ord('c'))
+
+
+@char_rule
+def encoding_char(b: int):
+    return (ord('A') <= b <= ord('Z')) or (ord('a') <= b <= ord('z')) or (ord('0') <= b <= ord('9')) \
+           or b == ord('.') or b == ord('_')
+
+
+@char_rule
 def restricted_char(b: int):
     return (0x1 <= b <= 0x8) or (0xB <= b <= 0xC) or (0xE <= b <= 0x1F) or (0x7F <= b <= 0x84) or (0x86 <= b <= 0x9F)
 
@@ -164,7 +175,332 @@ version_info = rule_sequence(whitespace, 'version', eq, production(
     ["'", version_num, "'"],
     ['"', version_num, '"'],
 ), token_type='VersionInfo')
-# xml_decl = rule_sequence('<?xml', version_info, optional(encoding_decl), optional(sd_decl), optional(whitespace), '?>')
+
+# EncName	   ::=   	[A-Za-z] ([A-Za-z0-9._] | '-')*
+enc_name = rule_sequence(
+    ascii_char,
+    star(
+        production(
+            encoding_char,
+            '-'
+        )
+    ),
+    token_type='EncName'
+)
+# EncodingDecl	   ::=   	S 'encoding' Eq ('"' EncName '"' | "'" EncName "'" )
+encoding_decl = rule_sequence(
+    whitespace,
+    'encoding',
+    eq,
+    production(
+        ['"', enc_name, '"'],
+        ["'", enc_name, "'"]
+    ),
+    token_type='EncodingDecl'
+)
+
+# SDDecl	   ::=   	S 'standalone' Eq (("'" ('yes' | 'no') "'") | ('"' ('yes' | 'no') '"'))
+sd_decl = rule_sequence(
+    whitespace,
+    'standalone',
+    eq,
+    production(
+        ["'", production('yes', 'no'), "'"],
+        ['"', production('yes', 'no'), '"']
+    ),
+    token_type='SDDecl'
+)
+
+xml_decl = rule_sequence(
+    '<?xml',
+    version_info,
+    optional(encoding_decl),
+    optional(sd_decl),
+    optional(whitespace),
+    '?>',
+    token_type='XMLDecl'
+)
+
+# DeclSep	   ::=   	PEReference | S
+decl_sep = production(pe_reference, whitespace, token_type='decl_sep')
+
+
+def cp_ref(*args, **kwargs):
+    global cp
+    cp(*args, **kwargs)
+
+
+# choice	   ::=   	'(' S? cp ( S? '|' S? cp )+ S? ')'
+choice = rule_sequence(
+    '(',
+    optional(whitespace),
+    cp_ref,
+    plus(production(optional(whitespace), [optional(whitespace), cp_ref])),
+    optional(whitespace),
+    ')',
+    token_type='choice'
+)
+
+# seq	   ::=   	'(' S? cp ( S? ',' S? cp )* S? ')'
+seq = rule_sequence(
+    '(',
+    optional(whitespace),
+    cp_ref,
+    star(production(optional(whitespace), '?', optional(whitespace), cp_ref)),
+    optional(whitespace),
+    ')',
+    token_type='seq'
+)
+
+# cp	   ::=   	(Name | choice | seq) ('?' | '*' | '+')?
+cp = rule_sequence(
+    production(name, choice, seq),
+    optional(production('?', '*', '+'))
+)
+
+# children	   ::=   	(choice | seq) ('?' | '*' | '+')?
+children = rule_sequence(
+    production(choice, seq),
+    optional(['?', '*', '+']),
+    token_type='children'
+)
+
+# Mixed	   ::=   	'(' S? '#PCDATA' (S? '|' S? Name)* S? ')*' | '(' S? '#PCDATA' S? ')'
+mixed = production(
+    [
+        '(', optional(whitespace), '#PCDATA', star([optional(whitespace), '|', optional(whitespace), name]),
+        optional(whitespace), ')*'
+    ], [
+        '(', optional(whitespace), '#PCDATA', optional(whitespace), ')'
+    ],
+    token_type='Mixed'
+)
+
+# contentspec	   ::=   	'EMPTY' | 'ANY' | Mixed | children
+contentspec = production(
+    'EMPTY',
+    'ANY',
+    mixed,
+    children,
+    token_type='contentspec'
+)
+
+# elementdecl	   ::=   	'<!ELEMENT' S Name S contentspec S? '>'
+elementdecl = rule_sequence(
+    '<!ELEMENT',
+    whitespace,
+    name,
+    whitespace,
+    contentspec,
+    optional(whitespace),
+    '>',
+    token_type='elementdecl'
+)
+
+string_type = string_match('CDATA')
+
+tokenized_type = production(
+    'ID',
+    'IDREF',
+    'IDREFS',
+    'ENTITY',
+    'ENTITIES',
+    'NMTOKEN',
+    'NMTOKENS',
+    token_type='TokenizedType'
+)
+
+# NotationType	   ::=   	'NOTATION' S '(' S? Name (S? '|' S? Name)* S? ')'
+notation_type = rule_sequence(
+    'NOTATION',
+    whitespace,
+    '(',
+    optional(whitespace),
+    name,
+    star([
+        optional(whitespace),
+        '|',
+        optional(whitespace),
+        name
+    ]),
+    ')',
+    token_type='NotationType'
+)
+
+# Enumeration	   ::=   	'(' S? Nmtoken (S? '|' S? Nmtoken)* S? ')'
+enumeration = rule_sequence(
+    '(',
+    optional(whitespace),
+    nm_token,
+    star([
+        optional(whitespace),
+        '|',
+        optional(whitespace),
+        nm_token
+    ]),
+    optional(whitespace),
+    ')',
+    token_type='Enumeration'
+)
+
+# DefaultDecl	   ::=   	'#REQUIRED' | '#IMPLIED'
+# | (('#FIXED' S)? AttValue)
+default_decl = production(
+    '#REQUIRED',
+    '#IMPLIED',
+    [
+        optional(['#FIXED', whitespace]),
+        att_value
+    ],
+    token_type='DefaultDecl'
+)
+
+# EnumeratedType	   ::=   	NotationType | Enumeration
+enumerated_type = production(
+    notation_type,
+    enumeration
+)
+
+# AttType	   ::=   	StringType | TokenizedType | EnumeratedType
+att_type = production(
+    string_type,
+    tokenized_type,
+    enumerated_type,
+    token_type='AttType'
+)
+
+# AttDef	   ::=   	S Name S AttType S DefaultDecl
+att_def = rule_sequence(
+    whitespace,
+    name,
+    whitespace,
+    att_type,
+    whitespace,
+    default_decl,
+    token_type='AttDef'
+)
+
+# AttlistDecl	   ::=   	'<!ATTLIST' S Name AttDef* S? '>'
+attlist_decl = rule_sequence(
+    '<!ATTLIST',
+    whitespace,
+    name,
+    star(att_def),
+    optional(whitespace),
+    '>',
+    token_type='AttlistDecl'
+)
+
+# ExternalID	   ::=   	'SYSTEM' S SystemLiteral
+# | 'PUBLIC' S PubidLiteral S SystemLiteral
+external_id = production(
+    [
+        'SYSTEM',
+        whitespace,
+        system_literal
+    ], [
+        'PUBLIC',
+        whitespace,
+        pubid_literal,
+        whitespace,
+        system_literal
+    ],
+    token_type='external_id'
+)
+
+# NDataDecl	   ::=   	S 'NDATA' S Name
+n_data_decl = rule_sequence(
+    whitespace,
+    'NDATA',
+    whitespace,
+    name,
+    token_type='NDataDecl'
+)
+
+# PEDef	   ::=   	EntityValue | ExternalID
+pe_def = production(entity_value, external_id)
+
+# EntityDef	   ::=   	EntityValue | (ExternalID NDataDecl?)
+entity_def = production(
+    entity_value,
+    [external_id, optional(n_data_decl)],
+    token_type='EntityDef'
+)
+
+# PEDecl	   ::=   	'<!ENTITY' S '%' S Name S PEDef S? '>'
+pe_decl = rule_sequence(
+    '<!ENTITY',
+    whitespace,
+    '%',
+    whitespace,
+    name,
+    whitespace,
+    pe_def,
+    optional(whitespace),
+    '>',
+    token_type='PEDecl'
+)
+
+# GEDecl	   ::=   	'<!ENTITY' S Name S EntityDef S? '>'
+ge_decl = rule_sequence(
+    '<!ENTITY',
+    whitespace,
+    name,
+    whitespace,
+    entity_def,
+    optional(whitespace),
+    '>',
+    token_type='GEDecl'
+)
+
+# PublicID	   ::=   	'PUBLIC' S PubidLiteral
+public_id = rule_sequence('PUBLIC', whitespace, pubid_literal)
+
+# NotationDecl	   ::=   	'<!NOTATION' S Name S (ExternalID | PublicID) S? '>'
+notation_decl = rule_sequence(
+    '<!NOTATION',
+    whitespace,
+    name,
+    whitespace,
+    production(external_id, public_id),
+    optional(whitespace),
+    '>',
+    token_type='NotationDecl'
+)
+
+entity_decl = production(ge_decl, pe_decl)
+
+# markupdecl	   ::=   	elementdecl | AttlistDecl | EntityDecl | NotationDecl | PI | Comment
+markupdecl = production(
+    elementdecl,
+    attlist_decl,
+    entity_decl,
+    notation_decl,
+    pi,
+    comment,
+    token_type='markupdecl'
+)
+
+# intSubset	   ::=   	(markupdecl | DeclSep)*
+int_subset = star(markupdecl, decl_sep)
+
+# doctypedecl	   ::=   	'<!DOCTYPE' S Name (S ExternalID)? S? ('[' intSubset ']' S?)? '>'
+doctypedecl = rule_sequence(
+    '<!DOCTYPE',
+    whitespace,
+    name,
+    optional([whitespace, external_id]),
+    optional(whitespace),
+    optional(['[', int_subset, ']', optional(whitespace)]),
+    '>',
+    token_type='doctypedecl'
+)
+
+prolog = rule_sequence(
+    xml_decl,
+    star(misc),
+    optional([doctypedecl, star(misc)])
+)
 
 # Attribute	   ::=   	Name Eq AttValue
 attribute = rule_sequence(name, eq, att_value)
@@ -220,7 +556,9 @@ def element(file_stream: FileStream):
 
 
 parse_permissive = star(production(
+    prolog,
     element,
+    doctypedecl,
     misc,
     minus(char, restricted_char)
 ))
