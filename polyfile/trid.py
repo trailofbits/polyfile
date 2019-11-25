@@ -27,6 +27,11 @@ DEFS = None
 # These are the file formats that don't have to start at byte offset zero of the file:
 CAN_BE_OFFSET = {'adobe_pdf', 'zip', 'html'}
 
+# These are file formats that cannot be nested;
+# In other words, once we find a match of these types, we will not allow submatches of that type within the same
+# region unless they are encapsulated by another filetype
+CANNOT_BE_NESTED = {'html'}
+
 
 class TRiDDef:
     def __init__(self, name, filetype, ext, mime, patterns, strings=()):
@@ -40,6 +45,11 @@ class TRiDDef:
         for cbo in CAN_BE_OFFSET:
             if self.name.startswith(cbo):
                 self.can_be_offset = True
+                break
+        self.can_be_nested = True
+        for cbn in CANNOT_BE_NESTED:
+            if self.name.startswith(cbn):
+                self.can_be_nested = False
                 break
 
     @staticmethod
@@ -145,6 +155,7 @@ class Matcher:
 
     def match(self, file_stream, progress_callback=None):
         with make_stream(file_stream) as fs:
+            yields_by_offset = []
             if progress_callback is not None:
                 fslen = len(fs)
 
@@ -157,6 +168,10 @@ class Matcher:
                 for tdef in DEFS:
                     if not tdef.can_be_offset:
                         for offset in tdef.match(fs):
+                            if yields_by_offset and yields_by_offset[-1][0] == offset:
+                                yields_by_offset[-1][1].append(tdef)
+                            else:
+                                yields_by_offset.append([offset, [tdef]])
                             yield offset, tdef
                 fs.seek(prev_pos)
             found_strings = defaultdict(set)
@@ -194,7 +209,25 @@ class Matcher:
                                     pos >= potential_start for pos in found_strings[string]
                                 ) for string in tdef.strings
                             ):
+                                if not tdef.can_be_nested:
+                                    # make sure that at least one of the prior matches is a different type
+                                    ybo_i = len(yields_by_offset) - 1
+                                    is_valid = False
+                                    while ybo_i >= 0 and yields_by_offset[ybo_i][0] < potential_start:
+                                        for parent in yields_by_offset[ybo_i][1]:
+                                            if parent.name != tdef.name:
+                                                is_valid = True
+                                                break
+                                            elif parent.name == tdef.name and len(yields_by_offset[ybo_i][1]) == 1:
+                                                break
+                                        ybo_i -= 1
+                                    if not is_valid and yields_by_offset:
+                                        continue
                                 yield potential_start, tdef
+                                if yields_by_offset and yields_by_offset[-1][0] == potential_start:
+                                    yields_by_offset[-1][1].append(tdef)
+                                else:
+                                    yields_by_offset.append([potential_start, [tdef]])
                                 yielded[tdef].add(potential_start)
 
 
