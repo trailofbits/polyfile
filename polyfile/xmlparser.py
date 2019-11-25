@@ -583,6 +583,7 @@ def parse_permissive(file_stream: FileStream):
         ))(file_stream)
     finally:
         file_stream.remove_listener(listener)
+        log.clear_status()
 
 
 @submatcher('xml.trid.xml')
