@@ -1,6 +1,9 @@
 from .ebnf import char_rule, Token, CompoundToken, star, plus, minus, optional, rule_sequence, star_until, reject_if, production, string_match
 from .fileutils import FileStream
 from .polyfile import InvalidMatch, Match, submatcher
+from .logger import getStatusLogger
+
+log = getStatusLogger("XML")
 
 
 def whitespace(file_stream: FileStream):
@@ -555,13 +558,31 @@ def element(file_stream: FileStream):
         return CompoundToken([s, c, e], start, token_type='element')
 
 
-parse_permissive = star(production(
-    prolog,
-    element,
-    doctypedecl,
-    misc,
-    minus(char, restricted_char)
-))
+def parse_permissive(file_stream: FileStream):
+    start_pos = file_stream.tell()
+
+    class Listener:
+        percent = 0.0
+
+        def __call__(self, _, pos):
+            p = (((pos - start_pos) * 1000)//(len(file_stream) - start_pos)) / 10.0
+            if p > self.percent:
+                self.percent = p
+                log.status(f"Parsing HTML at offset 0x{file_stream.offset():x}: {self.percent:.1f}%")
+
+    listener = Listener()
+
+    file_stream.add_listener(listener)
+    try:
+        return star(production(
+            prolog,
+            element,
+            doctypedecl,
+            misc,
+            minus(char, restricted_char)
+        ))(file_stream)
+    finally:
+        file_stream.remove_listener(listener)
 
 
 @submatcher('xml.trid.xml')
