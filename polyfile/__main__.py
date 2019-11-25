@@ -122,7 +122,7 @@ def main(argv=None):
         if args.FILE == '-':
             filename = 'STDIN',
         else:
-            filename = os.path.split(args.FILE)
+            filename = os.path.split(args.FILE)[-1]
         sbud = {
             'MD5': md5.hexdigest(),
             'SHA1': sha1.hexdigest(),

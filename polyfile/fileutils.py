@@ -153,7 +153,7 @@ class FileStream:
         self._stream.seek(self.start + offset)
 
     def tell(self):
-        return self._stream.tell() - self.start
+        return min(max(self._stream.tell() - self.start, 0), self._length)
 
     def peek(self, n=None):
         old_pos = self.tell()
@@ -162,7 +162,12 @@ class FileStream:
         return ret
 
     def read(self, n=None, update_listeners=True):
-        pos = self.tell()
+        if self._stream.tell() - self.start < 0:
+            # another context moved the position, so move it back to our zero index:
+            self.seek(0)
+            pos = 0
+        else:
+            pos = self.tell()
         if update_listeners:
             for listener in self._listeners:
                 listener(self, pos)
