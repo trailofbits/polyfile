@@ -1,4 +1,4 @@
-from .ebnf import char_rule, Token, CompoundToken, star, plus, minus, optional, rule_sequence, star_until, reject_if, production, string_match
+from .ebnf import char_rule, Token, CompoundToken, star, plus, minus, named_rule, optional, rule_sequence, star_until, reject_if, production, string_match
 from .fileutils import FileStream
 from .polyfile import InvalidMatch, Match, submatcher
 from .logger import getStatusLogger
@@ -523,7 +523,7 @@ etag = rule_sequence('</', name, optional(whitespace), '>', token_type='ETag')
 content = None
 
 
-def element(file_stream: FileStream):
+def element(file_stream: FileStream, optional_etag=False):
     # content	   ::=   	CharData? ((element | Reference | CDSect | PI | Comment) CharData?)*
     global content
     if content is None:
@@ -553,9 +553,15 @@ def element(file_stream: FileStream):
             return None
         e = etag(file_stream)
         if e is None:
+            if optional_etag:
+                return CompoundToken([s, c], start, token_type='malformed_element')
             file_stream.seek(end)
             return None
         return CompoundToken([s, c, e], start, token_type='element')
+
+
+def unterminated_element(file_stream: FileStream):
+    return element(file_stream, optional_etag=True)
 
 
 def parse_permissive(file_stream: FileStream):
@@ -576,10 +582,12 @@ def parse_permissive(file_stream: FileStream):
     try:
         return star(production(
             prolog,
-            element,
+            unterminated_element,
             doctypedecl,
             misc,
-            minus(char, restricted_char)
+            etag,  # Allow malformed elements that have misplaced end tags
+            named_rule(plus(restricted_char), name='RestrictedChar'),
+            char
         ))(file_stream)
     finally:
         file_stream.remove_listener(listener)

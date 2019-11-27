@@ -309,3 +309,20 @@ def optional(rule):
         return t
 
     return wrapper
+
+
+def named_rule(rule, name):
+    rule = make_rule(rule)
+
+    def wrapper(file_stream: FileStream):
+        t = rule(file_stream)
+        if t is not None:
+            if t.token_type == name:
+                return t
+            elif t.token_type is None:
+                t.token_type = name
+            else:
+                t = CompoundToken([t], token_type=name)
+        return t
+
+    return wrapper
