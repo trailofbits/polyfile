@@ -90,9 +90,19 @@ class AST:
             yield self.parent
             yield from self.parent.ancestors
 
+    @property
+    def last_parsed(self):
+        if self.children:
+            return self.children[-1]
+        else:
+            return self
+
     def __getitem__(self, key):
         if hasattr(self.obj, 'uid') and self.obj.uid == key:
             return bytes(self)
+
+        elif key == '_':
+            return self.last_parsed
 
         elif isinstance(self.obj, Attribute):
             try:
@@ -304,7 +314,15 @@ class ByteMatch:
         elif isinstance(contents, bytearray):
             self.contents = bytes(contents)
         elif isinstance(contents, list):
-            self.contents = bytes(contents)
+            arr = bytearray()
+            for b in contents:
+                if isinstance(b, int):
+                    arr.append(b)
+                elif isinstance(b, bytes):
+                    arr += b
+                elif isinstance(b, str):
+                    arr += b.encode('utf-8')
+            self.contents = bytes(arr)
         else:
             raise RuntimeError(f"TODO: Implement support for `contents` of type {type(contents)}")
 
@@ -373,6 +391,15 @@ class Enum:
         return parsed
 
 
+def to_int(int_like, endianness=Endianness.BIG) -> int:
+    if isinstance(int_like, int):
+        return int_like
+    elif isinstance(int_like, bytes):
+        return int.from_bytes(int_like, byteorder=['big', 'little'][endianness == Endianness.LITTLE])
+    else:
+        raise ValueError(f"Cannot convert {int_like!r} to an int!")
+
+
 class ByteArray:
     def __init__(self, size=None, size_eos=False, terminator=None, parent=None):
         if size is None:
@@ -396,7 +423,7 @@ class ByteArray:
         if self.size is None:
             size = None
         else:
-            size = int(self.size.interpret(context))
+            size = to_int(self.size.interpret(context), endianness=self.parent.endianness)
         while self.size is None or not self._size_met(ret, size):
             try:
                 b = stream.read_bytes(1)
@@ -511,6 +538,8 @@ class Attribute:
                 self._type = self.parent.get_type(self._type_name)
             if self.enum is not None:
                 self._type = self.parent.get_type(self.enum).bind(self._type)
+            if self._type is None and self._type_name is not None:
+                self._type = get_primitive_type(self._type_name, endianness=self.endianness)
         return self._type
 
     def parse(self, stream: KaitaiStream, context: AST=None) -> AST:
@@ -621,7 +650,9 @@ class Type:
             parent_type = self.parent.get_type(type_name, allow_primitive=False)
             if parent_type is not None:
                 return parent_type
-        if allow_primitive:
+        if type_name in DEFS:
+            return DEFS[type_name]
+        elif allow_primitive:
             return get_primitive_type(type_name, self.endianness)
         else:
             KeyError(type_name)
