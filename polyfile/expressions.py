@@ -287,7 +287,9 @@ class Expression:
 
     @staticmethod
     def get_value(token: Token, assignments: dict):
-        if isinstance(token, IntegerToken):
+        if token is None:
+            return None
+        elif isinstance(token, IntegerToken):
             return token.value
         elif isinstance(token, IdentifierToken):
             if token.name not in assignments:
