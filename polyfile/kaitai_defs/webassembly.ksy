@@ -172,7 +172,7 @@ types:
       - id: payload_len
         type: vlq_base128_le
       - id: name_len
-        type: u4
+        type: vlq_base128_le
         if: id == payload_type::custom_payload
       - id: name
         size: name_len
