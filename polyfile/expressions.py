@@ -27,7 +27,7 @@ def to_int(v, byteorder='big') -> int:
 
 class Operator(Enum):
     ENUM_ACCESSOR = ('::', 0, lambda a, b: a[b.name], True, 2, False, (True, False))
-    MEMBER_ACCESS = ('.', 1, lambda a, b: None, True, 2, False, (True, False))
+    MEMBER_ACCESS = ('.', 1, lambda a, b: a[b.name], True, 2, False, (True, False))
     UNARY_PLUS = ('+', 2, lambda a: a, False, 1, True)
     UNARY_MINUS = ('-', 2, lambda a: -to_int(a), False, 1, True)
     LOGICAL_NOT = ('not', 2, lambda a: not a, False, 1)
@@ -281,6 +281,15 @@ def infix_to_rpn(tokens):
         yield top
 
 
+def collect_keys(d: dict) -> frozenset:
+    keys = set()
+    for k, v in d.items():
+        keys.add(k)
+        if isinstance(v, dict):
+            keys |= collect_keys(v)
+    return frozenset(keys)
+
+
 class Expression:
     def __init__(self, rpn):
         self.tokens = tuple(rpn)
@@ -323,6 +332,34 @@ class Expression:
 
     def __repr__(self):
         return f"{self.__class__.__name__}(rpn={self.tokens!r})"
+
+    def to_str(self, context=None):
+        values = []
+        for t in self.tokens:
+            if isinstance(t, OperatorToken):
+                args = values[-t.op.arity:]
+                values = values[:-t.op.arity]
+                if len(args) != t.op.arity:
+                    raise NotImplementedError(f"Add support for operators of arity { t.op.arity }")
+                if t.op.arity == 2:
+                    values.append(f'({ args[-2] }{ t.op.token }{ args[-1] })')
+                elif t.op.arity == 1:
+                    if t.op.left_associative:
+                        values.append(f'{ args[-1] }{ t.op.token }')
+                    else:
+                        values.append(f'{ t.op.token }{ args[-1] }')
+            elif isinstance(t, IdentifierToken):
+                if t.name in context:
+                    values.append(f"({t.name}={context[t.name]})")
+                else:
+                    values.append(t.name)
+            elif isinstance(t, IntegerToken):
+                values.append(t.value)
+            else:
+                values.append(t)
+        return ''.join(map(str, values))
+
+    __str__ = to_str
 
 
 def parse(expression_str: str) -> Expression:
