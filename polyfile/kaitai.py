@@ -106,9 +106,18 @@ class AST:
 
         elif isinstance(self.obj, Attribute):
             try:
-                t = self.obj.parent.get_type(key)
-                if t is not None and isinstance(t, Enum):
+                if self.obj.type is not None:
+                    try:
+                        t = self.obj.type.get_type(key)
+                    except KeyError:
+                        t = None
+                if t is None:
+                    t = self.obj.parent.get_type(key)
+                elif isinstance(t, Enum):
                     return t
+                elif isinstance(t, Instance):
+                    # TODO: Change `None` to a stream object once we plumb in support for instance io and pos
+                    return t.parse(None, self)
             except KeyError:
                 pass
 
@@ -304,7 +313,9 @@ class Expression:
         self.expr = expressions.parse(expr)
 
     def interpret(self, context):
-        return self.expr.interpret(assignments=context)
+        ret = self.expr.interpret(assignments=context)
+        log.debug(f"{self.expr.to_str(context=context)}.interpret(...) = {ret!r}")
+        return ret
 
 
 class ByteMatch:
@@ -460,9 +471,9 @@ class String(ByteArray):
 
 
 class Attribute:
-    def __init__(self, raw_yaml, parent):
+    def __init__(self, raw_yaml, parent, uid=None):
         self.parent = parent
-        self.uid = raw_yaml.get('id', None)
+        self.uid = raw_yaml.get('id', uid)
         self.contents = raw_yaml.get('contents', None)
         if self.contents is not None:
             self.contents = ByteMatch(self.contents)
@@ -555,8 +566,10 @@ class Attribute:
             for i in range(iterations):
                 ast.add_child(self.type.parse(stream, ast))
         elif self.repeat == Repeat.UNTIL:
-            while not self.repeat_until.interpret(context):
+            while True:
                 ast.add_child(self.type.parse(stream, ast))
+                if self.repeat_until.interpret(context):
+                    break
         else:
             ast.add_child(self.type.parse(stream, ast))
         return ast
@@ -568,6 +581,28 @@ class Attribute:
             'type': self._type_name
         }
         return f"{self.__class__.__name__}(raw_yaml={raw_yaml!r}, parent={self.parent!r})"
+
+
+class Instance(Attribute):
+    def __init__(self, raw_yaml, parent, uid):
+        super().__init__(raw_yaml=raw_yaml, parent=parent, uid=uid)
+
+        self.pos = raw_yaml.get('pos', None)
+        self.io = raw_yaml.get('io', None)
+        self.value = raw_yaml.get('value', None)
+
+        if self.value is not None:
+            self.value = Expression(self.value)
+
+    def parse(self, stream: KaitaiStream, context: AST=None) -> AST:
+        if self.pos is not None:
+            raise NotImplementedError("TODO: Implement the Instance `pos` spec")
+        elif self.io is not None:
+            raise NotImplementedError("TODO: Implement the Instance `io` spec")
+        if self.value is not None:
+            return self.value.interpret(context)
+        else:
+            return super().parse(stream, context)
 
 
 class Type:
@@ -590,6 +625,7 @@ class Type:
         else:
             self._imports = []
         self.seq = [Attribute(s, self) for s in raw_yaml.get('seq', ())]
+        self.instances = {name: Instance(s, self, name) for name, s in raw_yaml.get('instances', {}).items()}
         self.types = {
             typename: Type(raw_type, uid=typename, parent=self)
             for typename, raw_type in raw_yaml.get('types', {}).items()
@@ -639,6 +675,8 @@ class Type:
     def get_type(self, type_name, allow_primitive=True):
         if type_name in self.types:
             return self.types[type_name]
+        elif type_name in self.instances:
+            return self.instances[type_name]
         # see if it is defined in an import
         for t in self.imports:
             try:
