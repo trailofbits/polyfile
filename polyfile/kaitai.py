@@ -32,8 +32,11 @@ class AST:
         self._children = []
         self._offset = None
         self._length = None
+        self._last_parsed = None
         if parent is not None:
             parent.add_child(self)
+        self.last_parsed = self
+        log.debug(f"Updated AST: {self.root.to_dict()}")
 
     @property
     def relative_offset(self):
@@ -92,10 +95,13 @@ class AST:
 
     @property
     def last_parsed(self):
-        if self.children:
-            return self.children[-1]
-        else:
-            return self
+        return self._last_parsed
+
+    @last_parsed.setter
+    def last_parsed(self, ast):
+        self._last_parsed = ast
+        if self.parent is not None:
+            self.parent.last_parsed = ast
 
     def __getitem__(self, key):
         if hasattr(self.obj, 'uid') and self.obj.uid == key:
@@ -106,14 +112,8 @@ class AST:
 
         elif isinstance(self.obj, Attribute):
             try:
-                if self.obj.type is not None:
-                    try:
-                        t = self.obj.type.get_type(key)
-                    except KeyError:
-                        t = None
-                if t is None:
-                    t = self.obj.parent.get_type(key)
-                elif isinstance(t, Enum):
+                t = self.obj.parent.get_type(key)
+                if isinstance(t, Enum):
                     return t
                 elif isinstance(t, Instance):
                     # TODO: Change `None` to a stream object once we plumb in support for instance io and pos
