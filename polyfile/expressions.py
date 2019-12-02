@@ -25,9 +25,16 @@ def to_int(v, byteorder='big') -> int:
     raise ValueError(f"Cannot convert {v!r} to an integer")
 
 
+def member_access(a, b):
+    return a[b.name]
+
+
+Reference = 'REFERENCE'
+
+
 class Operator(Enum):
     ENUM_ACCESSOR = ('::', 0, lambda a, b: a[b.name], True, 2, False, (True, False))
-    MEMBER_ACCESS = ('.', 1, lambda a, b: a[b.name], True, 2, False, (True, False))
+    MEMBER_ACCESS = ('.', 1, member_access, True, 2, False, (Reference, False))
     UNARY_PLUS = ('+', 2, lambda a: a, False, 1, True)
     UNARY_MINUS = ('-', 2, lambda a: -to_int(a), False, 1, True)
     LOGICAL_NOT = ('not', 2, lambda a: not a, False, 1)
@@ -309,15 +316,29 @@ class Expression:
         else:
             raise ValueError(f"Unexpected token {token!r}")
 
+    @staticmethod
+    def get_reference(token: Token, assignments: dict):
+        if isinstance(token, IdentifierToken):
+            if hasattr(assignments, 'get_reference'):
+                return assignments.get_reference(token.name)
+            else:
+                raise ValueError(f"Unknown identifier {token.name!r}")
+        else:
+            return token
+
     def interpret(self, assignments=None):
         if assignments is None:
             assignments = {}
+        if hasattr(self.tokens[0], 'name') and self.tokens[0].name == 'header':
+            breakpoint()
         values = []
         for t in self.tokens:
             if isinstance(t, OperatorToken):
                 args = []
                 for expand, v in zip(t.op.expand, values[-t.op.arity:]):
-                    if expand:
+                    if expand == Reference:
+                        args.append(self.get_reference(v, assignments))
+                    elif expand:
                         args.append(self.get_value(v, assignments))
                     else:
                         args.append(v)
