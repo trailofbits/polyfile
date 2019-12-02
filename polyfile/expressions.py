@@ -22,19 +22,19 @@ def to_int(v, byteorder='big') -> int:
         else:
             # Assume big endian
             return int.from_bytes(v, byteorder=byteorder)
-    raise ValueError(f"Cannot convert {v!r} to an integer")
+    try:
+        return to_int(bytes(v), byteorder=byteorder)
+    except TypeError:
+        raise ValueError(f"Cannot convert {v!r} to an integer")
 
 
 def member_access(a, b):
     return a[b.name]
 
 
-Reference = 'REFERENCE'
-
-
 class Operator(Enum):
     ENUM_ACCESSOR = ('::', 0, lambda a, b: a[b.name], True, 2, False, (True, False))
-    MEMBER_ACCESS = ('.', 1, member_access, True, 2, False, (Reference, False))
+    MEMBER_ACCESS = ('.', 1, member_access, True, 2, False, (True, False))
     UNARY_PLUS = ('+', 2, lambda a: a, False, 1, True)
     UNARY_MINUS = ('-', 2, lambda a: -to_int(a), False, 1, True)
     LOGICAL_NOT = ('not', 2, lambda a: not a, False, 1)
@@ -314,31 +314,19 @@ class Expression:
         elif isinstance(token, int) or isinstance(token, str) or isinstance(token, bytes):
             return token
         else:
-            raise ValueError(f"Unexpected token {token!r}")
-
-    @staticmethod
-    def get_reference(token: Token, assignments: dict):
-        if isinstance(token, IdentifierToken):
-            if hasattr(assignments, 'get_reference'):
-                return assignments.get_reference(token.name)
-            else:
-                raise ValueError(f"Unknown identifier {token.name!r}")
-        else:
             return token
+        #else:
+        #    raise ValueError(f"Unexpected token {token!r}")
 
     def interpret(self, assignments=None):
         if assignments is None:
             assignments = {}
-        if hasattr(self.tokens[0], 'name') and self.tokens[0].name == 'header':
-            breakpoint()
         values = []
         for t in self.tokens:
             if isinstance(t, OperatorToken):
                 args = []
                 for expand, v in zip(t.op.expand, values[-t.op.arity:]):
-                    if expand == Reference:
-                        args.append(self.get_reference(v, assignments))
-                    elif expand:
+                    if expand:
                         args.append(self.get_value(v, assignments))
                     else:
                         args.append(v)

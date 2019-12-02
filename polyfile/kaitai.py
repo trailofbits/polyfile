@@ -103,12 +103,21 @@ class AST:
         if self.parent is not None:
             self.parent.last_parsed = ast
 
-    def get_reference(self, key):
+    def __getitem__(self, key):
         if hasattr(self.obj, 'uid') and self.obj.uid == key:
             return self
 
         elif key == '_':
             return self.last_parsed
+
+        elif key == '_parent':
+            if self.parent is None:
+                return None
+            else:
+                return self.parent
+
+        elif key == '_root':
+            return self.root
 
         elif isinstance(self.obj, Attribute):
             try:
@@ -136,42 +145,6 @@ class AST:
         for a in self.ancestors:
             if hasattr(a.obj, 'uid') and a.obj.uid == key:
                 return a
-
-        raise KeyError(key)
-
-    def __getitem__(self, key):
-        if hasattr(self.obj, 'uid') and self.obj.uid == key:
-            return bytes(self)
-
-        elif key == '_':
-            return self.last_parsed
-
-        elif isinstance(self.obj, Attribute):
-            try:
-                t = self.obj.parent.get_type(key)
-                if isinstance(t, Enum):
-                    return t
-                elif isinstance(t, Instance):
-                    # TODO: Change `None` to a stream object once we plumb in support for instance io and pos
-                    return t.parse(None, self)
-            except KeyError:
-                pass
-
-        elif isinstance(self.obj, Type):
-            try:
-                t = self.obj.get_type(key)
-                if t is not None and isinstance(t, Enum):
-                    return t
-            except KeyError:
-                pass
-
-        for d in self.descendants:
-            if hasattr(d.obj, 'uid') and d.obj.uid == key:
-                return bytes(d)
-
-        for a in self.ancestors:
-            if hasattr(a.obj, 'uid') and a.obj.uid == key:
-                return bytes(a)
 
         raise KeyError(key)
 
@@ -350,6 +323,8 @@ class Expression:
 
     def interpret(self, context):
         ret = self.expr.interpret(assignments=context)
+        if not isinstance(ret, bytes) and not isinstance(ret, int) and not isinstance(ret, str):
+            ret = bytes(ret)
         log.debug(f"{self.expr.to_str(context=context)}.interpret(...) = {ret!r}")
         return ret
 
@@ -683,6 +658,8 @@ class Type:
                 return v.encode(self.encoding)
         elif isinstance(v, bytes):
             return v
+        elif isinstance(v, AST):
+            return bytes(v)
         else:
             raise RuntimeError(f"No support for converting {v!r} to bytes")
 
