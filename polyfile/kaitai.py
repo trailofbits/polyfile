@@ -107,6 +107,10 @@ class AST:
         if hasattr(self.obj, 'uid') and self.obj.uid == key:
             return self
 
+        elif isinstance(key, int):
+            # Assume this is an index lookup
+            return self.children[key]
+
         elif key == '_':
             return self.last_parsed
 
@@ -133,8 +137,11 @@ class AST:
         elif isinstance(self.obj, Type):
             try:
                 t = self.obj.get_type(key)
-                if t is not None and isinstance(t, Enum):
+                if isinstance(t, Enum):
                     return t
+                elif isinstance(t, Instance):
+                    # TODO: Change `None` to a stream object once we plumb in support for instance io and pos
+                    return t.parse(None, self)
             except KeyError:
                 pass
 

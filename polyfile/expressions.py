@@ -59,6 +59,7 @@ class Operator(Enum):
     LOGICAL_OR = ('or', 12, lambda a, b: a or b)
     TERNARY_ELSE = (':', 13, lambda a, b: (a, b), False)
     TERNARY_CONDITIONAL = ('?', 14, lambda a, b: b[bool(a)], False)
+    GETITEM = ('__getitem__', 1, lambda a, b: a[b])
 
     def __init__(self,
                  token,
@@ -124,6 +125,24 @@ class OpenParen(Parenthesis):
 class CloseParen(Parenthesis):
     def __init__(self):
         super().__init__(')')
+
+
+class Bracket(Token):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}()"
+
+
+class OpenBracket(Bracket):
+    def __init__(self):
+        super().__init__('[')
+
+
+class CloseBracket(Bracket):
+    def __init__(self):
+        super().__init__(']')
 
 
 class OperatorToken(Token):
@@ -215,6 +234,10 @@ class Tokenizer:
                 ret = OpenParen()
             elif c[0] == ')':
                 ret = CloseParen()
+            elif c[0] == '[':
+                ret = OpenBracket()
+            elif c[0] == ']':
+                ret = CloseBracket()
             elif c[0] == ' ' or c[0] == '\t':
                 break
             else:
@@ -264,6 +287,8 @@ def infix_to_rpn(tokens):
     for token in tokens:
         if isinstance(token, OpenParen):
             operators.append(token)
+        elif isinstance(token, OpenBracket):
+            operators.append(token)
         elif isinstance(token, CloseParen):
             while not isinstance(operators[-1], OpenParen):
                 yield operators.pop()
@@ -271,6 +296,14 @@ def infix_to_rpn(tokens):
             # to throw an index out of bounds exception
             if operators and isinstance(operators[-1], OpenParen):
                 operators.pop()
+        elif isinstance(token, CloseBracket):
+            while not isinstance(operators[-1], OpenBracket):
+                yield operators.pop()
+            # TODO: Throw a nice mismatched brackets exception here instead of relying on operators[-1]
+            # to throw an index out of bounds exception
+            if operators and isinstance(operators[-1], OpenBracket):
+                operators.pop()
+            yield OperatorToken(Operator.GETITEM)
         elif isinstance(token, OperatorToken):
             while operators and not isinstance(operators[-1], OpenParen) and \
                     (operators[-1].op.priority < token.op.priority \
@@ -285,6 +318,8 @@ def infix_to_rpn(tokens):
         top = operators.pop()
         if isinstance(top, Parenthesis):
             raise RuntimeError("Mismatched parenthesis")
+        elif isinstance(top, Bracket):
+            raise RuntimeError("Mismatched brackets")
         yield top
 
 
