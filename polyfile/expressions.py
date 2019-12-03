@@ -35,6 +35,28 @@ def member_access(a, b):
     return a[b.name]
 
 
+def resolve_and_apply(operator):
+    def wrapper(a, b):
+        # first, try and make them both ints:
+        try:
+            int_a = to_int(a)
+            int_b = to_int(b)
+            try:
+                return operator(int_a, int_b)
+            except ValueError as e:
+                raise e
+        except ValueError:
+            pass
+        if type(a) == type(b):
+            return operator(a, b)
+        elif isinstance(a, bool):
+            return operator(a, bool(b))
+        elif isinstance(b, bool):
+            return operator(b, bool(a))
+        return operator(bytes(a), bytes(b))
+    return wrapper
+
+
 class Operator(Enum):
     ENUM_ACCESSOR = ('::', 0, lambda a, b: a[b.name], True, 2, False, (True, False))
     MEMBER_ACCESS = ('.', 1, member_access, True, 2, False, (True, False))
@@ -49,12 +71,12 @@ class Operator(Enum):
     SUBTRACTION = ('-', 4, lambda a, b: to_int(a) - to_int(b))
     BITWISE_LEFT_SHIFT = ('<<', 5, lambda a, b: to_int(a) << to_int(b))
     BITWISE_RIGHT_SHIFT = ('>>', 5, lambda a, b: to_int(a) >> to_int(b))
-    LESS_THAN = ('<', 6, lambda a, b: a < b)
-    GREATER_THAN = ('>', 6, lambda a, b: a > b)
-    LESS_THAN_EQUAL = ('<=', 6, lambda a, b: a <= b)
-    GREATER_THAN_EQUAL = ('>=', 6, lambda a, b: a >= b)
-    EQUALS = ('==', 7, lambda a, b: a == b)
-    NOT_EQUAL = ('!=', 7, lambda a, b: a != b)
+    LESS_THAN = ('<', 6, resolve_and_apply(lambda a, b: a < b))
+    GREATER_THAN = ('>', 6, resolve_and_apply(lambda a, b: a > b))
+    LESS_THAN_EQUAL = ('<=', 6, resolve_and_apply(lambda a, b: a <= b))
+    GREATER_THAN_EQUAL = ('>=', 6, resolve_and_apply(lambda a, b: a >= b))
+    EQUALS = ('==', 7, resolve_and_apply(lambda a, b: a == b))
+    NOT_EQUAL = ('!=', 7, resolve_and_apply(lambda a, b: a != b))
     BITWISE_AND = ('&', 8, lambda a, b: to_int(a) & to_int(b))
     BITWISE_XOR = ('^', 9, lambda a, b: to_int(a) ^ to_int(b))
     BITWISE_OR = ('|', 10, lambda a, b: to_int(a) | to_int(b))
