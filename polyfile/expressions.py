@@ -3,6 +3,9 @@ from enum import Enum
 from io import StringIO
 import itertools
 
+from .logger import getStatusLogger
+
+log = getStatusLogger('Expressions')
 
 OPERATORS_BY_NAME = {}
 
@@ -58,7 +61,7 @@ class Operator(Enum):
     LOGICAL_AND = ('and', 11, lambda a, b: a and b)
     LOGICAL_OR = ('or', 12, lambda a, b: a or b)
     TERNARY_ELSE = (':', 13, lambda a, b: (a, b), False)
-    TERNARY_CONDITIONAL = ('?', 14, lambda a, b: b[bool(a)], False)
+    TERNARY_CONDITIONAL = ('?', 14, lambda a, b: b[not bool(a)], False)
     GETITEM = ('__getitem__', 1, lambda a, b: a[b])
 
     def __init__(self,
@@ -354,25 +357,43 @@ class Expression:
         #    raise ValueError(f"Unexpected token {token!r}")
 
     def interpret(self, assignments=None):
-        if assignments is None:
-            assignments = {}
-        values = []
-        for t in self.tokens:
-            if isinstance(t, OperatorToken):
-                args = []
-                for expand, v in zip(t.op.expand, values[-t.op.arity:]):
-                    if expand:
-                        args.append(self.get_value(v, assignments))
+        log.debug(f"Interpreting: {self.to_str(context=assignments)}")
+        with log.debug_nesting():
+            if assignments is None:
+                assignments = {}
+            values = []
+            for t in self.tokens:
+                if isinstance(t, OperatorToken):
+                    log.debug(f"Executing operator {t.op.token}")
+                    with log.debug_nesting():
+                        args = []
+                        for expand, v in zip(t.op.expand, values[-t.op.arity:]):
+                            if expand:
+                                args.append(self.get_value(v, assignments))
+                            else:
+                                args.append(v)
+                    log.debug(f"Arguments: {args!s}")
+                    if t.op == Operator.GETITEM or t.op == Operator.MEMBER_ACCESS:
+                        try:
+                            values = values[:-t.op.arity] + [t.op.execute(*args)]
+                        except KeyError:
+                            raise KeyError(f"{values[-2]!s}[{values[-1]}]")
                     else:
-                        args.append(v)
-                values = values[:-t.op.arity] + [t.op.execute(*args)]
+                        values = values[:-t.op.arity] + [t.op.execute(*args)]
+                    log.debug(f"Result: {values[-1]!s}")
+                else:
+                    values.append(t)
+            if len(values) != 1:
+                raise RuntimeError(f"Unexpected extra tokens: {values[:-1]}")
+            elif isinstance(values[0], IdentifierToken):
+                log.debug(f"Resolving Identifier {values[0].name}")
+                with log.debug_nesting():
+                    ret = self.get_value(values[0], assignments)
+                log.debug(f"{values[0].name} = {ret}")
             else:
-                values.append(t)
-        if len(values) != 1:
-            raise RuntimeError(f"Unexpected extra tokens: {values[:-1]}")
-        if isinstance(values[0], IdentifierToken):
-            return self.get_value(values[0], assignments)
-        return values[0]
+                ret = values[0]
+        log.debug(f"Result: {ret!r}")
+        return ret
 
     def __repr__(self):
         return f"{self.__class__.__name__}(rpn={self.tokens!r})"
@@ -393,10 +414,7 @@ class Expression:
                     else:
                         values.append(f'{ t.op.token }{ args[-1] }')
             elif isinstance(t, IdentifierToken):
-                if t.name in context:
-                    values.append(f"({t.name}={context[t.name]})")
-                else:
-                    values.append(t.name)
+                values.append(t.name)
             elif isinstance(t, IntegerToken):
                 values.append(t.value)
             else:

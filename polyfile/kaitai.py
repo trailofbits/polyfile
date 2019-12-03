@@ -107,7 +107,7 @@ class AST:
         if hasattr(self.obj, 'uid') and self.obj.uid == key:
             return self
 
-        elif isinstance(key, int):
+        elif isinstance(key, int) and 0 <= key < len(self.children):
             # Assume this is an index lookup
             return self.children[key]
 
@@ -122,6 +122,9 @@ class AST:
 
         elif key == '_root':
             return self.root
+
+        elif key == 'size':
+            return len(self.children)
 
         elif isinstance(self.obj, Attribute):
             try:
@@ -223,6 +226,9 @@ class AST:
             return {
                 self.obj.uid: [c.to_dict() for c in self.children]
             }
+
+    def __str__(self):
+        return f"AST({self.to_dict()!s})"
 
     def __len__(self):
         return len(self._children)
@@ -329,10 +335,11 @@ class Expression:
         self.expr = expressions.parse(expr)
 
     def interpret(self, context):
+        #log.debug(f"Interpreting: {self.expr.to_str(context=context)}")
         ret = self.expr.interpret(assignments=context)
         if not isinstance(ret, bytes) and not isinstance(ret, int) and not isinstance(ret, str):
             ret = bytes(ret)
-        log.debug(f"{self.expr.to_str(context=context)}.interpret(...) = {ret!r}")
+        #log.debug(f"Result: {ret!r}")
         return ret
 
 
@@ -607,20 +614,36 @@ class Instance(Attribute):
 
         self.pos = raw_yaml.get('pos', None)
         self.io = raw_yaml.get('io', None)
-        self.value = raw_yaml.get('value', None)
+        self.raw_expression: str = raw_yaml.get('value', None)
 
-        if self.value is not None:
-            self.value = Expression(self.value)
+        if self.raw_expression is not None:
+            self.value: Expression = Expression(self.raw_expression)
 
     def parse(self, stream: KaitaiStream, context: AST=None) -> AST:
-        if self.pos is not None:
-            raise NotImplementedError("TODO: Implement the Instance `pos` spec")
-        elif self.io is not None:
-            raise NotImplementedError("TODO: Implement the Instance `io` spec")
-        if self.value is not None:
-            return self.value.interpret(context)
+        if self.raw_expression is not None:
+            log.debug(f"Parsing instance {self.raw_expression!r}")
         else:
-            return super().parse(stream, context)
+            log.debug(f"Parsing instance {self!r}")
+        with log.debug_nesting():
+            if self.pos is not None:
+                raise NotImplementedError("TODO: Implement the Instance `pos` spec")
+            elif self.io is not None:
+                raise NotImplementedError("TODO: Implement the Instance `io` spec")
+            if self.value is not None:
+                return self.value.interpret(context)
+            else:
+                return super().parse(stream, context)
+
+    def __repr__(self):
+        raw_yaml = {
+            'id': self.uid,
+            'contents': self.contents,
+            'type': self._type_name,
+            'pos': self.pos,
+            'io': self.io,
+            'value': self.value
+        }
+        return f"{self.__class__.__name__}(raw_yaml={raw_yaml!r}, parent={self.parent!r})"
 
 
 class Type:
