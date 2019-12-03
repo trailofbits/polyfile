@@ -60,8 +60,8 @@ class Operator(Enum):
     BITWISE_OR = ('|', 10, lambda a, b: to_int(a) | to_int(b))
     LOGICAL_AND = ('and', 11, lambda a, b: a and b)
     LOGICAL_OR = ('or', 12, lambda a, b: a or b)
-    TERNARY_ELSE = (':', 13, lambda a, b: (a, b), False)
-    TERNARY_CONDITIONAL = ('?', 14, lambda a, b: b[not bool(a)], False)
+    TERNARY_ELSE = (':', 13, lambda a, b: (a, b), False, 2, False, (False, False))
+    TERNARY_CONDITIONAL = ('?', 14, lambda a, b: b[not bool(a)], False, 2, False, (True, False))
     GETITEM = ('__getitem__', 1, lambda a, b: a[b])
 
     def __init__(self,
@@ -380,6 +380,10 @@ class Expression:
                             raise KeyError(f"{values[-2]!s}[{values[-1]}]")
                     else:
                         values = values[:-t.op.arity] + [t.op.execute(*args)]
+                    if t.op == Operator.TERNARY_CONDITIONAL:
+                        # We need to expand the result here.
+                        # We can't pre-expand the arguments because that would break short circuit evaluation
+                        values[-1] = self.get_value(values[-1], assignments)
                     log.debug(f"Result: {values[-1]!s}")
                 else:
                     values.append(t)
