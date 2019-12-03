@@ -587,7 +587,7 @@ class Attribute:
             while not stream.is_eof():
                 ast.add_child(self.type.parse(stream, ast))
         elif self.repeat == Repeat.EXPR:
-            iterations = int.from_bytes(self.repeat_expr.interpret(context), byteorder='big')
+            iterations = to_int(self.repeat_expr.interpret(context), endianness=self.endianness)
             for i in range(iterations):
                 ast.add_child(self.type.parse(stream, ast))
         elif self.repeat == Repeat.UNTIL:

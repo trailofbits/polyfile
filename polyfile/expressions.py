@@ -365,6 +365,7 @@ class Expression:
             for t in self.tokens:
                 if isinstance(t, OperatorToken):
                     log.debug(f"Executing operator {t.op.token}")
+                    exception = None
                     with log.debug_nesting():
                         args = []
                         for expand, v in zip(t.op.expand, values[-t.op.arity:]):
@@ -372,24 +373,34 @@ class Expression:
                                 args.append(self.get_value(v, assignments))
                             else:
                                 args.append(v)
+                            if isinstance(args[-1], Exception):
+                                exception = args[-1]
                     log.debug(f"Arguments: {args!s}")
-                    if t.op == Operator.GETITEM or t.op == Operator.MEMBER_ACCESS:
-                        try:
-                            values = values[:-t.op.arity] + [t.op.execute(*args)]
-                        except KeyError:
-                            values = values[:-t.op.arity] + [KeyError(f"{values[-2]!s}[{values[-1]}]")]
-                        except Exception as e:
-                            values = values[:-t.op.arity] + [e]
+                    # are any of the arguments exceptions? if so, skip executing the operator and
+                    # propagate the exception, instead:
+                    if exception is not None and t.op != Operator.TERNARY_ELSE:
+                        # don't do this for ternary else (":") because it is just a pass-through
+                        # and needs to do so for short circuit evaluation to work
+                        values = values[:-t.op.arity] + [exception]
                     else:
-                        values = values[:-t.op.arity] + [t.op.execute(*args)]
-                    if t.op == Operator.TERNARY_CONDITIONAL:
-                        # We need to expand the result here.
-                        # We can't pre-expand the arguments because that would break short circuit evaluation
-                        values[-1] = self.get_value(values[-1], assignments)
-                    log.debug(f"Result: {values[-1]!s}")
+                        if t.op == Operator.GETITEM or t.op == Operator.MEMBER_ACCESS:
+                            try:
+                                values = values[:-t.op.arity] + [t.op.execute(*args)]
+                            except KeyError:
+                                values = values[:-t.op.arity] + [KeyError(f"{values[-2]!s}[{values[-1]}]")]
+                            except Exception as e:
+                                values = values[:-t.op.arity] + [e]
+                        else:
+                            values = values[:-t.op.arity] + [t.op.execute(*args)]
+                        if t.op == Operator.TERNARY_CONDITIONAL:
+                            # We need to expand the result here.
+                            # We can't pre-expand the arguments because that would break short circuit evaluation
+                            values[-1] = self.get_value(values[-1], assignments)
+                    log.debug(f"Operator Result: {values[-1]!s}")
                 else:
                     values.append(t)
             if len(values) != 1:
+                log.debug(f"Error: Interpretation encountered unexpected tokens")
                 raise RuntimeError(f"Unexpected extra tokens: {values[:-1]}")
             elif isinstance(values[0], IdentifierToken):
                 log.debug(f"Resolving Identifier {values[0].name}")
@@ -399,8 +410,9 @@ class Expression:
             else:
                 ret = values[0]
         if isinstance(ret, Exception):
+            log.debug(f"Interpretation raised exception {ret!r}")
             raise ret
-        log.debug(f"Result: {ret!r}")
+        log.debug(f"Interpretation Result: {ret!r}")
         return ret
 
     def __repr__(self):
