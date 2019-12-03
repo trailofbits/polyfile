@@ -377,7 +377,9 @@ class Expression:
                         try:
                             values = values[:-t.op.arity] + [t.op.execute(*args)]
                         except KeyError:
-                            raise KeyError(f"{values[-2]!s}[{values[-1]}]")
+                            values = values[:-t.op.arity] + [KeyError(f"{values[-2]!s}[{values[-1]}]")]
+                        except Exception as e:
+                            values = values[:-t.op.arity] + [e]
                     else:
                         values = values[:-t.op.arity] + [t.op.execute(*args)]
                     if t.op == Operator.TERNARY_CONDITIONAL:
@@ -396,6 +398,8 @@ class Expression:
                 log.debug(f"{values[0].name} = {ret}")
             else:
                 ret = values[0]
+        if isinstance(ret, Exception):
+            raise ret
         log.debug(f"Result: {ret!r}")
         return ret
 
