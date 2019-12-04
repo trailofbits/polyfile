@@ -434,6 +434,8 @@ class Expression:
         if isinstance(ret, Exception):
             log.debug(f"Interpretation raised exception {ret!r}")
             raise ret
+        elif isinstance(ret, IntegerToken):
+            ret = ret.value
         log.debug(f"Interpretation Result: {ret!r}")
         return ret
 
