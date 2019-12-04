@@ -95,7 +95,7 @@ def main(argv=None):
 
     with PathOrStdin(args.FILE) as file_path:
         matches = []
-        matcher = polyfile.Matcher(args.try_all_offsets)
+        matcher = polyfile.Matcher(args.try_all_offsets, submatch=not args.only_match)
         for match in matcher.match(file_path, progress_callback=progress_callback, trid_defs=trid_defs):
             if hasattr(match.match, 'filetype'):
                 filetype = match.match.filetype
