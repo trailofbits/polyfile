@@ -114,6 +114,9 @@ class Matcher:
         load()
         if defs is None:
             defs = DEFS
+            self.custom_defs = False
+        else:
+            self.custom_defs = True
         self.patterns = defaultdict(set)
         self.try_all_offsets = try_all_offsets
         log.status("Building multi-string search data structures...")
