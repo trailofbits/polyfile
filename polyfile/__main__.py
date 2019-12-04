@@ -140,6 +140,8 @@ def main(argv=None):
             args.html.write(html.generate(file_path, sbud).encode('utf-8'))
             args.html.close()
             log.info(f"Saved HTML output to {args.html.name}")
+        if progress_callback is not None:
+            log.clear_status()
 
 
 if __name__ == '__main__':
