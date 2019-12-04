@@ -19,14 +19,28 @@ def content_length(content):
     return content[-1].offset.offset - content[0].offset.offset + token_length(content[-1])
 
 
-def _emit_dict(parsed, parent, pdf_offset):
-    dict_obj = Submatch(
-        "PDFDictionary",
-        '',
-        relative_offset=parsed.start.offset.offset - parent.offset + pdf_offset,
-        length=parsed.end.offset.offset - parsed.start.offset.offset + len(parsed.end.token),
-        parent=parent
-    )
+def _emit_dict(parsed: pdfparser.ParsedDictionary, parent, pdf_offset):
+    if parsed.end is None:
+        last_token = parsed.last_token
+        if last_token is not None:
+            length = last_token.offset.offset - parsed.start.offset.offset + len(last_token.token)
+        else:
+            length = len(parsed.start.token)
+        dict_obj = Submatch(
+            "UnterminatedPDFDictionary",
+            '',
+            relative_offset=parsed.start.offset.offset - parent.offset + pdf_offset,
+            length=length,
+            parent=parent
+        )
+    else:
+        dict_obj = Submatch(
+            "PDFDictionary",
+            '',
+            relative_offset=parsed.start.offset.offset - parent.offset + pdf_offset,
+            length=parsed.end.offset.offset - parsed.start.offset.offset + len(parsed.end.token),
+            parent=parent
+        )
     yield dict_obj
     for key, value in parsed:
         if isinstance(value, pdfparser.ParsedDictionary):

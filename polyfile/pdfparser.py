@@ -829,6 +829,22 @@ class ParsedDictionary:
             raw_v += v.token
         self._kvs[key.token] = raw_v
 
+    @property
+    def last_token(self):
+        ret = None
+        for k in self:
+            ret = k
+        loop = True
+        while loop:
+            loop = False
+            if isinstance(ret, tuple) or isinstance(ret, list):
+                ret = ret[-1]
+                loop = True
+            if ret != self and hasattr(ret, 'last_token'):
+                ret = ret.last_token
+                loop = True
+        return ret
+
     def __iter__(self):
         return iter(self.kvs)
 
@@ -840,8 +856,10 @@ class cPDFParseDictionary:
         dataTrimmed = TrimLWhiteSpace(TrimRWhiteSpace(self.content))
         if dataTrimmed == []:
             self.parsed = None
-        elif self.isOpenDictionary(dataTrimmed[0]) and (self.isCloseDictionary(dataTrimmed[-1]) or self.couldBeCloseDictionary(dataTrimmed[-1])):
+        elif self.isOpenDictionary(dataTrimmed[0]):
             self.parsed = self.ParseDictionary(dataTrimmed)[0]
+            if not (self.isCloseDictionary(dataTrimmed[-1]) or self.couldBeCloseDictionary(dataTrimmed[-1])):
+                self.parsed.properly_terminated = False
         else:
             self.parsed = None
 
@@ -921,6 +939,10 @@ class cPDFParseDictionary:
                     #value.append(ConditionalCanonicalize(tokens[0][1], self.nocanonicalizedoutput))
                     value.append(tokens[0])
             tokens = tokens[1:]
+        # Modified by Evan Sultanik:
+        # Instead of returning `None` on parsing error, be permissive of problems like missing closing brackets
+        # and just return the best effort:
+        return dictionary, tokens
 
     def Retrieve(self):
         return self.parsed
