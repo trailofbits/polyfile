@@ -138,6 +138,7 @@ def parse_object(file_stream, object, matcher: Matcher, parent=None):
     #log.debug('')
     content_start = dict_offset + dict_length
     content_len = endobj.offset.offset - content_start - objid.offset.offset
+    is_dct_decode = False
     if content_len > 0:
         content = Submatch(
             "PDFObjectContent",
