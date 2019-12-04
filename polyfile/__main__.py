@@ -25,6 +25,7 @@ def main(argv=None):
     parser.add_argument('--html', '-t', type=argparse.FileType('wb'), required=False,
                         help='Path to write an interactive HTML file for exploring the PDF')
     parser.add_argument('--try-all-offsets', '-a', action='store_true', help='Search for a file match at every possible offset; this can be very slow for larger files')
+    parser.add_argument('--only-match', '-m', action='store_true', help='Do not attempt to parse known filetypes; only match against file magic')
     parser.add_argument('--debug', '-d', action='store_true', help='Print debug information')
     parser.add_argument('--quiet', '-q', action='store_true', help='Suppress all log output (overrides --debug)')
     parser.add_argument('--version', '-v', action='store_true', help='Print PolyFile\'s version information to STDERR')
