@@ -424,6 +424,9 @@ class Enum:
             raise RuntimeError(f"Enum {self} is not bound")
         parsed = self.binding.parse(stream, context)
         # TODO: Make sure parsed is in this enum
+        value = bytes([to_int(parsed, self.parent.endianness)])
+        if value not in self.values.values() and not (value != '\x00' and b'' in self.values.values()):
+            raise ValueError(f"{value} is not in enumeration {self.uid}: {self.values}")
         return parsed
 
 
@@ -432,6 +435,8 @@ def to_int(int_like, endianness=Endianness.BIG) -> int:
         return int_like
     elif isinstance(int_like, bytes):
         return int.from_bytes(int_like, byteorder=['big', 'little'][endianness == Endianness.LITTLE])
+    elif isinstance(int_like, Integer):
+        return int_like.obj
     else:
         raise ValueError(f"Cannot convert {int_like!r} to an int!")
 
