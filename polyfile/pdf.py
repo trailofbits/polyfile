@@ -70,7 +70,7 @@ def _emit_dict(parsed: pdfparser.ParsedDictionary, parent, pdf_offset):
         )
         if isinstance(value, pdfparser.ParsedDictionary):
             yield from _emit_dict(value, pair, pdf_offset)
-        else:
+        elif value:
             value_length = value[-1].offset.offset + len(value[-1].token) - value[0].offset.offset
             yield Submatch(
                 "Value",
