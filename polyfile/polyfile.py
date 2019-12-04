@@ -131,9 +131,10 @@ class Submatch(Match):
 
 
 class Matcher:
-    def __init__(self, try_all_offsets=False):
+    def __init__(self, try_all_offsets=False, submatch=True):
         self.trid_matcher = None
         self.try_all_offsets = try_all_offsets
+        self.submatch = submatch
 
     def match(self, file_stream, parent=None, progress_callback=None, trid_defs=None):
         if self.trid_matcher is None or\
@@ -141,7 +142,7 @@ class Matcher:
                 (not self.trid_matcher.custom_defs and trid_defs is not None):
             self.trid_matcher = trid.Matcher(try_all_offsets=self.try_all_offsets, defs=trid_defs)
         for offset, tdef in self.trid_matcher.match(file_stream, progress_callback=progress_callback):
-            if tdef.name in CUSTOM_MATCHERS:
+            if self.submatch and tdef.name in CUSTOM_MATCHERS:
                 display_name = tdef.name.upper()
                 if display_name.endswith('.XML'):
                     display_name = display_name[:-4]
