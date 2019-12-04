@@ -812,6 +812,9 @@ class ParsedDictionary:
     def __contains__(self, key):
         return key in self._kvs
 
+    def __len__(self):
+        return len(self.kvs)
+
     def __getitem__(self, key):
         return self._kvs[key]
 
@@ -831,6 +834,8 @@ class ParsedDictionary:
 
     @property
     def last_token(self):
+        if self.end is not None:
+            return self.end
         ret = None
         for k in self:
             ret = k

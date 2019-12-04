@@ -44,7 +44,12 @@ def _emit_dict(parsed: pdfparser.ParsedDictionary, parent, pdf_offset):
     yield dict_obj
     for key, value in parsed:
         if isinstance(value, pdfparser.ParsedDictionary):
-            value_end = value.end.offset.offset + len(value.end.token)
+            if value.last_token is None:
+                value_end = key.offset.offset
+            else:
+                value_end = value.last_token.offset.offset + len(value.last_token.token)
+        elif len(value) == 0:
+            value_end = key.offset.offset
         else:
             value_end = value[-1].offset.offset + len(value[-1].token)
         pair_offset = key.offset.offset - dict_obj.offset
