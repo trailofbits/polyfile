@@ -20,6 +20,7 @@ setup(
     packages=find_packages(),
     python_requires='>=3.6',
     install_requires=[
+        'intervaltree',
         'jinja2',
         'kaitaistruct>=0.7',
         'Pillow>=5.0.0',
@@ -28,7 +29,8 @@ setup(
     ],
     entry_points={
         'console_scripts': [
-            'polyfile = polyfile.__main__:main'
+            'polyfile = polyfile.__main__:main',
+            'polymerge = polymerge.__main__:main'
         ]
     },
     package_data={'polyfile': ['defs.json.gz', os.path.join('templates', '*')]},
