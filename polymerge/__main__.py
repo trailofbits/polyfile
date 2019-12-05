@@ -18,6 +18,7 @@ https://github.com/trailofbits/polytracker/
 ''', formatter_class=RawTextHelpFormatter)
     parser.add_argument('POLYFILE_JSON', type=argparse.FileType('r'), help='')
     parser.add_argument('POLYTRACKER_JSON', type=argparse.FileType('r'), help='')
+    parser.add_argument('--simplify', '-s', action='store_true', help='Simplify the function mapping by only labeling PolyFile elements that have the fewest number of functions.')
     parser.add_argument('--version', '-v',
                         action='version',
                         version=f"PolyMerge version {version.VERSION_STRING}\n",
@@ -38,7 +39,7 @@ https://github.com/trailofbits/polytracker/
     args.POLYFILE_JSON.close()
     polytracker_json = json.load(args.POLYTRACKER_JSON)
     args.POLYTRACKER_JSON.close()
-    print(json.dumps(merge(polyfile_json, polytracker_json)))
+    print(json.dumps(merge(polyfile_json, polytracker_json, simplify=args.simplify)))
 
 
 if __name__ == '__main__':
