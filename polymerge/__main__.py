@@ -59,7 +59,7 @@ https://github.com/trailofbits/polytracker/
     print(json.dumps(merged))
     if args.cfg is not None or args.cfg_pdf is not None:
         log.status("Reconstructing the runtime control flow graph...")
-        dot = program_trace.build_cfg()
+        dot = program_trace.build_cfg()#(merged_json_obj=merged)
         log.clear_status()
         if args.cfg is not None:
             with open(args.cfg, 'w') as cfg_file:

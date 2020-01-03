@@ -2,6 +2,7 @@ from typing import Dict, Iterable, List, Set
 
 from graphviz import Digraph
 
+from . import polymerge
 
 class FunctionInfo:
     def __init__(self, name: str, input_bytes: Dict[str, List[int]], called_from: Iterable[str] = ()):
@@ -31,11 +32,22 @@ class ProgramTrace:
         self.polytracker_version = polytracker_version
         self.functions: Dict[str, FunctionInfo] = {f.name: f for f in function_data}
 
-    def build_cfg(self, merged_json_obj=None) -> Digraph:
+    def build_cfg(self, merged_json_obj=None, only_labeled_functions=False) -> Digraph:
         dot = Digraph(comment='PolyTracker Program Trace')
         function_ids = {name: i for i, name in enumerate(self.functions)}
+        if merged_json_obj is not None:
+            function_labels = {
+                func_name: ', '.join(['::'.join(label) for label in labels])
+                for func_name, labels in polymerge.function_labels(merged_json_obj).items()
+            }
+        else:
+            function_labels = {}
         for f in self.functions.values():
-            dot.node(f'func{function_ids[f.name]}', label=f.name)
+            if f.name in function_labels:
+                label = f"{f.name} ({function_labels[f.name]})"
+            else:
+                label = f.name
+            dot.node(f'func{function_ids[f.name]}', label=label)
         for f in self.functions.values():
             for caller in f.called_from:
                 if caller not in function_ids:

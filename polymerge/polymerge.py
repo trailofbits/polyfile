@@ -1,5 +1,6 @@
 import copy
 from collections import defaultdict
+from typing import Dict, Set, Tuple
 
 from intervaltree import IntervalTree
 
@@ -8,6 +9,25 @@ from polyfile import logger, version
 from . import polytracker
 
 log = logger.getStatusLogger("PolyMerge")
+
+
+def _function_labels(merged: dict, labeling: Dict[str, Set[Tuple[str]]], ancestry: Tuple[str] = ()):
+    if 'type' in merged:
+        name = merged['type']
+    else:
+        name = merged['name']
+    label: Tuple[str] = ancestry + (name,)
+    for f in merged.get('functions', ()):
+        labeling[f].add(label)
+    for s in merged.get('subEls', ()):
+        _function_labels(s, labeling, ancestry=label)
+
+
+def function_labels(merged_json_obj: dict) -> Dict[str, Set[Tuple[str]]]:
+    labels = defaultdict(set)
+    for merged in merged_json_obj['struc']:
+        _function_labels(merged, labels)
+    return labels
 
 
 class Hashable:
@@ -86,7 +106,7 @@ def merge(polyfile_json_obj: dict, program_trace: polytracker.ProgramTrace, simp
                     last_percent = function_percent
                     function_percent = int((function_progress / function_bytes) * 100.0)
                     if function_percent > last_percent:
-                        log.status(f"{(progress / total_bytes) * 100.0:.2f}%\tprocessing function {function_name}... ({function_percent}%)")
+                        log.status(f"{(progress / total_bytes) * 100.0:.2f}% processing function {function_name}... ({function_percent}%)")
                 for interval in intervals[offset]:
                     elem = IDHashable(interval.data)
                     if simplify:
@@ -108,3 +128,5 @@ def merge(polyfile_json_obj: dict, program_trace: polytracker.ProgramTrace, simp
         for elem, functions in matches.items():
             elem.value['functions'] = list(functions)
     return ret
+
+
