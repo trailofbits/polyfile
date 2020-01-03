@@ -1,6 +1,7 @@
 import argparse
 import json
 import logging
+import shutil
 import sys
 
 from argparse import RawTextHelpFormatter
@@ -8,6 +9,9 @@ from argparse import RawTextHelpFormatter
 from polyfile import logger, version
 
 from .polymerge import merge
+from . import polytracker
+
+log = logger.getStatusLogger("PolyMerge")
 
 
 def main(argv=None):
@@ -20,6 +24,8 @@ https://github.com/trailofbits/polytracker/
     parser.add_argument('POLYFILE_JSON', type=argparse.FileType('r'), help='')
     parser.add_argument('POLYTRACKER_JSON', type=argparse.FileType('r'), help='')
     parser.add_argument('--simplify', '-s', action='store_true', help='Simplify the function mapping by only labeling PolyFile elements that have the fewest number of functions.')
+    parser.add_argument('--cfg', '-c', type=str, default=None, help='Optional path to output a Graphviz .dot file representing the control flow graph of the program trace')
+    parser.add_argument('--cfg-pdf', '-p', type=str, default=None, help='Similar to --cfg, but renders the graph to a PDF instead of outputting the .dot source')
     parser.add_argument('--debug', '-d', action='store_true', help='Print debug information')
     parser.add_argument('--quiet', '-q', action='store_true', help='Suppress all log output (overrides --debug)')
     parser.add_argument('--version', '-v',
@@ -47,9 +53,25 @@ https://github.com/trailofbits/polytracker/
 
     polyfile_json = json.load(args.POLYFILE_JSON)
     args.POLYFILE_JSON.close()
-    polytracker_json = json.load(args.POLYTRACKER_JSON)
+    program_trace = polytracker.parse(json.load(args.POLYTRACKER_JSON))
     args.POLYTRACKER_JSON.close()
-    print(json.dumps(merge(polyfile_json, polytracker_json, simplify=args.simplify)))
+    merged = merge(polyfile_json, program_trace, simplify=args.simplify)
+    print(json.dumps(merged))
+    if args.cfg is not None or args.cfg_pdf is not None:
+        log.status("Reconstructing the runtime control flow graph...")
+        dot = program_trace.build_cfg()
+        log.clear_status()
+        if args.cfg is not None:
+            with open(args.cfg, 'w') as cfg_file:
+                cfg_file.write(dot.source)
+            log.info(f"Saved CFG .dot graph to {args.cfg}")
+        if args.cfg_pdf is not None:
+            log.status("Rendering the runtime CFG to a PDF...")
+            rendered_path = dot.render(args.cfg_pdf, cleanup=True)
+            log.clear_status()
+            if rendered_path != args.cfg_pdf:
+                shutil.move(rendered_path, args.cfg_pdf)
+            log.info(f"Saved CFG graph PDF to {args.cfg_pdf}")
 
 
 if __name__ == '__main__':

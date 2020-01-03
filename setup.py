@@ -20,6 +20,7 @@ setup(
     packages=find_packages(),
     python_requires='>=3.6',
     install_requires=[
+        'graphviz',
         'intervaltree',
         'jinja2',
         'kaitaistruct>=0.7',

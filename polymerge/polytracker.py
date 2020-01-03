@@ -1,5 +1,7 @@
 from typing import Dict, Iterable, List, Set
 
+from graphviz import Digraph
+
 
 class FunctionInfo:
     def __init__(self, name: str, input_bytes: Dict[str, List[int]], called_from: Iterable[str] = ()):
@@ -28,6 +30,20 @@ class ProgramTrace:
     def __init__(self, polytracker_version: tuple, function_data: Iterable[FunctionInfo]):
         self.polytracker_version = polytracker_version
         self.functions: Dict[str, FunctionInfo] = {f.name: f for f in function_data}
+
+    def build_cfg(self, merged_json_obj=None) -> Digraph:
+        dot = Digraph(comment='PolyTracker Program Trace')
+        function_ids = {name: i for i, name in enumerate(self.functions)}
+        for f in self.functions.values():
+            dot.node(f'func{function_ids[f.name]}', label=f.name)
+        for f in self.functions.values():
+            for caller in f.called_from:
+                if caller not in function_ids:
+                    caller_id = len(function_ids)
+                    function_ids[caller] = caller_id
+                    dot.node(f'func{ caller_id }', label=caller)
+                dot.edge(f'func{function_ids[caller]}', f'func{function_ids[f.name]}')
+        return dot
 
     def __repr__(self):
         return f"{self.__class__.__name__}(polytracker_version={self.polytracker_version!r}, function_data={list(self.functions.values())!r})"

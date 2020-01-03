@@ -55,7 +55,7 @@ def build_intervals(elem: dict, tree: IntervalTree = None):
     return tree
 
 
-def merge(polyfile_json_obj: dict, polytracker_json_obj: dict, simplify=False) -> dict:
+def merge(polyfile_json_obj: dict, program_trace: polytracker.ProgramTrace, simplify=False) -> dict:
     ret = copy.deepcopy(polyfile_json_obj)
     if 'versions' in ret:
         ret['versions']['polymerge'] = version.VERSION_STRING
@@ -65,7 +65,6 @@ def merge(polyfile_json_obj: dict, polytracker_json_obj: dict, simplify=False) -
         intervals = build_intervals(match)
     matches = defaultdict(set)
     elems_by_function = defaultdict(set)
-    program_trace: polytracker.ProgramTrace = polytracker.parse(polytracker_json_obj)
     ret['versions']['polytracker'] = '.'.join(map(str, program_trace.polytracker_version))
     # The following code assumes that taint was tracked from a single input file.
     if log.isEnabledFor(logger.STATUS):
