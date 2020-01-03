@@ -131,6 +131,9 @@ def main(argv=None):
             'b64contents': b64contents.decode('utf-8'),
             'fileName': filename,
             'length': file_length,
+            'versions': {
+                'polyfile': version.VERSION_STRING
+            },
             'struc': [
                 match.to_obj() for match in matches
             ]

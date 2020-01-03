@@ -3,7 +3,7 @@ from collections import defaultdict
 
 from intervaltree import IntervalTree
 
-from polyfile import logger
+from polyfile import logger, version
 
 from . import polytracker
 
@@ -57,11 +57,16 @@ def build_intervals(elem: dict, tree: IntervalTree = None):
 
 def merge(polyfile_json_obj: dict, polytracker_json_obj: dict, simplify=False) -> dict:
     ret = copy.deepcopy(polyfile_json_obj)
+    if 'versions' in ret:
+        ret['versions']['polymerge'] = version.VERSION_STRING
+    else:
+        ret['versions'] = {'polymerge': version.VERSION_STRING}
     for match in ret['struc']:
         intervals = build_intervals(match)
     matches = defaultdict(set)
     elems_by_function = defaultdict(set)
     program_trace: polytracker.ProgramTrace = polytracker.parse(polytracker_json_obj)
+    ret['versions']['polytracker'] = '.'.join(map(str, program_trace.polytracker_version))
     # The following code assumes that taint was tracked from a single input file.
     if log.isEnabledFor(logger.STATUS):
         total_bytes = 0
