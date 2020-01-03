@@ -24,6 +24,7 @@ setup(
         'intervaltree',
         'jinja2',
         'kaitaistruct>=0.7',
+        'networkx',
         'Pillow>=5.0.0',
         'pyyaml>=3.13',
         'setuptools'
