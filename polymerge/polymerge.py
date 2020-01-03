@@ -3,6 +3,12 @@ from collections import defaultdict
 
 from intervaltree import IntervalTree
 
+from polyfile import logger
+
+from . import polytracker
+
+log = logger.getStatusLogger("PolyMerge")
+
 
 class Hashable:
     def __init__(self, value):
@@ -55,13 +61,34 @@ def merge(polyfile_json_obj: dict, polytracker_json_obj: dict, simplify=False) -
         intervals = build_intervals(match)
     matches = defaultdict(set)
     elems_by_function = defaultdict(set)
-    for function, offsets in polytracker_json_obj.items():
-        for offset in offsets:
-            for interval in intervals[offset]:
-                elem = IDHashable(interval.data)
-                if simplify:
-                    elems_by_function[function].add(elem)
-                matches[elem].add(function)
+    program_trace: polytracker.ProgramTrace = polytracker.parse(polytracker_json_obj)
+    # The following code assumes that taint was tracked from a single input file.
+    if log.isEnabledFor(logger.STATUS):
+        total_bytes = 0
+        for function_info in program_trace.functions.values():
+            for _, tainted_bytes in function_info.items():
+                total_bytes += len(tainted_bytes)
+        progress = 0
+    for function_name, function_info in program_trace.functions.items():
+        if log.isEnabledFor(logger.STATUS):
+            function_bytes = sum(len(tainted_bytes) for _, tainted_bytes in function_info.items())
+            function_progress = 0
+            function_percent = -1
+        for input_source, tainted_bytes in function_info.items():
+            for offset in tainted_bytes:
+                if log.isEnabledFor(logger.STATUS):
+                    progress += 1
+                    function_progress += 1
+                    last_percent = function_percent
+                    function_percent = int((function_progress / function_bytes) * 100.0)
+                    if function_percent > last_percent:
+                        log.status(f"{(progress / total_bytes) * 100.0:.2f}%\tprocessing function {function_name}... ({function_percent}%)")
+                for interval in intervals[offset]:
+                    elem = IDHashable(interval.data)
+                    if simplify:
+                        elems_by_function[function_name].add(elem)
+                    matches[elem].add(function_name)
+    log.clear_status()
     if simplify:
         # only choose the elements with the fewest number of functions
         num_functions = {elem: len(functions) for elem, functions in matches.items()}

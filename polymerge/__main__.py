@@ -1,10 +1,11 @@
 import argparse
 import json
+import logging
 import sys
 
 from argparse import RawTextHelpFormatter
 
-from polyfile import version
+from polyfile import logger, version
 
 from .polymerge import merge
 
@@ -19,6 +20,8 @@ https://github.com/trailofbits/polytracker/
     parser.add_argument('POLYFILE_JSON', type=argparse.FileType('r'), help='')
     parser.add_argument('POLYTRACKER_JSON', type=argparse.FileType('r'), help='')
     parser.add_argument('--simplify', '-s', action='store_true', help='Simplify the function mapping by only labeling PolyFile elements that have the fewest number of functions.')
+    parser.add_argument('--debug', '-d', action='store_true', help='Print debug information')
+    parser.add_argument('--quiet', '-q', action='store_true', help='Suppress all log output (overrides --debug)')
     parser.add_argument('--version', '-v',
                         action='version',
                         version=f"PolyMerge version {version.VERSION_STRING}\n",
@@ -34,6 +37,13 @@ https://github.com/trailofbits/polytracker/
         argv = sys.argv
 
     args = parser.parse_args(argv[1:])
+
+    if args.debug:
+        logger.setLevel(logging.DEBUG)
+    elif args.quiet:
+        logger.setLevel(logging.CRITICAL)
+    else:
+        logger.setLevel(logger.STATUS)
 
     polyfile_json = json.load(args.POLYFILE_JSON)
     args.POLYFILE_JSON.close()
