@@ -1,9 +1,6 @@
 from typing import Dict, Iterable, List, Set
 
-import networkx as nx
-from graphviz import Digraph
-
-from . import polymerge
+from .cfg import CFG
 
 
 class FunctionInfo:
@@ -32,32 +29,6 @@ class FunctionInfo:
         return f"{self.__class__.__name__}(name={self.name!r}, input_bytes={self.input_bytes!r}, called_from={self.called_from!r})"
 
 
-class CFG(nx.DiGraph):
-    def __init__(self, trace):
-        super().__init__()
-        self.trace: ProgramTrace = trace
-
-    def to_dot(self, merged_json_obj=None, only_labeled_functions=False) -> Digraph:
-        dot = Digraph(comment='PolyTracker Program Trace')
-        function_ids = {node.name: i for i, node in enumerate(self.nodes)}
-        if merged_json_obj is not None:
-            function_labels = {
-                func_name: ', '.join(['::'.join(label) for label in labels])
-                for func_name, labels in polymerge.function_labels(merged_json_obj).items()
-            }
-        else:
-            function_labels = {}
-        for f in self.nodes:
-            if f.name in function_labels:
-                label = f"{f.name} ({function_labels[f.name]})"
-            else:
-                label = f.name
-            dot.node(f'func{function_ids[f.name]}', label=label)
-        for caller, callee in self.edges:
-            dot.edge(f'func{function_ids[caller.name]}', f'func{function_ids[callee.name]}')
-        return dot
-
-
 class ProgramTrace:
     def __init__(self, polytracker_version: tuple, function_data: Iterable[FunctionInfo]):
         self.polytracker_version = polytracker_version
@@ -65,7 +36,7 @@ class ProgramTrace:
         self._cfg = None
 
     @property
-    def cfg(self):
+    def cfg(self) -> CFG:
         if self._cfg is not None:
             return self._cfg
         self._cfg = CFG(self)
