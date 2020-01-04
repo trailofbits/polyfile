@@ -1,18 +1,44 @@
-from graphviz import Digraph
+import graphviz
 import networkx as nx
 
-from . import polymerge
-from .polytracker import ProgramTrace
+from . import polymerge, polytracker
 
 
-class CFG(nx.DiGraph):
-    def __init__(self, trace: ProgramTrace):
+class DiGraph(nx.DiGraph):
+    def __init__(self):
         super().__init__()
-        self.trace: ProgramTrace = trace
+        self._dominator_forest: DiGraph = None
 
-    def to_dot(self, merged_json_obj=None, only_labeled_functions=False) -> Digraph:
-        dot = Digraph(comment='PolyTracker Program Trace')
-        function_ids = {node.name: i for i, node in enumerate(self.nodes)}
+    @property
+    def dominator_forest(self):
+        if self._dominator_forest is not None:
+            return self._dominator_forest
+        self._dominator_forest = DiGraph()
+        for root in [n for n, d in self.in_degree() if d == 0]:
+            for node, dominated_by in nx.immediate_dominators(self, root).items():
+                if node != dominated_by:
+                    self._dominator_forest.add_edge(dominated_by, node)
+        return self._dominator_forest
+
+    def to_dot(self, comment: str = None, labeler=str) -> graphviz.Digraph:
+        if comment is not None:
+            dot = graphviz.Digraph(comment=comment)
+        else:
+            dot = graphviz.Digraph()
+        node_ids = {node: i for i, node in enumerate(self.nodes)}
+        for node in self.nodes:
+            dot.node(f'func{node_ids[node]}', label=labeler(node))
+        for caller, callee in self.edges:
+            dot.edge(f'func{node_ids[caller]}', f'func{node_ids[callee]}')
+        return dot
+
+
+class CFG(DiGraph):
+    def __init__(self, trace):
+        super().__init__()
+        self.trace: polytracker.ProgramTrace = trace
+
+    def to_dot(self, merged_json_obj=None, only_labeled_functions=False) -> graphviz.Digraph:
         if merged_json_obj is not None:
             function_labels = {
                 func_name: ', '.join(['::'.join(label) for label in labels])
@@ -20,12 +46,11 @@ class CFG(nx.DiGraph):
             }
         else:
             function_labels = {}
-        for f in self.nodes:
+
+        def labeler(f):
             if f.name in function_labels:
-                label = f"{f.name} ({function_labels[f.name]})"
+                return f"{f.name} ({function_labels[f.name]})"
             else:
-                label = f.name
-            dot.node(f'func{function_ids[f.name]}', label=label)
-        for caller, callee in self.edges:
-            dot.edge(f'func{function_ids[caller.name]}', f'func{function_ids[callee.name]}')
-        return dot
+                return f.name
+
+        return super().to_dot(comment='PolyTracker Program Trace', labeler=labeler)
