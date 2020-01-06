@@ -81,8 +81,9 @@ def merge(polyfile_json_obj: dict, program_trace: polytracker.ProgramTrace, simp
         ret['versions']['polymerge'] = version.VERSION_STRING
     else:
         ret['versions'] = {'polymerge': version.VERSION_STRING}
+    intervals = None
     for match in ret['struc']:
-        intervals = build_intervals(match)
+        intervals = build_intervals(match, tree=intervals)
     matches = defaultdict(set)
     elems_by_function = defaultdict(set)
     ret['versions']['polytracker'] = '.'.join(map(str, program_trace.polytracker_version))
