@@ -4,10 +4,14 @@ from .cfg import CFG
 
 
 class FunctionInfo:
-    def __init__(self, name: str, input_bytes: Dict[str, List[int]], called_from: Iterable[str] = ()):
+    def __init__(self, name: str, cmp_bytes: Dict[str, List[int]], input_bytes: Dict[str, List[int]] = None, called_from: Iterable[str] = ()):
         self.name = name
         self.called_from = frozenset(called_from)
-        self.input_bytes = input_bytes
+        self.cmp_bytes = cmp_bytes
+        if input_bytes is None:
+            self.input_bytes = cmp_bytes
+        else:
+            self.input_bytes = input_bytes
 
     @property
     def taint_sources(self) -> Set[str]:
@@ -29,7 +33,7 @@ class FunctionInfo:
         return self.name
 
     def __repr__(self):
-        return f"{self.__class__.__name__}(name={self.name!r}, input_bytes={self.input_bytes!r}, called_from={self.called_from!r})"
+        return f"{self.__class__.__name__}(name={self.name!r}, cmp_bytes={self.cmp_bytes!r}, input_bytes={self.input_bytes!r}, called_from={self.called_from!r})"
 
 
 class ProgramTrace:
@@ -82,12 +86,30 @@ def parse_format_v1(polytracker_json_obj: dict) -> ProgramTrace:
 
 
 def parse_format_v2(polytracker_json_obj: dict) -> ProgramTrace:
+    function_data = []
+    for function_name, data in polytracker_json_obj.items():
+        if 'input_bytes' not in data:
+            if 'cmp_bytes' in data:
+                input_bytes = data['cmp_bytes']
+            else:
+                input_bytes = {}
+        else:
+            input_bytes = data['input_bytes']
+        if 'cmp_bytes' in data:
+            cmp_bytes = data['cmp_bytes']
+        else:
+            cmp_bytes = input_bytes
+        if 'called_from' in data:
+            called_from = data['called_from']
+        else:
+            called_from = ()
+        function_data.append(FunctionInfo(
+            name=function_name,
+            cmp_bytes=cmp_bytes,
+            input_bytes=input_bytes,
+            called_from=called_from
+        ))
     return ProgramTrace(
         polytracker_version=(0, 0, 1, 'alpha2.1'),
-        function_data=[FunctionInfo(
-            name=function_name,
-            input_bytes=function_data['input_bytes'],
-            called_from=function_data['called_from']
-        ) for function_name, function_data in polytracker_json_obj.items()
-        ]
+        function_data=function_data
     )
