@@ -1,5 +1,7 @@
 import copy
 from collections import defaultdict
+import heapq
+from statistics import stdev
 from typing import Dict, Set, Tuple
 
 from intervaltree import IntervalTree
@@ -86,6 +88,9 @@ def merge(polyfile_json_obj: dict, program_trace: polytracker.ProgramTrace, simp
         intervals = build_intervals(match, tree=intervals)
     matches = defaultdict(set)
     elems_by_function = defaultdict(set)
+    types_by_function = defaultdict(set)
+    functions_by_type = defaultdict(set)
+    elems_by_type = defaultdict(set)
     ret['versions']['polytracker'] = '.'.join(map(str, program_trace.polytracker_version))
     # The following code assumes that taint was tracked from a single input file.
     if log.isEnabledFor(logger.STATUS):
@@ -96,10 +101,10 @@ def merge(polyfile_json_obj: dict, program_trace: polytracker.ProgramTrace, simp
         progress = 0
     for function_name, function_info in program_trace.functions.items():
         if log.isEnabledFor(logger.STATUS):
-            function_bytes = sum(len(tainted_bytes) for _, tainted_bytes in function_info.items())
+            function_bytes = sum(len(tainted_bytes) for _, tainted_bytes in function_info.cmp_bytes.items())
             function_progress = 0
             function_percent = -1
-        for input_source, tainted_bytes in function_info.items():
+        for input_source, tainted_bytes in function_info.cmp_bytes.items():
             for offset in tainted_bytes:
                 if log.isEnabledFor(logger.STATUS):
                     progress += 1
@@ -110,10 +115,33 @@ def merge(polyfile_json_obj: dict, program_trace: polytracker.ProgramTrace, simp
                         log.status(f"{(progress / total_bytes) * 100.0:.2f}% processing function {function_name}... ({function_percent}%)")
                 for interval in intervals[offset]:
                     elem = IDHashable(interval.data)
-                    if simplify:
-                        elems_by_function[function_name].add(elem)
+                    #if simplify:
+                    elems_by_function[function_name].add(elem)
+                    elem_type = elem.value['type']
+                    types_by_function[function_name].add(elem_type)
+                    functions_by_type[elem_type].add(function_name)
+                    elems_by_type[elem_type].add(elem)
                     matches[elem].add(function_name)
     log.clear_status()
+    for elem_type, elems in elems_by_type.items():
+        # find the function that operated on the most number of elems of this type
+        elem_count = [(-len(elems & elems_by_function[func]), func) for func in functions_by_type[elem_type]]
+        if not elem_count:
+            continue
+        elif len(elem_count) == 1:
+            func_matches = [elem_count[0][1]]
+        else:
+            std_dev = stdev(-count for count, _ in elem_count)
+            heapq.heapify(elem_count)
+            best_value, best_match_func = heapq.heappop(elem_count)
+            value_threshold = -best_value - std_dev
+            func_matches = [best_match_func]
+            while elem_count:
+                best_value, best_match_func = heapq.heappop(elem_count)
+                if -best_value < value_threshold:
+                    break
+                func_matches.append(best_match_func)
+        print(elem_type, func_matches)
     if simplify:
         # only choose the elements with the fewest number of functions
         num_functions = {elem: len(functions) for elem, functions in matches.items()}
