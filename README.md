@@ -34,8 +34,8 @@ This will automatically install the `polyfile` and `polymerge` executables in yo
 
 ```
 usage: polyfile [-h] [--filetype FILETYPE] [--list] [--html HTML]
-                [--try-all-offsets] [--debug] [--quiet] [--version]
-                [-dumpversion]
+                [--try-all-offsets] [--only-match] [--debug] [--quiet]
+                [--version] [-dumpversion]
                 [FILE]
 
 A utility to recursively map the structure of a file.
@@ -56,6 +56,8 @@ optional arguments:
   --try-all-offsets, -a
                         Search for a file match at every possible offset; this
                         can be very slow for larger files
+  --only-match, -m      Do not attempt to parse known filetypes; only match
+                        against file magic
   --debug, -d           Print debug information
   --quiet, -q           Suppress all log output (overrides --debug)
   --version, -v         Print PolyFile's version information to STDERR
