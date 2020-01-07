@@ -1,6 +1,11 @@
-from typing import Dict, Iterable, List, Set
+from collections import defaultdict
+from typing import Dict, Iterable, List, Set, Tuple
+
+from polyfile import logger
 
 from .cfg import CFG
+
+log = logger.getStatusLogger('PolyTracker')
 
 
 class FunctionInfo:
@@ -63,9 +68,36 @@ class ProgramTrace:
         return f"{self.__class__.__name__}(polytracker_version={self.polytracker_version!r}, function_data={list(self.functions.values())!r})"
 
 
-def parse(polytracker_json_obj: dict) -> ProgramTrace:
-    # TODO: Once https://github.com/trailofbits/polytracker/issues/39 is implemented, add logic here for versioning
+POLYTRACKER_JSON_FORMATS = []
 
+
+def normalize_version(*version) -> Tuple[str]:
+    version = tuple(str(v) for v in version)
+    version = tuple(version) + ('0',) * (3 - len(version))
+    version = tuple(version) + ('',) * (4 - len(version))
+    return version
+
+
+def polytracker_version(*version):
+    def wrapper(func):
+        POLYTRACKER_JSON_FORMATS.append((normalize_version(*version), func))
+        POLYTRACKER_JSON_FORMATS.sort(reverse=True)
+        return func
+    return wrapper
+
+
+def parse(polytracker_json_obj: dict) -> ProgramTrace:
+    if 'version' in polytracker_json_obj:
+        version = normalize_version(*polytracker_json_obj['version'].split('.'))
+        if len(version) > 4:
+            log.warn(f"Unexpectedly long PolyTracker version: {polytracker_json_obj['version']!r}")
+        for i, (known_version, parser) in enumerate(POLYTRACKER_JSON_FORMATS):
+            # POLYTRACKER_JSON_FORMATS is auto-sorted in decreasing order
+            if version >= known_version:
+                if i == 0 and version > known_version:
+                    log.warn(f"PolyTracker version {polytracker_json_obj['version']!r} is newer than the latest supported by PolyMerge ({'.'.join(known_version)})")
+                return parser(polytracker_json_obj)
+        raise ValueError(f"Unsupported PolyTracker version {polytracker_json_obj['version']!r}")
     for function_name, function_data in polytracker_json_obj.items():
         if isinstance(function_data, dict) and 'called_from' in function_data:
             # this is the second version of the output format
@@ -74,6 +106,7 @@ def parse(polytracker_json_obj: dict) -> ProgramTrace:
             return parse_format_v1(polytracker_json_obj)
 
 
+@polytracker_version(0, 0, 1, '')
 def parse_format_v1(polytracker_json_obj: dict) -> ProgramTrace:
     return ProgramTrace(
         polytracker_version=(0, 0, 1),
@@ -85,6 +118,7 @@ def parse_format_v1(polytracker_json_obj: dict) -> ProgramTrace:
     )
 
 
+@polytracker_version(0, 0, 1, 'alpha2.1')
 def parse_format_v2(polytracker_json_obj: dict) -> ProgramTrace:
     function_data = []
     for function_name, data in polytracker_json_obj.items():
@@ -111,5 +145,37 @@ def parse_format_v2(polytracker_json_obj: dict) -> ProgramTrace:
         ))
     return ProgramTrace(
         polytracker_version=(0, 0, 1, 'alpha2.1'),
+        function_data=function_data
+    )
+
+
+@polytracker_version(1, 0, 1)
+def parse_format_v3(polytracker_json_obj: dict) -> ProgramTrace:
+    version = polytracker_json_obj['version'].split('.')
+    function_data = []
+    for function_name, data in polytracker_json_obj['tainted_functions'].items():
+        if 'input_bytes' not in data:
+            if 'cmp_bytes' in data:
+                input_bytes = data['cmp_bytes']
+            else:
+                input_bytes = {}
+        else:
+            input_bytes = data['input_bytes']
+        if 'cmp_bytes' in data:
+            cmp_bytes = data['cmp_bytes']
+        else:
+            cmp_bytes = input_bytes
+        if function_name in polytracker_json_obj['runtime_cfg']:
+            called_from = frozenset(polytracker_json_obj['runtime_cfg'][function_name])
+        else:
+            called_from = frozenset()
+        function_data.append(FunctionInfo(
+            name=function_name,
+            cmp_bytes=cmp_bytes,
+            input_bytes=input_bytes,
+            called_from=called_from
+        ))
+    return ProgramTrace(
+        polytracker_version=version,
         function_data=function_data
     )
