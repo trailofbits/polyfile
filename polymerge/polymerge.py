@@ -1,6 +1,7 @@
 import copy
-from collections import defaultdict
+from collections import Counter, defaultdict
 import heapq
+import math
 from statistics import stdev
 from typing import Dict, Set, Tuple
 
@@ -77,6 +78,20 @@ def build_intervals(elem: dict, tree: IntervalTree = None):
     return tree
 
 
+def shannon_entropy(data):
+    if not hasattr(data, '__len__'):
+        data = list(data)
+
+    if len(data) <= 1:
+        return 0
+
+    counts = Counter(data)
+
+    probabilities = [float(c) / len(data) for c in counts.values()]
+
+    return -sum(p * math.log(p, 2) for p in probabilities if p > 0.)
+
+
 def merge(polyfile_json_obj: dict, program_trace: polytracker.ProgramTrace, simplify=False) -> dict:
     ret = copy.deepcopy(polyfile_json_obj)
     if 'versions' in ret:
@@ -123,25 +138,31 @@ def merge(polyfile_json_obj: dict, program_trace: polytracker.ProgramTrace, simp
                     elems_by_type[elem_type].add(elem)
                     matches[elem].add(function_name)
     log.clear_status()
+    dominator_tree = program_trace.cfg.dominator_forest
     for elem_type, elems in elems_by_type.items():
-        # find the function that operated on the most number of elems of this type
-        elem_count = [(-len(elems & elems_by_function[func]), func) for func in functions_by_type[elem_type]]
-        if not elem_count:
+        # find the function that is most specialized in operating on elems of this type:
+        specialization = [
+            (shannon_entropy(elem.value['type'] for elem in elems_by_function[func]), func)
+            for func in functions_by_type[elem_type]
+        ]
+        if not specialization:
             continue
-        elif len(elem_count) == 1:
-            func_matches = [elem_count[0][1]]
+        elif len(specialization) == 1:
+            func_matches = [specialization[0][1]]
         else:
-            std_dev = stdev(-count for count, _ in elem_count)
-            heapq.heapify(elem_count)
-            best_value, best_match_func = heapq.heappop(elem_count)
-            value_threshold = -best_value - std_dev
+            std_dev = stdev(entropy for entropy, _ in specialization)
+            heapq.heapify(specialization)
+            best_value, best_match_func = heapq.heappop(specialization)
+            value_threshold = best_value + std_dev
             func_matches = [best_match_func]
-            while elem_count:
-                best_value, best_match_func = heapq.heappop(elem_count)
-                if -best_value < value_threshold:
+            while specialization:
+                best_value, best_match_func = heapq.heappop(specialization)
+                if best_value > value_threshold:
                     break
                 func_matches.append(best_match_func)
-        print(elem_type, func_matches)
+        # now choose the function match that is highest in the CFG dominator tree:
+        depths = [(dominator_tree.depth(program_trace.functions[func]), func) for func in func_matches]
+        print("BESTMATCH", elem_type, depths)
     if simplify:
         # only choose the elements with the fewest number of functions
         num_functions = {elem: len(functions) for elem, functions in matches.items()}

@@ -1,3 +1,5 @@
+import math
+
 import graphviz
 import networkx as nx
 
@@ -8,13 +10,32 @@ class DiGraph(nx.DiGraph):
     def __init__(self):
         super().__init__()
         self._dominator_forest: DiGraph = None
+        self._roots = None
+        self._path_lengths = None
+
+    def path_length(self, from_node, to_node):
+        if self._path_lengths is None:
+            self._path_lengths = dict(nx.all_pairs_shortest_path_length(self, cutoff=None))
+        if from_node not in self._path_lengths or to_node not in self._path_lengths[from_node]:
+            return math.inf
+        else:
+            return self._path_lengths[from_node][to_node]
+
+    @property
+    def roots(self):
+        if self._roots is None:
+            self._roots = tuple(n for n, d in self.in_degree() if d == 0)
+        return self._roots
+
+    def depth(self, node):
+        return min(self.path_length(root, node) for root in self.roots)
 
     @property
     def dominator_forest(self):
         if self._dominator_forest is not None:
             return self._dominator_forest
         self._dominator_forest = DiGraph()
-        for root in [n for n, d in self.in_degree() if d == 0]:
+        for root in self.roots:
             for node, dominated_by in nx.immediate_dominators(self, root).items():
                 if node != dominated_by:
                     self._dominator_forest.add_edge(dominated_by, node)
