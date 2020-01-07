@@ -18,12 +18,17 @@ as _The ALAN Parsers Project_.
 
 ## Quickstart
 
-In the same directory as this README, run:
+You can install the latest stable version of PolyFile from PyPI:
+```
+pip3 install polyfile
+```
+
+To install PolyFile from source, in the same directory as this README, run:
 ```
 pip3 install -e .
 ```
 
-This will automatically install the `polyfile` executable in your path.
+This will automatically install the `polyfile` and `polymerge` executables in your path.
 
 ## Usage
 
