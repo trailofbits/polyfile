@@ -103,7 +103,6 @@ def merge(polyfile_json_obj: dict, program_trace: polytracker.ProgramTrace) -> d
         intervals = build_intervals(match, tree=intervals)
     matches = defaultdict(set)
     elems_by_function = defaultdict(set)
-    types_by_function = defaultdict(set)
     functions_by_type = defaultdict(set)
     elems_by_type = defaultdict(set)
     ret['versions']['polytracker'] = '.'.join(map(str, program_trace.polytracker_version))
@@ -132,7 +131,6 @@ def merge(polyfile_json_obj: dict, program_trace: polytracker.ProgramTrace) -> d
                     elem = IDHashable(interval.data)
                     elems_by_function[function_name].add(elem)
                     elem_type = elem.value['type']
-                    types_by_function[function_name].add(elem_type)
                     functions_by_type[elem_type].add(function_name)
                     elems_by_type[elem_type].add(elem)
                     matches[elem].add(function_name)
