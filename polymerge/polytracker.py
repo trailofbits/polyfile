@@ -153,6 +153,7 @@ def parse_format_v2(polytracker_json_obj: dict) -> ProgramTrace:
 def parse_format_v3(polytracker_json_obj: dict) -> ProgramTrace:
     version = polytracker_json_obj['version'].split('.')
     function_data = []
+    tainted_functions = set()
     for function_name, data in polytracker_json_obj['tainted_functions'].items():
         if 'input_bytes' not in data:
             if 'cmp_bytes' in data:
@@ -174,6 +175,14 @@ def parse_format_v3(polytracker_json_obj: dict) -> ProgramTrace:
             cmp_bytes=cmp_bytes,
             input_bytes=input_bytes,
             called_from=called_from
+        ))
+        tainted_functions.add(function_name)
+    # Add any additional functions from the CFG that didn't operate on tainted bytes
+    for function_name in polytracker_json_obj['runtime_cfg'].keys() - tainted_functions:
+        function_data.append(FunctionInfo(
+            name=function_name,
+            cmp_bytes={},
+            called_from=polytracker_json_obj['runtime_cfg'][function_name]
         ))
     return ProgramTrace(
         polytracker_version=version,
