@@ -92,7 +92,7 @@ def shannon_entropy(data):
     return -sum(p * math.log(p, 2) for p in probabilities if p > 0.)
 
 
-def merge(polyfile_json_obj: dict, program_trace: polytracker.ProgramTrace, simplify=False) -> dict:
+def merge(polyfile_json_obj: dict, program_trace: polytracker.ProgramTrace) -> dict:
     ret = copy.deepcopy(polyfile_json_obj)
     if 'versions' in ret:
         ret['versions']['polymerge'] = version.VERSION_STRING
@@ -116,10 +116,10 @@ def merge(polyfile_json_obj: dict, program_trace: polytracker.ProgramTrace, simp
         progress = 0
     for function_name, function_info in program_trace.functions.items():
         if log.isEnabledFor(logger.STATUS):
-            function_bytes = sum(len(tainted_bytes) for _, tainted_bytes in function_info.cmp_bytes.items())
+            function_bytes = sum(len(tainted_bytes) for _, tainted_bytes in function_info.items())#.cmp_bytes.items())
             function_progress = 0
             function_percent = -1
-        for input_source, tainted_bytes in function_info.cmp_bytes.items():
+        for input_source, tainted_bytes in function_info.items():#cmp_bytes.items():
             for offset in tainted_bytes:
                 if log.isEnabledFor(logger.STATUS):
                     progress += 1
@@ -130,7 +130,6 @@ def merge(polyfile_json_obj: dict, program_trace: polytracker.ProgramTrace, simp
                         log.status(f"{(progress / total_bytes) * 100.0:.2f}% processing function {function_name}... ({function_percent}%)")
                 for interval in intervals[offset]:
                     elem = IDHashable(interval.data)
-                    #if simplify:
                     elems_by_function[function_name].add(elem)
                     elem_type = elem.value['type']
                     types_by_function[function_name].add(elem_type)
@@ -139,6 +138,7 @@ def merge(polyfile_json_obj: dict, program_trace: polytracker.ProgramTrace, simp
                     matches[elem].add(function_name)
     log.clear_status()
     dominator_tree = program_trace.cfg.dominator_forest
+    ret['best_function_matches'] = {}
     for elem_type, elems in elems_by_type.items():
         # find the function that is most specialized in operating on elems of this type:
         specialization = [
@@ -162,21 +162,17 @@ def merge(polyfile_json_obj: dict, program_trace: polytracker.ProgramTrace, simp
                 func_matches.append(best_match_func)
         # now choose the function match that is highest in the CFG dominator tree:
         depths = [(dominator_tree.depth(program_trace.functions[func]), func) for func in func_matches]
-        print("BESTMATCH", elem_type, depths)
-    if simplify:
-        # only choose the elements with the fewest number of functions
-        num_functions = {elem: len(functions) for elem, functions in matches.items()}
-        for function, elems in elems_by_function.items():
-            min_value = min(num_functions[elem] for elem in elems)
-            for elem in elems:
-                if num_functions[elem] == min_value:
-                    if 'functions' in elem.value:
-                        elem.value['functions'].append(function)
-                    else:
-                        elem.value['functions'] = [function]
-    else:
-        for elem, functions in matches.items():
-            elem.value['functions'] = list(functions)
+        heapq.heapify(depths)
+        best_value, best_match_func = heapq.heappop(depths)
+        func_matches = [best_match_func]
+        while depths:
+            value, best_match_func = heapq.heappop(depths)
+            if value > best_value:
+                break
+            func_matches.append(best_match_func)
+        ret['best_function_matches'][elem_type] = func_matches
+    for elem, functions in matches.items():
+        elem.value['functions'] = list(functions)
     return ret
 
 

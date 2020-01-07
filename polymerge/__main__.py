@@ -23,7 +23,6 @@ https://github.com/trailofbits/polytracker/
 ''', formatter_class=RawTextHelpFormatter)
     parser.add_argument('POLYFILE_JSON', type=argparse.FileType('r'), help='')
     parser.add_argument('POLYTRACKER_JSON', type=argparse.FileType('r'), help='')
-    parser.add_argument('--simplify', '-s', action='store_true', help='Simplify the function mapping by only labeling PolyFile elements that have the fewest number of functions.')
     parser.add_argument('--cfg', '-c', type=str, default=None, help='Optional path to output a Graphviz .dot file representing the control flow graph of the program trace')
     parser.add_argument('--cfg-pdf', '-p', type=str, default=None, help='Similar to --cfg, but renders the graph to a PDF instead of outputting the .dot source')
     parser.add_argument('--debug', '-d', action='store_true', help='Print debug information')
@@ -55,7 +54,7 @@ https://github.com/trailofbits/polytracker/
     args.POLYFILE_JSON.close()
     program_trace = polytracker.parse(json.load(args.POLYTRACKER_JSON))
     args.POLYTRACKER_JSON.close()
-    merged = merge(polyfile_json, program_trace, simplify=args.simplify)
+    merged = merge(polyfile_json, program_trace)
     print(json.dumps(merged))
     if args.cfg is not None or args.cfg_pdf is not None:
         log.status("Reconstructing the runtime control flow graph...")
