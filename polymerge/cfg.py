@@ -6,9 +6,13 @@ import networkx as nx
 from . import polymerge, polytracker
 
 
+def roots(graph):
+    return (n for n, d in graph.in_degree() if d == 0)
+
+
 class DiGraph(nx.DiGraph):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self._dominator_forest: DiGraph = None
         self._roots = None
         self._path_lengths = None
@@ -24,7 +28,7 @@ class DiGraph(nx.DiGraph):
     @property
     def roots(self):
         if self._roots is None:
-            self._roots = tuple(n for n, d in self.in_degree() if d == 0)
+            self._roots = tuple(roots(self))
         return self._roots
 
     def depth(self, node):
@@ -34,7 +38,7 @@ class DiGraph(nx.DiGraph):
     def dominator_forest(self):
         if self._dominator_forest is not None:
             return self._dominator_forest
-        self._dominator_forest = DiGraph()
+        self._dominator_forest = DAG()
         for root in self.roots:
             for node, dominated_by in nx.immediate_dominators(self, root).items():
                 if node != dominated_by:
@@ -52,6 +56,33 @@ class DiGraph(nx.DiGraph):
         for caller, callee in self.edges:
             dot.edge(f'func{node_ids[caller]}', f'func{node_ids[callee]}')
         return dot
+
+
+class DAG(DiGraph):
+    def vertex_induced_subgraph(self, vertices):
+        vertices = frozenset(vertices)
+        subgraph = self.copy()
+        to_remove = set(self.nodes) - vertices
+        for v in vertices:
+            node = v
+            parent = None
+            while True:
+                parents = tuple(subgraph.predecessors(node))
+                if not parents:
+                    if parent is not None:
+                        subgraph.remove_edge(parent, v)
+                        subgraph.add_edge(node, v)
+                    break
+                assert len(parents) == 1
+                ancestor = parents[0]
+                if parent is None:
+                    parent = ancestor
+                if ancestor in vertices:
+                    to_remove.add(v)
+                    break
+                node = ancestor
+        subgraph.remove_nodes_from(to_remove)
+        return subgraph
 
 
 class CFG(DiGraph):

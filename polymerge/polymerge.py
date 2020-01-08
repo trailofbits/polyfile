@@ -10,6 +10,7 @@ from intervaltree import IntervalTree
 from polyfile import logger, version
 
 from . import polytracker
+from . import cfg
 
 log = logger.getStatusLogger("PolyMerge")
 
@@ -158,17 +159,13 @@ def merge(polyfile_json_obj: dict, program_trace: polytracker.ProgramTrace) -> d
                 if best_value > value_threshold:
                     break
                 func_matches.append(best_match_func)
-        # now choose the function match that is highest in the CFG dominator tree:
-        depths = [(dominator_tree.depth(program_trace.functions[func]), func) for func in func_matches]
-        heapq.heapify(depths)
-        best_value, best_match_func = heapq.heappop(depths)
-        func_matches = [best_match_func]
-        while depths:
-            value, best_match_func = heapq.heappop(depths)
-            if value > best_value:
-                break
-            func_matches.append(best_match_func)
-        ret['best_function_matches'][elem_type] = func_matches
+        # now choose the functions that are roots in the vertex-induced subgraph of the CFG dominator tree:
+        ret['best_function_matches'][elem_type] = [
+            root.name
+            for root in cfg.roots(
+                dominator_tree.vertex_induced_subgraph(program_trace.functions[func] for func in func_matches)
+            )
+        ]
     for elem, functions in matches.items():
         elem.value['functions'] = list(functions)
     return ret
