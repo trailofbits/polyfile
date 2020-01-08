@@ -25,6 +25,9 @@ class DiGraph(nx.DiGraph):
         else:
             return self._path_lengths[from_node][to_node]
 
+    def set_roots(self, roots):
+        self._roots = roots
+
     @property
     def roots(self):
         if self._roots is None:

@@ -93,6 +93,43 @@ def shannon_entropy(data):
     return -sum(p * math.log(p, 2) for p in probabilities if p > 0.)
 
 
+def _build_type_graph(graph: cfg.DiGraph, elem: dict, parent: str = None):
+    node_name = elem['type']
+    graph.add_node(node_name)
+    if parent is not None:
+        graph.add_edge(parent, node_name)
+    if 'subEls' in elem:
+        for child in elem['subEls']:
+            _build_type_graph(graph, child, node_name)
+
+
+def polyfile_type_graph(polyfile_json_obj: dict) -> cfg.DiGraph:
+    graph = cfg.DiGraph()
+    roots = []
+    for match in polyfile_json_obj['struc']:
+        roots.append(match['type'])
+        _build_type_graph(graph, match)
+    graph.set_roots(roots)
+    return graph
+
+
+def _filter_function_matches(type_dominators: cfg.DAG, node: str, matches: dict, disallowed: set, parent: str = None):
+    if node in matches:
+        orig_matches = matches[node]
+        matches[node] = [func for func in orig_matches if func not in disallowed]
+        if not matches[node] and parent in matches:
+            # we want to avoid the matches from being filtered to empty, so add in any overlap from the parent:
+            matches[node] = [func for func in orig_matches if func not in (disallowed - set(matches[parent]))]
+        disallowed |= set(matches[node])
+    for child in type_dominators.successors(node):
+        _filter_function_matches(type_dominators, child, matches, disallowed, node)
+
+
+def filter_function_matches(type_dominators: cfg.DAG, matches: dict):
+    for root in type_dominators.roots:
+        _filter_function_matches(type_dominators, root, matches, set())
+
+
 def merge(polyfile_json_obj: dict, program_trace: polytracker.ProgramTrace) -> dict:
     ret = copy.deepcopy(polyfile_json_obj)
     if 'versions' in ret:
@@ -166,6 +203,12 @@ def merge(polyfile_json_obj: dict, program_trace: polytracker.ProgramTrace) -> d
                 dominator_tree.vertex_induced_subgraph(program_trace.functions[func] for func in func_matches)
             )
         ]
+    # finally, remove redundant functions in the best matches based upon the semantic hierarchy:
+    # first step in that is to build the dominator tree of the PolyFile hierarchy:
+    type_dominators: cfg.DAG = polyfile_type_graph(polyfile_json_obj).dominator_forest
+    # for each type in the 'best_function_matches' mapping, only include a function if that function is not
+    # included for any ancestor of the type in `type_dominators`
+    filter_function_matches(type_dominators, ret['best_function_matches'])
     for elem, functions in matches.items():
         elem.value['functions'] = list(functions)
     return ret
