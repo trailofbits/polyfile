@@ -113,21 +113,30 @@ def polyfile_type_graph(polyfile_json_obj: dict) -> cfg.DiGraph:
     return graph
 
 
-def _filter_function_matches(type_dominators: cfg.DAG, node: str, matches: dict, disallowed: set, parent: str = None):
+def _filter_function_matches(
+        type_dominators: cfg.DAG,
+        node: str,
+        matches: dict,
+        disallowed: Dict[str, int],
+        depth: int = 0):
     if node in matches:
         orig_matches = matches[node]
-        matches[node] = [func for func in orig_matches if func not in disallowed]
-        if not matches[node] and parent in matches:
-            # we want to avoid the matches from being filtered to empty, so add in any overlap from the parent:
-            matches[node] = [func for func in orig_matches if func not in (disallowed - set(matches[parent]))]
-        disallowed |= set(matches[node])
+        for disallowed_depth in range(depth, -1, -1):
+            matches[node] = [
+                func for func in orig_matches if func not in disallowed or disallowed[func] >= disallowed_depth
+            ]
+            if matches[node]:
+                break
+        for func in matches[node]:
+            if func not in disallowed:
+                disallowed[func] = depth
     for child in type_dominators.successors(node):
-        _filter_function_matches(type_dominators, child, matches, disallowed, node)
+        _filter_function_matches(type_dominators, child, matches, disallowed, depth + 1)
 
 
 def filter_function_matches(type_dominators: cfg.DAG, matches: dict):
     for root in type_dominators.roots:
-        _filter_function_matches(type_dominators, root, matches, set())
+        _filter_function_matches(type_dominators, root, matches, {})
 
 
 def merge(polyfile_json_obj: dict, program_trace: polytracker.ProgramTrace) -> dict:
