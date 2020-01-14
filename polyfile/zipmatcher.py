@@ -13,4 +13,4 @@ class ZipFile(Match):
                     with Tempfile(zf.read(name)) as f:
                         yield from self.matcher.match(f, parent=self)
         except zipfile.BadZipFile:
-            raise InvalidMatch
+            raise InvalidMatch()
