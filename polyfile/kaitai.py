@@ -639,6 +639,12 @@ def parse(typename, bytes_like) -> AST:
     return DEFS[typename].parse(KaitaiStream(BytesIO(bytes_like)))
 
 
+def parse_stream(typename, stream) -> AST:
+    if typename not in DEFS:
+        load()
+    return DEFS[typename].parse(KaitaiStream(stream))
+
+
 def load():
     for ksy_path in glob.glob(os.path.join(KSY_DIR, '*.ksy')):
         log.status(f'Loading KSY file definitions... {os.path.split(ksy_path)[-1]}')

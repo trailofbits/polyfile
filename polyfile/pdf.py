@@ -2,6 +2,7 @@ import base64
 
 from . import pdfparser
 from . import kaitai
+from .kaitaimatcher import ast_to_matches
 from .logger import getStatusLogger
 from .polyfile import Match, Matcher, Submatch, submatcher
 
@@ -60,27 +61,6 @@ def _emit_dict(parsed, parent, pdf_offset):
                 length=value_length,
                 parent=pair
             )
-
-
-def ast_to_matches(ast: kaitai.AST, parent: Submatch):
-    stack = [(parent, ast)]
-    while stack:
-        parent, node = stack.pop()
-        if not hasattr(node.obj, 'uid'):
-            continue
-        if len(node.children) == 1 and not hasattr(node.children[0], 'uid'):
-            match = node.children[0].obj
-        else:
-            match = ''
-        new_node = Submatch(
-            name=node.obj.uid,
-            match_obj=match,
-            relative_offset=node.relative_offset,
-            length=node.length,
-            parent=parent
-        )
-        yield new_node
-        stack.extend(reversed([(new_node, c) for c in node.children]))
 
 
 def parse_object(file_stream, object, matcher: Matcher, parent=None):
