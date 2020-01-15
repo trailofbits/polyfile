@@ -72,7 +72,9 @@ def build_intervals(elem: dict, tree: IntervalTree = None):
     if tree is None:
         tree = IntervalTree()
     if 'size' in elem:
-        tree[elem['offset']:elem['offset']+elem['size']] = elem
+        elem_size = elem['size']
+        if elem_size > 0:
+            tree[elem['offset']:elem['offset']+elem_size] = elem
     if 'subEls' in elem:
         for child in elem['subEls']:
             build_intervals(child, tree)
