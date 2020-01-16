@@ -4,7 +4,7 @@ import os
 
 import yaml
 
-from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
+from kaitaistruct import KaitaiStream, BytesIO
 
 from . import expressions
 from . import logger
@@ -305,6 +305,8 @@ class ByteMatch:
             self.contents = bytes(contents)
         elif isinstance(contents, list):
             self.contents = bytes(contents)
+        elif isinstance(contents, str):
+            self.contents = contents.encode('utf-8')
         else:
             raise RuntimeError(f"TODO: Implement support for `contents` of type {type(contents)}")
 
@@ -569,7 +571,9 @@ class Type:
             self.types[eid] = Enum({v: self.to_bytes(k) for k, v in raw_enum.items()}, uid=eid, parent=self)
 
     def to_bytes(self, v):
-        if isinstance(v, int):
+        if isinstance(v, int) or isinstance(v, expressions.IntegerToken):
+            if isinstance(v, expressions.IntegerToken):
+                v = v.value
             if self.endianness is None or self.endianness == Endianness.BIG:
                 e = 'big'
             else:
