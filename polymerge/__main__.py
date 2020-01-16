@@ -8,7 +8,7 @@ from argparse import RawTextHelpFormatter
 
 from polyfile import logger, version
 
-from .polymerge import merge
+from .polymerge import merge, polyfile_type_graph
 from . import polytracker
 
 log = logger.getStatusLogger("PolyMerge")
@@ -25,6 +25,8 @@ https://github.com/trailofbits/polytracker/
     parser.add_argument('POLYTRACKER_JSON', type=argparse.FileType('r'), help='')
     parser.add_argument('--cfg', '-c', type=str, default=None, help='Optional path to output a Graphviz .dot file representing the control flow graph of the program trace')
     parser.add_argument('--cfg-pdf', '-p', type=str, default=None, help='Similar to --cfg, but renders the graph to a PDF instead of outputting the .dot source')
+    parser.add_argument('--type-hierarchy', '-t', type=str, default=None, help='Optional path to output a Graphviz .dot file representing the type hierarchy extracted from PolyFile')
+    parser.add_argument('--type-hierarchy-pdf', '-y', type=str, default=None, help='Similar to --type-hierarchy, but renders the graph to a PDF instead of outputting the .dot source')
     parser.add_argument('--debug', '-d', action='store_true', help='Print debug information')
     parser.add_argument('--quiet', '-q', action='store_true', help='Suppress all log output (overrides --debug)')
     parser.add_argument('--version', '-v',
@@ -72,6 +74,21 @@ https://github.com/trailofbits/polytracker/
             if rendered_path != args.cfg_pdf:
                 shutil.move(rendered_path, args.cfg_pdf)
             log.info(f"Saved CFG graph PDF to {args.cfg_pdf}")
+    if args.type_hierarchy is not None or args.type_hierarchy_pdf is not None:
+        log.status("Building the input file type hierarchy...")
+        type_dominators: cfg.DAG = polyfile_type_graph(polyfile_json).dominator_forest
+        dot = type_dominators.to_dot()
+        if args.type_hierarchy:
+            with open(args.type_hierarchy, 'w') as dot_file:
+                dot_file.write(dot.source)
+            log.info(f"Saved type hierarchy .dot graph to {args.type_hierarchy}")
+        if args.type_hierarchy_pdf is not None:
+            log.status("Rendering the type hierarchy to a PDF...")
+            rendered_path = dot.render(args.type_hierarchy_pdf, cleanup=True)
+            log.clear_status()
+            if rendered_path != args.type_hierarchy_pdf:
+                shutil.move(rendered_path, args.type_hierarchy_pdf)
+            log.info(f"Saved type hierarchy PDF to {args.type_hierarchy_pdf}")
 
 
 if __name__ == '__main__':
