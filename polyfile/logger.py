@@ -31,6 +31,20 @@ logging.addLevelName(STATUS, "STATUS")
 
 DEFAULT_STATUS_LOG_HANDLER = StatusLogHandler()
 
+_debug_nesting = 0
+
+
+class DebugNester:
+    def __init__(self, status_logger):
+        self.logger = status_logger
+
+    def __enter__(self):
+        self.logger.push_debug_nesting()
+        return self.logger
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.logger.pop_debug_nesting()
+
 
 class StatusLogger(logging.getLoggerClass()):
     def __init__(self, name, level=logging.NOTSET):
@@ -41,6 +55,26 @@ class StatusLogger(logging.getLoggerClass()):
         if self.isEnabledFor(STATUS):
             self._log(STATUS, msg, args, **kwargs)
 
+    def debug(self, msg, *args, **kwargs):
+        global _debug_nesting
+        msg = '    ' * _debug_nesting + msg
+        super().debug(msg, *args, **kwargs)
+
+    @staticmethod
+    def push_debug_nesting():
+        global _debug_nesting
+        _debug_nesting += 1
+
+    def pop_debug_nesting(self):
+        global _debug_nesting
+        _debug_nesting = _debug_nesting - 1
+        if _debug_nesting < 0:
+            self.warn("Unbalanced debug nesting")
+            _debug_nesting = 0
+
+    def debug_nesting(self):
+        return DebugNester(self)
+
     def clear_status(self):
         self.status('')
 
@@ -48,7 +82,7 @@ class StatusLogger(logging.getLoggerClass()):
 logging.setLoggerClass(StatusLogger)
 
 
-def getStatusLogger(name):
+def getStatusLogger(name) -> StatusLogger:
     return logging.getLogger(name)
 
 

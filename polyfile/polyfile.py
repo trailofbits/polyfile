@@ -1,6 +1,7 @@
 from json import dumps
 
 from .fileutils import FileStream
+from . import kaitai
 from . import logger
 from . import trid
 
@@ -128,6 +129,27 @@ class Match:
 
 class Submatch(Match):
     pass
+
+
+def ast_to_matches(ast: kaitai.AST, parent: Submatch):
+    stack = [(parent, ast)]
+    while stack:
+        parent, node = stack.pop()
+        if not hasattr(node.obj, 'uid'):
+            continue
+        if len(node.children) == 1 and not hasattr(node.children[0], 'uid'):
+            match = node.children[0].obj
+        else:
+            match = ''
+        new_node = Submatch(
+            name=node.obj.uid,
+            match_obj=match,
+            relative_offset=node.relative_offset,
+            length=node.length,
+            parent=parent
+        )
+        yield new_node
+        stack.extend(reversed([(new_node, c) for c in node.children]))
 
 
 class Matcher:

@@ -3,6 +3,9 @@ from enum import Enum
 from io import StringIO
 import itertools
 
+from .logger import getStatusLogger
+
+log = getStatusLogger('Expressions')
 
 OPERATORS_BY_NAME = {}
 
@@ -22,12 +25,41 @@ def to_int(v, byteorder='big') -> int:
         else:
             # Assume big endian
             return int.from_bytes(v, byteorder=byteorder)
-    raise ValueError(f"Cannot convert {v!r} to an integer")
+    try:
+        return to_int(bytes(v), byteorder=byteorder)
+    except TypeError:
+        raise ValueError(f"Cannot convert {v!r} to an integer")
+
+
+def member_access(a, b):
+    return a[b.name]
+
+
+def resolve_and_apply(operator):
+    def wrapper(a, b):
+        # first, try and make them both ints:
+        try:
+            int_a = to_int(a)
+            int_b = to_int(b)
+            try:
+                return operator(int_a, int_b)
+            except ValueError as e:
+                raise e
+        except ValueError:
+            pass
+        if type(a) == type(b):
+            return operator(a, b)
+        elif isinstance(a, bool):
+            return operator(a, bool(b))
+        elif isinstance(b, bool):
+            return operator(b, bool(a))
+        return operator(bytes(a), bytes(b))
+    return wrapper
 
 
 class Operator(Enum):
     ENUM_ACCESSOR = ('::', 0, lambda a, b: a[b.name], True, 2, False, (True, False))
-    MEMBER_ACCESS = ('.', 1, lambda a, b: None, True, 2, False, (True, False))
+    MEMBER_ACCESS = ('.', 1, member_access, True, 2, False, (True, False))
     UNARY_PLUS = ('+', 2, lambda a: a, False, 1, True)
     UNARY_MINUS = ('-', 2, lambda a: -to_int(a), False, 1, True)
     LOGICAL_NOT = ('not', 2, lambda a: not a, False, 1)
@@ -39,19 +71,20 @@ class Operator(Enum):
     SUBTRACTION = ('-', 4, lambda a, b: to_int(a) - to_int(b))
     BITWISE_LEFT_SHIFT = ('<<', 5, lambda a, b: to_int(a) << to_int(b))
     BITWISE_RIGHT_SHIFT = ('>>', 5, lambda a, b: to_int(a) >> to_int(b))
-    LESS_THAN = ('<', 6, lambda a, b: a < b)
-    GREATER_THAN = ('>', 6, lambda a, b: a > b)
-    LESS_THAN_EQUAL = ('<=', 6, lambda a, b: a <= b)
-    GREATER_THAN_EQUAL = ('>=', 6, lambda a, b: a >= b)
-    EQUALS = ('==', 7, lambda a, b: a == b)
-    NOT_EQUAL = ('!=', 7, lambda a, b: a != b)
+    LESS_THAN = ('<', 6, resolve_and_apply(lambda a, b: a < b))
+    GREATER_THAN = ('>', 6, resolve_and_apply(lambda a, b: a > b))
+    LESS_THAN_EQUAL = ('<=', 6, resolve_and_apply(lambda a, b: a <= b))
+    GREATER_THAN_EQUAL = ('>=', 6, resolve_and_apply(lambda a, b: a >= b))
+    EQUALS = ('==', 7, resolve_and_apply(lambda a, b: a == b))
+    NOT_EQUAL = ('!=', 7, resolve_and_apply(lambda a, b: a != b))
     BITWISE_AND = ('&', 8, lambda a, b: to_int(a) & to_int(b))
     BITWISE_XOR = ('^', 9, lambda a, b: to_int(a) ^ to_int(b))
     BITWISE_OR = ('|', 10, lambda a, b: to_int(a) | to_int(b))
     LOGICAL_AND = ('and', 11, lambda a, b: a and b)
     LOGICAL_OR = ('or', 12, lambda a, b: a or b)
-    TERNARY_ELSE = (':', 13, lambda a, b: (a, b), False)
-    TERNARY_CONDITIONAL = ('?', 14, lambda a, b: b[bool(a)], False)
+    TERNARY_ELSE = (':', 13, lambda a, b: (a, b), False, 2, False, (False, False))
+    TERNARY_CONDITIONAL = ('?', 14, lambda a, b: b[not bool(a)], False, 2, False, (True, False))
+    GETITEM = ('__getitem__', 1, lambda a, b: a[b])
 
     def __init__(self,
                  token,
@@ -117,6 +150,24 @@ class OpenParen(Parenthesis):
 class CloseParen(Parenthesis):
     def __init__(self):
         super().__init__(')')
+
+
+class Bracket(Token):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}()"
+
+
+class OpenBracket(Bracket):
+    def __init__(self):
+        super().__init__('[')
+
+
+class CloseBracket(Bracket):
+    def __init__(self):
+        super().__init__(']')
 
 
 class OperatorToken(Token):
@@ -208,6 +259,10 @@ class Tokenizer:
                 ret = OpenParen()
             elif c[0] == ')':
                 ret = CloseParen()
+            elif c[0] == '[':
+                ret = OpenBracket()
+            elif c[0] == ']':
+                ret = CloseBracket()
             elif c[0] == ' ' or c[0] == '\t':
                 break
             else:
@@ -257,6 +312,8 @@ def infix_to_rpn(tokens):
     for token in tokens:
         if isinstance(token, OpenParen):
             operators.append(token)
+        elif isinstance(token, OpenBracket):
+            operators.append(token)
         elif isinstance(token, CloseParen):
             while not isinstance(operators[-1], OpenParen):
                 yield operators.pop()
@@ -264,6 +321,14 @@ def infix_to_rpn(tokens):
             # to throw an index out of bounds exception
             if operators and isinstance(operators[-1], OpenParen):
                 operators.pop()
+        elif isinstance(token, CloseBracket):
+            while not isinstance(operators[-1], OpenBracket):
+                yield operators.pop()
+            # TODO: Throw a nice mismatched brackets exception here instead of relying on operators[-1]
+            # to throw an index out of bounds exception
+            if operators and isinstance(operators[-1], OpenBracket):
+                operators.pop()
+            yield OperatorToken(Operator.GETITEM)
         elif isinstance(token, OperatorToken):
             while operators and not isinstance(operators[-1], OpenParen) and \
                     (operators[-1].op.priority < token.op.priority \
@@ -278,7 +343,18 @@ def infix_to_rpn(tokens):
         top = operators.pop()
         if isinstance(top, Parenthesis):
             raise RuntimeError("Mismatched parenthesis")
+        elif isinstance(top, Bracket):
+            raise RuntimeError("Mismatched brackets")
         yield top
+
+
+def collect_keys(d: dict) -> frozenset:
+    keys = set()
+    for k, v in d.items():
+        keys.add(k)
+        if isinstance(v, dict):
+            keys |= collect_keys(v)
+    return frozenset(keys)
 
 
 class Expression:
@@ -287,7 +363,9 @@ class Expression:
 
     @staticmethod
     def get_value(token: Token, assignments: dict):
-        if isinstance(token, IntegerToken):
+        if token is None:
+            return None
+        elif isinstance(token, IntegerToken):
             return token.value
         elif isinstance(token, IdentifierToken):
             if token.name not in assignments:
@@ -296,31 +374,98 @@ class Expression:
         elif isinstance(token, int) or isinstance(token, str) or isinstance(token, bytes):
             return token
         else:
-            raise ValueError(f"Unexpected token {token!r}")
+            return token
+        #else:
+        #    raise ValueError(f"Unexpected token {token!r}")
 
     def interpret(self, assignments=None):
-        if assignments is None:
-            assignments = {}
-        values = []
-        for t in self.tokens:
-            if isinstance(t, OperatorToken):
-                args = []
-                for expand, v in zip(t.op.expand, values[-t.op.arity:]):
-                    if expand:
-                        args.append(self.get_value(v, assignments))
+        log.debug(f"Interpreting: {self.to_str(context=assignments)}")
+        with log.debug_nesting():
+            if assignments is None:
+                assignments = {}
+            values = []
+            for t in self.tokens:
+                if isinstance(t, OperatorToken):
+                    log.debug(f"Executing operator {t.op.token}")
+                    exception = None
+                    with log.debug_nesting():
+                        args = []
+                        for expand, v in zip(t.op.expand, values[-t.op.arity:]):
+                            if expand:
+                                args.append(self.get_value(v, assignments))
+                            else:
+                                args.append(v)
+                            if isinstance(args[-1], Exception):
+                                exception = args[-1]
+                    log.debug(f"Arguments: {args!s}")
+                    # are any of the arguments exceptions? if so, skip executing the operator and
+                    # propagate the exception, instead:
+                    if exception is not None and t.op != Operator.TERNARY_ELSE:
+                        # don't do this for ternary else (":") because it is just a pass-through
+                        # and needs to do so for short circuit evaluation to work
+                        values = values[:-t.op.arity] + [exception]
                     else:
-                        args.append(v)
-                values = values[:-t.op.arity] + [t.op.execute(*args)]
+                        if t.op == Operator.GETITEM or t.op == Operator.MEMBER_ACCESS:
+                            try:
+                                values = values[:-t.op.arity] + [t.op.execute(*args)]
+                            except KeyError:
+                                values = values[:-t.op.arity] + [KeyError(f"{values[-2]!s}[{values[-1]}]")]
+                            except Exception as e:
+                                values = values[:-t.op.arity] + [e]
+                        else:
+                            values = values[:-t.op.arity] + [t.op.execute(*args)]
+                        if t.op == Operator.TERNARY_CONDITIONAL:
+                            # We need to expand the result here.
+                            # We can't pre-expand the arguments because that would break short circuit evaluation
+                            values[-1] = self.get_value(values[-1], assignments)
+                    log.debug(f"Operator Result: {values[-1]!s}")
+                else:
+                    values.append(t)
+            if len(values) != 1:
+                log.debug(f"Error: Interpretation encountered unexpected tokens")
+                raise RuntimeError(f"Unexpected extra tokens: {values[:-1]}")
+            elif isinstance(values[0], IdentifierToken):
+                log.debug(f"Resolving Identifier {values[0].name}")
+                with log.debug_nesting():
+                    ret = self.get_value(values[0], assignments)
+                log.debug(f"{values[0].name} = {ret}")
             else:
-                values.append(t)
-        if len(values) != 1:
-            raise RuntimeError(f"Unexpected extra tokens: {values[:-1]}")
-        if isinstance(values[0], IdentifierToken):
-            return self.get_value(values[0], assignments)
-        return values[0]
+                ret = values[0]
+        if isinstance(ret, Exception):
+            log.debug(f"Interpretation raised exception {ret!r}")
+            raise ret
+        elif isinstance(ret, IntegerToken):
+            ret = ret.value
+        log.debug(f"Interpretation Result: {ret!r}")
+        return ret
 
     def __repr__(self):
         return f"{self.__class__.__name__}(rpn={self.tokens!r})"
+
+    def to_str(self, context=None):
+        values = []
+        for t in self.tokens:
+            if isinstance(t, OperatorToken):
+                args = values[-t.op.arity:]
+                values = values[:-t.op.arity]
+                if len(args) != t.op.arity:
+                    raise NotImplementedError(f"Add support for operators of arity { t.op.arity }")
+                if t.op.arity == 2:
+                    values.append(f'({ args[-2] }{ t.op.token }{ args[-1] })')
+                elif t.op.arity == 1:
+                    if t.op.left_associative:
+                        values.append(f'{ args[-1] }{ t.op.token }')
+                    else:
+                        values.append(f'{ t.op.token }{ args[-1] }')
+            elif isinstance(t, IdentifierToken):
+                values.append(t.name)
+            elif isinstance(t, IntegerToken):
+                values.append(t.value)
+            else:
+                values.append(t)
+        return ''.join(map(str, values))
+
+    __str__ = to_str
 
 
 def parse(expression_str: str) -> Expression:

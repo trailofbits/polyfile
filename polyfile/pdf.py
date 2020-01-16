@@ -4,7 +4,7 @@ from . import pdfparser
 from . import kaitai
 from .kaitaimatcher import ast_to_matches
 from .logger import getStatusLogger
-from .polyfile import Match, Matcher, Submatch, submatcher
+from .polyfile import ast_to_matches, Match, Matcher, Submatch, submatcher
 
 log = getStatusLogger("PDF")
 

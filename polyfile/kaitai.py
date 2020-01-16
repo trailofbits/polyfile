@@ -32,8 +32,11 @@ class AST:
         self._children = []
         self._offset = None
         self._length = None
+        self._last_parsed = None
         if parent is not None:
             parent.add_child(self)
+        self.last_parsed = self
+        log.debug(f"Updated AST: {self.root.to_dict()}")
 
     @property
     def relative_offset(self):
@@ -90,33 +93,68 @@ class AST:
             yield self.parent
             yield from self.parent.ancestors
 
+    @property
+    def last_parsed(self):
+        return self._last_parsed
+
+    @last_parsed.setter
+    def last_parsed(self, ast):
+        self._last_parsed = ast
+        if self.parent is not None:
+            self.parent.last_parsed = ast
+
     def __getitem__(self, key):
         if hasattr(self.obj, 'uid') and self.obj.uid == key:
-            return bytes(self)
+            return self
+
+        elif isinstance(key, int) and 0 <= key < len(self.children):
+            # Assume this is an index lookup
+            return self.children[key]
+
+        elif key == '_':
+            return self.last_parsed
+
+        elif key == '_parent':
+            if self.parent is None:
+                return None
+            else:
+                return self.parent
+
+        elif key == '_root':
+            return self.root
+
+        elif key == 'size':
+            return len(self.children)
 
         elif isinstance(self.obj, Attribute):
             try:
                 t = self.obj.parent.get_type(key)
-                if t is not None and isinstance(t, Enum):
+                if isinstance(t, Enum):
                     return t
+                elif isinstance(t, Instance):
+                    # TODO: Change `None` to a stream object once we plumb in support for instance io and pos
+                    return t.parse(None, self)
             except KeyError:
                 pass
 
         elif isinstance(self.obj, Type):
             try:
                 t = self.obj.get_type(key)
-                if t is not None and isinstance(t, Enum):
+                if isinstance(t, Enum):
                     return t
+                elif isinstance(t, Instance):
+                    # TODO: Change `None` to a stream object once we plumb in support for instance io and pos
+                    return t.parse(None, self)
             except KeyError:
                 pass
 
         for d in self.descendants:
             if hasattr(d.obj, 'uid') and d.obj.uid == key:
-                return bytes(d)
+                return d
 
         for a in self.ancestors:
             if hasattr(a.obj, 'uid') and a.obj.uid == key:
-                return bytes(a)
+                return a
 
         raise KeyError(key)
 
@@ -188,6 +226,9 @@ class AST:
             return {
                 self.obj.uid: [c.to_dict() for c in self.children]
             }
+
+    def __str__(self):
+        return f"AST({self.to_dict()!s})"
 
     def __len__(self):
         return len(self._children)
@@ -294,7 +335,12 @@ class Expression:
         self.expr = expressions.parse(expr)
 
     def interpret(self, context):
-        return self.expr.interpret(assignments=context)
+        #log.debug(f"Interpreting: {self.expr.to_str(context=context)}")
+        ret = self.expr.interpret(assignments=context)
+        if not isinstance(ret, bytes) and not isinstance(ret, int) and not isinstance(ret, str):
+            ret = bytes(ret)
+        #log.debug(f"Result: {ret!r}")
+        return ret
 
 
 class ByteMatch:
@@ -304,7 +350,15 @@ class ByteMatch:
         elif isinstance(contents, bytearray):
             self.contents = bytes(contents)
         elif isinstance(contents, list):
-            self.contents = bytes(contents)
+            arr = bytearray()
+            for b in contents:
+                if isinstance(b, int):
+                    arr.append(b)
+                elif isinstance(b, bytes):
+                    arr += b
+                elif isinstance(b, str):
+                    arr += b.encode('utf-8')
+            self.contents = bytes(arr)
         elif isinstance(contents, str):
             self.contents = contents.encode('utf-8')
         else:
@@ -372,7 +426,21 @@ class Enum:
             raise RuntimeError(f"Enum {self} is not bound")
         parsed = self.binding.parse(stream, context)
         # TODO: Make sure parsed is in this enum
+        value = bytes([to_int(parsed, self.parent.endianness)])
+        if value not in self.values.values() and not (value != '\x00' and b'' in self.values.values()):
+            raise ValueError(f"{value} is not in enumeration {self.uid}: {self.values}")
         return parsed
+
+
+def to_int(int_like, endianness=Endianness.BIG) -> int:
+    if isinstance(int_like, int):
+        return int_like
+    elif isinstance(int_like, bytes):
+        return int.from_bytes(int_like, byteorder=['big', 'little'][endianness == Endianness.LITTLE])
+    elif isinstance(int_like, Integer):
+        return int_like.obj
+    else:
+        raise ValueError(f"Cannot convert {int_like!r} to an int!")
 
 
 class ByteArray:
@@ -398,7 +466,7 @@ class ByteArray:
         if self.size is None:
             size = None
         else:
-            size = int(self.size.interpret(context))
+            size = to_int(self.size.interpret(context), endianness=self.parent.endianness)
         while self.size is None or not self._size_met(ret, size):
             try:
                 b = stream.read_bytes(1)
@@ -435,9 +503,9 @@ class String(ByteArray):
 
 
 class Attribute:
-    def __init__(self, raw_yaml, parent):
+    def __init__(self, raw_yaml, parent, uid=None):
         self.parent = parent
-        self.uid = raw_yaml.get('id', None)
+        self.uid = raw_yaml.get('id', uid)
         self.contents = raw_yaml.get('contents', None)
         if self.contents is not None:
             self.contents = ByteMatch(self.contents)
@@ -513,6 +581,8 @@ class Attribute:
                 self._type = self.parent.get_type(self._type_name)
             if self.enum is not None:
                 self._type = self.parent.get_type(self.enum).bind(self._type)
+            if self._type is None and self._type_name is not None:
+                self._type = get_primitive_type(self._type_name, endianness=self.endianness)
         return self._type
 
     def parse(self, stream: KaitaiStream, context: AST=None) -> AST:
@@ -524,12 +594,18 @@ class Attribute:
             while not stream.is_eof():
                 ast.add_child(self.type.parse(stream, ast))
         elif self.repeat == Repeat.EXPR:
-            iterations = int.from_bytes(self.repeat_expr.interpret(context), byteorder='big')
-            for i in range(iterations):
-                ast.add_child(self.type.parse(stream, ast))
+            if self.type == IntegerTypes.U1:
+                # Just read this as a bytearray
+                ast.add_child(ByteArray(size=self.repeat_expr.interpret(context), parent=self).parse(stream, ast))
+            else:
+                iterations = to_int(self.repeat_expr.interpret(context), endianness=self.endianness)
+                for i in range(iterations):
+                    ast.add_child(self.type.parse(stream, ast))
         elif self.repeat == Repeat.UNTIL:
-            while not self.repeat_until.interpret(context):
+            while True:
                 ast.add_child(self.type.parse(stream, ast))
+                if self.repeat_until.interpret(context):
+                    break
         else:
             ast.add_child(self.type.parse(stream, ast))
         return ast
@@ -539,6 +615,44 @@ class Attribute:
             'id': self.uid,
             'contents': self.contents,
             'type': self._type_name
+        }
+        return f"{self.__class__.__name__}(raw_yaml={raw_yaml!r}, parent={self.parent!r})"
+
+
+class Instance(Attribute):
+    def __init__(self, raw_yaml, parent, uid):
+        super().__init__(raw_yaml=raw_yaml, parent=parent, uid=uid)
+
+        self.pos = raw_yaml.get('pos', None)
+        self.io = raw_yaml.get('io', None)
+        self.raw_expression: str = raw_yaml.get('value', None)
+
+        if self.raw_expression is not None:
+            self.value: Expression = Expression(self.raw_expression)
+
+    def parse(self, stream: KaitaiStream, context: AST=None) -> AST:
+        if self.raw_expression is not None:
+            log.debug(f"Parsing instance {self.raw_expression!r}")
+        else:
+            log.debug(f"Parsing instance {self!r}")
+        with log.debug_nesting():
+            if self.pos is not None:
+                raise NotImplementedError("TODO: Implement the Instance `pos` spec")
+            elif self.io is not None:
+                raise NotImplementedError("TODO: Implement the Instance `io` spec")
+            if self.value is not None:
+                return self.value.interpret(context)
+            else:
+                return super().parse(stream, context)
+
+    def __repr__(self):
+        raw_yaml = {
+            'id': self.uid,
+            'contents': self.contents,
+            'type': self._type_name,
+            'pos': self.pos,
+            'io': self.io,
+            'value': self.value
         }
         return f"{self.__class__.__name__}(raw_yaml={raw_yaml!r}, parent={self.parent!r})"
 
@@ -563,6 +677,7 @@ class Type:
         else:
             self._imports = []
         self.seq = [Attribute(s, self) for s in raw_yaml.get('seq', ())]
+        self.instances = {name: Instance(s, self, name) for name, s in raw_yaml.get('instances', {}).items()}
         self.types = {
             typename: Type(raw_type, uid=typename, parent=self)
             for typename, raw_type in raw_yaml.get('types', {}).items()
@@ -586,6 +701,8 @@ class Type:
                 return v.encode(self.encoding)
         elif isinstance(v, bytes):
             return v
+        elif isinstance(v, AST):
+            return bytes(v)
         else:
             raise RuntimeError(f"No support for converting {v!r} to bytes")
 
@@ -614,6 +731,8 @@ class Type:
     def get_type(self, type_name, allow_primitive=True):
         if type_name in self.types:
             return self.types[type_name]
+        elif type_name in self.instances:
+            return self.instances[type_name]
         # see if it is defined in an import
         for t in self.imports:
             try:
@@ -625,7 +744,9 @@ class Type:
             parent_type = self.parent.get_type(type_name, allow_primitive=False)
             if parent_type is not None:
                 return parent_type
-        if allow_primitive:
+        if type_name in DEFS:
+            return DEFS[type_name]
+        elif allow_primitive:
             return get_primitive_type(type_name, self.endianness)
         else:
             KeyError(type_name)
