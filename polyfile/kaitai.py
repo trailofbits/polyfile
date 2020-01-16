@@ -394,7 +394,8 @@ class SwitchedType:
             if case is None:
                 default_case = typename
                 continue
-            case_value = self.parent.to_bytes(expressions.parse(str(case)).interpret(context))
+            case_value = expressions.parse(str(case)).interpret(context)
+            case_value = self.parent.to_bytes(case_value, force_endianness='big')
             if switch_on_value == case_value:
                 return self.parent.get_type(typename).parse(stream, context)
         if default_case is not None:
@@ -426,7 +427,7 @@ class Enum:
             raise RuntimeError(f"Enum {self} is not bound")
         parsed = self.binding.parse(stream, context)
         # TODO: Make sure parsed is in this enum
-        value = bytes([to_int(parsed, self.parent.endianness)])
+        value = self.parent.to_bytes(to_int(parsed, self.parent.endianness))
         if value not in self.values.values() and not (value != '\x00' and b'' in self.values.values()):
             raise ValueError(f"{value} is not in enumeration {self.uid}: {self.values}")
         return parsed
@@ -685,11 +686,13 @@ class Type:
         for eid, raw_enum in raw_yaml.get('enums', {}).items():
             self.types[eid] = Enum({v: self.to_bytes(k) for k, v in raw_enum.items()}, uid=eid, parent=self)
 
-    def to_bytes(self, v):
+    def to_bytes(self, v, force_endianness: str = None):
         if isinstance(v, int) or isinstance(v, expressions.IntegerToken):
             if isinstance(v, expressions.IntegerToken):
                 v = v.value
-            if self.endianness is None or self.endianness == Endianness.BIG:
+            if force_endianness is not None:
+                e = force_endianness
+            elif self.endianness is None or self.endianness == Endianness.BIG:
                 e = 'big'
             else:
                 e = 'little'
