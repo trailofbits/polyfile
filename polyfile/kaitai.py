@@ -45,16 +45,21 @@ class AST:
         else:
             return self.offset - self.parent.offset
 
-    def __bytes__(self):
+    def to_bytes(self, endianness='big'):
         ret = bytearray()
         for c in self._children:
             if isinstance(c, bytes):
                 ret.extend(c)
             elif isinstance(c, int):
-                ret.append(c)
+                ret.extend(int.to_bytes((self.obj.bit_length() + 7) // 8, endianness))
+            elif hasattr(c, 'to_bytes'):
+                ret.extend(c.to_bytes(endianness=endianness))
             else:
                 ret.extend(bytes(c))
         return bytes(ret)
+
+    def __bytes__(self):
+        return self.to_bytes()
 
     def __contains__(self, key):
         try:
@@ -258,9 +263,11 @@ class Integer(AST):
         self._offset = offset
         self._length = length
 
-    def __bytes__(self):
-        return self.obj.to_bytes((self.obj.bit_length() + 7) // 8, 'big')
+    def to_bytes(self, endianness='big'):
+        return self.obj.to_bytes((self.obj.bit_length() + 7) // 8, endianness)
 
+    def __bytes__(self):
+        return self.to_bytes()
 
 class IntegerTypes(PyEnum):
     U1 = ('u1', 8, False, Endianness.NONE, 0, 255, KaitaiStream.read_u1)
@@ -379,9 +386,7 @@ class SwitchedType:
         self.switch_on = expressions.parse(raw_yaml['switch-on'])
         self.cases = []
         for k, v in raw_yaml['cases'].items():
-            if isinstance(k, int):
-                self.cases.append((str(k), v))
-            elif k == '_':
+            if k == '_':
                 self.cases.append(None, v)
             else:
                 self.cases.append((k, v))
@@ -389,13 +394,18 @@ class SwitchedType:
 
     def parse(self, stream: KaitaiStream, context: AST) -> AST:
         default_case = None
+        if self.parent.to_bytes(self.switch_on.interpret(context), force_endianness='big') == b'TU':
+            breakpoint()
         switch_on_value = self.parent.to_bytes(self.switch_on.interpret(context))
         for case, typename in self.cases:
             if case is None:
                 default_case = typename
                 continue
-            case_value = expressions.parse(str(case)).interpret(context)
-            case_value = self.parent.to_bytes(case_value, force_endianness='big')
+            if isinstance(case, int):
+                case_value = self.parent.to_bytes(case)
+            else:
+                case_value = expressions.parse(case).interpret(context)
+                case_value = self.parent.to_bytes(case_value)
             if switch_on_value == case_value:
                 return self.parent.get_type(typename).parse(stream, context)
         if default_case is not None:
@@ -687,15 +697,15 @@ class Type:
             self.types[eid] = Enum({v: self.to_bytes(k) for k, v in raw_enum.items()}, uid=eid, parent=self)
 
     def to_bytes(self, v, force_endianness: str = None):
+        if force_endianness is not None:
+            e = force_endianness
+        elif self.endianness is None or self.endianness == Endianness.BIG:
+            e = 'big'
+        else:
+            e = 'little'
         if isinstance(v, int) or isinstance(v, expressions.IntegerToken):
             if isinstance(v, expressions.IntegerToken):
                 v = v.value
-            if force_endianness is not None:
-                e = force_endianness
-            elif self.endianness is None or self.endianness == Endianness.BIG:
-                e = 'big'
-            else:
-                e = 'little'
             return v.to_bytes((v.bit_length() + 7) // 8, e)
         elif isinstance(v, str):
             if self.encoding is None:
@@ -705,7 +715,7 @@ class Type:
         elif isinstance(v, bytes):
             return v
         elif isinstance(v, AST):
-            return bytes(v)
+            return v.to_bytes(e)
         else:
             raise RuntimeError(f"No support for converting {v!r} to bytes")
 
