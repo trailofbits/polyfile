@@ -2,6 +2,7 @@ import zipfile
 
 from .fileutils import Tempfile
 from . import kaitai
+from .kaitaimatcher import ast_to_matches
 from .polyfile import InvalidMatch, Match, submatcher
 
 
@@ -17,7 +18,7 @@ class ZipFile(Match):
             raise InvalidMatch()
         if ast is None:
             raise InvalidMatch()
-        yield from kaitai.ast_to_matches(ast, parent=self)
+        yield from ast_to_matches(ast, parent=self)
         file_stream.seek(old_pos)
         try:
             with zipfile.ZipFile(file_stream) as zf:

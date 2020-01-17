@@ -239,6 +239,50 @@ class AST:
         return len(self._children)
 
 
+class IOWrapper:
+    def __init__(self, io: KaitaiStream):
+        self.io: KaitaiStream = io
+
+    def __getitem__(self, key):
+        if key == 'eof':
+            return self.io.is_eof()
+        else:
+            raise NotImplementedError(f"TODO: Implement _io.{key}")
+
+
+class ASTWithIO:
+    def __init__(self, ast: AST, io: KaitaiStream):
+        self._ast = ast
+        self._io = io
+
+    def __getitem__(self, key):
+        if key == '_io':
+            return IOWrapper(self._io)
+        else:
+            return self._ast[key]
+
+    def __contains__(self, key):
+        if key == '_io':
+            return True
+        else:
+            return key in self._ast
+
+    def __bytes__(self):
+        return bytes(self._ast)
+
+    def __getattr__(self, key):
+        return getattr(self._ast, key)
+
+    def __str__(self):
+        return str(self._ast)
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}(ast={self._ast!r}, io={self._io!r})"
+
+    def __len__(self):
+        return len(self._ast)
+
+
 class RawBytes(AST):
     def __init__(self, raw_bytes, offset, parent: AST=None):
         super().__init__(raw_bytes, parent)
@@ -268,6 +312,7 @@ class Integer(AST):
 
     def __bytes__(self):
         return self.to_bytes()
+
 
 class IntegerTypes(PyEnum):
     U1 = ('u1', 8, False, Endianness.NONE, 0, 255, KaitaiStream.read_u1)
@@ -394,8 +439,6 @@ class SwitchedType:
 
     def parse(self, stream: KaitaiStream, context: AST) -> AST:
         default_case = None
-        if self.parent.to_bytes(self.switch_on.interpret(context), force_endianness='big') == b'TU':
-            breakpoint()
         switch_on_value = self.parent.to_bytes(self.switch_on.interpret(context))
         for case, typename in self.cases:
             if case is None:
@@ -439,7 +482,8 @@ class Enum:
         # TODO: Make sure parsed is in this enum
         value = self.parent.to_bytes(to_int(parsed, self.parent.endianness))
         if value not in self.values.values() and not (value != '\x00' and b'' in self.values.values()):
-            raise ValueError(f"{value} is not in enumeration {self.uid}: {self.values}")
+            log.warn(f"{value} is not in enumeration {self.uid}: {self.values}")
+            #raise ValueError(f"{value} is not in enumeration {self.uid}: {self.values}")
         return parsed
 
 
@@ -597,10 +641,11 @@ class Attribute:
         return self._type
 
     def parse(self, stream: KaitaiStream, context: AST=None) -> AST:
+        ast = AST(self, parent=context)
+        context = ASTWithIO(context, stream)
         if self.if_expr is not None:
             if not self.if_expr.interpret(context):
                 return None
-        ast = AST(self, parent=context)
         if self.repeat == Repeat.EOS:
             while not stream.is_eof():
                 ast.add_child(self.type.parse(stream, ast))
@@ -714,7 +759,7 @@ class Type:
                 return v.encode(self.encoding)
         elif isinstance(v, bytes):
             return v
-        elif isinstance(v, AST):
+        elif hasattr(v, 'to_bytes'):
             return v.to_bytes(e)
         else:
             raise RuntimeError(f"No support for converting {v!r} to bytes")
