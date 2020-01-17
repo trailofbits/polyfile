@@ -382,6 +382,27 @@ def get_primitive_type(type_name: str, endianness: Endianness=None):
     raise KeyError(f'Unknown type "{type_name}"')
 
 
+def truncate_stream(stream: KaitaiStream, num_bytes: int) -> KaitaiStream:
+    class TruncatedStream:
+        def __init__(self):
+            self._end_byte = None
+
+        def __enter__(self):
+            self._end_byte = stream.pos() + num_bytes
+            return self
+
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            pass
+
+        def is_eof(self):
+            return stream.is_eof() or stream.pos() >= self._end_byte
+
+        def __getattr__(self, key):
+            return getattr(stream, key)
+
+    return TruncatedStream()
+
+
 class Expression:
     def __init__(self, expr):
         self.expr = expressions.parse(expr)
@@ -504,6 +525,8 @@ class ByteArray:
             self.size = None
         elif isinstance(size, int):
             self.size = Expression(str(size))
+        elif isinstance(size, Expression):
+            self.size = size
         else:
             self.size = Expression(size)
         self.size_eos = size_eos
@@ -590,6 +613,8 @@ class Attribute:
         self._encoding = raw_yaml.get('encoding', None)
         self.enum = raw_yaml.get('enum', None)
         self.size = raw_yaml.get('size', None)
+        if self.size is not None and isinstance(self.size, str):
+            self.size = Expression(self.size)
         self.size_eos = raw_yaml.get('size-eos', False)
         self.terminator = raw_yaml.get('terminator', None)
 
@@ -662,6 +687,10 @@ class Attribute:
                 ast.add_child(self.type.parse(stream, ast))
                 if self.repeat_until.interpret(context):
                     break
+        elif self.size is not None:
+            num_bytes = to_int(self.size.interpret(context))
+            with truncate_stream(stream, num_bytes) as s:
+                ast.add_child(self.type.parse(s, ast))
         else:
             ast.add_child(self.type.parse(stream, ast))
         return ast
@@ -812,6 +841,8 @@ class Type:
     def parse(self, stream: KaitaiStream, context: AST=None) -> AST:
         ast = AST(self, parent=context)
         for attr in self.seq:
+            if attr.uid == 'extra':
+                breakpoint()
             ast.add_child(attr.parse(stream, ast))
         return ast
 
