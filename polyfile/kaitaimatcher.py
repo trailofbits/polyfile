@@ -34,6 +34,7 @@ for kaitai_def, trid_def in KAITAI_TRID_MAPPING.items():
             try:
                 ast = kaitai.parse_stream(kaitai_def, file_stream)
             except Exception as e:
+                raise e
                 raise InvalidMatch()
             if ast is None:
                 raise InvalidMatch()

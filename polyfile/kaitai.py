@@ -128,8 +128,8 @@ class AST:
         elif key == '_root':
             return self.root
 
-        elif key == 'size':
-            return len(self.children)
+        #elif key == 'size':
+        #    return len(self.children)
 
         elif isinstance(self.obj, Attribute):
             try:
@@ -168,7 +168,7 @@ class AST:
         if self._offset is None:
             if self._children:
                 self._offset = self._children[0].offset
-            elif self.parent is not None:
+            elif self.parent is not None and self.parent._offset is not None and self.parent._length is not None:
                 self._offset = self.parent.offset + self.parent.length
             else:
                 self._offset = 0
@@ -441,7 +441,7 @@ class ByteMatch:
         offset = stream.pos()
         c = stream.read_bytes(len(self.contents))
         if c != self.contents:
-            print(context.root.to_dict())
+            print(str(context.root.to_dict()).replace("'", '"').replace("b\"", '"').replace('\\', '\\\\'))
             raise RuntimeError(f"File offset {offset}: Expected {self.contents!r} but instead got {c!r}")
         return RawBytes(c, offset)
 
@@ -475,6 +475,7 @@ class SwitchedType:
         if default_case is not None:
             return self.parent.get_type(default_case).parse(stream, context)
         else:
+            log.warn(f"Attribute {self.parent.uid} does not contain a case for {switch_on_value}")
             return ByteArray(
                 size=self.parent.size,
                 size_eos=self.parent.size,
@@ -540,22 +541,25 @@ class ByteArray:
 
     def parse(self, stream: KaitaiStream, context: AST) -> RawBytes:
         offset = stream.pos()
-        ret = bytearray()
         if self.size is None:
             size = None
         else:
-            size = to_int(self.size.interpret(context), endianness=self.parent.endianness)
-        while self.size is None or not self._size_met(ret, size):
-            try:
-                b = stream.read_bytes(1)
-            except EOFError:
-                if self.size_eos:
+            size = to_int(self.size.interpret(context))#, endianness=self.parent.endianness)
+        if size is not None and self.terminator is None:
+            ret = stream.read_bytes(size)
+        else:
+            ret = bytearray()
+            while self.size is None or not self._size_met(ret, size):
+                try:
+                    b = stream.read_bytes(1)
+                except EOFError:
+                    if self.size_eos:
+                        break
+                    else:
+                        raise RuntimeError("Unexpected end of stream")
+                ret.extend(b)
+                if self.terminator is not None and b == self.terminator:
                     break
-                else:
-                    raise RuntimeError("Unexpected end of stream")
-            ret.extend(b)
-            if self.terminator is not None and b == self.terminator:
-                break
         return RawBytes(bytes(ret), offset)
 
 
@@ -574,9 +578,12 @@ class String(ByteArray):
         return self._decoded_length(parsed) >= size
 
     def parse(self, *args, **kwargs) -> RawBytes:
-        ret = super().parse(*args, **kwargs)
+        ret: AST = super().parse(*args, **kwargs)
         # make sure the parsed bytes decode properly:
-        ret.obj.decode(self.encoding)
+        try:
+            ret.obj.decode(self.encoding)
+        except UnicodeDecodeError:
+            log.warn(f"\"{ret.obj}\" at file offset {ret.offset} is not a valid {self.encoding} string")
         return ret
 
 
@@ -688,7 +695,10 @@ class Attribute:
                 if self.repeat_until.interpret(context):
                     break
         elif self.size is not None:
-            num_bytes = to_int(self.size.interpret(context))
+            if hasattr(self.size, 'interpret'):
+                num_bytes = to_int(self.size.interpret(context))
+            else:
+                num_bytes = to_int(self.size)
             with truncate_stream(stream, num_bytes) as s:
                 ast.add_child(self.type.parse(s, ast))
         else:
@@ -841,8 +851,6 @@ class Type:
     def parse(self, stream: KaitaiStream, context: AST=None) -> AST:
         ast = AST(self, parent=context)
         for attr in self.seq:
-            if attr.uid == 'extra':
-                breakpoint()
             ast.add_child(attr.parse(stream, ast))
         return ast
 
