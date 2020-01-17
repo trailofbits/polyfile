@@ -128,9 +128,6 @@ class AST:
         elif key == '_root':
             return self.root
 
-        #elif key == 'size':
-        #    return len(self.children)
-
         elif isinstance(self.obj, Attribute):
             try:
                 t = self.obj.parent.get_type(key)
@@ -160,6 +157,9 @@ class AST:
         for a in self.ancestors:
             if hasattr(a.obj, 'uid') and a.obj.uid == key:
                 return a
+
+        if key == 'size':
+            return len(self.children)
 
         raise KeyError(key)
 
@@ -507,6 +507,12 @@ class Enum:
             log.warn(f"{value} is not in enumeration {self.uid}: {self.values}")
             #raise ValueError(f"{value} is not in enumeration {self.uid}: {self.values}")
         return parsed
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}(mapping={self.values!r}, uid={self.uid!r}, parent={self.parent!r}, type_binding={self.binding!r})"
+
+    def __str__(self):
+        return f"Enum<{self.uid}>({self.values!r})"
 
 
 def to_int(int_like, endianness=Endianness.BIG) -> int:
