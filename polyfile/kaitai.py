@@ -25,6 +25,18 @@ class Endianness(PyEnum):
 PRIMITIVE_TYPES_BY_NAME = {}
 
 
+def to_dict_key(obj):
+    if not hasattr(obj, 'uid'):
+        if hasattr(obj, 'parent'):
+            return f"{to_dict_key(obj.parent)}::{obj!s}"
+        else:
+            return obj
+    if not hasattr(obj, 'parent') or obj.parent is None:
+        return obj.uid
+    else:
+        return f"{to_dict_key(obj.parent)}::{obj.uid}"
+
+
 class AST:
     def __init__(self, obj, parent=None):
         self.obj = obj
@@ -223,13 +235,11 @@ class AST:
             return self.parent.root
 
     def to_dict(self):
-        if not hasattr(self.obj, 'uid'):
-            return self.obj
-        elif len(self.children) == 1:
-            return {self.obj.uid: self.children[0].to_dict()}
+        if len(self.children) == 1:
+            return {to_dict_key(self.obj): self.children[0].to_dict()}
         else:
             return {
-                self.obj.uid: [c.to_dict() for c in self.children]
+                to_dict_key(self.obj): [c.to_dict() for c in self.children]
             }
 
     def __str__(self):
@@ -385,22 +395,28 @@ def get_primitive_type(type_name: str, endianness: Endianness=None):
 def truncate_stream(stream: KaitaiStream, num_bytes: int) -> KaitaiStream:
     class TruncatedStream:
         def __init__(self):
-            self._end_byte = None
-
-        def __enter__(self):
             self._end_byte = stream.pos() + num_bytes
-            return self
 
-        def __exit__(self, exc_type, exc_val, exc_tb):
+        def read(self, n=None):
+            if n is None:
+                n = max(0, self._end_byte - stream.pos())
+            if stream.pos() + n > self._end_byte:
+                return b''
+            return stream.read_bytes(n)
+
+        def close(self):
             pass
 
-        def is_eof(self):
-            return stream.is_eof() or stream.pos() >= self._end_byte
+        def tell(self):
+            return stream.pos()
 
         def __getattr__(self, key):
             return getattr(stream, key)
 
-    return TruncatedStream()
+    ret = KaitaiStream(TruncatedStream())
+    ret.bits = stream.bits
+    ret.bits_left = stream.bits_left
+    return ret
 
 
 class Expression:
@@ -706,6 +722,7 @@ class Attribute:
             else:
                 num_bytes = to_int(self.size)
             with truncate_stream(stream, num_bytes) as s:
+                log.debug(f"Truncated stream to {num_bytes} bytes")
                 ast.add_child(self.type.parse(s, ast))
         else:
             ast.add_child(self.type.parse(stream, ast))
