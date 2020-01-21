@@ -173,6 +173,7 @@ types:
         type: vlq_base128_le
       - id: name_len
         type: vlq_base128_le
+        #type: u4
         if: id == payload_type::custom_payload
       - id: name
         size: name_len
@@ -347,7 +348,7 @@ types:
         - id: raw
           type: u1
           repeat: expr
-          repeat-expr: _parent.header.payload_len.value
+          repeat-expr: _parent.header.payload_len.value - _parent.header.name_len.value - 1
 
 #####################################################################################################
 
