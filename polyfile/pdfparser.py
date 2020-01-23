@@ -857,6 +857,8 @@ class cPDFParseDictionary:
     def ParseDictionary(self, tokens):
         state = 0 # start
         dictionary = ParsedDictionary()
+        string_match = 0
+        array_match = 0
         while tokens != []:
             if state == 0:
                 if self.isOpenDictionary(tokens[0]):
@@ -889,26 +891,37 @@ class cPDFParseDictionary:
                     pass
                 elif value == [] and tokens[0][1] == '[':
                     value.append(tokens[0])
-                elif value != [] and value[0] == '[' and tokens[0][1] != ']':
+                    array_match += 1
+                elif value != [] and value[0][1] == '[' and tokens[0][1] != ']':
                     value.append(tokens[0])
-                elif value != [] and value[0] == '[' and tokens[0][1] == ']':
+                    if tokens[0][1] == '[':
+                        array_match += 1
+                elif value != [] and value[0][1] == '[' and tokens[0][1] == ']':
+                    array_match -= 1
                     value.append(tokens[0])
-                    dictionary.append(key, value)
-                    value = []
-                    state = 1
+                    if array_match == 0:
+                        dictionary.append(key, value)
+                        value = []
+                        state = 1
                 elif value == [] and tokens[0][1] == '(':
                     value.append(tokens[0])
-                elif value != [] and value[0] == '(' and tokens[0][1] != ')':
+                    string_match += 1
+                elif value != [] and value[0][1] == '(' and tokens[0][1] != ')':
                     if tokens[0][1][0] == '%':
                         tokens = [tokens[0]] + cPDFTokenizer(StringIO(tokens[0][1][1:])).Tokens() + tokens[1:]
                         value.append('%')
                     else:
                         value.append(tokens[0])
-                elif value != [] and value[0] == '(' and tokens[0][1] == ')':
+
+                    if tokens[0][1] == '(':
+                        string_match += 1
+                elif value != [] and value[0][1] == '(' and tokens[0][1] == ')':
+                    string_match -= 1
                     value.append(tokens[0])
-                    dictionary.append(key, value)
-                    value = []
-                    state = 1
+                    if string_match == 0:
+                        dictionary.append(key, value)
+                        value = []
+                        state = 1
                 elif value != [] and tokens[0][1][0] == '/':
                     dictionary.append(key, value)
                     # Removed by Evan; we want to retain the raw key
