@@ -18,19 +18,24 @@ as _The ALAN Parsers Project_.
 
 ## Quickstart
 
-In the same directory as this README, run:
+You can install the latest stable version of PolyFile from PyPI:
+```
+pip3 install polyfile
+```
+
+To install PolyFile from source, in the same directory as this README, run:
 ```
 pip3 install -e .
 ```
 
-This will automatically install the `polyfile` executable in your path.
+This will automatically install the `polyfile` and `polymerge` executables in your path.
 
 ## Usage
 
 ```
 usage: polyfile [-h] [--filetype FILETYPE] [--list] [--html HTML]
-                [--try-all-offsets] [--debug] [--quiet] [--version]
-                [-dumpversion]
+                [--try-all-offsets] [--only-match] [--debug] [--quiet]
+                [--version] [-dumpversion]
                 [FILE]
 
 A utility to recursively map the structure of a file.
@@ -51,6 +56,8 @@ optional arguments:
   --try-all-offsets, -a
                         Search for a file match at every possible offset; this
                         can be very slow for larger files
+  --only-match, -m      Do not attempt to parse known filetypes; only match
+                        against file magic
   --debug, -d           Print debug information
   --quiet, -q           Suppress all log output (overrides --debug)
   --version, -v         Print PolyFile's version information to STDERR
@@ -87,6 +94,64 @@ curl -v --silent https://www.sultanik.com/files/ESultanikResume.pdf | polyfile -
 ## Output Format
 
 PolyFile outputs its mapping in an extension of the [SBuD](https://github.com/corkami/sbud) JSON format described [in the documentation](docs/json_format.md).
+
+## Merging Output From PolyTracker
+
+[PolyTracker](https://github.com/trailofbits/polytracker) is PolyFile’s sister utility for automatically instrumenting
+a parser to track the input byte offsets operated on by each function. The output of both tools can be merged to
+automatically label the semantic purpose of the functions in a parser. For example, given an instrumented black-box
+binary, we can quickly determine which functions in the program are responsible for parsing which parts of the input
+file format’s grammar. This is an area of active research intended to achieve fully automated grammar extraction from a
+parser.
+
+A separate utility called `polymerge` is installed with PolyFile specifically designed to merge the output of both
+tools.
+
+```
+usage: polymerge [-h] [--cfg CFG] [--cfg-pdf CFG_PDF] [--debug] [--quiet]
+                 [--version] [-dumpversion]
+                 POLYFILE_JSON POLYTRACKER_JSON
+
+A utility to merge the JSON output of `polyfile`
+with a polytracker.json file from PolyTracker.
+
+https://github.com/trailofbits/polyfile/
+https://github.com/trailofbits/polytracker/
+
+positional arguments:
+  POLYFILE_JSON
+  POLYTRACKER_JSON
+
+optional arguments:
+  -h, --help            show this help message and exit
+  --cfg CFG, -c CFG     Optional path to output a Graphviz .dot file representing the control flow graph of the program trace
+  --cfg-pdf CFG_PDF, -p CFG_PDF
+                        Similar to --cfg, but renders the graph to a PDF instead of outputting the .dot source
+  --debug, -d           Print debug information
+  --quiet, -q           Suppress all log output (overrides --debug)
+  --version, -v         Print PolyMerge's version information and exit
+  -dumpversion          Print PolyMerge's raw version information and exit
+```
+
+The output of `polymerge` is the same as [PolyFile’s output format](docs/json_format.md), augmented with the following:
+1. For each semantic label in the hierarchy, a list of…
+    1. …functions that operated on bytes tainted with that label; and
+    2. …functions whose control flow was influenced by bytes tainted with that label.
+2. For each type within the semantic hierarchy, a list of functions that are “most specialized” in processing that type.
+   This process is described in the next section.
+
+`polymerge` can also optionally emit a Graphviz `.dot` file or rendered PDF of the runtime control-flow graph recorded
+by PolyTracker. 
+
+### Identifying Function Specializations 
+
+As mentioned above, `polymerge` attempts to match each semantic type of the input file to a set of functions that are
+“most specialized” in operating on that type. This is an active area of academic research  and is likely to change in
+the future, but here is the current method employed by `polymerge`:
+1. For each semantic type in the input file, collect the functions that operated on bytes from that type;
+2. For each function, calculate the Shannon entropy of the different types on which that function operated;
+3. Sort the functions by entropy, and select the functions in the smallest standard deviation; and
+4. Keep the functions that are shallowest in the dominator tree of the runtime control-flow graph.
 
 ## Current Status and Known Deficiencies
 * The instrumented Kaitai Struct parser generator implementation has only been tested on the JPEG/JFIF grammar;

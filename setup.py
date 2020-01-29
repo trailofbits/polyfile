@@ -20,15 +20,19 @@ setup(
     packages=find_packages(),
     python_requires='>=3.6',
     install_requires=[
+        'graphviz',
+        'intervaltree',
         'jinja2',
         'kaitaistruct>=0.7',
+        'networkx',
         'Pillow>=5.0.0',
         'pyyaml>=3.13',
         'setuptools'
     ],
     entry_points={
         'console_scripts': [
-            'polyfile = polyfile.__main__:main'
+            'polyfile = polyfile.__main__:main',
+            'polymerge = polymerge.__main__:main'
         ]
     },
     package_data={'polyfile': ['defs.json.gz', os.path.join('templates', '*')]},
