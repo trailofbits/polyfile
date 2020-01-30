@@ -120,60 +120,87 @@ class AST:
         if self.parent is not None:
             self.parent.last_parsed = ast
 
+    def get_member(self, key):
+        log.debug(f"{self.obj!s}.get_member({key!r})")
+
+        with log.debug_nesting():
+            if key == 'size':
+                return len(self.children)
+
+            elif isinstance(self.obj, Attribute):
+                try:
+                    t = self.obj.parent.get_type(key)
+                    if isinstance(t, Instance):
+                        # TODO: Change `None` to a stream object once we plumb in support for instance io and pos
+                        return t.parse(None, self)
+                except KeyError:
+                    pass
+
+            elif isinstance(self.obj, Type):
+                try:
+                    t = self.obj.get_type(key)
+                    if isinstance(t, Instance):
+                        # TODO: Change `None` to a stream object once we plumb in support for instance io and pos
+                        return t.parse(None, self)
+                except KeyError:
+                    pass
+
+            for c in self.children:
+                if hasattr(c.obj, 'uid') and c.obj.uid == key:
+                    return c
+                for grandchild in c.children:
+                    if hasattr(grandchild.obj, 'uid') and grandchild.obj.uid == key:
+                        return grandchild
+
+            raise KeyError(key)
+
     def __getitem__(self, key):
-        if hasattr(self.obj, 'uid') and self.obj.uid == key:
-            return self
+        log.debug(f"{self.obj!s}[{key!r}]")
+        with log.debug_nesting():
+            if isinstance(key, int) and 0 <= key < len(self.children):
+                # Assume this is an index lookup
+                return self.children[key]
 
-        elif isinstance(key, int) and 0 <= key < len(self.children):
-            # Assume this is an index lookup
-            return self.children[key]
+            elif hasattr(self.obj, 'uid') and self.obj.uid == key:
+                return self
 
-        elif key == '_':
-            return self.last_parsed
+            elif key == '_':
+                return self.last_parsed
 
-        elif key == '_parent':
-            if self.parent is None:
-                return None
-            else:
-                return self.parent
+            elif key == '_parent':
+                if self.parent is None:
+                    return None
+                else:
+                    return self.parent.parent
 
-        elif key == '_root':
-            return self.root
+            elif key == '_root':
+                return self.root
 
-        elif isinstance(self.obj, Attribute):
-            try:
-                t = self.obj.parent.get_type(key)
-                if isinstance(t, Enum):
-                    return t
-                elif isinstance(t, Instance):
-                    # TODO: Change `None` to a stream object once we plumb in support for instance io and pos
-                    return t.parse(None, self)
-            except KeyError:
-                pass
+            elif isinstance(self.obj, Attribute):
+                try:
+                    t = self.obj.parent.get_type(key)
+                    if isinstance(t, Enum):
+                        return t
+                except KeyError:
+                    pass
 
-        elif isinstance(self.obj, Type):
-            try:
-                t = self.obj.get_type(key)
-                if isinstance(t, Enum):
-                    return t
-                elif isinstance(t, Instance):
-                    # TODO: Change `None` to a stream object once we plumb in support for instance io and pos
-                    return t.parse(None, self)
-            except KeyError:
-                pass
+            elif isinstance(self.obj, Type):
+                try:
+                    t = self.obj.get_type(key)
+                    if isinstance(t, Enum):
+                        return t
+                except KeyError:
+                    pass
 
-        for d in self.descendants:
-            if hasattr(d.obj, 'uid') and d.obj.uid == key:
-                return d
+            for d in self.descendants:
+                if hasattr(d.obj, 'uid') and d.obj.uid == key:
+                    return d
 
-        for a in self.ancestors:
-            if hasattr(a.obj, 'uid') and a.obj.uid == key:
-                return a
+            for a in self.ancestors:
+                if hasattr(a.obj, 'uid') and a.obj.uid == key:
+                    return a
 
-        if key == 'size':
-            return len(self.children)
-
-        raise KeyError(key)
+            raise KeyError(key)
 
     @property
     def offset(self):
@@ -245,6 +272,9 @@ class AST:
     def __str__(self):
         return f"AST({self.to_dict()!s})"
 
+    def __repr__(self):
+        return f"{self.__class__.__name__}(obj={self.obj})"
+
     def __len__(self):
         return len(self._children)
 
@@ -252,6 +282,9 @@ class AST:
 class IOWrapper:
     def __init__(self, io: KaitaiStream):
         self.io: KaitaiStream = io
+
+    def get_member(self, key):
+        return self[key]
 
     def __getitem__(self, key):
         if key == 'eof':
@@ -714,6 +747,7 @@ class Attribute:
         elif self.repeat == Repeat.UNTIL:
             while True:
                 ast.add_child(self.type.parse(stream, ast))
+                ast.last_parsed = ast.children[-1]
                 if self.repeat_until.interpret(context):
                     break
         elif self.size is not None:
@@ -869,7 +903,7 @@ class Type:
         elif allow_primitive:
             return get_primitive_type(type_name, self.endianness)
         else:
-            KeyError(type_name)
+            KeyError(f"Unknown type {type_name} at {self.uid}")
 
     def parse(self, stream: KaitaiStream, context: AST=None) -> AST:
         ast = AST(self, parent=context)

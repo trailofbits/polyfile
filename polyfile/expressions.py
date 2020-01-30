@@ -32,7 +32,7 @@ def to_int(v, byteorder='big') -> int:
 
 
 def member_access(a, b):
-    return a[b.name]
+    return a.get_member(b.name)
 
 
 def resolve_and_apply(operator):
@@ -41,6 +41,7 @@ def resolve_and_apply(operator):
         try:
             int_a = to_int(a)
             int_b = to_int(b)
+            log.debug(f"{int_a} {operator!r} {int_b}")
             try:
                 return operator(int_a, int_b)
             except ValueError as e:
@@ -180,11 +181,17 @@ class OperatorToken(Token):
     def __repr__(self):
         return f"{self.__class__.__name__}(op={self.op!r})"
 
+    def __str__(self):
+        return self._raw
+
 
 class IdentifierToken(Token):
     def __init__(self, name):
         super().__init__(name)
         self.name = name
+
+    def __str__(self):
+        return self.name
 
 
 class IntegerToken(Token):
@@ -197,6 +204,9 @@ class IntegerToken(Token):
 
     def __repr__(self):
         return f"{self.__class__.__name__}(raw_str={self.raw_token!r}, value={self.value!r})"
+
+    def __str__(self):
+        return str(self.value)
 
 
 class Tokenizer:
@@ -397,7 +407,7 @@ class Expression:
                                 args.append(v)
                             if isinstance(args[-1], Exception):
                                 exception = args[-1]
-                    log.debug(f"Arguments: {args!s}")
+                    log.debug(f"Arguments: [{', '.join(map(str, args))}]")
                     # are any of the arguments exceptions? if so, skip executing the operator and
                     # propagate the exception, instead:
                     if exception is not None and t.op != Operator.TERNARY_ELSE:
@@ -409,7 +419,10 @@ class Expression:
                             try:
                                 values = values[:-t.op.arity] + [t.op.execute(*args)]
                             except KeyError:
-                                values = values[:-t.op.arity] + [KeyError(f"{values[-2]!s}[{values[-1]}]")]
+                                if t.op == Operator.GETITEM:
+                                    values = values[:-t.op.arity] + [KeyError(f"{values[-2]!s}[{values[-1]}]")]
+                                else:
+                                    values = values[:-t.op.arity] + [KeyError(f"{values[-2]!s}.{values[-1]}")]
                             except Exception as e:
                                 values = values[:-t.op.arity] + [e]
                         else:
@@ -418,7 +431,7 @@ class Expression:
                             # We need to expand the result here.
                             # We can't pre-expand the arguments because that would break short circuit evaluation
                             values[-1] = self.get_value(values[-1], assignments)
-                    log.debug(f"Operator Result: {values[-1]!s}")
+                    log.debug(f"Operator Result: {values[-1]!r}")
                 else:
                     values.append(t)
             if len(values) != 1:
