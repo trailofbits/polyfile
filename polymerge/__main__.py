@@ -21,8 +21,7 @@ with a polytracker.json file from PolyTracker.
 https://github.com/trailofbits/polyfile/
 https://github.com/trailofbits/polytracker/
 ''', formatter_class=RawTextHelpFormatter)
-    parser.add_argument('POLYFILE_JSON', type=argparse.FileType('r'), help='')
-    parser.add_argument('POLYTRACKER_JSON', type=argparse.FileType('r'), help='')
+    parser.add_argument('FILES', type=argparse.FileType('r'), nargs='+', help='Path to the PolyFile JSON output and/or the PolyTracker JSON output. Merging will only occur if both files are provided. The `--cfg` and `--type-hierarchy` options can be used if only a single file is provided, but no merging will occur.')
     parser.add_argument('--cfg', '-c', type=str, default=None, help='Optional path to output a Graphviz .dot file representing the control flow graph of the program trace')
     parser.add_argument('--cfg-pdf', '-p', type=str, default=None, help='Similar to --cfg, but renders the graph to a PDF instead of outputting the .dot source')
     parser.add_argument('--type-hierarchy', '-t', type=str, default=None, help='Optional path to output a Graphviz .dot file representing the type hierarchy extracted from PolyFile')
@@ -52,13 +51,47 @@ https://github.com/trailofbits/polytracker/
     else:
         logger.setLevel(logger.STATUS)
 
-    polyfile_json = json.load(args.POLYFILE_JSON)
-    args.POLYFILE_JSON.close()
-    program_trace = polytracker.parse(json.load(args.POLYTRACKER_JSON))
-    args.POLYTRACKER_JSON.close()
-    merged = merge(polyfile_json, program_trace)
-    print(json.dumps(merged))
-    if args.cfg is not None or args.cfg_pdf is not None:
+    build_cfg = args.cfg is not None or args.cfg_pdf is not None
+    built_type_hierarchy = args.type_hierarchy is not None or args.type_hierarchy_pdf is not None
+
+    if len(args.FILES) == 1:
+        if build_cfg and built_type_hierarchy:
+            parser.print_help()
+            sys.stderr.write('\n')
+            log.critical("Error: Two input files (PolyFile, PolyTracker) are required when both `--cfg` and `--type-hierarchy` options are enabled.")
+            parser.exit()
+        elif build_cfg:
+            polyfile_json_file = None
+            polytracker_json_file = args.FILES[0]
+        elif built_type_hierarchy:
+            polyfile_json_file = args.FILES[0]
+            polytracker_json_file = None
+        else:
+            return 0
+    elif len(args.FILES) != 2:
+            parser.print_help()
+            sys.stderr.write('\n')
+            log.critical("Error: Expected at most two input files")
+            parser.exit()
+    else:
+        polyfile_json_file = args.FILES[0]
+        polytracker_json_file = args.FILES[1]
+
+    if polyfile_json_file is not None:
+        polyfile_json = json.load(polyfile_json_file)
+        polyfile_json_file.close()
+    else:
+        polyfile_json = None
+    if polytracker_json_file is not None:
+        program_trace = polytracker.parse(json.load(polytracker_json_file))
+        polytracker_json_file.close()
+    else:
+        program_trace = None
+    if polyfile_json is not None and program_trace is not None:
+        merged = merge(polyfile_json, program_trace)
+        print(json.dumps(merged))
+
+    if build_cfg:
         log.status("Reconstructing the runtime control flow graph...")
         cfg = program_trace.cfg
         dot = cfg.to_dot()#(merged_json_obj=merged)
@@ -74,7 +107,8 @@ https://github.com/trailofbits/polytracker/
             if rendered_path != args.cfg_pdf:
                 shutil.move(rendered_path, args.cfg_pdf)
             log.info(f"Saved CFG graph PDF to {args.cfg_pdf}")
-    if args.type_hierarchy is not None or args.type_hierarchy_pdf is not None:
+
+    if built_type_hierarchy:
         log.status("Building the input file type hierarchy...")
         type_dominators: cfg.DAG = polyfile_type_graph(polyfile_json).dominator_forest
         dot = type_dominators.to_dot()
