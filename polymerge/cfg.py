@@ -93,7 +93,7 @@ class CFG(DiGraph):
         super().__init__()
         self.trace: polytracker.ProgramTrace = trace
 
-    def to_dot(self, merged_json_obj=None, only_labeled_functions=False) -> graphviz.Digraph:
+    def to_dot(self, merged_json_obj=None, only_labeled_functions=False, labeler=None) -> graphviz.Digraph:
         if merged_json_obj is not None:
             function_labels = {
                 func_name: ', '.join(['::'.join(label) for label in labels])
@@ -102,10 +102,12 @@ class CFG(DiGraph):
         else:
             function_labels = {}
 
-        def labeler(f):
-            if f.name in function_labels:
+        def func_labeler(f):
+            if labeler is not None:
+                return labeler(f)
+            elif f.name in function_labels:
                 return f"{f.name} ({function_labels[f.name]})"
             else:
                 return f.name
 
-        return super().to_dot(comment='PolyTracker Program Trace', labeler=labeler)
+        return super().to_dot(comment='PolyTracker Program Trace', labeler=func_labeler)

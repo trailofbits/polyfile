@@ -6,6 +6,11 @@ import sys
 
 from argparse import RawTextHelpFormatter
 
+try:
+    import cxxfilt
+except ModuleNotFoundError:
+    cxxfilt = None
+
 from polyfile import logger, version
 
 from .polymerge import merge, polyfile_type_graph
@@ -24,6 +29,7 @@ https://github.com/trailofbits/polytracker/
     parser.add_argument('FILES', type=argparse.FileType('r'), nargs='+', help='Path to the PolyFile JSON output and/or the PolyTracker JSON output. Merging will only occur if both files are provided. The `--cfg` and `--type-hierarchy` options can be used if only a single file is provided, but no merging will occur.')
     parser.add_argument('--cfg', '-c', type=str, default=None, help='Optional path to output a Graphviz .dot file representing the control flow graph of the program trace')
     parser.add_argument('--cfg-pdf', '-p', type=str, default=None, help='Similar to --cfg, but renders the graph to a PDF instead of outputting the .dot source')
+    parser.add_argument('--demangle', action='store_true', help='Demangle C++ function names in the CFG (requires that PolyFile was installed with the `demangle` option, or that the `cxxfilt` Python module is installed.)')
     parser.add_argument('--type-hierarchy', '-t', type=str, default=None, help='Optional path to output a Graphviz .dot file representing the type hierarchy extracted from PolyFile')
     parser.add_argument('--type-hierarchy-pdf', '-y', type=str, default=None, help='Similar to --type-hierarchy, but renders the graph to a PDF instead of outputting the .dot source')
     parser.add_argument('--debug', '-d', action='store_true', help='Print debug information')
@@ -77,6 +83,10 @@ https://github.com/trailofbits/polytracker/
         polyfile_json_file = args.FILES[0]
         polytracker_json_file = args.FILES[1]
 
+    if build_cfg and args.demangle and cxxfilt is None:
+        log.critical("Error: The `cxxfilt` package is not installed. Either reinstall PolyFile with the `demangle` option enabled, or run `pip3 install cxxfilt`.")
+        parser.exit()
+
     if polyfile_json_file is not None:
         polyfile_json = json.load(polyfile_json_file)
         polyfile_json_file.close()
@@ -94,7 +104,17 @@ https://github.com/trailofbits/polytracker/
     if build_cfg:
         log.status("Reconstructing the runtime control flow graph...")
         cfg = program_trace.cfg
-        dot = cfg.to_dot()#(merged_json_obj=merged)
+
+        def labeler(f):
+            if args.demangle:
+                funcname = f.name
+                if funcname.startswith('dfs$'):
+                    funcname = funcname[4:]
+                return cxxfilt.demangle(funcname)
+            else:
+                return f.name
+
+        dot = cfg.to_dot(labeler=labeler)#(merged_json_obj=merged)
         log.clear_status()
         if args.cfg is not None:
             with open(args.cfg, 'w') as cfg_file:
