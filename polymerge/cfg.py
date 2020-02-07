@@ -37,6 +37,12 @@ class DiGraph(nx.DiGraph):
     def depth(self, node):
         return min(self.path_length(root, node) for root in self.roots)
 
+    def ancestors(self, node) -> set:
+        return nx.ancestors(self, node)
+
+    def descendants(self, node) -> frozenset:
+        return frozenset(nx.dfs_successors(self, node).keys())
+
     @property
     def dominator_forest(self):
         if self._dominator_forest is not None:

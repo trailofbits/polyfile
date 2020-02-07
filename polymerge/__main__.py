@@ -27,6 +27,9 @@ def parse_dataflow_ranges(dataflow):
     dataflow_from_start = None
     dataflow_to_end = None
 
+    if dataflow is None:
+        return dataflow_from_start, dataflow_to_end, dataflow_ranges
+
     for dataflow_range in dataflow:
         parts = dataflow_range.split(':')
         if len(parts) > 2:
@@ -95,7 +98,8 @@ https://github.com/trailofbits/polytracker/
     parser.add_argument('FILES', type=argparse.FileType('r'), nargs='+', help='Path to the PolyFile JSON output and/or the PolyTracker JSON output. Merging will only occur if both files are provided. The `--cfg` and `--type-hierarchy` options can be used if only a single file is provided, but no merging will occur.')
     parser.add_argument('--cfg', '-c', type=str, default=None, help='Optional path to output a Graphviz .dot file representing the control flow graph of the program trace')
     parser.add_argument('--cfg-pdf', '-p', type=str, default=None, help='Similar to --cfg, but renders the graph to a PDF instead of outputting the .dot source')
-    parser.add_argument('--dataflow', type=str, nargs='*', help='For the CFG generation options, only render functions that operated on the given byte offsets. `--dataflow 10` means that only functions operating on byte 10 should be included. `--dataflow 10:30` means that only functions operating on bytes 10 through 29 should be included. The beginning or end of a range can be omitted and will default to the beginning and end of the file, respectively. Multiple `--dataflow` ranges can be specified. `--dataflow :` will render the CFG only with functions that operated on tainted bytes. Omitting `--dataflow` will produce a CFG containing all functions.')
+    parser.add_argument('--dataflow', type=str, nargs='*', help='For the CFG generation options, only render functions that participated in dataflow. `--dataflow 10` means that only functions in the dataflow related to byte 10 should be included. `--dataflow 10:30` means that only functions operating on bytes 10 through 29 should be included. The beginning or end of a range can be omitted and will default to the beginning and end of the file, respectively. Multiple `--dataflow` ranges can be specified. `--dataflow :` will render the CFG only with functions that operated on tainted bytes. Omitting `--dataflow` will produce a CFG containing all functions.')
+    parser.add_argument('--no-intermediate-functions', action='store_true', help='To be used in conjunction with `--dataflow`. If enabled, only functions in the dataflow graph if they operated on the tainted bytes. This can result in a disjoint dataflow graph.')
     parser.add_argument('--demangle', action='store_true', help='Demangle C++ function names in the CFG (requires that PolyFile was installed with the `demangle` option, or that the `cxxfilt` Python module is installed.)')
     parser.add_argument('--type-hierarchy', '-t', type=str, default=None, help='Optional path to output a Graphviz .dot file representing the type hierarchy extracted from PolyFile')
     parser.add_argument('--type-hierarchy-pdf', '-y', type=str, default=None, help='Similar to --type-hierarchy, but renders the graph to a PDF instead of outputting the .dot source')
@@ -190,14 +194,36 @@ https://github.com/trailofbits/polytracker/
                 return f.name
 
         if dataflow_from_start is not None or dataflow_to_end is not None or dataflow_ranges is not None:
-            def node_filter(f: polytracker.FunctionInfo):
+            dataflow_functions = set()
+            for f in program_trace.functions.values():
+                check_more = False
                 for offsets in f.input_bytes.values():
                     for offset in offsets:
                         if (dataflow_to_end is not None and offset >= dataflow_to_end) \
                                 or (dataflow_from_start is not None and offset < dataflow_from_start) \
                                 or (dataflow_ranges is not None and dataflow_ranges[offset]):
-                            return True
-                return False
+                            dataflow_functions.add(f)
+                            break
+                    else:
+                        check_more = True
+                    if not check_more:
+                        break
+                else:
+                    log.debug(f"Function {f!r} did not operate on any tainted bytes")
+            if not args.no_intermediate_functions:
+                # add all functions that have both an ancestor and descendant
+                # in the dominator tree that's also in in dataflow_functions
+                doms = program_trace.cfg.dominator_forest
+                orig_functions = frozenset(dataflow_functions)
+                for f in program_trace.functions.values():
+                    if f in orig_functions:
+                        continue
+                    if doms.ancestors(f).intersection(orig_functions) \
+                            and doms.descendants(f).intersection(orig_functions):
+                        log.debug(f"Adding intermediate function {f.name} to the dataflow graph")
+                        dataflow_functions.add(f)
+
+            node_filter = lambda func: func in dataflow_functions
         else:
             node_filter = None
 
