@@ -29,6 +29,9 @@ setup(
         'pyyaml>=3.13',
         'setuptools'
     ],
+    extras_require={
+        'demangle': ['cxxfilt'],
+    },
     entry_points={
         'console_scripts': [
             'polyfile = polyfile.__main__:main',
