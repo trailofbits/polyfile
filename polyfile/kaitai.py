@@ -123,34 +123,35 @@ class AST:
     def get_member(self, key):
         log.debug(f"{self.obj!s}.get_member({key!r})")
 
+        obj_type: Type = self.obj
+        ast_type: AST = self
+        if isinstance(self.obj, Attribute):
+            obj_type = self.obj.type
+            while ast_type is not None:
+
+                if ast_type.obj != obj_type:
+                    ast_type = ast_type.parent
+
         with log.debug_nesting():
             if key == 'size':
                 return len(self.children)
 
-            elif isinstance(self.obj, Attribute):
-                try:
-                    t = self.obj.parent.get_type(key)
-                    if isinstance(t, Instance):
-                        # TODO: Change `None` to a stream object once we plumb in support for instance io and pos
-                        return t.parse(None, self)
-                except KeyError:
-                    pass
+            elif key == 'compressed_size':
+                breakpoint()
 
-            elif isinstance(self.obj, Type):
-                try:
-                    t = self.obj.get_type(key)
-                    if isinstance(t, Instance):
-                        # TODO: Change `None` to a stream object once we plumb in support for instance io and pos
-                        return t.parse(None, self)
-                except KeyError:
-                    pass
+            try:
+                t = obj_type.get_type(key)
+                if isinstance(t, Instance):
+                    # TODO: Change `None` to a stream object once we plumb in support for instance io and pos
+                    return t.parse(None, ast_type)
+            except KeyError:
+                pass
 
             for c in self.children:
                 if hasattr(c.obj, 'uid') and c.obj.uid == key:
                     return c
-                for grandchild in c.children:
-                    if hasattr(grandchild.obj, 'uid') and grandchild.obj.uid == key:
-                        return grandchild
+                elif isinstance(c.obj, Attribute) and hasattr(c.obj.parent, 'uid') and c.obj.parent.uid == key:
+                    return c
 
             raise KeyError(key)
 
