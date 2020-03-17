@@ -5,6 +5,7 @@ import shutil
 import sys
 
 from argparse import RawTextHelpFormatter
+from functools import reduce
 
 try:
     import cxxfilt
@@ -103,6 +104,7 @@ https://github.com/trailofbits/polytracker/
     parser.add_argument('--demangle', action='store_true', help='Demangle C++ function names in the CFG (requires that PolyFile was installed with the `demangle` option, or that the `cxxfilt` Python module is installed.)')
     parser.add_argument('--type-hierarchy', '-t', type=str, default=None, help='Optional path to output a Graphviz .dot file representing the type hierarchy extracted from PolyFile')
     parser.add_argument('--type-hierarchy-pdf', '-y', type=str, default=None, help='Similar to --type-hierarchy, but renders the graph to a PDF instead of outputting the .dot source')
+    parser.add_argument('--diff', type=argparse.FileType('r'), nargs='*', help='Diff an arbitrary number of input polytracker.json files, all treated as the same class, against one or more polytracker.json provided after `--diff` arguments')
     parser.add_argument('--debug', '-d', action='store_true', help='Print debug information')
     parser.add_argument('--quiet', '-q', action='store_true', help='Suppress all log output (overrides --debug)')
     parser.add_argument('--version', '-v',
@@ -131,13 +133,44 @@ https://github.com/trailofbits/polytracker/
     build_cfg = args.cfg is not None or args.cfg_pdf is not None
     built_type_hierarchy = args.type_hierarchy is not None or args.type_hierarchy_pdf is not None
 
+    if len(args.diff) > 0:
+        input_program_traces = [polytracker.parse(json.load(diff_file)) for diff_file in args.FILES]
+        program_traces_to_diff = [polytracker.parse(json.load(diff_file)) for diff_file in args.diff]
+
+        def labeler(funcname):
+            if args.demangle:
+                if funcname.startswith('dfs$'):
+                    funcname = funcname[4:]
+                return cxxfilt.demangle(funcname)
+            else:
+                return funcname
+
+        first_funcs = None
+        for f in input_program_traces:
+            fnames = set(labeler(fname) for fname in f.functions.keys())
+            if first_funcs is None:
+                first_funcs = fnames
+            else:
+                first_funcs &= fnames
+
+        second_funcs = None
+        for f in input_program_traces:
+            fnames = set(labeler(fname) for fname in f.functions.keys())
+            if second_funcs is None:
+                second_funcs = fnames
+            else:
+                second_funcs &= fnames
+
+        print('\n'.join(second_funcs ^ first_funcs))
+        exit(0)
+
     if len(args.FILES) == 1:
         if build_cfg and built_type_hierarchy:
             parser.print_help()
             sys.stderr.write('\n')
             log.critical("Error: Two input files (PolyFile, PolyTracker) are required when both `--cfg` and `--type-hierarchy` options are enabled.")
             parser.exit()
-        elif build_cfg:
+        elif build_cfg or diff_polytracker:
             polyfile_json_file = None
             polytracker_json_file = args.FILES[0]
         elif built_type_hierarchy:
@@ -146,10 +179,10 @@ https://github.com/trailofbits/polytracker/
         else:
             return 0
     elif len(args.FILES) != 2:
-            parser.print_help()
-            sys.stderr.write('\n')
-            log.critical("Error: Expected at most two input files")
-            parser.exit()
+        parser.print_help()
+        sys.stderr.write('\n')
+        log.critical("Error: Expected at most two input files")
+        parser.exit()
     else:
         polyfile_json_file = args.FILES[0]
         polytracker_json_file = args.FILES[1]
@@ -176,6 +209,7 @@ https://github.com/trailofbits/polytracker/
         polytracker_json_file.close()
     else:
         program_trace = None
+
     if polyfile_json is not None and program_trace is not None:
         merged = merge(polyfile_json, program_trace)
         print(json.dumps(merged))
