@@ -211,10 +211,11 @@ def parse_object(file_stream, object, matcher: Matcher, parent=None):
                                 decoded = zlib.decompress(raw_content)
                                 yield Submatch(
                                     "FlateEncoded",
-                                    decoded,
+                                    raw_content,
                                     relative_offset=0,
                                     length=len(raw_content),
-                                    parent=streamcontent
+                                    parent=streamcontent,
+                                    decoded=decoded
                                 )
                             except zlib.error:
                                 log.warn(f"DEFLATE decoding error at near offset {streamcontent.offset}")

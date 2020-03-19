@@ -94,6 +94,26 @@ def generate(file_path, sbud):
         if mime_type is None:
             mime_type = 'application/octet-stream'
 
+        def _decoded_matches(m=None):
+            if m is None:
+                return
+            if 'decoded' in m:
+                decoded = ''
+                for b in base64.b64decode(m['decoded']).replace(b'\r\n', b'<br />') \
+                        .replace(b'\n', b'<br />').replace(b'\r', b'\u23ce'):
+                    try:
+                        decoded += bytes([b]).decode('utf-8')
+                    except UnicodeDecodeError:
+                        decoded += f"\\x{int(b)}"
+                yield m, decoded
+            if 'subEls' in m:
+                for a in m['subEls']:
+                    yield from _decoded_matches(a)
+
+        def decoded_matches():
+            for m in matches:
+                yield from _decoded_matches(m)
+
         return TEMPLATE.render(
             filename=os.path.split(file_path)[-1],
             encoded=sbud['b64contents'],
@@ -102,7 +122,8 @@ def generate(file_path, sbud):
             input_bytes=input_bytes,
             math=math,
             read_unicode=ReadUnicode(),
-            mime_type=mime_type
+            mime_type=mime_type,
+            decoded_matches=decoded_matches
         )
 
 

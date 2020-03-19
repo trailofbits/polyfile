@@ -1,3 +1,4 @@
+import base64
 from json import dumps
 
 from .fileutils import FileStream
@@ -34,7 +35,8 @@ class Match:
                  parent=None,
                  matcher=None,
                  display_name=None,
-                 img_data=None):
+                 img_data=None,
+                 decoded=None):
         if parent is not None:
             if not isinstance(parent, Match):
                 raise ValueError("The parent must be an instance of a Match")
@@ -51,6 +53,7 @@ class Match:
             self.display_name = display_name
         self.match = match_obj
         self.img_data = img_data
+        self.decoded = decoded
         self._offset = relative_offset
         self._length = length
         self._parent = parent
@@ -114,6 +117,8 @@ class Match:
         }
         if self.img_data is not None:
             ret['img_data'] = self.img_data
+        if self.decoded is not None:
+            ret['decoded'] = base64.b64encode(self.decoded).decode('utf-8')
         return ret
 
     def json(self):
