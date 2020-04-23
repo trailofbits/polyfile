@@ -1,4 +1,5 @@
 import base64
+import zlib
 
 from . import pdfparser
 from . import kaitai
@@ -119,6 +120,7 @@ def parse_object(file_stream, object, matcher: Matcher, parent=None):
     content_start = dict_offset + dict_length
     content_len = endobj.offset.offset - content_start - objid.offset.offset
     is_dct_decode = False
+    is_flate_decode = False
     if content_len > 0:
         content = Submatch(
             "PDFObjectContent",
@@ -132,6 +134,8 @@ def parse_object(file_stream, object, matcher: Matcher, parent=None):
         if oPDFParseDictionary.parsed is not None:
             is_dct_decode = '/Filter' in oPDFParseDictionary.parsed \
                 and oPDFParseDictionary.parsed['/Filter'].strip() == '/DCTDecode'
+            is_flate_decode = '/Filter' in oPDFParseDictionary.parsed \
+                and oPDFParseDictionary.parsed['/Filter'].strip() == '/FlateDecode'
             if '/Length' in oPDFParseDictionary.parsed:
                 try:
                     stream_len = int(oPDFParseDictionary.parsed['/Length'])
@@ -202,6 +206,19 @@ def parse_object(file_stream, object, matcher: Matcher, parent=None):
                                     yield from iterator
                                 except StopIteration:
                                     pass
+                        elif is_flate_decode:
+                            try:
+                                decoded = zlib.decompress(raw_content)
+                                yield Submatch(
+                                    "FlateEncoded",
+                                    raw_content,
+                                    relative_offset=0,
+                                    length=len(raw_content),
+                                    parent=streamcontent,
+                                    decoded=decoded
+                                )
+                            except zlib.error:
+                                log.warn(f"DEFLATE decoding error at near offset {streamcontent.offset}")
 
                         yield Submatch(
                            "EndStream",

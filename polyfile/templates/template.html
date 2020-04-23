@@ -31,15 +31,20 @@
 <span style="display:none;" id="clickinfo">Double-click to jump to an address</span>
 <br />
 
+{% macro render_match_name(match) -%}
+{{ match['name'] }}{% if match['decoded'] %}<br />
+[<a href="#decoded{{ match['uid'] }}">Decode</a>]{% endif %}{% if match['img_data'] %}
+        <span class="tree_custom">
+            <img src="{{ match['img_data'] }}" style="max-width: 8em;" />
+        </span>{% endif %}
+{%- endmacro %}
+
 {% macro render_match(match, first) -%}
 <li>
     {% if 'subEls' in match and match['subEls'] %}
     <input type="checkbox" {{'checked="checked" ' if first}}id="match{{ match['uid'] }}" />
     <label class="tree_label" for="match{{ match['uid'] }}" matchbyte="{{ match['offset'] }}" matchlength="{{ match['size'] }}">
-        {{ match['name'] }}{% if match['img_data'] %}
-        <span class="tree_custom">
-            <img src="{{ match['img_data'] }}" style="max-width: 8em;" />
-        </span>{% endif %}
+        {{ render_match_name(match) }}
     </label>
     <ul>
         {% for child in match['subEls'] %}
@@ -48,10 +53,7 @@
     </ul>
     {% else %}
     <span class="tree_label" matchbyte="{{ match['offset'] }}" matchlength="{{ match['size'] }}">
-        {{ match['name'] }}{% if match['img_data'] %}
-        <span class="tree_custom">
-            <img src="{{ match['img_data'] }}" style="max-width: 8em;" />
-        </span>{% endif %}
+        {{ render_match_name(match) }}
     </span>
     {% endif %}
 </li>
@@ -93,6 +95,16 @@
         <div class="readablebytes"></div>
     </div>
 </div>
+
+{% for match, decoded in decoded_matches() %}
+<div id="decoded{{ match['uid'] }}" class="overlay">
+    <div class="popup">
+        <h2>Decoded {{ match['name'] }}</h2>
+		<a class="close" href="#">&times;</a>
+        <div class="content rawdump">{{ decoded|safe }}</div>
+    </div>
+</div>
+{% endfor %}
 
 {#
 <div class="rawdump">
