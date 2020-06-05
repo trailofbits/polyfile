@@ -3,6 +3,7 @@ import zlib
 
 from . import pdfparser
 from . import kaitai
+from .fileutils import Tempfile
 from .kaitaimatcher import ast_to_matches
 from .logger import getStatusLogger
 from .polyfile import Match, Matcher, Submatch, submatcher
@@ -156,10 +157,12 @@ def parse_object(file_stream, object, matcher: Matcher, parent=None):
             if raw_content.startswith(b'\n'):
                 streamtoken += b'\n'
                 raw_content = raw_content[1:]
-                if raw_content.endswith(b'\n'):
+                if raw_content.endswith(b'\n') or raw_content.endswith(b'\r'):
                     endtoken = b'endstream'
                     if raw_content.endswith(b'\r\n'):
                         endtoken += b'\r\n'
+                    elif raw_content.endswith(b'\r'):
+                        endtoken += b'\r'
                     else:
                         endtoken += b'\n'
                     if raw_content.endswith(endtoken):
@@ -209,7 +212,7 @@ def parse_object(file_stream, object, matcher: Matcher, parent=None):
                         elif is_flate_decode:
                             try:
                                 decoded = zlib.decompress(raw_content)
-                                yield Submatch(
+                                flate_encoded = Submatch(
                                     "FlateEncoded",
                                     raw_content,
                                     relative_offset=0,
@@ -217,8 +220,15 @@ def parse_object(file_stream, object, matcher: Matcher, parent=None):
                                     parent=streamcontent,
                                     decoded=decoded
                                 )
+                                yield flate_encoded
+                                # recursively match against the deflated contents
+                                with Tempfile(raw_content) as f:
+                                    yield from matcher.match(f, parent=flate_encoded)
                             except zlib.error:
                                 log.warn(f"DEFLATE decoding error at near offset {streamcontent.offset}")
+                        else:
+                            with Tempfile(raw_content) as f:
+                                yield from matcher.match(f, parent=streamcontent)
 
                         yield Submatch(
                            "EndStream",
