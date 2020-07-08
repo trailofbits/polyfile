@@ -27,6 +27,8 @@ def main(argv=None):
                         help='Path to write an interactive HTML file for exploring the PDF')
     parser.add_argument('--try-all-offsets', '-a', action='store_true', help='Search for a file match at every possible offset; this can be very slow for larger files')
     parser.add_argument('--only-match', '-m', action='store_true', help='Do not attempt to parse known filetypes; only match against file magic')
+    parser.add_argument('--require-match', action='store_true', help='If no matches are found, exit with code 127')
+    parser.add_argument('--max-matches', type=int, default=None, help='Stop scanning after having found this many matches')
     parser.add_argument('--debug', '-d', action='store_true', help='Print debug information')
     parser.add_argument('--quiet', '-q', action='store_true', help='Suppress all log output (overrides --debug)')
     parser.add_argument('--version', '-v', action='store_true', help='Print PolyFile\'s version information to STDERR')
@@ -102,20 +104,27 @@ def main(argv=None):
 
     with PathOrStdin(args.FILE) as file_path:
         matches = []
-        matcher = polyfile.Matcher(args.try_all_offsets, submatch=not args.only_match)
-        for match in matcher.match(file_path, progress_callback=progress_callback, trid_defs=trid_defs):
-            if hasattr(match.match, 'filetype'):
-                filetype = match.match.filetype
-            else:
-                filetype = match.name
-            if match.parent is None:
-                log.info(f"Found a file of type {filetype} at byte offset {match.offset}")
-                matches.append(match)
-            elif isinstance(match, polyfile.Submatch):
-                log.info(f"Found a subregion of type {filetype} at byte offset {match.offset}")
-            else:
-                log.info(f"Found an embedded file of type {filetype} at byte offset {match.offset}")
+        if args.max_matches is None or args.max_matches > 0:
+            matcher = polyfile.Matcher(args.try_all_offsets, submatch=not args.only_match)
+            for match in matcher.match(file_path, progress_callback=progress_callback, trid_defs=trid_defs):
+                if hasattr(match.match, 'filetype'):
+                    filetype = match.match.filetype
+                else:
+                    filetype = match.name
+                if match.parent is None:
+                    log.info(f"Found a file of type {filetype} at byte offset {match.offset}")
+                    matches.append(match)
+                    if args.max_matches is not None and len(matches) >= args.max_matches:
+                        log.info(f"Found { args.max_matches } matches; stopping early")
+                        break
+                elif isinstance(match, polyfile.Submatch):
+                    log.info(f"Found a subregion of type {filetype} at byte offset {match.offset}")
+                else:
+                    log.info(f"Found an embedded file of type {filetype} at byte offset {match.offset}")
         sys.stderr.flush()
+        if args.require_match and not matches:
+            log.info("No matches found, exiting")
+            exit(127)
         md5 = hashlib.md5()
         sha1 = hashlib.sha1()
         sha256 = hashlib.sha256()
