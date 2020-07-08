@@ -4,6 +4,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 import sys
 
 from . import html
@@ -20,7 +21,7 @@ log = logger.getStatusLogger("polyfile")
 def main(argv=None):
     parser = argparse.ArgumentParser(description='A utility to recursively map the structure of a file.')
     parser.add_argument('FILE', nargs='?', default='-', help='The file to analyze; pass \'-\' or omit to read from STDIN')
-    parser.add_argument('--filetype', '-f', action='append', help='Explicitly match against the given filetype (default is to match against all filetypes)')
+    parser.add_argument('--filetype', '-f', action='append', help='Explicitly match against the given filetype or filetype wildcard (default is to match against all filetypes)')
     parser.add_argument('--list', '-l', action='store_true', help='list the supported filetypes (for the `--filetype` argument) and exit')
     parser.add_argument('--html', '-t', type=argparse.FileType('wb'), required=False,
                         help='Path to write an interactive HTML file for exploring the PDF')
@@ -89,7 +90,13 @@ def main(argv=None):
 
     if args.filetype:
         trid.load()
-        trid_defs = [d for d in trid.DEFS if d.name[:-len('.trid.xml')] in args.filetype]
+        regex = r'|'.join(fr"({ f.replace('*', '.*').replace('?', '.?') })" for f in args.filetype)
+        matcher = re.compile(regex)
+        trid_defs = [d for d in trid.DEFS if matcher.fullmatch(d.name[:-len('.trid.xml')])]
+        if not trid_defs:
+            log.error(f"Filetype argument(s) { args.filetype } did not match any known definitions!")
+            exit(1)
+        log.info(f"Only matching against these types: {[d.name[:-len('.trid.xml')] for d in trid_defs ]}")
     else:
         trid_defs = None
 
