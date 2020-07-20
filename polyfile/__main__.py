@@ -104,24 +104,39 @@ def main(argv=None):
 
     with PathOrStdin(args.FILE) as file_path:
         matches = []
-        if args.max_matches is None or args.max_matches > 0:
-            matcher = polyfile.Matcher(args.try_all_offsets, submatch=not args.only_match)
-            for match in matcher.match(file_path, progress_callback=progress_callback, trid_defs=trid_defs):
-                if hasattr(match.match, 'filetype'):
-                    filetype = match.match.filetype
-                else:
-                    filetype = match.name
-                if match.parent is None:
-                    log.info(f"Found a file of type {filetype} at byte offset {match.offset}")
-                    matches.append(match)
-                    if args.max_matches is not None and len(matches) >= args.max_matches:
-                        log.info(f"Found { args.max_matches } matches; stopping early")
+        try:
+            if args.max_matches is None or args.max_matches > 0:
+                matcher = polyfile.Matcher(args.try_all_offsets, submatch=not args.only_match)
+                for match in matcher.match(file_path, progress_callback=progress_callback, trid_defs=trid_defs):
+                    if hasattr(match.match, 'filetype'):
+                        filetype = match.match.filetype
+                    else:
+                        filetype = match.name
+                    if match.parent is None:
+                        log.info(f"Found a file of type {filetype} at byte offset {match.offset}")
+                        matches.append(match)
+                        if args.max_matches is not None and len(matches) >= args.max_matches:
+                            log.info(f"Found { args.max_matches } matches; stopping early")
+                            break
+                    elif isinstance(match, polyfile.Submatch):
+                        log.info(f"Found a subregion of type {filetype} at byte offset {match.offset}")
+                    else:
+                        log.info(f"Found an embedded file of type {filetype} at byte offset {match.offset}")
+            sys.stderr.flush()
+        except KeyboardInterrupt:
+            try:
+                sys.stdout.flush()
+                sys.stderr.flush()
+                sys.stderr.write("\n\nCaught keyboard interrupt.\n")
+                while True:
+                    sys.stderr.write("Would you like PolyFile to output its current progress? [Yn] ")
+                    result = input()
+                    if not result or result.lower() == 'y':
                         break
-                elif isinstance(match, polyfile.Submatch):
-                    log.info(f"Found a subregion of type {filetype} at byte offset {match.offset}")
-                else:
-                    log.info(f"Found an embedded file of type {filetype} at byte offset {match.offset}")
-        sys.stderr.flush()
+                    elif result and result.lower() == 'n':
+                        sys.exit(0)
+            except KeyboardInterrupt:
+                sys.exit(1)
         if args.require_match and not matches:
             log.info("No matches found, exiting")
             exit(127)
