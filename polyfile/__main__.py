@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import re
+import signal
 import sys
 
 from . import html
@@ -16,6 +17,17 @@ from .fileutils import PathOrStdin
 
 
 log = logger.getStatusLogger("polyfile")
+
+
+class SIGTERMHandler:
+    def __init__(self):
+        self.terminated = False
+        signal.signal(signal.SIGTERM, self.sigterm_handler)
+
+    def sigterm_handler(self, signum, frame):
+        sys.stderr.flush()
+        sys.stderr.write('\n\nCaught SIGTERM. Exiting gracefully, and dumping partial results...\n')
+        self.terminated = True
 
 
 def main(argv=None):
@@ -102,26 +114,45 @@ def main(argv=None):
     else:
         trid_defs = None
 
+    sigterm_handler = SIGTERMHandler()
+
     with PathOrStdin(args.FILE) as file_path:
         matches = []
-        if args.max_matches is None or args.max_matches > 0:
-            matcher = polyfile.Matcher(args.try_all_offsets, submatch=not args.only_match)
-            for match in matcher.match(file_path, progress_callback=progress_callback, trid_defs=trid_defs):
-                if hasattr(match.match, 'filetype'):
-                    filetype = match.match.filetype
-                else:
-                    filetype = match.name
-                if match.parent is None:
-                    log.info(f"Found a file of type {filetype} at byte offset {match.offset}")
-                    matches.append(match)
-                    if args.max_matches is not None and len(matches) >= args.max_matches:
-                        log.info(f"Found { args.max_matches } matches; stopping early")
+        try:
+            if args.max_matches is None or args.max_matches > 0:
+                matcher = polyfile.Matcher(args.try_all_offsets, submatch=not args.only_match)
+                for match in matcher.match(file_path, progress_callback=progress_callback, trid_defs=trid_defs):
+                    if sigterm_handler.terminated:
                         break
-                elif isinstance(match, polyfile.Submatch):
-                    log.info(f"Found a subregion of type {filetype} at byte offset {match.offset}")
-                else:
-                    log.info(f"Found an embedded file of type {filetype} at byte offset {match.offset}")
-        sys.stderr.flush()
+                    if hasattr(match.match, 'filetype'):
+                        filetype = match.match.filetype
+                    else:
+                        filetype = match.name
+                    if match.parent is None:
+                        log.info(f"Found a file of type {filetype} at byte offset {match.offset}")
+                        matches.append(match)
+                        if args.max_matches is not None and len(matches) >= args.max_matches:
+                            log.info(f"Found { args.max_matches } matches; stopping early")
+                            break
+                    elif isinstance(match, polyfile.Submatch):
+                        log.info(f"Found a subregion of type {filetype} at byte offset {match.offset}")
+                    else:
+                        log.info(f"Found an embedded file of type {filetype} at byte offset {match.offset}")
+            sys.stderr.flush()
+        except KeyboardInterrupt:
+            try:
+                sys.stdout.flush()
+                sys.stderr.flush()
+                sys.stderr.write("\n\nCaught keyboard interrupt.\n")
+                while True:
+                    sys.stderr.write("Would you like PolyFile to output its current progress? [Yn] ")
+                    result = input()
+                    if not result or result.lower() == 'y':
+                        break
+                    elif result and result.lower() == 'n':
+                        sys.exit(0)
+            except KeyboardInterrupt:
+                sys.exit(128 + signal.SIGINT)
         if args.require_match and not matches:
             log.info("No matches found, exiting")
             exit(127)
@@ -161,6 +192,8 @@ def main(argv=None):
             log.info(f"Saved HTML output to {args.html.name}")
         if progress_callback is not None:
             log.clear_status()
+        if sigterm_handler.terminated:
+            sys.exit(128 + signal.SIGTERM)
 
 
 if __name__ == '__main__':
