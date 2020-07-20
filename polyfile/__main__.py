@@ -152,7 +152,7 @@ def main(argv=None):
                     elif result and result.lower() == 'n':
                         sys.exit(0)
             except KeyboardInterrupt:
-                sys.exit(1)
+                sys.exit(128 + signal.SIGINT)
         if args.require_match and not matches:
             log.info("No matches found, exiting")
             exit(127)
