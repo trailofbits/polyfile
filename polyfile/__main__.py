@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import re
+import signal
 import sys
 
 from . import html
@@ -16,6 +17,17 @@ from .fileutils import PathOrStdin
 
 
 log = logger.getStatusLogger("polyfile")
+
+
+class SIGTERMHandler:
+    def __init__(self):
+        self.terminated = False
+        signal.signal(signal.SIGTERM, self.sigterm_handler)
+
+    def sigterm_handler(self, signum, frame):
+        sys.stderr.flush()
+        sys.stderr.write('\n\nCaught SIGTERM. Exiting gracefully, and dumping partial results...\n')
+        self.terminated = True
 
 
 def main(argv=None):
@@ -102,12 +114,16 @@ def main(argv=None):
     else:
         trid_defs = None
 
+    sigterm_handler = SIGTERMHandler()
+
     with PathOrStdin(args.FILE) as file_path:
         matches = []
         try:
             if args.max_matches is None or args.max_matches > 0:
                 matcher = polyfile.Matcher(args.try_all_offsets, submatch=not args.only_match)
                 for match in matcher.match(file_path, progress_callback=progress_callback, trid_defs=trid_defs):
+                    if sigterm_handler.terminated:
+                        break
                     if hasattr(match.match, 'filetype'):
                         filetype = match.match.filetype
                     else:
@@ -176,6 +192,8 @@ def main(argv=None):
             log.info(f"Saved HTML output to {args.html.name}")
         if progress_callback is not None:
             log.clear_status()
+        if sigterm_handler.terminated:
+            sys.exit(128 + signal.SIGTERM)
 
 
 if __name__ == '__main__':
