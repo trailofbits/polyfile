@@ -305,6 +305,8 @@ class ByteMatch:
             self.contents = bytes(contents)
         elif isinstance(contents, list):
             self.contents = bytes(contents)
+        elif isinstance(contents, str):
+            self.contents = contents.encode("utf-8")
         else:
             raise RuntimeError(f"TODO: Implement support for `contents` of type {type(contents)}")
 
