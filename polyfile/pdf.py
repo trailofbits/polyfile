@@ -1,5 +1,6 @@
 import base64
 import zlib
+from typing import Dict, Iterator, List, Optional, Type
 
 from . import pdfparser
 from . import kaitai
@@ -65,6 +66,102 @@ def _emit_dict(parsed, parent, pdf_offset):
             )
 
 
+FILTERS_BY_NAME: Dict[str, Type["StreamFilter"]] = {}
+
+
+class StreamFilter:
+    name: str
+
+    def __init__(self, next_decoder: Optional["StreamFilter"] = None):
+        self.next_decoder: Optional[StreamFilter] = next_decoder
+
+    def __init_subclass__(cls, **kwargs):
+        FILTERS_BY_NAME[f"/{cls.name}Decode"] = cls
+
+    def decode(self, matcher: Matcher, raw_content: bytes, parent: Submatch) -> Iterator[Submatch]:
+        raise NotImplementedError()
+
+    def match(self, matcher: Matcher, raw_content: bytes, parent: Submatch) -> Iterator[Submatch]:
+        for submatch in self.decode(matcher, raw_content, parent):
+            yield submatch
+            if submatch.decoded is None:
+                if self.next_decoder is not None:
+                    log.warning(f"Expected submatch submatch {submatch!r} from decoded by {self.__class__.__name__} "
+                                "to have a `decoded` member, but it was `None`")
+                continue
+            if self.next_decoder is None:
+                # recursively match against the deflated contents
+                with Tempfile(submatch.decoded) as f:
+                    yield from matcher.match(f, parent=submatch)
+            else:
+                yield from self.next_decoder.match(matcher, submatch.decoded, submatch)
+
+
+class FlateDecoder(StreamFilter):
+    name = "Flate"
+
+    def decode(self, matcher: Matcher, raw_content: bytes, parent: Submatch) -> Iterator[Submatch]:
+        try:
+            decoded = zlib.decompress(raw_content)
+            yield Submatch(
+                f"{self.name}Encoded",
+                raw_content,
+                relative_offset=0,
+                length=len(raw_content),
+                parent=parent,
+                decoded=decoded
+            )
+        except zlib.error:
+            log.warn(f"DEFLATE decoding error near offset {parent.offset}")
+
+
+class DCTDecoder(StreamFilter):
+    name = "DCT"
+
+    def decode(self, matcher: Matcher, raw_content: bytes, parent: Submatch) -> Iterator[Submatch]:
+        if raw_content[:1] != b'\xff':
+            return
+        # This is most likely a JPEG image
+        try:
+            ast = kaitai.parse('jpeg', raw_content)
+        except Exception as e:
+            log.error(str(e))
+            ast = None
+        if ast is not None:
+            iterator = ast_to_matches(ast, parent=parent)
+            try:
+                jpeg_match = next(iterator)
+                jpeg_match.img_data = f"data:image/jpeg;base64,{base64.b64encode(raw_content).decode('utf-8')}"
+                yield jpeg_match
+                yield from iterator
+            except StopIteration:
+                pass
+
+
+class ASCIIHexDecoder(StreamFilter):
+    name = "ASCIIHex"
+
+    def decode(self, matcher: Matcher, raw_content: bytes, parent: Submatch) -> Iterator[Submatch]:
+        data = bytearray()
+        for byte_str in raw_content.replace(b"\n", b" ").split(b" "):
+            byte_str = byte_str.strip()
+            if byte_str.endswith(b">"):
+                byte_str = byte_str[:-1].strip()
+            try:
+                data.append(int(byte_str, 16))
+            except ValueError:
+                log.warning(f"Invalid byte string {byte_str!r} near offset {parent.offset}")
+                return
+        yield Submatch(
+            f"{self.name}Encoded",
+            raw_content,
+            relative_offset=0,
+            length=len(raw_content),
+            parent=parent,
+            decoded=bytes(data)
+        )
+
+
 def parse_object(file_stream, object, matcher: Matcher, parent=None):
     log.status('Parsing PDF obj %d %d' % (object.id, object.version))
     objtoken, objid, objversion, endobj = object.objtokens
@@ -120,8 +217,6 @@ def parse_object(file_stream, object, matcher: Matcher, parent=None):
     #log.debug('')
     content_start = dict_offset + dict_length
     content_len = endobj.offset.offset - content_start - objid.offset.offset
-    is_dct_decode = False
-    is_flate_decode = False
     if content_len > 0:
         content = Submatch(
             "PDFObjectContent",
@@ -132,11 +227,22 @@ def parse_object(file_stream, object, matcher: Matcher, parent=None):
         )
         yield content
         stream_len = None
+        filters: List[StreamFilter] = []
         if oPDFParseDictionary.parsed is not None:
-            is_dct_decode = '/Filter' in oPDFParseDictionary.parsed \
-                and oPDFParseDictionary.parsed['/Filter'].strip() == '/DCTDecode'
-            is_flate_decode = '/Filter' in oPDFParseDictionary.parsed \
-                and oPDFParseDictionary.parsed['/Filter'].strip() == '/FlateDecode'
+            if '/Filter' in oPDFParseDictionary.parsed:
+                filter_value = oPDFParseDictionary.parsed["/Filter"].strip()
+                if filter_value.startswith("[") and filter_value.endswith("]"):
+                   filter_value = str(filter_value[1:-1])
+                for filter in filter_value.split(" "):
+                    if len(filter.strip()) == 0:
+                        continue
+                    elif filter.strip() not in FILTERS_BY_NAME:
+                        log.warn(f"Unimplemented PDF filter: {filter.strip()}")
+                    else:
+                        new_filter = FILTERS_BY_NAME[filter.strip()]()
+                        if filters:
+                            filters[-1].next_decoder = new_filter
+                        filters.append(new_filter)
             if '/Length' in oPDFParseDictionary.parsed:
                 try:
                     stream_len = int(oPDFParseDictionary.parsed['/Length'])
@@ -185,51 +291,8 @@ def parse_object(file_stream, object, matcher: Matcher, parent=None):
                             parent=content
                         )
                         yield streamcontent
-                        # Temporarily disabled this until we figure out how to handle incorrect matches:
-                        # with file_stream.save_pos() as fs:
-                        #     with fs[streamcontent.offset:streamcontent.offset + streamcontent.length] as f:
-                        #         f.seek(0)
-                        #         yield from matcher.match(
-                        #             f,
-                        #             streamcontent
-                        #         )
-                        if is_dct_decode and raw_content[:1] == b'\xff':
-                            # This is most likely a JPEG image
-                            try:
-                                ast = kaitai.parse('jpeg', raw_content)
-                            except Exception as e:
-                                log.error(str(e))
-                                ast = None
-                            if ast is not None:
-                                iterator = ast_to_matches(ast, parent=streamcontent)
-                                try:
-                                    jpeg_match = next(iterator)
-                                    jpeg_match.img_data = f"data:image/jpeg;base64,{base64.b64encode(raw_content).decode('utf-8')}"
-                                    yield jpeg_match
-                                    yield from iterator
-                                except StopIteration:
-                                    pass
-                        elif is_flate_decode:
-                            try:
-                                decoded = zlib.decompress(raw_content)
-                                flate_encoded = Submatch(
-                                    "FlateEncoded",
-                                    raw_content,
-                                    relative_offset=0,
-                                    length=len(raw_content),
-                                    parent=streamcontent,
-                                    decoded=decoded
-                                )
-                                yield flate_encoded
-                                # recursively match against the deflated contents
-                                with Tempfile(raw_content) as f:
-                                    yield from matcher.match(f, parent=flate_encoded)
-                            except zlib.error:
-                                log.warn(f"DEFLATE decoding error at near offset {streamcontent.offset}")
-                        else:
-                            with Tempfile(raw_content) as f:
-                                yield from matcher.match(f, parent=streamcontent)
-
+                        if filters:
+                            yield from filters[0].match(matcher, raw_content, streamcontent)
                         yield Submatch(
                            "EndStream",
                             endtoken,
