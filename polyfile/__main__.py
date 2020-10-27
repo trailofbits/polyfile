@@ -135,7 +135,7 @@ def main(argv=None):
                             log.info(f"Found { args.max_matches } matches; stopping early")
                             break
                     elif isinstance(match, polyfile.Submatch):
-                        log.info(f"Found a subregion of type {filetype} at byte offset {match.offset}")
+                        log.debug(f"Found a subregion of type {filetype} at byte offset {match.offset}")
                     else:
                         log.info(f"Found an embedded file of type {filetype} at byte offset {match.offset}")
             sys.stderr.flush()
