@@ -3,6 +3,11 @@ import subprocess
 
 
 def git_branch():
+    """
+    Return the name of the current branch.
+
+    Args:
+    """
     try:
         branch = subprocess.check_output(
             ['git', 'symbolic-ref', '-q', 'HEAD'],
