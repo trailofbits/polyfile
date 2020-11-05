@@ -7,6 +7,13 @@ from .polyfile import InvalidMatch, Match, submatcher
 @submatcher('zip-vgm.trid.xml')
 class ZipFile(Match):
     def submatch(self, file_stream):
+        """
+        Submatch the submatch.
+
+        Args:
+            self: (todo): write your description
+            file_stream: (str): write your description
+        """
         try:
             with zipfile.ZipFile(file_stream) as zf:
                 for name in zf.namelist():

@@ -7,6 +7,15 @@ KAITAI_TRID_MAPPING = {
 
 
 def ast_to_matches(ast: kaitai.AST, parent: Match):
+    """
+    Convert a list of ast nodes.
+
+    Args:
+        ast: (todo): write your description
+        kaitai: (array): write your description
+        AST: (todo): write your description
+        parent: (todo): write your description
+    """
     stack = [(parent, ast)]
     while stack:
         parent, node = stack.pop()
@@ -31,6 +40,13 @@ for kaitai_def, trid_def in KAITAI_TRID_MAPPING.items():
     @submatcher(trid_def)
     class KaitaiMatcher(Match):
         def submatch(self, file_stream):
+            """
+            Parse the ast.
+
+            Args:
+                self: (todo): write your description
+                file_stream: (str): write your description
+            """
             try:
                 ast = kaitai.parse_stream(kaitai_def, file_stream)
             except Exception as e:

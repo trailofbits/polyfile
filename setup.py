@@ -5,6 +5,11 @@ VERSION_MODULE_PATH = os.path.join(os.path.realpath(os.path.dirname(__file__)), 
 
 
 def get_version_string():
+    """
+    Get the version string.
+
+    Args:
+    """
     version = {}
     with open(VERSION_MODULE_PATH) as f:
         exec(f.read(), version)
