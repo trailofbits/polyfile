@@ -6,7 +6,7 @@ KAITAI_TRID_MAPPING = {
 }
 
 
-def ast_to_matches(ast: kaitai.AST, parent: Match):
+def ast_to_matches(ast, parent: Match):
     stack = [(parent, ast)]
     while stack:
         parent, node = stack.pop()

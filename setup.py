@@ -6,7 +6,7 @@ from pathlib import Path
 from setuptools import setup, find_packages
 import subprocess
 import sys
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Tuple
 
 VERSION_MODULE_PATH = os.path.join(os.path.realpath(os.path.dirname(__file__)), "polyfile", "version.py")
 
@@ -55,7 +55,7 @@ except ModuleNotFoundError:
         return TQDM()
 
 
-ksy_manifest: Dict[str, List[Dict[str, str]]] = {}
+ksy_manifest: Dict[str, Dict[str, Any]] = {}
 
 with tqdm(leave=False, desc="Compiling the Kaitai Struct Format Library", total=num_files) as t:
     with concurrent.futures.ThreadPoolExecutor(max_workers=cpu_count()) as executor:
@@ -70,13 +70,18 @@ with tqdm(leave=False, desc="Compiling the Kaitai Struct Format Library", total=
             if relative_path in ksy_manifest:
                 raise ValueError(f"{relative_path} appears twice in the Kaitai format library!")
             try:
-                ksy_manifest[relative_path] = [
-                    {
-                        "class_name": class_name,
-                        "python_path": str(Path(python_path).relative_to(KAITAI_PARSERS_DIR))
-                    }
-                    for class_name, python_path in future.result()
-                ]
+                (first_spec_class_name, first_spec_python_path), *dependencies = future.result()
+                ksy_manifest[relative_path] = {
+                    "class_name": first_spec_class_name,
+                    "python_path": str(Path(first_spec_python_path).relative_to(KAITAI_PARSERS_DIR)),
+                    "dependencies": [
+                        {
+                            "class_name": class_name,
+                            "python_path": str(Path(python_path).relative_to(KAITAI_PARSERS_DIR))
+                        }
+                        for class_name, python_path in dependencies
+                    ]
+                }
                 t.write(f"Compiled {path.name}")
             except Exception as e:
                 t.write(f"Warning: Failed to compile {path}: {e}\n")

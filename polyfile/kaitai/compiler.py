@@ -12,7 +12,7 @@ import json
 from pathlib import Path
 import shutil
 import subprocess
-from typing import List, Union
+from typing import Iterable, List, Union
 
 
 KAITAI_COMPILER_NAME: str = "kaitai-struct-compiler"
@@ -27,18 +27,20 @@ def has_kaitai_compiler() -> bool:
 
 
 class CompiledKSY:
-    def __init__(self, class_name: str, python_path: Union[str, Path]):
+    def __init__(self, class_name: str, python_path: Union[str, Path], dependencies: Iterable["CompiledKSY"] = ()):
         self.class_name: str = class_name
         if not isinstance(python_path, Path):
             python_path = Path(python_path)
         self.python_path: Path = python_path
+        self.dependencies: List[CompiledKSY] = list(dependencies)
 
     def __repr__(self):
-        return f"{self.__class__.__name__}(class_name={self.class_name!r}, python_path={self.python_path!r})"
+        return f"{self.__class__.__name__}(class_name={self.class_name!r}, python_path={self.python_path!r}, "\
+               f"dependencies={self.dependencies!r})"
 
 
-def compile(ksy_path: Union[str, Path], output_directory: Union[str, Path]) -> List[CompiledKSY]:
-    """Returns the list of compiled KSYs"""
+def compile(ksy_path: Union[str, Path], output_directory: Union[str, Path]) -> CompiledKSY:
+    """Returns the list of compiled KSYs; the original spec being first, followed by its dependencies"""
     if not has_kaitai_compiler():
         raise KaitaiError(f"{KAITAI_COMPILER_NAME} not found! Please make sure it is in your PATH")
 
@@ -49,7 +51,7 @@ def compile(ksy_path: Union[str, Path], output_directory: Union[str, Path]) -> L
 
     cmd = [
         KAITAI_COMPILER_NAME, "--target", "python", "--outdir", str(output_directory), str(ksy_path),
-        "--debug", "--ksc-json-output", "-I", Path.cwd()
+        "--debug", "--ksc-json-output", "-I", Path.cwd(), "--python-package", "polyfile.kaitai.parsers"
     ]
 
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -64,13 +66,20 @@ def compile(ksy_path: Union[str, Path], output_directory: Union[str, Path]) -> L
     if "errors" in result[ksy_path] and result[ksy_path]["errors"]:
         raise KaitaiError(f"Error compiling {ksy_path}: {result[ksy_path]['errors'][0]['message']}")
 
-    return [
-        CompiledKSY(
-            class_name=compiled["topLevelName"],
-            python_path=output_directory / compiled["files"][0]["fileName"]
+    first_spec_name = result[ksy_path]["firstSpecName"]
+    first_spec = result[ksy_path]["output"]["python"][first_spec_name]
+    return CompiledKSY(
+        class_name=first_spec["topLevelName"],
+        python_path=output_directory / first_spec["files"][0]["fileName"],
+        dependencies=(
+            CompiledKSY(
+                class_name=compiled["topLevelName"],
+                python_path=output_directory / compiled["files"][0]["fileName"]
+            )
+            for spec_name, compiled in result[ksy_path]["output"]["python"].items()
+            if spec_name != first_spec_name
         )
-        for compiled in result[ksy_path]["output"]["python"].values()
-    ]
+    )
 
 
 if __name__ == "__main__":
@@ -84,8 +93,10 @@ if __name__ == "__main__":
     args = parser.parse_args(sys.argv[1:])
 
     try:
-        for compiled in compile(args.KSY_PATH, args.OUTPUT_DIRECTORY):
-            print(f"{compiled.class_name}\t{compiled.python_path}")
+        compiled = compile(args.KSY_PATH, args.OUTPUT_DIRECTORY)
+        print(f"{compiled.class_name}\t{compiled.python_path}")
+        for dep in compiled.dependencies:
+            print(f"{dep.class_name}\t{dep.python_path}")
     except KaitaiError as e:
         sys.stderr.write(f"{e!s}\n\n")
         sys.exit(1)
