@@ -2,7 +2,7 @@ import importlib.util
 import inspect
 import json
 from pathlib import Path
-from typing import Any, Dict, Optional, Set, Type
+from typing import Any, Dict, Optional, Set, Type, Union
 
 from .compiler import CompiledKSY
 
@@ -47,20 +47,38 @@ def import_spec(compiled: CompiledKSY) -> Optional[Type[KaitaiStruct]]:
     raise ImportError(f"Could not find parser class {compiled.class_name!r} in {compiled.python_path}")
 
 
-def get_parser(ksy_path: str) -> Type[KaitaiStruct]:
-    """Returns a parser for the given KSY file.
+class KaitaiInspector:
+    def __init__(self, struct: KaitaiStruct):
+        self.struct: KaitaiStruct = struct
 
-    The KSY file is specified as a relative path to the file within the Kaitai struct format library.
-    Examples:
 
-         "executable/dos_mz.ksy"
-         "image/jpeg.ksy"
-         "network/pcap.ksy"
+class KaitaiParser:
+    def __init__(self, struct_type: Type[KaitaiStruct]):
+        self.struct_type: Type[KaitaiStruct] = struct_type
 
-    """
-    if ksy_path not in _PARSERS_BY_KSY:
-        if ksy_path not in COMPILED_INFO_BY_KSY:
-            raise KeyError(ksy_path)
-        info = COMPILED_INFO_BY_KSY[ksy_path]
-        _PARSERS_BY_KSY[ksy_path] = import_spec(info)  # type: ignore
-    return _PARSERS_BY_KSY[ksy_path]
+    @staticmethod
+    def load(ksy_path: str) -> "KaitaiParser":
+        """Returns a parser for the given KSY file and input file.
+
+        The KSY file is specified as a relative path to the file within the Kaitai struct format library.
+        Examples:
+
+             "executable/dos_mz.ksy"
+             "image/jpeg.ksy"
+             "network/pcap.ksy"
+
+        """
+        if ksy_path not in _PARSERS_BY_KSY:
+            if ksy_path not in COMPILED_INFO_BY_KSY:
+                raise KeyError(ksy_path)
+            info = COMPILED_INFO_BY_KSY[ksy_path]
+            _PARSERS_BY_KSY[ksy_path] = import_spec(info)  # type: ignore
+        return KaitaiParser(_PARSERS_BY_KSY[ksy_path])
+
+    def parse(self, input_file_path: Union[str, Path]) -> KaitaiInspector:
+        if isinstance(input_file_path, Path):
+            input_file_path = str(input_file_path)
+
+        struct = self.struct_type.from_file(input_file_path)
+        struct._read()
+        return KaitaiInspector(struct)
