@@ -1,8 +1,12 @@
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from enum import Enum
 import importlib.util
 import inspect
+from io import BufferedReader, BytesIO
 import json
 from pathlib import Path
-from typing import Any, Dict, Optional, Set, Type, Union
+from typing import Any, Dict, Iterator, List, Optional, Set, Type, Union
 
 from .compiler import CompiledKSY
 
@@ -47,9 +51,165 @@ def import_spec(compiled: CompiledKSY) -> Optional[Type[KaitaiStruct]]:
     raise ImportError(f"Could not find parser class {compiled.class_name!r} in {compiled.python_path}")
 
 
+@dataclass(unsafe_hash=True, order=True, frozen=True)
+class Segment:
+    start: int
+    end: int
+
+
+class ASTNode:
+    """Represents an element in a parse."""
+
+    def __init__(
+            self,
+            name: str,
+            segment: Segment,
+            offset: int,
+            parent: Optional["CompoundNode"] = None
+    ):
+        self.name: str = name
+        self.segment: Segment = segment
+        self.offset: int = offset
+        if parent is None:
+            if not isinstance(self, RootNode):
+                raise ValueError(f"Only a RootNode can have no parent, not {self!r}")
+            self.root: RootNode = self
+            self.level: int = 0
+        else:
+            self.root = parent.root
+            self.level = parent.level + 1
+        self.parent: Optional[CompoundNode] = parent
+
+    @property
+    def start(self) -> int:
+        return self.offset + self.segment.start
+
+    @property
+    def end(self) -> int:
+        return self.offset + self.segment.end
+
+    @property
+    def raw_value(self):
+        """Sequence of bytes of this segment."""
+        return self.root.get_value(self.start, self.end)
+
+    @property
+    def size(self) -> int:
+        return self.end - self.start
+
+    def __repr__(self):
+        return f"{self.name}({self.__class__.__name__}) [{self.start}:{self.end}]"
+
+
+class ValueNode(ASTNode):
+    """A leaf in the parse tree."""
+
+    TYPES = (int, float, str, bytes, Enum)
+
+    def __init__(self, value: bytes, *args, **kwargs):
+        self._value: bytes = value
+        super().__init__(*args, **kwargs)
+
+    @property
+    def value(self) -> bytes:
+        return self._value
+
+    def __repr__(self):
+        return f"{self.name}({self.__class__.__name__}<{self.value.__class__.__name__}>) [{self.start}:{self.end}]"
+
+
+class CompoundNode(ASTNode, ABC):
+    """A node that can have children"""
+
+    def __init__(self, obj: KaitaiStruct, *args, **kwargs):
+        self.obj: KaitaiStruct = obj
+        super().__init__(*args, **kwargs)
+        self._children: Optional[List[ASTNode]] = None
+
+    @property
+    def children(self) -> List[ASTNode]:
+        if self._children is None:
+            self._children = list(self.explore())
+        return self._children
+
+    @abstractmethod
+    def explore(self) -> Iterator[ASTNode]:
+        raise NotImplementedError()
+
+    def make_child(
+            self,
+            obj: KaitaiStruct,
+            name: str,
+            segment: Segment,
+            offset: int,
+    ) -> ASTNode:
+        if isinstance(obj, KaitaiStruct):
+            node_class = StructNode
+        elif isinstance(obj, ValueNode.TYPES):
+            node_class = ValueNode
+        elif isinstance(obj, list):
+            node_class = ArrayNode
+        else:
+            raise TypeError(f"Unknown object type: {type(obj)}")
+
+        return node_class(obj, name, segment, offset, self)
+
+
+class StructNode(CompoundNode):
+    """Represents node of the subtype."""
+
+    def explore(self) -> Iterator[ASTNode]:
+        for name in self.obj.SEQ_FIELDS:
+            markers = self.obj._debug[name].copy()
+            if "arr" in markers:
+                del markers["arr"]
+            segment = Segment(**markers)
+            offset = self.offset
+            if isinstance(self.parent, StructNode):
+                if self.obj._io != self.parent.obj._io:
+                    offset = self.start
+            yield self.make_child(getattr(self.obj, name), name, segment, offset)
+
+
+class ArrayNode(CompoundNode):
+    """Represents node of array of subtype items."""
+
+    def explore(self) -> Iterator[ASTNode]:
+        for i, obj in enumerate(self.obj):
+            markers = self.parent.obj._debug[self.name]["arr"][i]
+            segment = Segment(**markers)
+            name = f"{self.name}[{i}]"
+            yield self.make_child(obj, name, segment, self.offset)
+
+
+class RootNode(StructNode):
+    def __init__(self, buffer: bytes, obj: KaitaiStruct):
+        self.buffer: bytes = buffer
+        super().__init__(obj, name=obj.__class__.__name__, segment=Segment(0, len(self.buffer)), offset=0)
+
+    def get_value(self, start, end):
+        return self.buffer[start:end]
+
+
+def build(struct):
+    """Interface method, shorthand for RootNode()."""
+
+    _io = struct._io._io
+    if isinstance(_io, BytesIO):
+        buffer = _io.getbuffer().tobytes()
+    elif isinstance(_io, BufferedReader):
+        with open(struct._io._io.name, 'rb') as f:
+            buffer = f.read()
+    else:
+        raise TypeError('Unsupported stream type')
+
+    return RootNode(buffer, struct)
+
+
 class KaitaiInspector:
     def __init__(self, struct: KaitaiStruct):
         self.struct: KaitaiStruct = struct
+        print(build(struct).children)
 
 
 class KaitaiParser:
