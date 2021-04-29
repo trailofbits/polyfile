@@ -8,6 +8,7 @@ from .kaitai.parsers.gif import Gif
 from .kaitai.parsers.jpeg import Jpeg
 from .kaitai.parsers.pcap import Pcap
 from .kaitai.parsers.png import Png
+from .kaitai.parsers.sqlite3 import Sqlite3
 from .polyfile import submatcher, InvalidMatch, Match, Submatch
 
 KAITAI_TRID_MAPPING: Dict[str, Type[KaitaiStruct]] = {
@@ -17,7 +18,8 @@ KAITAI_TRID_MAPPING: Dict[str, Type[KaitaiStruct]] = {
     "bitmap-png.trid.xml": Png,
     "pcap-ext-be.trid.xml": Pcap,
     "pcap-ext-le.trid.xml": Pcap,
-    "acp-le.trid.xml": Pcap
+    "acp-le.trid.xml": Pcap,
+    "sqlite-3x.trid.xml": Sqlite3
 }
 IMAGE_MIMETYPES: Dict[Type[KaitaiStruct], str] = {
     Gif: "image/gif",
