@@ -1,9 +1,8 @@
-import base64
 import zlib
 from typing import Dict, Iterator, List, Optional, Type
 
 from . import pdfparser
-from . import kaitai
+from .kaitai.parser import KaitaiParser
 from .fileutils import Tempfile
 from .kaitaimatcher import ast_to_matches
 from .logger import getStatusLogger
@@ -123,19 +122,12 @@ class DCTDecoder(StreamFilter):
             return
         # This is most likely a JPEG image
         try:
-            ast = kaitai.parse('jpeg', raw_content)
+            ast = KaitaiParser.load("image/jpeg.ksy").parse(raw_content).ast
         except Exception as e:
             log.error(str(e))
             ast = None
         if ast is not None:
-            iterator = ast_to_matches(ast, parent=parent)
-            try:
-                jpeg_match = next(iterator)
-                jpeg_match.img_data = f"data:image/jpeg;base64,{base64.b64encode(raw_content).decode('utf-8')}"
-                yield jpeg_match
-                yield from iterator
-            except StopIteration:
-                pass
+            yield from ast_to_matches(ast, parent=parent)
 
 
 class ASCIIHexDecoder(StreamFilter):

@@ -1,3 +1,4 @@
+import base64
 from typing import Dict, Iterator, List, Tuple, Type
 
 from .kaitai.parser import ASTNode, KaitaiParser, KaitaiStruct, RootNode
@@ -33,4 +34,14 @@ for trid_def, kaitai_def in KAITAI_TRID_MAPPING.items():
                 ast = KaitaiParser(kaitai_def).parse(file_stream).ast
             except Exception:
                 raise InvalidMatch()
-            yield from ast_to_matches(ast, parent=self)
+            iterator = ast_to_matches(ast, parent=self)
+            if kaitai_def is Jpeg:
+                # add a preview of the JPEG:
+                try:
+                    jpeg_match = next(iterator)
+                    jpeg_match.img_data = "data:image/jpeg;base64,"\
+                                          f"{base64.b64encode(file_stream.content).decode('utf-8')}"
+                    yield jpeg_match
+                except StopIteration:
+                    pass
+            yield from iterator
