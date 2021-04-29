@@ -29,8 +29,8 @@ def compile_ksy(path: Path) -> List[Tuple[str, str]]:
         [sys.executable, str(COMPILE_SCRIPT), str(path), str(KAITAI_PARSERS_DIR)],
         cwd=str(KAITAI_FORMAT_LIBRARY)
     ).decode("utf-8")
-    return [
-        tuple(line.split("\t"))  # (class_name, python_path)
+    return [  # type: ignore
+        tuple(line.split("\t")[:2])  # (class_name, python_path)
         for line in output.split("\n") if line.strip()
     ]
 
@@ -103,7 +103,7 @@ setup(
     url='https://github.com/trailofbits/polyfile',
     author='Trail of Bits',
     version=get_version_string(),
-    packages=find_packages(),
+    packages=find_packages(exclude=("tests",)),
     python_requires='>=3.6',
     install_requires=[
         'graphviz',
