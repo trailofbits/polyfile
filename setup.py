@@ -128,6 +128,7 @@ setup(
     ],
     extras_require={
         'demangle': ['cxxfilt'],
+        "dev": ["mypy", "pytest", "flake8"]
     },
     entry_points={
         'console_scripts': [
