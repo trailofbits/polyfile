@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional, Set, Type, Union
 
 from .compiler import CompiledKSY
+from ..fileutils import FileStream
 
 from kaitaistruct import KaitaiStruct
 
@@ -56,6 +57,41 @@ class Segment:
     start: int
     end: int
 
+    def __contains__(self, item):
+        return isinstance(item, Segment) and item.start >= self.start and item.end <= self.end
+
+    def __len__(self):
+        return self.end - self.start
+
+    def __bool__(self):
+        return len(self) > 0
+
+    def __getitem__(self, index_or_slice: Union[int, slice]):
+        if isinstance(index_or_slice, slice):
+            if index_or_slice.step is not None and index_or_slice.step != 1:
+                raise ValueError(f"{self.__class__.__name__}.__getitem__ only supports slices with step=1")
+            if index_or_slice.start is None:
+                new_start = self.start
+            else:
+                new_start = self.start + index_or_slice.start
+            if index_or_slice.stop is None:
+                new_end = self.end
+            elif index_or_slice.stop < 0:
+                new_end = self.end + index_or_slice.stop
+            else:
+                new_end = self.start + index_or_slice.stop
+            if new_start > self.end:
+                new_start = self.end
+            if new_end < new_start or new_end > self.end:
+                new_end = new_start
+            return Segment(new_start, new_end)
+        elif self.start + index_or_slice >= self.end or (index_or_slice < 0 and -index_or_slice > len(self)):
+            raise IndexError(index_or_slice)
+        elif index_or_slice < 0:
+            return Segment(self.end + index_or_slice, self.end + index_or_slice + 1)
+        else:
+            return Segment(self.start + index_or_slice, self.start + index_or_slice + 1)
+
 
 class ASTNode:
     """Represents an element in a parse."""
@@ -80,6 +116,9 @@ class ASTNode:
             self.level = parent.level + 1
         self.parent: Optional[CompoundNode] = parent
 
+    def dfs(self) -> Iterator["ASTNode"]:
+        yield self
+
     @property
     def start(self) -> int:
         return self.offset + self.segment.start
@@ -96,6 +135,10 @@ class ASTNode:
     @property
     def size(self) -> int:
         return self.end - self.start
+
+    @property
+    def children(self) -> List["ASTNode"]:
+        return []
 
     def __repr__(self):
         return f"{self.name}({self.__class__.__name__}) [{self.start}:{self.end}]"
@@ -136,6 +179,13 @@ class CompoundNode(ASTNode, ABC):
     def explore(self) -> Iterator[ASTNode]:
         raise NotImplementedError()
 
+    def dfs(self) -> Iterator[ASTNode]:
+        stack = [self]
+        while stack:
+            top = stack.pop()
+            yield top
+            stack.extend(reversed(top.children))
+
     def make_child(
             self,
             obj: KaitaiStruct,
@@ -163,6 +213,8 @@ class StructNode(CompoundNode):
             markers = self.obj._debug[name].copy()
             if "arr" in markers:
                 del markers["arr"]
+            if "start" not in markers or "end" not in markers:
+                continue
             segment = Segment(**markers)
             offset = self.offset
             if isinstance(self.parent, StructNode):
@@ -191,25 +243,28 @@ class RootNode(StructNode):
         return self.buffer[start:end]
 
 
-def build(struct):
-    """Interface method, shorthand for RootNode()."""
-
-    _io = struct._io._io
-    if isinstance(_io, BytesIO):
-        buffer = _io.getbuffer().tobytes()
-    elif isinstance(_io, BufferedReader):
-        with open(struct._io._io.name, 'rb') as f:
-            buffer = f.read()
-    else:
-        raise TypeError('Unsupported stream type')
-
-    return RootNode(buffer, struct)
-
-
 class KaitaiInspector:
     def __init__(self, struct: KaitaiStruct):
         self.struct: KaitaiStruct = struct
-        print(build(struct).children)
+        self._ast: Optional[RootNode] = None
+
+    @property
+    def ast(self) -> RootNode:
+        if self._ast is None:
+            _io = self.struct._io._io
+            if isinstance(_io, FileStream):
+                buffer = _io.content
+            elif isinstance(_io, BytesIO):
+                buffer = _io.getbuffer().tobytes()
+            elif isinstance(_io, BufferedReader):
+                with open(self.struct._io._io.name, 'rb') as f:
+                    buffer = f.read()
+            else:
+                raise TypeError('Unsupported stream type')
+
+            self._ast = RootNode(buffer, self.struct)
+
+        return self._ast
 
 
 class KaitaiParser:
@@ -235,10 +290,15 @@ class KaitaiParser:
             _PARSERS_BY_KSY[ksy_path] = import_spec(info)  # type: ignore
         return KaitaiParser(_PARSERS_BY_KSY[ksy_path])
 
-    def parse(self, input_file_path: Union[str, Path]) -> KaitaiInspector:
-        if isinstance(input_file_path, Path):
-            input_file_path = str(input_file_path)
-
-        struct = self.struct_type.from_file(input_file_path)
+    def parse(self, input_file_path_or_content: Union[str, Path, bytes, BytesIO]) -> KaitaiInspector:
+        if isinstance(input_file_path_or_content, Path):
+            input_file_path_or_content = str(input_file_path_or_content)
+        if isinstance(input_file_path_or_content, str):
+            struct = self.struct_type.from_file(input_file_path_or_content)
+        elif isinstance(input_file_path_or_content, bytes):
+            struct = self.struct_type.from_bytes(input_file_path_or_content)
+        else:
+            # Treat it like BytesIO
+            struct = self.struct_type.from_io(input_file_path_or_content)
         struct._read()
         return KaitaiInspector(struct)
