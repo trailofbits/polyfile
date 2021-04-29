@@ -220,7 +220,8 @@ class StructNode(CompoundNode):
             if isinstance(self.parent, StructNode):
                 if self.obj._io != self.parent.obj._io:
                     offset = self.start
-            yield self.make_child(getattr(self.obj, name), name, segment, offset)
+            if hasattr(self.obj, name):
+                yield self.make_child(getattr(self.obj, name), name, segment, offset)
 
 
 class ArrayNode(CompoundNode):
