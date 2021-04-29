@@ -170,7 +170,7 @@ https://github.com/trailofbits/polytracker/
             sys.stderr.write('\n')
             log.critical("Error: Two input files (PolyFile, PolyTracker) are required when both `--cfg` and `--type-hierarchy` options are enabled.")
             parser.exit()
-        elif build_cfg or diff_polytracker:
+        elif build_cfg:
             polyfile_json_file = None
             polytracker_json_file = args.FILES[0]
         elif built_type_hierarchy:
