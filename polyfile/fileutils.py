@@ -180,16 +180,21 @@ class FileStream:
                         return False
         return True
 
+    @property
+    def content(self) -> bytes:
+        with self.save_pos():
+            self.seek(0)
+            return self.read(len(self))
+
     def tempfile(self, prefix=None, suffix=None):
         class FSTempfile:
-            def __init__(self, file_stream):
+            def __init__(self, file_stream: FileStream):
                 self._temp = None
-                self._fs = file_stream
+                self._fs: FileStream = file_stream
 
             def __enter__(self):
                 self._temp = tf.NamedTemporaryFile(prefix=prefix, suffix=suffix, delete=False)
-                self._fs.seek(0)
-                self._temp.write(self._fs.read(len(self._fs)))
+                self._temp.write(self._fs.content)
                 self._temp.flush()
                 self._temp.close()
                 return self._temp.name

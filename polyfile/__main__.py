@@ -61,12 +61,15 @@ def main(argv=None):
         for name, filetype in sorted((d.name, d.filetype) for d in trid.DEFS):
             if name.endswith('.trid.xml'):
                 name = name[:-len('.trid.xml')]
-            sys.stdout.write(f"{name}")
-            sys.stdout.flush()
-            sys.stderr.write(f' {"." * (longest_name - len(name) - 2)} \x1B[3m{filetype}\x1B[23m')
-            sys.stderr.flush()
-            sys.stdout.write('\n')
-            sys.stdout.flush()
+            if sys.stdout.isatty():
+                sys.stdout.write(f"{name}")
+                sys.stdout.flush()
+                sys.stderr.write(f' {"." * (longest_name - len(name) - 2)} \x1B[3m{filetype}\x1B[23m')
+                sys.stderr.flush()
+                sys.stdout.write('\n')
+                sys.stdout.flush()
+            else:
+                sys.stdout.write(f"{name}\t{filetype}\n")
         exit(0)
 
     if args.version:
