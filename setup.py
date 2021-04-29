@@ -108,6 +108,14 @@ def get_version_string():
     return version['VERSION_STRING']
 
 
+if sys.version_info < (3, 7):
+    # dataclasses were only added in Python 3.7
+    additional_requirements = [
+        "dataclasses>=0.8"
+    ]
+else:
+    additional_requirements = []
+
 setup(
     name='polyfile',
     description='A utility to recursively map the structure of a file.',
@@ -125,7 +133,7 @@ setup(
         'Pillow>=5.0.0',
         'pyyaml>=3.13',
         'setuptools'
-    ],
+    ] + additional_requirements,
     extras_require={
         'demangle': ['cxxfilt'],
         "dev": ["mypy", "pytest", "flake8"]
