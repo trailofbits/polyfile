@@ -168,10 +168,6 @@ the future, but here is the current method employed by `polymerge`:
 3. Sort the functions by entropy, and select the functions in the smallest standard deviation; and
 4. Keep the functions that are shallowest in the dominator tree of the runtime control-flow graph.
 
-## Current Status and Known Deficiencies
-* The instrumented Kaitai Struct parser generator implementation has only been tested on the JPEG/JFIF grammar;
-  other KSY definitions may exercise portions of the KSY specification that have not yet been implemented
-
 ## License and Acknowledgements
 
 This research was developed by [Trail of
