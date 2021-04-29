@@ -4,16 +4,19 @@ from typing import Dict, Iterator, List, Tuple, Type
 from .kaitai.parser import ASTNode, KaitaiParser, KaitaiStruct, RootNode
 from .kaitai.parsers.gif import Gif
 from .kaitai.parsers.jpeg import Jpeg
+from .kaitai.parsers.png import Png
 from .polyfile import submatcher, InvalidMatch, Match, Submatch
 
 KAITAI_TRID_MAPPING: Dict[str, Type[KaitaiStruct]] = {
-    "bitmap-jpeg.trid.xml": Jpeg,
     "bitmap-gif.trid.xml": Gif,
     "bitmap-gif-anim.trid.xml": Gif,
+    "bitmap-jpeg.trid.xml": Jpeg,
+    "bitmap-png.trid.xml": Png
 }
 IMAGE_MIMETYPES: Dict[Type[KaitaiStruct], str] = {
     Gif: "image/gif",
-    Jpeg: "image/jpeg"
+    Jpeg: "image/jpeg",
+    Png: "image/png"
 }
 
 
