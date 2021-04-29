@@ -1,9 +1,12 @@
 import base64
 from typing import Dict, Iterator, List, Tuple, Type
 
+from kaitaistruct import KaitaiStructError
+
 from .kaitai.parser import ASTNode, KaitaiParser, KaitaiStruct, RootNode
 from .kaitai.parsers.gif import Gif
 from .kaitai.parsers.jpeg import Jpeg
+from .kaitai.parsers.pcap import Pcap
 from .kaitai.parsers.png import Png
 from .polyfile import submatcher, InvalidMatch, Match, Submatch
 
@@ -11,7 +14,10 @@ KAITAI_TRID_MAPPING: Dict[str, Type[KaitaiStruct]] = {
     "bitmap-gif.trid.xml": Gif,
     "bitmap-gif-anim.trid.xml": Gif,
     "bitmap-jpeg.trid.xml": Jpeg,
-    "bitmap-png.trid.xml": Png
+    "bitmap-png.trid.xml": Png,
+    "pcap-ext-be.trid.xml": Pcap,
+    "pcap-ext-le.trid.xml": Pcap,
+    "acp-le.trid.xml": Pcap
 }
 IMAGE_MIMETYPES: Dict[Type[KaitaiStruct], str] = {
     Gif: "image/gif",
@@ -48,6 +54,6 @@ for trid_def, kaitai_def in KAITAI_TRID_MAPPING.items():
         def submatch(self, file_stream):
             try:
                 ast = KaitaiParser(kaitai_def).parse(file_stream).ast
-            except Exception:
+            except (Exception, KaitaiStructError):
                 raise InvalidMatch()
             yield from ast_to_matches(ast, parent=self)
