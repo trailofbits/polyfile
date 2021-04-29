@@ -4,8 +4,8 @@
 </p>
 <br />
 
-[![Build Status](https://travis-ci.com/trailofbits/polyfile.svg?branch=master)](https://travis-ci.com/trailofbits/polyfile)
 [![PyPI version](https://badge.fury.io/py/polyfile.svg)](https://badge.fury.io/py/polyfile)
+[![Tests](https://github.com/trailofbits/polyfile/workflows/Tests/badge.svg)](https://github.com/trailofbits/polyfile/actions)
 [![Slack Status](https://empireslacking.herokuapp.com/badge.svg)](https://empireslacking.herokuapp.com)
 
 A utility to identify and map the semantic structure of files,
