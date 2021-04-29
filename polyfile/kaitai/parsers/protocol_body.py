@@ -30,7 +30,7 @@ class ProtocolBody(KaitaiStruct):
     on that parameter.
     
     .. seealso::
-       Source - http://www.iana.org/assignments/protocol-numbers/protocol-numbers.xhtml
+       Source - https://www.iana.org/assignments/protocol-numbers/protocol-numbers.xhtml
     """
 
     class ProtocolEnum(Enum):
