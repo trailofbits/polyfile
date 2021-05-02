@@ -41,6 +41,12 @@ class Match:
         return f"{self.__class__.__name__}(test={self.test!r}, offset={self.offset}, length={self.length})"
 
 
+class Endianness(Enum):
+    NATIVE = "="
+    LITTLE = "<"
+    BIG = ">"
+
+
 def parse_numeric(text: str) -> int:
     text = text.strip()
     if text.startswith("0x"):
@@ -172,10 +178,18 @@ class DataType(ABC, Generic[T]):
             return TYPES_BY_NAME[fmt]
         elif fmt.startswith("string"):
             dt = StringType.parse(fmt)
+        elif fmt.startswith("pstring"):
+            dt = PascalStringType.parse(fmt)
         elif fmt == "regex":
             dt = RegexType()
         else:
             dt = NumericDataType.parse(fmt)
+        if dt.name in TYPES_BY_NAME:
+            # Sometimes a data type will change its name based on modifiers.
+            # For example, string and pstring will always include their modifiers after their name
+            dt = TYPES_BY_NAME[dt.name]
+        else:
+            TYPES_BY_NAME[dt.name] = dt
         TYPES_BY_NAME[fmt] = dt
         return dt
 
@@ -194,7 +208,8 @@ class StringType(DataType[str]):
             name = f"string/{['', 'B'][compact_whitespace]}{['', 'b'][optional_blanks]}{['', 'c'][case_insensitive]}"
         super().__init__(name)
 
-    def parse_expected(self, specification: str) -> str:
+    @staticmethod
+    def parse_string(specification: str) -> str:
         chars: List[str] = []
         escaped = False
         escapes = {
@@ -216,6 +231,9 @@ class StringType(DataType[str]):
             else:
                 chars.append(c)
         return "".join(chars)
+
+    def parse_expected(self, specification: str) -> str:
+        return StringType.parse_string(specification)
 
     def match(self, data: bytes, expected: str) -> Optional[bytes]:
         e = expected.encode("utf-8")
@@ -239,6 +257,97 @@ class StringType(DataType[str]):
             case_insensitive="c" in options,
             compact_whitespace="B" in options,
             optional_blanks="b" in options
+        )
+
+
+class PascalStringType(DataType[bytes]):
+    def __init__(
+            self,
+            byte_length: int = 1,
+            endianness: Endianness = Endianness.BIG,
+            count_includes_length: bool = False
+    ):
+        if endianness != Endianness.BIG and endianness != Endianness.LITTLE:
+            raise ValueError("Endianness must be either BIG or LITTLE")
+        elif byte_length == 1:
+            modifier = "B"
+        elif byte_length == 2:
+            if endianness == Endianness.BIG:
+                modifier = "H"
+            else:
+                modifier = "h"
+        elif byte_length == 4:
+            if endianness == Endianness.BIG:
+                modifier = "L"
+            else:
+                modifier = "l"
+        else:
+            raise ValueError("byte_length must be either 1, 2, or 4")
+        if count_includes_length:
+            modifier = f"{modifier}J"
+        super().__init__(f"pstring/{modifier}")
+        self.byte_length: int = byte_length
+        self.endianness: Endianness = endianness
+        self.count_includes_length: int = count_includes_length
+
+    def parse_expected(self, specification: str) -> bytes:
+        return StringType.parse_string(specification).encode("utf-8")
+
+    def match(self, data: bytes, expected: bytes) -> Optional[bytes]:
+        if len(data) < self.byte_length:
+            return None
+        elif self.byte_length == 1:
+            length = data[0]
+        elif self.byte_length == 2:
+            if self.endianness == Endianness.BIG:
+                length = struct.unpack(">H", data[:2])
+            else:
+                length = struct.unpack("<H", data[:2])
+        elif self.endianness == Endianness.BIG:
+            length = struct.unpack(">I", data[:4])
+        else:
+            length = struct.unpack("<I", data[:4])
+        if self.count_includes_length:
+            length -= self.byte_length
+        if len(data) < self.byte_length + length:
+            return None
+        elif len(expected) != length:
+            return None
+        if data[self.byte_length:self.byte_length + length] == expected:
+            return expected
+        else:
+            return None
+
+    PSTRING_TYPE_FORMAT: re.Pattern = re.compile(r"^pstring(/J?[BHhLl]?J?)?$")
+
+    @classmethod
+    def parse(cls, format_str: str) -> "PascalStringType":
+        m = cls.PSTRING_TYPE_FORMAT.match(format_str)
+        if not m:
+            raise ValueError(f"Invalid pstring type declaration: {format_str!r}")
+        if m.group(1) is None:
+            options: Iterable[str] = ()
+        else:
+            options = m.group(1)
+        if "H" in options:
+            byte_length = 2
+            endianness = Endianness.BIG
+        elif "h" in options:
+            byte_length = 2
+            endianness = Endianness.LITTLE
+        elif "L" in options:
+            byte_length = 4
+            endianness = Endianness.BIG
+        elif "l" in options:
+            byte_length = 4
+            endianness = Endianness.LITTLE
+        else:
+            byte_length = 1
+            endianness = Endianness.BIG
+        return PascalStringType(
+            byte_length=byte_length,
+            endianness=endianness,
+            count_includes_length="J" in options
         )
 
 
@@ -272,12 +381,6 @@ class BaseNumericDataType(Enum):
         self.struct_fmt: str = struct_fmt
         self.num_bytes: int = num_bytes
         BASE_NUMERIC_TYPES_BY_NAME[name] = self
-
-
-class Endianness(Enum):
-    NATIVE = "="
-    LITTLE = "<"
-    BIG = ">"
 
 
 NUMERIC_OPERATORS_BY_SYMBOL: Dict[str, "NumericOperator"] = {}
