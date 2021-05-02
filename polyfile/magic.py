@@ -442,6 +442,14 @@ class NumericValue(Generic[T]):
         raise ValueError(f"Could not parse numeric type {value!r}")
 
 
+class NumericWildcard(NumericValue):
+    def __init__(self):
+        super().__init__(None)
+
+    def test(self, to_match) -> bool:
+        return True
+
+
 class IntegerValue(NumericValue[int]):
     @staticmethod
     def parse(value: str, num_bytes: int) -> "IntegerValue":
@@ -485,7 +493,10 @@ class NumericDataType(DataType[NumericValue]):
         self.endianness: Endianness = endianness
 
     def parse_expected(self, specification: str) -> NumericValue:
-        return NumericValue.parse(specification, self.base_type.num_bytes)
+        if specification == "x":
+            return NumericWildcard()
+        else:
+            return NumericValue.parse(specification, self.base_type.num_bytes)
 
     def match(self, data: bytes, expected: NumericValue) -> Optional[bytes]:
         if self.unsigned and self.base_type not in (BaseNumericDataType.DOUBLE, BaseNumericDataType.FLOAT):
