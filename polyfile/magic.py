@@ -571,6 +571,40 @@ class NamedTest(MagicTest):
         return self.name
 
 
+class UseTest(MagicTest):
+    def __init__(
+            self,
+            named_test: NamedTest,
+            offset: Offset,
+            mime: Optional[str] = None,
+            extensions: Iterable[str] = (),
+            message: str = "",
+            parent: Optional["MagicTest"] = None
+    ):
+        super().__init__(offset=offset, mime=mime, extensions=extensions, message=message, parent=parent)
+        self.named_test: NamedTest = named_test
+
+    def _match(
+            self,
+            data: bytes,
+            only_match_mime: bool = False,
+            parent_match: Optional[Match] = None
+    ) -> Iterator[Match]:
+        yield from self.named_test._match(data, only_match_mime, parent_match)
+        if only_match_mime and not self.can_match_mime:
+            return
+        m = self.test(data, self.offset.to_absolute(parent_match), parent_match)
+        if m is not None:
+            if not only_match_mime or self.mime is not None:
+                yield m
+            for child in self.children:
+                if not only_match_mime or child.can_match_mime:
+                    yield from child._match(data=data, only_match_mime=only_match_mime, parent_match=m)
+
+    def test(self, data: bytes, absolute_offset: int, parent_match: Optional[Match]) -> Optional[Match]:
+        raise NotImplementedError("This function should never be called")
+
+
 class DefaultTest(MagicTest):
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[Match]) -> Optional[Match]:
         if parent_match is None:
@@ -649,24 +683,33 @@ class MagicDefinition:
                             raise ValueError(f"{def_file!s} line {line_number}: Duplicate test named {test!r}")
                         test = NamedTest(name=test_str, offset=offset, message=message)
                         definition.named_tests[test_str] = test
-                    elif m.group("data_type") == "default":
-                        if current_test is None:
-                            raise NotImplementedError("TODO: Add support for default tests at level 0")
-                        test = DefaultTest(offset=offset, message=message, parent=current_test)
-                        definition.tests.append(test)
                     else:
-                        try:
-                            data_type = DataType.parse(m.group("data_type"))
-                            constant = data_type.parse_expected(test_str)
-                        except ValueError as e:
-                            raise ValueError(f"{def_file!s} line {line_number}: {e!s}")
-                        test = ConstantMatchTest(
-                            offset=offset,
-                            data_type=data_type,
-                            constant=constant,
-                            message=message,
-                            parent=current_test
-                        )
+                        if m.group("data_type") == "default":
+                            if current_test is None:
+                                raise NotImplementedError("TODO: Add support for default tests at level 0")
+                            test = DefaultTest(offset=offset, message=message, parent=current_test)
+                        elif m.group("data_type") == "use":
+                            if test_str not in definition.named_tests:
+                                raise ValueError(f"{def_file!s} line {line_number}: Unknown test named {test_str!r}")
+                            test = UseTest(
+                                definition.named_tests[test_str],
+                                offset=offset,
+                                message=message,
+                                parent=current_test
+                            )
+                        else:
+                            try:
+                                data_type = DataType.parse(m.group("data_type"))
+                                constant = data_type.parse_expected(test_str)
+                            except ValueError as e:
+                                raise ValueError(f"{def_file!s} line {line_number}: {e!s}")
+                            test = ConstantMatchTest(
+                                offset=offset,
+                                data_type=data_type,
+                                constant=constant,
+                                message=message,
+                                parent=current_test
+                            )
                         definition.tests.append(test)
                     current_test = test
                     continue
