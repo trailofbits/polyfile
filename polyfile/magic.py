@@ -571,6 +571,14 @@ class NamedTest(MagicTest):
         return self.name
 
 
+class DefaultTest(MagicTest):
+    def test(self, data: bytes, absolute_offset: int, parent_match: Optional[Match]) -> Optional[Match]:
+        if parent_match is None:
+            return Match(self, absolute_offset, 0)
+        else:
+            return None
+
+
 TEST_PATTERN: re.Pattern = re.compile(
     r"^(?P<level>[>]*)(?P<offset>&?-?(0x[\dA-Za-z]+|\d+))\s+(?P<data_type>[^\s]+)\s+(?P<remainder>.+)$"
 )
@@ -641,6 +649,11 @@ class MagicDefinition:
                             raise ValueError(f"{def_file!s} line {line_number}: Duplicate test named {test!r}")
                         test = NamedTest(name=test_str, offset=offset, message=message)
                         definition.named_tests[test_str] = test
+                    elif m.group("data_type") == "default":
+                        if current_test is None:
+                            raise NotImplementedError("TODO: Add support for default tests at level 0")
+                        test = DefaultTest(offset=offset, message=message, parent=current_test)
+                        definition.tests.append(test)
                     else:
                         try:
                             data_type = DataType.parse(m.group("data_type"))
