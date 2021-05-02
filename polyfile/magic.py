@@ -217,12 +217,26 @@ class DataType(ABC, Generic[T]):
 
 
 class StringType(DataType[bytes]):
-    def __init__(self, case_insensitive: bool = False, compact_whitespace: bool = False, optional_blanks: bool = False):
-        if not case_insensitive and not compact_whitespace and not optional_blanks:
+    def __init__(
+            self,
+            case_insensitive_lower: bool = False,
+            case_insensitive_upper: bool = False,
+            compact_whitespace: bool = False,
+            optional_blanks: bool = False,
+            trim: bool = False
+    ):
+        if not all((case_insensitive_lower, case_insensitive_upper, compact_whitespace, optional_blanks, trim)):
             name = "string"
         else:
-            name = f"string/{['', 'B'][compact_whitespace]}{['', 'b'][optional_blanks]}{['', 'c'][case_insensitive]}"
+            name = f"string/{['', 'W'][compact_whitespace]}{['', 'w'][optional_blanks]}"\
+                   f"{['', 'C'][case_insensitive_upper]}{['', 'c'][case_insensitive_lower]}"\
+                   f"{['', 'T'][trim]}"
         super().__init__(name)
+        self.case_insensitive_lower: bool = case_insensitive_lower
+        self.case_insensitive_upper: bool = case_insensitive_upper
+        self.compact_whitespace: bool = compact_whitespace
+        self.optional_blanks: bool = optional_blanks
+        self.trim: bool = trim
 
     @staticmethod
     def parse_string(specification: str) -> bytes:
@@ -266,12 +280,36 @@ class StringType(DataType[bytes]):
         return StringType.parse_string(specification)
 
     def match(self, data: bytes, expected: bytes) -> Optional[bytes]:
-        if data.startswith(expected):
-            return expected
-        else:
+        matched = bytearray()
+        had_whitespace = False
+        last_char: Optional[int] = None
+        for b in data:
+            if not expected:
+                break
+            matched.append(b)
+            is_whitespace = bytes([b]) in b" \t\n"
+            if self.trim and last_char is None and is_whitespace:
+                # skip leading whitespace
+                continue
+            elif self.compact_whitespace and is_whitespace:
+                if last_char is not None and bytes([last_char]) in b" \t\n":  # type: ignore
+                    # compact consecutive whitespace
+                    continue
+                else:
+                    had_whitespace = True
+            if not (
+                    b == expected[0] or
+                    (self.case_insensitive_lower and b == expected[0:1].lower()[0]) or
+                    (self.case_insensitive_upper and b == expected[0:1].upper()[0])
+            ):
+                if not (self.optional_blanks and expected[0:1] in b" \t\n"):
+                    return None
+            expected = expected[1:]
+        if self.compact_whitespace and not had_whitespace:
             return None
+        return bytes(matched)
 
-    STRING_TYPE_FORMAT: re.Pattern = re.compile(r"^string(/[Bbc]*)?$")
+    STRING_TYPE_FORMAT: re.Pattern = re.compile(r"^string(/[BbctTWw]*)?$")
 
     @classmethod
     def parse(cls, format_str: str) -> "StringType":
@@ -283,9 +321,11 @@ class StringType(DataType[bytes]):
         else:
             options = m.group(1)
         return StringType(
-            case_insensitive="c" in options,
-            compact_whitespace="B" in options,
-            optional_blanks="b" in options
+            case_insensitive_lower="c" in options,
+            case_insensitive_upper="C" in options,
+            compact_whitespace="B" in options or "W" in options,
+            optional_blanks="b" in options or "w" in options,
+            trim="T" in options
         )
 
 
