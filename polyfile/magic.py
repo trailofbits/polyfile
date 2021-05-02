@@ -106,11 +106,13 @@ class MagicTest(ABC):
             offset: Offset,
             mime: Optional[str] = None,
             extensions: Iterable[str] = (),
+            message: str = "",
             parent: Optional["MagicTest"] = None
     ):
         self.offset: Offset = offset
         self.mime: Optional[str] = mime
         self.extensions: Set[str] = set(extensions)
+        self.message: str = message
         self.parent: Optional[MagicTest] = parent
         self.children: List[MagicTest] = []
         if self.parent is not None:
@@ -137,21 +139,34 @@ class MagicTest(ABC):
     def test(self, data: bytes, parent_match: Optional[Match]) -> Optional[Match]:
         raise NotImplementedError()
 
-    def _match(self, data: bytes, parent_match: Optional[Match] = None) -> Iterator[Match]:
-        if not self.can_match_mime:
+    def _match(
+            self,
+            data: bytes,
+            only_match_mime: bool = False,
+            parent_match: Optional[Match] = None
+    ) -> Iterator[Match]:
+        if only_match_mime and not self.can_match_mime:
             return
         offset_data = data[self.offset.to_absolute(parent_match):]
         m = self.test(offset_data, parent_match)
         if m is not None:
-            if self.mime is not None:
+            if not only_match_mime or self.mime is not None:
                 yield m
             for child in self.children:
-                if child.can_match_mime:
-                    yield from child._match(data, m)
+                if not only_match_mime or child.can_match_mime:
+                    yield from child._match(data=data, only_match_mime=only_match_mime, parent_match=m)
 
-    def match(self, data: bytes) -> Iterator[Match]:
+    def match(self, data: bytes, only_match_mime: bool = False) -> Iterator[Match]:
         """Yields all matches for the given data"""
-        return self._match(data)
+        return self._match(data, only_match_mime=only_match_mime)
+
+    def __str__(self):
+        s = f"{'>' * self.level}{self.offset!s}\t{self.message}"
+        if self.mime is not None:
+            s = f"{s}\n!:mime\t{self.mime}"
+        for e in self.extensions:
+            s = f"{s}\n!:ext\t{e}"
+        return s
 
 
 TYPES_BY_NAME: Dict[str, "DataType"] = {}
@@ -518,9 +533,10 @@ class ConstantMatchTest(MagicTest, Generic[T]):
             constant: T,
             mime: Optional[str] = None,
             extensions: Iterable[str] = (),
+            message: str = "",
             parent: Optional["MagicTest"] = None
     ):
-        super().__init__(offset=offset, mime=mime, extensions=extensions, parent=parent)
+        super().__init__(offset=offset, mime=mime, extensions=extensions, message=message, parent=parent)
         self.data_type: DataType[T] = data_type
         self.constant: T = constant
 
@@ -535,8 +551,9 @@ class NamedTest(MagicTest):
             offset: Offset,
             mime: Optional[str] = None,
             extensions: Iterable[str] = (),
+            message: str = ""
     ):
-        super().__init__(offset=offset, mime=mime, extensions=extensions, parent=None)
+        super().__init__(offset=offset, mime=mime, extensions=extensions, message=message, parent=None)
         self.name: str = name
 
     def test(self, data: bytes, parent_match: Optional[Match]) -> Optional[Match]:
@@ -571,10 +588,23 @@ def _split_with_escapes(text: str) -> Tuple[str, str]:
 
 
 class MagicDefinition:
+    def __init__(self, tests: Iterable[MagicTest]):
+        self.tests: List[MagicTest] = []
+        self.named_tests: Dict[str, NamedTest] = {}
+        for test in tests:
+            if isinstance(test, NamedTest):
+                self.named_tests[test.name] = test
+            else:
+                self.tests.append(test)
+
+    def match(self, data: bytes, only_match_mime: bool = False) -> Iterator[Match]:
+        for test in self.tests:
+            yield from test.match(data, only_match_mime=only_match_mime)
+
     @staticmethod
     def parse(def_file: Union[str, Path]) -> "MagicDefinition":
         current_test: Optional[MagicTest] = None
-        named_tests: Dict[str, NamedTest] = {}
+        definition = MagicDefinition([])
         with open(def_file, "rb") as f:
             for line_number, raw_line in enumerate(f.readlines()):
                 line_number += 1
@@ -593,7 +623,8 @@ class MagicDefinition:
                         current_test = current_test.parent
                     if current_test is None and level != 0:
                         raise ValueError(f"{def_file!s} line {line_number}: Invalid level for test {line!r}")
-                    test_str, _ = _split_with_escapes(m.group("remainder"))
+                    test_str, message = _split_with_escapes(m.group("remainder"))
+                    message = message.lstrip()
                     try:
                         offset = Offset.parse(m.group("offset"))
                     except ValueError as e:
@@ -601,10 +632,10 @@ class MagicDefinition:
                     if m.group("data_type") == "name":
                         if current_test is not None:
                             raise ValueError(f"{def_file!s} line {line_number}: A named test must be at level 0")
-                        elif test in named_tests:
+                        elif test in definition.named_tests:
                             raise ValueError(f"{def_file!s} line {line_number}: Duplicate test named {test!r}")
-                        test = NamedTest(name=test_str, offset=offset)
-                        named_tests[test_str] = test
+                        test = NamedTest(name=test_str, offset=offset, message=message)
+                        definition.named_tests[test_str] = test
                     else:
                         try:
                             data_type = DataType.parse(m.group("data_type"))
@@ -615,9 +646,12 @@ class MagicDefinition:
                             offset=offset,
                             data_type=data_type,
                             constant=constant,
+                            message=message,
                             parent=current_test
                         )
+                        definition.tests.append(test)
                     current_test = test
+                    print(str(test))
                     continue
                 m = MIME_PATTERN.match(line)
                 if m:
@@ -635,3 +669,4 @@ class MagicDefinition:
                     current_test.extensions.add(m.group(1))
                     continue
                 raise ValueError(f"{def_file!s} line {line_number}: Unexpected line\n{raw_line!r}")
+        return definition
