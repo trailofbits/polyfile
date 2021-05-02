@@ -425,6 +425,27 @@ class ConstantMatchTest(MagicTest, Generic[T]):
         return self.data_type.match(data[self.offset:], self.constant) == self.constant
 
 
+class NamedTest(MagicTest):
+    def __init__(
+            self,
+            name: str,
+            offset: Offset,
+            mime: Optional[str] = None,
+            extensions: Iterable[str] = (),
+    ):
+        super().__init__(offset=offset, mime=mime, extensions=extensions, parent=None)
+        self.name: str = name
+
+    def test(self, data: bytes, parent_match: Optional[Match]) -> Optional[Match]:
+        if parent_match is not None:
+            return Match(self, parent_match.offset + parent_match.length, 0)
+        else:
+            return Match(self, 0, 0)
+
+    def __str__(self):
+        return self.name
+
+
 TEST_PATTERN: re.Pattern = re.compile(
     r"^(?P<level>[>]*)(?P<offset>&?(0x)?\d+)\s+(?P<data_type>[^\s]+)\s+(?P<remainder>.+)$"
 )
@@ -450,6 +471,7 @@ class MagicDefinition:
     @staticmethod
     def parse(def_file: Union[str, Path]) -> "MagicDefinition":
         current_test: Optional[MagicTest] = None
+        named_tests: Dict[str, NamedTest] = {}
         with open(def_file, "rb") as f:
             for line_number, raw_line in enumerate(f.readlines()):
                 line_number += 1
@@ -468,19 +490,30 @@ class MagicDefinition:
                         current_test = current_test.parent
                     if current_test is None and level != 0:
                         raise ValueError(f"{def_file!s} line {line_number}: Invalid level for test {line!r}")
-                    test, _ = _split_with_escapes(m.group("remainder"))
+                    test_str, _ = _split_with_escapes(m.group("remainder"))
                     try:
-                        data_type = DataType.parse(m.group("data_type"))
-                        constant = data_type.parse_expected(test)
                         offset = Offset.parse(m.group("offset"))
                     except ValueError as e:
                         raise ValueError(f"{def_file!s} line {line_number}: {e!s}")
-                    test = ConstantMatchTest(
-                        offset=offset,
-                        data_type=data_type,
-                        constant=constant,
-                        parent=current_test
-                    )
+                    if m.group("data_type") == "name":
+                        if current_test is not None:
+                            raise ValueError(f"{def_file!s} line {line_number}: A named test must be at level 0")
+                        elif test in named_tests:
+                            raise ValueError(f"{def_file!s} line {line_number}: Duplicate test named {test!r}")
+                        test = NamedTest(name=test_str, offset=offset)
+                        named_tests[test_str] = test
+                    else:
+                        try:
+                            data_type = DataType.parse(m.group("data_type"))
+                            constant = data_type.parse_expected(test_str)
+                        except ValueError as e:
+                            raise ValueError(f"{def_file!s} line {line_number}: {e!s}")
+                        test = ConstantMatchTest(
+                            offset=offset,
+                            data_type=data_type,
+                            constant=constant,
+                            parent=current_test
+                        )
                     current_test = test
                     continue
                 m = MIME_PATTERN.match(line)
@@ -492,4 +525,4 @@ class MagicDefinition:
                                          f"{current_test!r}: {current_test.mime!r} and {m.group(1)}")
                     current_test.mime = m.group(1)
                     continue
-                raise ValueError(f"{def_file!s} line {line_number}: Unexpected line")
+                raise ValueError(f"{def_file!s} line {line_number}: Unexpected line\n{raw_line!r}")
