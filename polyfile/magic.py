@@ -13,7 +13,7 @@ from enum import Enum
 from pathlib import Path
 import re
 import struct
-from typing import Callable, Dict, Generic, Iterable, Iterator, List, Optional, Set, TypeVar, Union
+from typing import Callable, Dict, Generic, Iterable, Iterator, List, Optional, Set, Tuple, TypeVar, Union
 
 DEFS_DIR: Path = Path(__file__).absolute().parent / "magic_defs"
 
@@ -195,8 +195,27 @@ class StringType(DataType[str]):
         super().__init__(name)
 
     def parse_expected(self, specification: str) -> str:
-        return specification.replace("\\n", "\n").replace("\\r", "\r").replace("\\t", "\t").replace("\\\\", "\\")\
-            .replace("\\0", "\0")
+        chars: List[str] = []
+        escaped = False
+        escapes = {
+            "0": "\0",
+            " ": " ",
+            "n": "\n",
+            "r": "\r",
+            "t": "\t",
+            "\\": "\\"
+        }
+        for c in specification:
+            if escaped:
+                escaped = False
+                if c not in escapes:
+                    raise ValueError(f"Unexpected escape character \"\\{c}\" in {specification!r}")
+                chars.append(escapes[c])
+            elif c == "\\":
+                escaped = True
+            else:
+                chars.append(c)
+        return "".join(chars)
 
     def match(self, data: bytes, expected: str) -> Optional[bytes]:
         e = expected.encode("utf-8")
@@ -406,9 +425,25 @@ class ConstantMatchTest(MagicTest, Generic[T]):
         return self.data_type.match(data[self.offset:], self.constant) == self.constant
 
 
-TEST_PATTERN: re.Pattern = re.compile(r"^([>]*)(&?(0x)?\d+)\s+([^\s]+)\s+([^\s]+).*$")
+TEST_PATTERN: re.Pattern = re.compile(
+    r"^(?P<level>[>]*)(?P<offset>&?(0x)?\d+)\s+(?P<data_type>[^\s]+)\s+(?P<remainder>.+)$"
+)
 MIME_PATTERN: re.Pattern = re.compile(r"^!:mime\s+([^\s]+)\s*$")
 EXTENSION_PATTERN: re.Pattern = re.compile(r"^!:ext\s+([^\s]+)\s*$")
+
+
+def _split_with_escapes(text: str) -> Tuple[str, str]:
+    first_length = 0
+    escaped = False
+    for c in text:
+        if escaped:
+            escaped = False
+        elif c == "\\":
+            escaped = True
+        elif c == " " or c == "\t" or c == "\n":
+            break
+        first_length += 1
+    return text[:first_length], text[first_length + 1:]
 
 
 class MagicDefinition:
@@ -428,15 +463,16 @@ class MagicDefinition:
                     continue
                 m = TEST_PATTERN.match(line)
                 if m:
-                    level = len(m.group(1))
+                    level = len(m.group("level"))
                     while current_test is not None and current_test.level >= level:
                         current_test = current_test.parent
                     if current_test is None and level != 0:
                         raise ValueError(f"{def_file!s} line {line_number}: Invalid level for test {line!r}")
+                    test, _ = _split_with_escapes(m.group("remainder"))
                     try:
-                        data_type = DataType.parse(m.group(4))
-                        constant = data_type.parse_expected(m.group(5))
-                        offset = Offset.parse(m.group(2))
+                        data_type = DataType.parse(m.group("data_type"))
+                        constant = data_type.parse_expected(test)
+                        offset = Offset.parse(m.group("offset"))
                     except ValueError as e:
                         raise ValueError(f"{def_file!s} line {line_number}: {e!s}")
                     test = ConstantMatchTest(
