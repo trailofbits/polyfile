@@ -216,7 +216,7 @@ class DataType(ABC, Generic[T]):
         return f"{self.__class__.__name__}({self.name})"
 
 
-class StringType(DataType[str]):
+class StringType(DataType[bytes]):
     def __init__(self, case_insensitive: bool = False, compact_whitespace: bool = False, optional_blanks: bool = False):
         if not case_insensitive and not compact_whitespace and not optional_blanks:
             name = "string"
@@ -225,36 +225,49 @@ class StringType(DataType[str]):
         super().__init__(name)
 
     @staticmethod
-    def parse_string(specification: str) -> str:
-        chars: List[str] = []
+    def parse_string(specification: str) -> bytes:
+        chars: List[int] = []
         escaped = False
         escapes = {
-            "0": "\0",
-            " ": " ",
-            "n": "\n",
-            "r": "\r",
-            "t": "\t",
-            "\\": "\\"
+            "0": ord("\0"),
+            " ": ord(" "),
+            "n": ord("\n"),
+            "r": ord("\r"),
+            "t": ord("\t"),
+            "\\": ord("\\")
         }
+        byte_escape: Optional[str] = None
         for c in specification:
-            if escaped:
+            if byte_escape is not None:
+                if not byte_escape:
+                    byte_escape = c
+                else:
+                    chars.append(int(f"{byte_escape}{c}", 16))
+                    byte_escape = None
+            elif escaped:
                 escaped = False
-                if c not in escapes:
-                    raise ValueError(f"Unexpected escape character \"\\{c}\" in {specification!r}")
-                chars.append(escapes[c])
+                if c == "x":
+                    byte_escape = ""
+                else:
+                    if c not in escapes:
+                        raise ValueError(f"Unexpected escape character \"\\{c}\" in {specification!r}")
+                    chars.append(escapes[c])
             elif c == "\\":
                 escaped = True
             else:
-                chars.append(c)
-        return "".join(chars)
+                chars.append(ord(c))
+        if escaped:
+            raise ValueError("Unexpected end of string when processing escape character")
+        elif byte_escape is not None:
+            raise ValueError(f"Unexpected end of string when processing \"\\x{byte_escape}\"")
+        return bytes(chars)
 
-    def parse_expected(self, specification: str) -> str:
+    def parse_expected(self, specification: str) -> bytes:
         return StringType.parse_string(specification)
 
-    def match(self, data: bytes, expected: str) -> Optional[bytes]:
-        e = expected.encode("utf-8")
-        if data.startswith(e):
-            return e
+    def match(self, data: bytes, expected: bytes) -> Optional[bytes]:
+        if data.startswith(expected):
+            return expected
         else:
             return None
 
@@ -307,7 +320,7 @@ class PascalStringType(DataType[bytes]):
         self.count_includes_length: int = count_includes_length
 
     def parse_expected(self, specification: str) -> bytes:
-        return StringType.parse_string(specification).encode("utf-8")
+        return StringType.parse_string(specification)
 
     def match(self, data: bytes, expected: bytes) -> Optional[bytes]:
         if len(data) < self.byte_length:
