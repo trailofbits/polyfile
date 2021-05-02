@@ -447,7 +447,7 @@ class NamedTest(MagicTest):
 
 
 TEST_PATTERN: re.Pattern = re.compile(
-    r"^(?P<level>[>]*)(?P<offset>&?(0x)?\d+)\s+(?P<data_type>[^\s]+)\s+(?P<remainder>.+)$"
+    r"^(?P<level>[>]*)(?P<offset>&?-?(0x[\dA-Za-z]+|\d+))\s+(?P<data_type>[^\s]+)\s+(?P<remainder>.+)$"
 )
 MIME_PATTERN: re.Pattern = re.compile(r"^!:mime\s+([^\s]+)\s*$")
 EXTENSION_PATTERN: re.Pattern = re.compile(r"^!:ext\s+([^\s]+)\s*$")
