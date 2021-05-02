@@ -25,10 +25,11 @@ MAGIC_DEFS: List[Path] = [
 
 
 class Match:
-    def __init__(self, test: "MagicTest", offset: int, length: int):
+    def __init__(self, test: "MagicTest", offset: int, length: int, parent: Optional["Match"] = None):
         self.test: MagicTest = test
         self.offset: int = offset
         self.length: int = length
+        self.parent: Optional[Match] = parent
 
     def __hash__(self):
         return hash((self.test, self.offset, self.length))
@@ -38,7 +39,8 @@ class Match:
                and other.length == self.length
 
     def __repr__(self):
-        return f"{self.__class__.__name__}(test={self.test!r}, offset={self.offset}, length={self.length})"
+        return f"{self.__class__.__name__}(test={self.test!r}, offset={self.offset}, length={self.length}, " \
+               f"parent={self.parent!r})"
 
 
 class Endianness(Enum):
@@ -136,7 +138,7 @@ class MagicTest(ABC):
         return self._can_match_mime
 
     @abstractmethod
-    def test(self, data: bytes, parent_match: Optional[Match]) -> Optional[Match]:
+    def test(self, data: bytes, absolute_offset: int, parent_match: Optional[Match]) -> Optional[Match]:
         raise NotImplementedError()
 
     def _match(
@@ -147,8 +149,7 @@ class MagicTest(ABC):
     ) -> Iterator[Match]:
         if only_match_mime and not self.can_match_mime:
             return
-        offset_data = data[self.offset.to_absolute(parent_match):]
-        m = self.test(offset_data, parent_match)
+        m = self.test(data, self.offset.to_absolute(parent_match), parent_match)
         if m is not None:
             if not only_match_mime or self.mime is not None:
                 yield m
@@ -540,8 +541,12 @@ class ConstantMatchTest(MagicTest, Generic[T]):
         self.data_type: DataType[T] = data_type
         self.constant: T = constant
 
-    def test(self, data: bytes, parent_match: Optional[Match]) -> Optional[Match]:
-        return self.data_type.match(data[self.offset:], self.constant) == self.constant
+    def test(self, data: bytes, absolute_offset: int, parent_match: Optional[Match]) -> Optional[Match]:
+        matched_bytes = self.data_type.match(data[absolute_offset:], self.constant)
+        if matched_bytes is not None:
+            return Match(self, absolute_offset, len(matched_bytes), parent=parent_match)
+        else:
+            return None
 
 
 class NamedTest(MagicTest):
@@ -556,11 +561,11 @@ class NamedTest(MagicTest):
         super().__init__(offset=offset, mime=mime, extensions=extensions, message=message, parent=None)
         self.name: str = name
 
-    def test(self, data: bytes, parent_match: Optional[Match]) -> Optional[Match]:
+    def test(self, data: bytes, absolute_offset: int, parent_match: Optional[Match]) -> Optional[Match]:
         if parent_match is not None:
-            return Match(self, parent_match.offset + parent_match.length, 0)
+            return Match(self, parent_match.offset + parent_match.length, 0, parent=parent_match)
         else:
-            return Match(self, 0, 0)
+            raise ValueError("A named test must always be called from a `use` test.")
 
     def __str__(self):
         return self.name
@@ -651,7 +656,6 @@ class MagicDefinition:
                         )
                         definition.tests.append(test)
                     current_test = test
-                    print(str(test))
                     continue
                 m = MIME_PATTERN.match(line)
                 if m:
