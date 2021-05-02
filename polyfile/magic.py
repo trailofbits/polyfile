@@ -628,4 +628,10 @@ class MagicDefinition:
                                          f"{current_test!r}: {current_test.mime!r} and {m.group(1)}")
                     current_test.mime = m.group(1)
                     continue
+                m = EXTENSION_PATTERN.match(line)
+                if m:
+                    if current_test is None:
+                        raise ValueError(f"{def_file!s} line {line_number}: Unexpected ext: {line!r}")
+                    current_test.extensions.add(m.group(1))
+                    continue
                 raise ValueError(f"{def_file!s} line {line_number}: Unexpected line\n{raw_line!r}")
