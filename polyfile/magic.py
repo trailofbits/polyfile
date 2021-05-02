@@ -485,12 +485,14 @@ class NumericDataType(DataType[NumericValue]):
             name: str,
             base_type: BaseNumericDataType,
             unsigned: bool = False,
-            endianness: Endianness = Endianness.NATIVE
+            endianness: Endianness = Endianness.NATIVE,
+            and_with: Optional[int] = None
     ):
         super().__init__(name)
         self.base_type: BaseNumericDataType = base_type
         self.unsigned: bool = unsigned
         self.endianness: Endianness = endianness
+        self.and_with = and_with
 
     def parse_expected(self, specification: str) -> NumericValue:
         if specification == "x":
@@ -504,7 +506,10 @@ class NumericDataType(DataType[NumericValue]):
         else:
             struct_fmt = self.base_type.value
         struct_fmt = f"{self.endianness.value}{struct_fmt}"
-        if expected.test(struct.unpack(struct_fmt, data)):
+        value = struct.unpack(struct_fmt, data)
+        if self.and_with is not None:
+            value &= self.and_with
+        if expected.test(value):
             return data[:self.base_type.num_bytes]
         else:
             return None
@@ -527,13 +532,20 @@ class NumericDataType(DataType[NumericValue]):
             fmt = fmt[2:]
         else:
             endianness = Endianness.NATIVE
+        amp_pos = fmt.find("&")
+        if amp_pos > 0:
+            and_with: Optional[int] = parse_numeric(fmt[amp_pos+1:])
+            fmt = fmt[:amp_pos]
+        else:
+            and_with = None
         if fmt not in BASE_NUMERIC_TYPES_BY_NAME:
             raise ValueError(f"Invalid numeric data type: {name!r}")
         return NumericDataType(
             name=name,
             base_type=BASE_NUMERIC_TYPES_BY_NAME[fmt],
             unsigned=unsigned,
-            endianness=endianness
+            endianness=endianness,
+            and_with=and_with
         )
 
 
