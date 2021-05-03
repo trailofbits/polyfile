@@ -855,6 +855,7 @@ class MagicDefinition:
     def parse(def_file: Union[str, Path]) -> "MagicDefinition":
         current_test: Optional[MagicTest] = None
         definition = MagicDefinition([])
+        late_bindings: List[UseTest] = []
         with open(def_file, "rb") as f:
             for line_number, raw_line in enumerate(f.readlines()):
                 line_number += 1
@@ -900,13 +901,22 @@ class MagicDefinition:
                             test = ClearTest(offset=offset, message=message, parent=current_test)
                         elif m.group("data_type") == "use":
                             if test_str not in definition.named_tests:
-                                raise ValueError(f"{def_file!s} line {line_number}: Unknown test named {test_str!r}")
-                            test = UseTest(
-                                definition.named_tests[test_str],
+                                late_binding = True
+                                named_test: Union[str, NamedTest] = test_str
+                            else:
+                                late_binding = False
+                                named_test = definition.named_tests[test_str]
+                            # named_test might be a string here (the test name) rather than an actual NamedTest object.
+                            # This will happen if the named test is defined after the use (late binding).
+                            # We will resolve this after the entire file is parsed.
+                            test = UseTest(  # type: ignore
+                                named_test,
                                 offset=offset,
                                 message=message,
                                 parent=current_test
                             )
+                            if late_binding:
+                                late_bindings.append(test)
                         else:
                             try:
                                 data_type = DataType.parse(m.group("data_type"))
@@ -939,4 +949,10 @@ class MagicDefinition:
                     current_test.extensions.add(m.group(1))
                     continue
                 raise ValueError(f"{def_file!s} line {line_number}: Unexpected line\n{raw_line!r}")
+        # resolve any "use" tests with late binding:
+        for use_test in late_bindings:
+            assert isinstance(use_test.named_test, str)
+            if use_test.named_test not in definition.named_tests:
+                raise ValueError(f"{def_file!s}: Named test {use_test.named_test!r} is not defined")
+            use_test.named_test = definition.named_tests[use_test.named_test]
         return definition
