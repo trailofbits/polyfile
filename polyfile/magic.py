@@ -158,7 +158,7 @@ class IndirectOffset(Offset):
     INDIRECT_OFFSET_PATTERN: re.Pattern = re.compile(
         "^\("
         rf"(?P<offset>&?-?{NUMBER_PATTERN})"
-        r"((?P<signedness>[.,])(?P<type>[bBcCeEfFgGhHiIlmsSqQ]))"
+        r"((?P<signedness>[.,])(?P<type>[bBcCeEfFgGhHiIlmsSqQ]))?"
         rf"(?P<addend>[+-]?{NUMBER_PATTERN})?"
         "\)$"
     )
@@ -169,6 +169,8 @@ class IndirectOffset(Offset):
         if not m:
             raise ValueError(f"Invalid indirect offset: {offset!r}")
         t = m.group("type")
+        if t is None:
+            t = "I"
         if t == "m":
             raise NotImplementedError("TODO: Add support for middle endianness")
         elif t.islower():
