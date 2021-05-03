@@ -245,7 +245,6 @@ class StringType(DataType[bytes]):
         chars: List[int] = []
         escaped = False
         escapes = {
-            "0": ord("\0"),
             " ": ord(" "),
             "n": ord("\n"),
             "r": ord("\r"),
@@ -267,6 +266,8 @@ class StringType(DataType[bytes]):
                 escaped = False
                 if c == "x":
                     byte_escape = ""
+                elif c.isdigit():
+                    chars.append(int(c))
                 else:
                     if c not in escapes:
                         raise ValueError(f"Unexpected escape character \"\\{c}\" in {specification!r}")
