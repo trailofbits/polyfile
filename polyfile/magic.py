@@ -629,6 +629,8 @@ class IntegerValue(NumericValue[int]):
             value = value[1:]
         except KeyError:
             operator = NumericOperator.EQUALS
+        if not value:
+            breakpoint()
         if value[0] == "~":
             int_value = parse_numeric(value[1:])
             int_value = (1 << (num_bytes * 8)) - 1 - int_value
@@ -920,6 +922,11 @@ class MagicDefinition:
                         else:
                             try:
                                 data_type = DataType.parse(m.group("data_type"))
+                                # in some definitions a space is put after the "&" in a numeric datatype:
+                                if test_str == "&":
+                                    test_str_remainder, message = _split_with_escapes(message)
+                                    message = message.lstrip()
+                                    test_str = f"&{test_str_remainder}"
                                 constant = data_type.parse_expected(test_str)
                             except ValueError as e:
                                 raise ValueError(f"{def_file!s} line {line_number}: {e!s}")
