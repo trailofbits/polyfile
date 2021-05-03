@@ -494,7 +494,8 @@ class SearchType(StringType):
 
     SEARCH_TYPE_FORMAT: re.Pattern = re.compile(
         r"^search"
-        r"((/(?P<repetitions1>\d+))(/(?P<flags1>[BbCctTWw]*))?|/((?P<flags2>[BbCctTWw]*)/)?(?P<repetitions2>\d+))$"
+        r"((/(?P<repetitions1>(0x[\dA-Za-z]+|\d+)))(/(?P<flags1>[BbCctTWw]*))?|"
+        r"/((?P<flags2>[BbCctTWw]*)/)?(?P<repetitions2>(0x[\dA-Za-z]+|\d+)))$"
     )
 
     @classmethod
@@ -503,10 +504,10 @@ class SearchType(StringType):
         if not m:
             raise ValueError(f"Invalid search type declaration: {format_str!r}")
         if m.group("repetitions1") is not None:
-            repetitions = int(m.group("repetitions1"))
+            repetitions = parse_numeric(m.group("repetitions1"))
             flags = m.group("flags1")
         elif m.group("repetitions2") is not None:
-            repetitions = int(m.group("repetitions2"))
+            repetitions = parse_numeric(m.group("repetitions2"))
             flags = m.group("flags2")
         else:
             raise ValueError(f"Invalid search type declaration: {format_str!r}")
