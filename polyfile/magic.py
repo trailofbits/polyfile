@@ -866,6 +866,31 @@ class OffsetMatchTest(MagicTest):
             return None
 
 
+class IndirectTest(MagicTest):
+    def __init__(
+            self,
+            matcher: "MagicMatcher",
+            offset: Offset,
+            relative: bool = False,
+            mime: Optional[str] = None,
+            extensions: Iterable[str] = (),
+            message: str = "",
+            parent: Optional[MagicTest] = None
+    ):
+        super().__init__(offset=offset, mime=mime, extensions=extensions, message=message, parent=parent)
+        self.matcher: MagicMatcher = matcher
+        self.relative: bool = relative
+
+    def test(self, data: bytes, absolute_offset: int, parent_match: Optional[Match]) -> Optional[Match]:
+        if self.relative:
+            if parent_match is None:
+                return None
+            absolute_offset += parent_match.offset
+        for match in self.matcher.match(data[absolute_offset:]):
+            match.offset += absolute_offset
+            yield match
+
+
 class NamedTest(MagicTest):
     def __init__(
             self,
@@ -1025,6 +1050,10 @@ class MagicMatcher:
                             expected_value = IntegerValue.parse(test_str, num_bytes=8)
                             test = OffsetMatchTest(offset=offset, value=expected_value, message=message,
                                                    parent=current_test)
+                        elif m.group("data_type") == "indirect" or m.group("data_type") == "indirect/r":
+                            test = IndirectTest(matcher=matcher, offset=offset,
+                                                relative=m.group("data_type").endswith("r"),
+                                                message=message, parent=current_test)
                         elif m.group("data_type") == "use":
                             if test_str not in matcher.named_tests:
                                 late_binding = True
