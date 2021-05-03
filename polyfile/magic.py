@@ -159,7 +159,8 @@ class IndirectOffset(Offset):
             num_bytes = 8
         elif t in ("h", "s"):
             num_bytes = 2
-        elif t == "i":
+        elif t in ("i", "l"):
+            # TODO: Confirm that "l" should really be here
             num_bytes = 4
         else:
             raise ValueError(f"Unsupported indirect specifier type: {m.group('type')!r}")
