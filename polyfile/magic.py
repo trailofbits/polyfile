@@ -250,7 +250,10 @@ class StringType(DataType[bytes]):
             "n": ord("\n"),
             "r": ord("\r"),
             "t": ord("\t"),
-            "\\": ord("\\")
+            "\\": ord("\\"),
+            "!": ord("!"),
+            ">": ord(">"),
+            "<": ord("<")
         }
         byte_escape: Optional[str] = None
         for c in specification:
