@@ -760,13 +760,13 @@ class NumericDataType(DataType[NumericValue]):
             base_type: BaseNumericDataType,
             unsigned: bool = False,
             endianness: Endianness = Endianness.NATIVE,
-            and_with: Optional[int] = None
+            preprocess: Callable[[int], int] = lambda x: x
     ):
         super().__init__(name)
         self.base_type: BaseNumericDataType = base_type
         self.unsigned: bool = unsigned
         self.endianness: Endianness = endianness
-        self.and_with = and_with
+        self.preprocess: Callable[[int], int] = preprocess
 
     def parse_expected(self, specification: str) -> NumericValue:
         if specification == "x":
@@ -781,8 +781,7 @@ class NumericDataType(DataType[NumericValue]):
             struct_fmt = self.base_type.value
         struct_fmt = f"{self.endianness.value}{struct_fmt}"
         value = struct.unpack(struct_fmt, data)
-        if self.and_with is not None:
-            value &= self.and_with
+        value = self.preprocess(value)
         if expected.test(value):
             return data[:self.base_type.num_bytes]
         else:
@@ -806,12 +805,18 @@ class NumericDataType(DataType[NumericValue]):
             fmt = fmt[2:]
         else:
             endianness = Endianness.NATIVE
-        amp_pos = fmt.find("&")
-        if amp_pos > 0:
-            and_with: Optional[int] = parse_numeric(fmt[amp_pos+1:])
-            fmt = fmt[:amp_pos]
+        for symbol, operator in (
+                ("&", lambda a, b: a & b),
+                ("%", lambda a, b: a % b)
+        ):
+            pos = fmt.find(symbol)
+            if pos > 0:
+                operand = parse_numeric(fmt[pos+1:])
+                preprocess = lambda n: operator(n, operand)
+                fmt = fmt[:pos]
+                break
         else:
-            and_with = None
+            preprocess = lambda n: n
         if fmt not in BASE_NUMERIC_TYPES_BY_NAME:
             raise ValueError(f"Invalid numeric data type: {name!r}")
         return NumericDataType(
@@ -819,7 +824,7 @@ class NumericDataType(DataType[NumericValue]):
             base_type=BASE_NUMERIC_TYPES_BY_NAME[fmt],
             unsigned=unsigned,
             endianness=endianness,
-            and_with=and_with
+            preprocess=preprocess
         )
 
 
