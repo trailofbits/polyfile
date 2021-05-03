@@ -693,10 +693,10 @@ class NumericDataType(DataType[NumericValue]):
     def parse(fmt: str) -> "DataType":
         name = fmt
         if fmt.startswith("u"):
+            fmt = fmt[1:]
             if fmt.startswith("double") or fmt.startswith("float"):
                 raise ValueError(f"{name[1:]} cannot be unsigned")
             unsigned = True
-            fmt = fmt[1:]
         else:
             unsigned = False
         if fmt.startswith("le"):
