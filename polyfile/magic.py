@@ -1060,7 +1060,7 @@ class MagicMatcher:
         with open(def_file, "rb") as f:
             for line_number, raw_line in enumerate(f.readlines()):
                 line_number += 1
-                raw_line = raw_line.strip()
+                raw_line = raw_line.lstrip()
                 if not raw_line or raw_line.startswith(b"#"):
                     # skip empty lines and comments
                     continue
