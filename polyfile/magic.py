@@ -47,6 +47,7 @@ class Endianness(Enum):
     NATIVE = "="
     LITTLE = "<"
     BIG = ">"
+    PDP = "me"
 
 
 def parse_numeric(text: str) -> int:
@@ -688,9 +689,10 @@ class BaseNumericDataType(Enum):
     LDATE = ("ldate", "L", 4)
     QLDATE = ("qldate", "I", 8)
 
-    def __init__(self, name: str, struct_fmt: str, num_bytes: int):
+    def __init__(self, name: str, struct_fmt: str, num_bytes: int, post_process: Callable[[int], int] = lambda n: n):
         self.struct_fmt: str = struct_fmt
         self.num_bytes: int = num_bytes
+        self.post_process: Callable[[int], int] = post_process
         BASE_NUMERIC_TYPES_BY_NAME[name] = self
 
 
@@ -790,6 +792,8 @@ class NumericDataType(DataType[NumericValue]):
         self.unsigned: bool = unsigned
         self.endianness: Endianness = endianness
         self.preprocess: Callable[[int], int] = preprocess
+        if self.endianness == Endianness.PDP and self.base_type.num_bytes != 4:
+            raise ValueError(f"PDP endianness can only be used with four byte base types, not {self.base_type}")
 
     def parse_expected(self, specification: str) -> NumericValue:
         if specification == "x":
@@ -798,12 +802,22 @@ class NumericDataType(DataType[NumericValue]):
             return NumericValue.parse(specification, self.base_type.num_bytes)
 
     def match(self, data: bytes, expected: NumericValue) -> Optional[bytes]:
-        if self.unsigned and self.base_type not in (BaseNumericDataType.DOUBLE, BaseNumericDataType.FLOAT):
-            struct_fmt = self.base_type.value.upper()
+        if len(data) < self.base_type.num_bytes:
+            return None
+        elif self.endianness == Endianness.PDP:
+            assert self.base_type.num_bytes == 4
+            if self.unsigned:
+                value = (struct.unpack("<H", data[:2]) << 16) | struct.unpack("<H", data[2:4])
+            else:
+                be_data = bytes([data[1], data[0], data[3], data[2]])
+                value = struct.unpack(">i", be_data)
         else:
-            struct_fmt = self.base_type.value
-        struct_fmt = f"{self.endianness.value}{struct_fmt}"
-        value = struct.unpack(struct_fmt, data)
+            if self.unsigned and self.base_type not in (BaseNumericDataType.DOUBLE, BaseNumericDataType.FLOAT):
+                struct_fmt = self.base_type.value.upper()
+            else:
+                struct_fmt = self.base_type.value
+            struct_fmt = f"{self.endianness.value}{struct_fmt}"
+            value = struct.unpack(struct_fmt, data)
         value = self.preprocess(value)
         if expected.test(value):
             return data[:self.base_type.num_bytes]
@@ -825,6 +839,9 @@ class NumericDataType(DataType[NumericValue]):
             fmt = fmt[2:]
         elif fmt.startswith("be"):
             endianness = Endianness.BIG
+            fmt = fmt[2:]
+        elif fmt.startswith("me"):
+            endianness = Endianness.PDP
             fmt = fmt[2:]
         else:
             endianness = Endianness.NATIVE
