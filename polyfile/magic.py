@@ -366,7 +366,8 @@ class SearchType(StringType):
         return None
 
     SEARCH_TYPE_FORMAT: re.Pattern = re.compile(
-        r"^search((/(?P<repetitions1>\d+))(/(?P<flags1>[BbCctTWw]))?|/((?P<flags2>[BbCctTWw])/)?(?P<repetitions2>\d+))$"
+        r"^search"
+        r"((/(?P<repetitions1>\d+))(/(?P<flags1>[BbCctTWw]*))?|/((?P<flags2>[BbCctTWw]*)/)?(?P<repetitions2>\d+))$"
     )
 
     @classmethod
@@ -889,8 +890,8 @@ class MagicDefinition:
                     if m.group("data_type") == "name":
                         if current_test is not None:
                             raise ValueError(f"{def_file!s} line {line_number}: A named test must be at level 0")
-                        elif test in definition.named_tests:
-                            raise ValueError(f"{def_file!s} line {line_number}: Duplicate test named {test!r}")
+                        elif test_str in definition.named_tests:
+                            raise ValueError(f"{def_file!s} line {line_number}: Duplicate test named {test_str!r}")
                         test = NamedTest(name=test_str, offset=offset, message=message)
                         definition.named_tests[test_str] = test
                     else:
