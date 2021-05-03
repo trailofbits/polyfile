@@ -198,8 +198,8 @@ class DataType(ABC, Generic[T]):
             dt = PascalStringType.parse(fmt)
         elif fmt.startswith("search"):
             dt = SearchType.parse(fmt)
-        elif fmt == "regex":
-            dt = RegexType()
+        elif fmt.startswith("regex"):
+            dt = RegexType.parse(fmt)
         else:
             dt = NumericDataType.parse(fmt)
         if dt.name in TYPES_BY_NAME:
@@ -487,18 +487,70 @@ class PascalStringType(DataType[bytes]):
 
 
 class RegexType(DataType[re.Pattern]):
-    def __init__(self):
-        super().__init__("regex")
+    def __init__(
+            self,
+            length: Optional[int] = None,
+            case_insensitive: bool = False,
+            match_to_start: bool = False,
+            limit_lines: bool = False
+    ):
+        if length is None:
+            if limit_lines:
+                length = 8 * 1024 // 80  # libmagic assumes 80 bytes per line
+            else:
+                length = 8 * 1024  # libmagic limits to 8KiB by default
+        self.limit_lines: bool = limit_lines
+        self.length: int = length
+        self.case_insensitive: bool = case_insensitive
+        self.match_to_start: bool = match_to_start
+        super().__init__(f"regex/{self.length}{['', 'c'][case_insensitive]}{['', 's'][match_to_start]}"
+                         f"{['', 'l'][self.limit_lines]}")
 
     def parse_expected(self, specification: str) -> re.Pattern:
-        return re.compile(specification.encode("utf-8"))
+        if self.case_insensitive:
+            return re.compile(StringType.parse_string(specification), re.IGNORECASE)
+        else:
+            return re.compile(StringType.parse_string(specification))
 
     def match(self, data: bytes, expected: re.Pattern) -> Optional[bytes]:
-        m = expected.match(data)
-        if m:
-            return m.group(0)
+        if self.limit_lines:
+            limit = self.length
+            offset = 0
+            byte_limit = 80 * self.length  # libmagic uses an implicit byte limit assuming 80 characters per line
+            while limit > 0:
+                limit -= 1
+                line_offset = data.find(b"\n", start=offset, end=byte_limit)
+                if line_offset < 0:
+                    return None
+                line = data[offset:line_offset]
+                m = expected.search(line)
+                if m:
+                    return data[:offset + m.end()]
+                offset = line_offset + 1
         else:
-            return None
+            m = expected.search(data[:self.length])
+            if m:
+                return data[:m.end()]
+            else:
+                return None
+
+    REGEX_TYPE_FORMAT: re.Pattern = re.compile(r"^regex(/(?P<length>\d+)?(?P<flags>[csl]*))?$")
+
+    @classmethod
+    def parse(cls, format_str: str) -> "RegexType":
+        m = cls.REGEX_TYPE_FORMAT.match(format_str)
+        if not m:
+            raise ValueError(f"Invalid regex type declaration: {format_str!r}")
+        if m.group("flags") is None:
+            options: Iterable[str] = ()
+        else:
+            options = m.group("flags")
+        return RegexType(
+            length=m.group("length"),
+            case_insensitive="c" in options,
+            match_to_start="s" in options,
+            limit_lines="l" in options
+        )
 
 
 BASE_NUMERIC_TYPES_BY_NAME: Dict[str, "BaseNumericDataType"] = {}
