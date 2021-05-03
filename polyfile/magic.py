@@ -347,7 +347,8 @@ class StringType(DataType[bytes]):
             "\\": ord("\\"),
             "!": ord("!"),
             ">": ord(">"),
-            "<": ord("<")
+            "<": ord("<"),
+            "^": ord("^")
         }
         byte_escape: Optional[str] = None
         for c in specification:
