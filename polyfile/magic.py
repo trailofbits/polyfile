@@ -378,10 +378,17 @@ class StringType(DataType[bytes]):
             if byte_escape is not None:
                 if not byte_escape:
                     byte_escape = c
+                    continue
+                elif not c.isnumeric():
+                    # libmagic allows single digit hex escapes, like "\x0\x0\x0". Handle that here:
+                    chars.append(int(byte_escape, 16))
+                    byte_escape = None
+                    # do not call continue so we fall through and process c as if it were a new character
                 else:
                     chars.append(int(f"{byte_escape}{c}", 16))
                     byte_escape = None
-            elif escaped:
+                    continue
+            if escaped:
                 escaped = False
                 if c == "x":
                     byte_escape = ""
@@ -398,7 +405,7 @@ class StringType(DataType[bytes]):
         if escaped:
             raise ValueError("Unexpected end of string when processing escape character")
         elif byte_escape is not None:
-            raise ValueError(f"Unexpected end of string when processing \"\\x{byte_escape}\"")
+            chars.append(int(byte_escape, 16))
         return bytes(chars)
 
     def parse_expected(self, specification: str) -> bytes:
