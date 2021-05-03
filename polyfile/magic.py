@@ -746,10 +746,19 @@ class UseTest(MagicTest):
 
 class DefaultTest(MagicTest):
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[Match]) -> Optional[Match]:
-        if parent_match is None:
+        if parent_match is None or getattr(parent_match, "_cleared", False):
             return Match(self, absolute_offset, 0)
         else:
             return None
+
+
+class ClearTest(MagicTest):
+    def test(self, data: bytes, absolute_offset: int, parent_match: Optional[Match]) -> Optional[Match]:
+        if parent_match is None:
+            return Match(self, absolute_offset, 0)
+        else:
+            setattr(parent_match, "_cleared", True)
+            return Match(self, absolute_offset, 0, parent_match)
 
 
 TEST_PATTERN: re.Pattern = re.compile(
@@ -827,6 +836,10 @@ class MagicDefinition:
                             if current_test is None:
                                 raise NotImplementedError("TODO: Add support for default tests at level 0")
                             test = DefaultTest(offset=offset, message=message, parent=current_test)
+                        elif m.group("data_type") == "clear":
+                            if current_test is None:
+                                raise NotImplementedError("TODO: Add support for clear tests at level 0")
+                            test = ClearTest(offset=offset, message=message, parent=current_test)
                         elif m.group("data_type") == "use":
                             if test_str not in definition.named_tests:
                                 raise ValueError(f"{def_file!s} line {line_number}: Unknown test named {test_str!r}")
