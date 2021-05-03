@@ -845,7 +845,7 @@ def _split_with_escapes(text: str) -> Tuple[str, str]:
     return text[:first_length], text[first_length + 1:]
 
 
-class MagicDefinition:
+class MagicMatcher:
     def __init__(self, tests: Iterable[MagicTest]):
         self.tests: List[MagicTest] = []
         self.named_tests: Dict[str, NamedTest] = {}
@@ -860,9 +860,8 @@ class MagicDefinition:
             yield from test.match(data, only_match_mime=only_match_mime)
 
     @staticmethod
-    def parse(def_file: Union[str, Path]) -> "MagicDefinition":
+    def _parse_file(def_file: Union[str, Path], matcher: "MagicMatcher") -> Iterable[UseTest]:
         current_test: Optional[MagicTest] = None
-        definition = MagicDefinition([])
         late_bindings: List[UseTest] = []
         with open(def_file, "rb") as f:
             for line_number, raw_line in enumerate(f.readlines()):
@@ -894,10 +893,10 @@ class MagicDefinition:
                     if m.group("data_type") == "name":
                         if current_test is not None:
                             raise ValueError(f"{def_file!s} line {line_number}: A named test must be at level 0")
-                        elif test_str in definition.named_tests:
+                        elif test_str in matcher.named_tests:
                             raise ValueError(f"{def_file!s} line {line_number}: Duplicate test named {test_str!r}")
                         test = NamedTest(name=test_str, offset=offset, message=message)
-                        definition.named_tests[test_str] = test
+                        matcher.named_tests[test_str] = test
                     else:
                         if m.group("data_type") == "default":
                             if current_test is None:
@@ -908,12 +907,12 @@ class MagicDefinition:
                                 raise NotImplementedError("TODO: Add support for clear tests at level 0")
                             test = ClearTest(offset=offset, message=message, parent=current_test)
                         elif m.group("data_type") == "use":
-                            if test_str not in definition.named_tests:
+                            if test_str not in matcher.named_tests:
                                 late_binding = True
                                 named_test: Union[str, NamedTest] = test_str
                             else:
                                 late_binding = False
-                                named_test = definition.named_tests[test_str]
+                                named_test = matcher.named_tests[test_str]
                             # named_test might be a string here (the test name) rather than an actual NamedTest object.
                             # This will happen if the named test is defined after the use (late binding).
                             # We will resolve this after the entire file is parsed.
@@ -943,7 +942,7 @@ class MagicDefinition:
                                 message=message,
                                 parent=current_test
                             )
-                        definition.tests.append(test)
+                        matcher.tests.append(test)
                     current_test = test
                     continue
                 m = MIME_PATTERN.match(line)
@@ -962,6 +961,14 @@ class MagicDefinition:
                     current_test.extensions.add(m.group(1))
                     continue
                 raise ValueError(f"{def_file!s} line {line_number}: Unexpected line\n{raw_line!r}")
+        return late_bindings
+
+    @staticmethod
+    def parse(*def_files: Union[str, Path]) -> "MagicMatcher":
+        late_bindings: List[UseTest] = []
+        matcher = MagicMatcher([])
+        for file in def_files:
+            late_bindings.extend(MagicMatcher._parse_file(file, matcher=matcher))
         # resolve any "use" tests with late binding:
         for use_test in late_bindings:
             assert isinstance(use_test.named_test, str)

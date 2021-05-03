@@ -1,10 +1,8 @@
 from unittest import TestCase
 
-from polyfile.magic import MagicDefinition, MAGIC_DEFS
+from polyfile.magic import MagicMatcher, MAGIC_DEFS
 
 
 class MagicTest(TestCase):
     def test_parsing(self):
-        for file in MAGIC_DEFS:
-            print(file)
-            MagicDefinition.parse(file)
+        MagicMatcher.parse(*MAGIC_DEFS)
