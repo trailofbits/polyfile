@@ -788,7 +788,7 @@ class NumericDataType(DataType[NumericValue]):
             return None
 
     @staticmethod
-    def parse(fmt: str) -> "DataType":
+    def parse(fmt: str) -> "NumericDataType":
         name = fmt
         if fmt.startswith("u"):
             fmt = fmt[1:]
@@ -841,6 +841,26 @@ class ConstantMatchTest(MagicTest, Generic[T]):
         matched_bytes = self.data_type.match(data[absolute_offset:], self.constant)
         if matched_bytes is not None:
             return Match(self, absolute_offset, len(matched_bytes), parent=parent_match)
+        else:
+            return None
+
+
+class OffsetMatchTest(MagicTest):
+    def __init__(
+            self,
+            offset: Offset,
+            value: IntegerValue,
+            mime: Optional[str] = None,
+            extensions: Iterable[str] = (),
+            message: str = "",
+            parent: Optional["MagicTest"] = None
+    ):
+        super().__init__(offset=offset, mime=mime, extensions=extensions, message=message, parent=parent)
+        self.value: IntegerValue = value
+
+    def test(self, data: bytes, absolute_offset: int, parent_match: Optional[Match]) -> Optional[Match]:
+        if self.value.test(absolute_offset):
+            return Match(self, 0, absolute_offset, parent=parent_match)
         else:
             return None
 
@@ -1000,6 +1020,10 @@ class MagicMatcher:
                             if current_test is None:
                                 raise NotImplementedError("TODO: Add support for clear tests at level 0")
                             test = ClearTest(offset=offset, message=message, parent=current_test)
+                        elif m.group("data_type") == "offset":
+                            expected_value = IntegerValue.parse(test_str, num_bytes=8)
+                            test = OffsetMatchTest(offset=offset, value=expected_value, message=message,
+                                                   parent=current_test)
                         elif m.group("data_type") == "use":
                             if test_str not in matcher.named_tests:
                                 late_binding = True
