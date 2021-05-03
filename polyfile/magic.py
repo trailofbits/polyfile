@@ -285,7 +285,7 @@ class DataType(ABC, Generic[T]):
     def parse(fmt: str) -> "DataType":
         if fmt in TYPES_BY_NAME:
             return TYPES_BY_NAME[fmt]
-        elif fmt.startswith("string"):
+        elif fmt.startswith("string") or fmt.startswith("ustring"):
             dt = StringType.parse(fmt)
         elif fmt.startswith("pstring"):
             dt = PascalStringType.parse(fmt)
@@ -409,7 +409,7 @@ class StringType(DataType[bytes]):
             return None
         return bytes(matched)
 
-    STRING_TYPE_FORMAT: re.Pattern = re.compile(r"^string(/[BbCctTWw]*)?$")
+    STRING_TYPE_FORMAT: re.Pattern = re.compile(r"^u?string(/[BbCctTWw]*)?$")
 
     @classmethod
     def parse(cls, format_str: str) -> "StringType":
