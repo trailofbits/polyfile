@@ -51,12 +51,17 @@ class Endianness(Enum):
 
 def parse_numeric(text: str) -> int:
     text = text.strip()
-    if text.startswith("0x"):
-        return int(text, 16)
-    elif text.startswith("0") and len(text) > 1:
-        return int(text, 8)
+    if text.startswith("-"):
+        factor = -1
+        text = text[1:]
     else:
-        return int(text)
+        factor = 1
+    if text.startswith("0x"):
+        return int(text, 16) * factor
+    elif text.startswith("0") and len(text) > 1:
+        return int(text, 8) * factor
+    else:
+        return int(text) * factor
 
 
 class Offset(ABC):
@@ -70,6 +75,8 @@ class Offset(ABC):
             return RelativeOffset(parse_numeric(offset[1:]))
         elif offset.startswith("("):
             return IndirectOffset.parse(offset)
+        elif offset.startswith("-"):
+            return NegativeOffset(parse_numeric(offset[1:]))
         else:
             return AbsoluteOffset(parse_numeric(offset))
 
@@ -88,6 +95,20 @@ class AbsoluteOffset(Offset):
         return str(self.offset)
 
 
+class NegativeOffset(Offset):
+    def __init__(self, magnitude: int):
+        self.magnitude: int = magnitude
+
+    def to_absolute(self, data: bytes, last_match: Optional[Match]) -> int:
+        return len(data) - self.magnitude
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}(magnitude={self.magnitude})"
+
+    def __str__(self):
+        return f"{self.magnitude}"
+
+
 class RelativeOffset(Offset):
     def __init__(self, relative_offset: int):
         self.relative_offset: int = relative_offset
@@ -103,8 +124,8 @@ class RelativeOffset(Offset):
 
 
 class IndirectOffset(Offset):
-    def __init__(self, offset: int, num_bytes: int, endianness: Endianness, signed: bool, addend: int = 0):
-        self.offset: int = offset
+    def __init__(self, offset: Offset, num_bytes: int, endianness: Endianness, signed: bool, addend: int = 0):
+        self.offset: Offset = offset
         self.num_bytes: int = num_bytes
         self.endianness: Endianness = endianness
         self.signed: bool = signed
@@ -129,12 +150,13 @@ class IndirectOffset(Offset):
             fmt = f"<{fmt}"
         else:
             fmt = f">{fmt}"
-        return struct.unpack(fmt, data[self.offset:self.offset + self.num_bytes]) + self.addend
+        offset = self.offset.to_absolute(data, last_match)
+        return struct.unpack(fmt, data[offset:offset + self.num_bytes]) + self.addend
 
     NUMBER_PATTERN: str = r"(0x[\dA-Za-z]+|\d+)"
     INDIRECT_OFFSET_PATTERN: re.Pattern = re.compile(
         "^\("
-        rf"(?P<offset>{NUMBER_PATTERN})"
+        rf"(?P<offset>&?-?{NUMBER_PATTERN})"
         r"((?P<signedness>[.,])(?P<type>[bBcCeEfFgGhHiIlmsSqQ]))"
         rf"(?P<addend>[+-]?{NUMBER_PATTERN})?"
         "\)$"
@@ -175,7 +197,7 @@ class IndirectOffset(Offset):
                 negate_addend = -1
                 addend = addend[1:]
         return IndirectOffset(
-            offset=parse_numeric(m.group("offset")),
+            offset=Offset.parse(m.group("offset")),
             num_bytes=num_bytes,
             endianness=endianness,
             signed=m.group("signedness") == ",",
@@ -183,7 +205,7 @@ class IndirectOffset(Offset):
         )
 
     def __repr__(self):
-        return f"{self.__class__.__name__}(offset=0x{self.offset:x}, num_bytes={self.num_bytes}, "\
+        return f"{self.__class__.__name__}(offset={self.offset!r}, num_bytes={self.num_bytes}, "\
                f"endianness={self.endianness!r}, signed={self.signed}, addend={self.addend})"
 
     def __str__(self):
@@ -193,7 +215,7 @@ class IndirectOffset(Offset):
             addend = str(self.addend)
         else:
             addend = f"+{self.addend}"
-        return f"({self.offset:x}{['.', ','][self.signed]}{self.num_bytes}{self.endianness}{addend})"
+        return f"({self.offset!s}{['.', ','][self.signed]}{self.num_bytes}{self.endianness}{addend})"
 
 
 class MagicTest(ABC):
