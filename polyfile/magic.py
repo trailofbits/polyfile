@@ -196,6 +196,8 @@ class DataType(ABC, Generic[T]):
             dt = StringType.parse(fmt)
         elif fmt.startswith("pstring"):
             dt = PascalStringType.parse(fmt)
+        elif fmt.startswith("search"):
+            dt = SearchType.parse(fmt)
         elif fmt == "regex":
             dt = RegexType()
         else:
@@ -309,7 +311,7 @@ class StringType(DataType[bytes]):
             return None
         return bytes(matched)
 
-    STRING_TYPE_FORMAT: re.Pattern = re.compile(r"^string(/[BbctTWw]*)?$")
+    STRING_TYPE_FORMAT: re.Pattern = re.compile(r"^string(/[BbCctTWw]*)?$")
 
     @classmethod
     def parse(cls, format_str: str) -> "StringType":
@@ -321,6 +323,67 @@ class StringType(DataType[bytes]):
         else:
             options = m.group(1)
         return StringType(
+            case_insensitive_lower="c" in options,
+            case_insensitive_upper="C" in options,
+            compact_whitespace="B" in options or "W" in options,
+            optional_blanks="b" in options or "w" in options,
+            trim="T" in options
+        )
+
+
+class SearchType(StringType):
+    def __init__(
+            self,
+            repetitions: int,
+            case_insensitive_lower: bool = False,
+            case_insensitive_upper: bool = False,
+            compact_whitespace: bool = False,
+            optional_blanks: bool = False,
+            trim: bool = False
+    ):
+        if repetitions <= 0:
+            raise ValueError("repetitions must be a positive integer")
+        super().__init__(
+            case_insensitive_lower=case_insensitive_lower,
+            case_insensitive_upper=case_insensitive_upper,
+            compact_whitespace=compact_whitespace,
+            optional_blanks=optional_blanks,
+            trim=trim
+        )
+        assert self.name.startswith("string")
+        self.name = f"search/{repetitions}{self.name[6:]}"
+        self.repetitions: int = repetitions
+
+    def match(self, data: bytes, expected: bytes) -> Optional[bytes]:
+        for i in range(self.repetitions):
+            ret = super().match(data[i:], expected)
+            if ret is not None:
+                return ret
+        return None
+
+    SEARCH_TYPE_FORMAT: re.Pattern = re.compile(
+        r"^search((/(?P<repetitions1>\d+))(/(?P<flags1>[BbCctTWw]))?|/((?P<flags2>[BbCctTWw])/)?(?P<repetitions2>\d+))$"
+    )
+
+    @classmethod
+    def parse(cls, format_str: str) -> "SearchType":
+        m = cls.SEARCH_TYPE_FORMAT.match(format_str)
+        if not m:
+            raise ValueError(f"Invalid search type declaration: {format_str!r}")
+        if m.group("repetitions1") is not None:
+            repetitions = int(m.group("repetitions1"))
+            flags = m.group("flags1")
+        elif m.group("repetitions2") is not None:
+            repetitions = int(m.group("repetitions2"))
+            flags = m.group("flags2")
+        else:
+            raise ValueError(f"Invalid search type declaration: {format_str!r}")
+        if flags is None:
+            options: Iterable[str] = ()
+        else:
+            options = flags
+        return SearchType(
+            repetitions=repetitions,
             case_insensitive_lower="c" in options,
             case_insensitive_upper="C" in options,
             compact_whitespace="B" in options or "W" in options,
