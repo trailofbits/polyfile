@@ -372,8 +372,7 @@ class StringType(DataType[bytes]):
             "\\": ord("\\"),
             "!": ord("!"),
             ">": ord(">"),
-            "<": ord("<"),
-            "^": ord("^")
+            "<": ord("<")
         }
         byte_escape: Optional[str] = None
         for c in specification:
@@ -638,9 +637,9 @@ class RegexType(DataType[re.Pattern]):
 
     def parse_expected(self, specification: str) -> re.Pattern:
         if self.case_insensitive:
-            return re.compile(StringType.parse_string(specification), re.IGNORECASE)
+            return re.compile(specification, re.IGNORECASE)
         else:
-            return re.compile(StringType.parse_string(specification))
+            return re.compile(specification)
 
     def match(self, data: bytes, expected: re.Pattern) -> Optional[bytes]:
         if self.limit_lines:
