@@ -339,6 +339,7 @@ class StringType(DataType[bytes]):
         escaped = False
         escapes = {
             " ": ord(" "),
+            "f": ord("\f"),
             "n": ord("\n"),
             "r": ord("\r"),
             "t": ord("\t"),
