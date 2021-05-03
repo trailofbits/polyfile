@@ -862,6 +862,9 @@ class MagicDefinition:
                 if not raw_line or raw_line.startswith(b"#"):
                     # skip empty lines and comments
                     continue
+                elif raw_line.startswith(b"!:apple") or raw_line.startswith(b"!:strength"):
+                    # ignore these directives for now
+                    continue
                 try:
                     line = raw_line.decode("utf-8")
                 except UnicodeDecodeError:
