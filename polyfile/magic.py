@@ -1018,10 +1018,10 @@ class ClearTest(MagicTest):
 
 
 TEST_PATTERN: re.Pattern = re.compile(
-    r"^(?P<level>[>]*)(?P<offset>[^\s]+)\s+(?P<data_type>[^\s]+)\s+(?P<remainder>.+)$"
+    r"^(?P<level>[>]*)(?P<offset>[^\s!][^\s]*)\s+(?P<data_type>[^\s]+)\s+(?P<remainder>.+)$"
 )
-MIME_PATTERN: re.Pattern = re.compile(r"^!:mime\s+([^\s]+)\s*$")
-EXTENSION_PATTERN: re.Pattern = re.compile(r"^!:ext\s+([^\s]+)\s*$")
+MIME_PATTERN: re.Pattern = re.compile(r"^!:mime\s+([^\s]+)\s*(#.*)?$")
+EXTENSION_PATTERN: re.Pattern = re.compile(r"^!:ext\s+([^\s]+)\s*(#.*)?$")
 
 
 def _split_with_escapes(text: str) -> Tuple[str, str]:
@@ -1078,7 +1078,7 @@ class MagicMatcher:
                     if current_test is None and level != 0:
                         raise ValueError(f"{def_file!s} line {line_number}: Invalid level for test {line!r}")
                     test_str, message = _split_with_escapes(m.group("remainder"))
-                    message = message.lstrip()
+                    message = message[:message.find("#")].lstrip()
                     try:
                         offset = Offset.parse(m.group("offset"))
                     except ValueError as e:
