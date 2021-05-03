@@ -61,7 +61,7 @@ def parse_numeric(text: str) -> int:
 
 class Offset(ABC):
     @abstractmethod
-    def to_absolute(self, last_match: Optional[Match]) -> int:
+    def to_absolute(self, data: bytes, last_match: Optional[Match]) -> int:
         raise NotImplementedError()
 
     @staticmethod
@@ -69,7 +69,7 @@ class Offset(ABC):
         if offset.startswith("&"):
             return RelativeOffset(parse_numeric(offset[1:]))
         elif offset.startswith("("):
-            raise NotImplementedError("TODO: Implement indirect offsets")
+            return IndirectOffset.parse(offset)
         else:
             return AbsoluteOffset(parse_numeric(offset))
 
@@ -78,7 +78,7 @@ class AbsoluteOffset(Offset):
     def __init__(self, offset: int):
         self.offset: int = offset
 
-    def to_absolute(self, last_match: Optional[Match]) -> int:
+    def to_absolute(self, data: bytes, last_match: Optional[Match]) -> int:
         return self.offset
 
     def __repr__(self):
@@ -92,7 +92,7 @@ class RelativeOffset(Offset):
     def __init__(self, relative_offset: int):
         self.relative_offset: int = relative_offset
 
-    def to_absolute(self, last_match: Optional[Match]) -> int:
+    def to_absolute(self, data: bytes, last_match: Optional[Match]) -> int:
         return last_match.offset + last_match.length + self.relative_offset
 
     def __repr__(self):
@@ -100,6 +100,99 @@ class RelativeOffset(Offset):
 
     def __str__(self):
         return f"&{self.relative_offset}"
+
+
+class IndirectOffset(Offset):
+    def __init__(self, offset: int, num_bytes: int, endianness: Endianness, signed: bool, addend: int = 0):
+        self.offset: int = offset
+        self.num_bytes: int = num_bytes
+        self.endianness: Endianness = endianness
+        self.signed: bool = signed
+        self.addend: int = addend
+        if self.endianness != Endianness.LITTLE and self.endianness != endianness.BIG:
+            raise ValueError(f"Invalid endianness: {endianness!r}")
+        elif num_bytes not in (1, 2, 4, 8):
+            raise ValueError(f"Invalid number of bytes: {num_bytes}")
+
+    def to_absolute(self, data: bytes, last_match: Optional[Match]) -> int:
+        if self.num_bytes == 1:
+            fmt = "B"
+        elif self.num_bytes == 2:
+            fmt = "H"
+        elif self.num_bytes == 8:
+            fmt = "Q"
+        else:
+            fmt = "I"
+        if self.signed:
+            fmt = fmt.lower()
+        if self.endianness == Endianness.LITTLE:
+            fmt = f"<{fmt}"
+        else:
+            fmt = f">{fmt}"
+        return struct.unpack(fmt, data[self.offset:self.offset + self.num_bytes]) + self.addend
+
+    NUMBER_PATTERN: str = r"(0x[\dA-Za-z]+|\d+)"
+    INDIRECT_OFFSET_PATTERN: re.Pattern = re.compile(
+        "^\("
+        rf"(?P<offset>{NUMBER_PATTERN})"
+        r"((?P<signedness>[.,])(?P<type>[bBcCeEfFgGhHiIlmsSqQ]))"
+        rf"(?P<addend>[+-]?{NUMBER_PATTERN})?"
+        "\)$"
+    )
+
+    @classmethod
+    def parse(cls, offset: str) -> "IndirectOffset":
+        m = cls.INDIRECT_OFFSET_PATTERN.match(offset)
+        if not m:
+            raise ValueError(f"Invalid indirect offset: {offset!r}")
+        t = m.group("type")
+        if t == "m":
+            raise NotImplementedError("TODO: Add support for middle endianness")
+        elif t.islower():
+            endianness = Endianness.LITTLE
+        else:
+            endianness = Endianness.BIG
+        t = t.lower()
+        if t in ("b", "c"):
+            num_bytes = 1
+        elif t in ("e", "f", "g"):
+            num_bytes = 8
+        elif t in ("h", "s"):
+            num_bytes = 2
+        elif t == "i":
+            num_bytes = 4
+        else:
+            raise ValueError(f"Unsupported indirect specifier type: {m.group('type')!r}")
+        addend = m.group("addend")
+        negate_addend = 1
+        if addend is None:
+            addend = "0"
+        else:
+            if addend.startswith("+"):
+                addend = addend[1:]
+            elif addend.startswith("-"):
+                negate_addend = -1
+                addend = addend[1:]
+        return IndirectOffset(
+            offset=parse_numeric(m.group("offset")),
+            num_bytes=num_bytes,
+            endianness=endianness,
+            signed=m.group("signedness") == ",",
+            addend=parse_numeric(addend) * negate_addend
+        )
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}(offset=0x{self.offset:x}, num_bytes={self.num_bytes}, "\
+               f"endianness={self.endianness!r}, signed={self.signed}, addend={self.addend})"
+
+    def __str__(self):
+        if self.addend == 0:
+            addend = ""
+        elif self.addend < 0:
+            addend = str(self.addend)
+        else:
+            addend = f"+{self.addend}"
+        return f"({self.offset:x}{['.', ','][self.signed]}{self.num_bytes}{self.endianness}{addend})"
 
 
 class MagicTest(ABC):
@@ -149,7 +242,7 @@ class MagicTest(ABC):
     ) -> Iterator[Match]:
         if only_match_mime and not self.can_match_mime:
             return
-        m = self.test(data, self.offset.to_absolute(parent_match), parent_match)
+        m = self.test(data, self.offset.to_absolute(data, parent_match), parent_match)
         if m is not None:
             if not only_match_mime or self.mime is not None:
                 yield m
@@ -825,7 +918,7 @@ class ClearTest(MagicTest):
 
 
 TEST_PATTERN: re.Pattern = re.compile(
-    r"^(?P<level>[>]*)(?P<offset>&?-?(0x[\dA-Za-z]+|\d+))\s+(?P<data_type>[^\s]+)\s+(?P<remainder>.+)$"
+    r"^(?P<level>[>]*)(?P<offset>[^\s]+)\s+(?P<data_type>[^\s]+)\s+(?P<remainder>.+)$"
 )
 MIME_PATTERN: re.Pattern = re.compile(r"^!:mime\s+([^\s]+)\s*$")
 EXTENSION_PATTERN: re.Pattern = re.compile(r"^!:ext\s+([^\s]+)\s*$")
