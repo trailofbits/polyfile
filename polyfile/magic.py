@@ -125,12 +125,13 @@ class RelativeOffset(Offset):
 
 
 class IndirectOffset(Offset):
-    def __init__(self, offset: Offset, num_bytes: int, endianness: Endianness, signed: bool, addend: int = 0):
+    def __init__(self, offset: Offset, num_bytes: int, endianness: Endianness, signed: bool,
+                 post_process: Callable[[int], int] = lambda n: n):
         self.offset: Offset = offset
         self.num_bytes: int = num_bytes
         self.endianness: Endianness = endianness
         self.signed: bool = signed
-        self.addend: int = addend
+        self.post_process: Callable[[int], int] = post_process
         if self.endianness != Endianness.LITTLE and self.endianness != endianness.BIG:
             raise ValueError(f"Invalid endianness: {endianness!r}")
         elif num_bytes not in (1, 2, 4, 8):
@@ -159,7 +160,7 @@ class IndirectOffset(Offset):
         "^\("
         rf"(?P<offset>&?-?{NUMBER_PATTERN})"
         r"((?P<signedness>[.,])(?P<type>[bBcCeEfFgGhHiIlmsSqQ]))?"
-        rf"(?P<addend>[+-]?{NUMBER_PATTERN})?"
+        rf"(?P<post_process>\*?[+-]?{NUMBER_PATTERN})?"
         "\)$"
     )
 
@@ -189,22 +190,26 @@ class IndirectOffset(Offset):
             num_bytes = 4
         else:
             raise ValueError(f"Unsupported indirect specifier type: {m.group('type')!r}")
-        addend = m.group("addend")
-        negate_addend = 1
-        if addend is None:
-            addend = "0"
+        pp = m.group("post_process")
+        if pp is None:
+            post_process = lambda n: n
         else:
-            if addend.startswith("+"):
-                addend = addend[1:]
-            elif addend.startswith("-"):
-                negate_addend = -1
-                addend = addend[1:]
+            if pp.startswith("*"):
+                multiply = True
+                pp = pp[1:]
+            else:
+                multiply = False
+            operand = parse_numeric(pp)
+            if multiply:
+                post_process = lambda n: n * operand
+            else:
+                post_process = lambda n: n + operand
         return IndirectOffset(
             offset=Offset.parse(m.group("offset")),
             num_bytes=num_bytes,
             endianness=endianness,
             signed=m.group("signedness") == ",",
-            addend=parse_numeric(addend) * negate_addend
+            post_process=post_process
         )
 
     def __repr__(self):
