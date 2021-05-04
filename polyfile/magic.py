@@ -153,7 +153,7 @@ class IndirectOffset(Offset):
         else:
             fmt = f">{fmt}"
         offset = self.offset.to_absolute(data, last_match)
-        return struct.unpack(fmt, data[offset:offset + self.num_bytes]) + self.addend
+        return self.post_process(struct.unpack(fmt, data[offset:offset + self.num_bytes]))
 
     NUMBER_PATTERN: str = r"(0x[\dA-Za-z]+|\d+)"
     INDIRECT_OFFSET_PATTERN: re.Pattern = re.compile(
