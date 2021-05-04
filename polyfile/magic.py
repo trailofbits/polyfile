@@ -827,7 +827,7 @@ class BaseNumericDataType(Enum):
     BYTE = ("byte", "b", 1)
     SHORT = ("short", "h", 2)
     LONG = ("long", "l", 4)
-    QUAD = ("quad", "i", 8)
+    QUAD = ("quad", "q", 8)
     FLOAT = ("float", "f", 4)
     DOUBLE = ("double", "d", 8)
     DATE = ("date", "L", 4)
