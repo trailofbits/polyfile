@@ -734,7 +734,8 @@ class RegexType(DataType[re.Pattern]):
             length: Optional[int] = None,
             case_insensitive: bool = False,
             match_to_start: bool = False,
-            limit_lines: bool = False
+            limit_lines: bool = False,
+            trim: bool = False
     ):
         if length is None:
             if limit_lines:
@@ -745,8 +746,9 @@ class RegexType(DataType[re.Pattern]):
         self.length: int = length
         self.case_insensitive: bool = case_insensitive
         self.match_to_start: bool = match_to_start
+        self.trim: bool = trim
         super().__init__(f"regex/{self.length}{['', 'c'][case_insensitive]}{['', 's'][match_to_start]}"
-                         f"{['', 'l'][self.limit_lines]}")
+                         f"{['', 'l'][self.limit_lines]}{['', 'T'][self.trim]}")
 
     def parse_expected(self, specification: str) -> re.Pattern:
         # regexes need to have escapes processed again:
@@ -774,16 +776,30 @@ class RegexType(DataType[re.Pattern]):
                 line = data[offset:line_offset]
                 m = expected.search(line)
                 if m:
-                    return DataTypeMatch(data[:offset + m.end()])
+                    match = data[:offset + m.end()]
+                    try:
+                        value = match.encode("utf-8")
+                    except UnicodeDecodeError:
+                        value = match
+                    if self.trim:
+                        value = value.strip()
+                    return DataTypeMatch(match, value)
                 offset = line_offset + 1
         else:
             m = expected.search(data[:self.length])
             if m:
-                return DataTypeMatch(data[:m.end()])
+                match = data[:m.end()]
+                try:
+                    value = match.encode("utf-8")
+                except UnicodeDecodeError:
+                    value = match
+                if self.trim:
+                    value = value.strip()
+                return DataTypeMatch(match, value)
             else:
                 return DataTypeMatch.INVALID
 
-    REGEX_TYPE_FORMAT: re.Pattern = re.compile(r"^regex(/(?P<length>\d+)?(?P<flags>[csl]*)(b\d*)?)?$")
+    REGEX_TYPE_FORMAT: re.Pattern = re.compile(r"^regex(/(?P<length>\d+)?(?P<flags>[cslT]*)(b\d*)?)?$")
     # NOTE: some specification files like `cad` use `regex/b`, which is undocumented, and it's unclear from the libmagic
     #       source code whether it is simply ignored or if it has a purpuse. We ignore it here.
 
@@ -800,7 +816,8 @@ class RegexType(DataType[re.Pattern]):
             length=m.group("length"),
             case_insensitive="c" in options,
             match_to_start="s" in options,
-            limit_lines="l" in options
+            limit_lines="l" in options,
+            trim="T" in options
         )
 
 
