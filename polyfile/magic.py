@@ -161,7 +161,7 @@ class IndirectOffset(Offset):
     INDIRECT_OFFSET_PATTERN: re.Pattern = re.compile(
         "^\("
         rf"(?P<offset>&?-?{NUMBER_PATTERN})"
-        r"((?P<signedness>[.,])(?P<type>[bBcCeEfFgGhHiIlmsSqQ]))?"
+        r"((?P<signedness>[.,])(?P<type>[bBcCeEfFgGhHiILlmsSqQ]))?"
         rf"(?P<post_process>\*?[+-]?({NUMBER_PATTERN}|\(-?{NUMBER_PATTERN}\)))?"
         "\)$"
     )
