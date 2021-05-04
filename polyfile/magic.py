@@ -856,7 +856,10 @@ class NumericDataType(DataType[NumericValue]):
             endianness = Endianness.NATIVE
         for symbol, operator in (
                 ("&", lambda a, b: a & b),
-                ("%", lambda a, b: a % b)
+                ("%", lambda a, b: a % b),
+                ("+", lambda a, b: a + b),
+                ("-", lambda a, b: a - b),
+                ("^", lambda a, b: a ^ b)
         ):
             pos = fmt.find(symbol)
             if pos > 0:
