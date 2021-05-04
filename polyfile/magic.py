@@ -198,7 +198,7 @@ class IndirectOffset(Offset):
         "^\("
         rf"(?P<offset>&?-?{NUMBER_PATTERN})"
         r"((?P<signedness>[.,])(?P<type>[bBcCeEfFgGhHiILlmsSqQ]))?"
-        rf"(?P<post_process>[\*&]?[+-]?({NUMBER_PATTERN}|\(-?{NUMBER_PATTERN}\)))?"
+        rf"(?P<post_process>[\*&/]?[+-]?({NUMBER_PATTERN}|\(-?{NUMBER_PATTERN}\)))?"
         "\)$"
     )
 
