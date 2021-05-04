@@ -13,7 +13,7 @@ from enum import Enum
 from pathlib import Path
 import re
 import struct
-from typing import Callable, Dict, Generic, Iterable, Iterator, List, Optional, Set, Tuple, TypeVar, Union
+from typing import Any, Callable, Dict, Generic, Iterable, Iterator, List, Optional, Set, Tuple, TypeVar, Union
 
 DEFS_DIR: Path = Path(__file__).absolute().parent / "magic_defs"
 
@@ -25,8 +25,9 @@ MAGIC_DEFS: List[Path] = [
 
 
 class Match:
-    def __init__(self, test: "MagicTest", offset: int, length: int, parent: Optional["Match"] = None):
+    def __init__(self, test: "MagicTest", value: Any, offset: int, length: int, parent: Optional["Match"] = None):
         self.test: MagicTest = test
+        self.value: Any = value
         self.offset: int = offset
         self.length: int = length
         self.parent: Optional[Match] = parent
@@ -310,6 +311,34 @@ TYPES_BY_NAME: Dict[str, "DataType"] = {}
 T = TypeVar("T")
 
 
+class DataTypeMatch:
+    INVALID: "DataTypeMatch"
+
+    def __init__(self, raw_match: Optional[bytes] = None, value: Optional[Any] = None):
+        self.raw_match: Optional[bytes] = raw_match
+        if value is None and raw_match is not None:
+            self.value: Optional[bytes] = raw_match
+        else:
+            self.value = value
+
+    def __bool__(self):
+        return self.raw_match is not None
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}(raw_match={self.raw_match!r}, value={self.value!r})"
+
+    def __str__(self):
+        if self.value is not None:
+            return str(self.value)
+        elif self.raw_match is None:
+            return "DataTypeNoMatch"
+        else:
+            return repr(self.raw_match)
+
+
+DataTypeMatch.INVALID = DataTypeMatch()
+
+
 class DataType(ABC, Generic[T]):
     def __init__(self, name: str):
         self.name: str = name
@@ -319,7 +348,7 @@ class DataType(ABC, Generic[T]):
         raise NotImplementedError()
 
     @abstractmethod
-    def match(self, data: bytes, expected: T) -> Optional[bytes]:
+    def match(self, data: bytes, expected: T) -> DataTypeMatch:
         raise NotImplementedError()
 
     @staticmethod
@@ -361,11 +390,11 @@ class LEUTF16Type(DataType[bytes]):
     def parse_expected(self, specification: str) -> bytes:
         return specification.encode("utf-16-le")
 
-    def match(self, data: bytes, expected: bytes) -> Optional[bytes]:
+    def match(self, data: bytes, expected: bytes) -> DataTypeMatch:
         if data.startswith(expected):
-            return expected
+            return DataTypeMatch(expected, expected.decode("utf-16-le"))
         else:
-            return None
+            return DataTypeMatch.INVALID
 
 
 class StringType(DataType[bytes]):
@@ -443,7 +472,11 @@ class StringType(DataType[bytes]):
     def parse_expected(self, specification: str) -> bytes:
         return StringType.parse_string(specification)
 
-    def match(self, data: bytes, expected: bytes) -> Optional[bytes]:
+    def match(self, data: bytes, expected: bytes) -> DataTypeMatch:
+        try:
+            expected_str = expected.decode("utf-8")
+        except UnicodeDecodeError:
+            expected_str = expected
         matched = bytearray()
         had_whitespace = False
         last_char: Optional[int] = None
@@ -467,11 +500,11 @@ class StringType(DataType[bytes]):
                     (self.case_insensitive_upper and b == expected[0:1].upper()[0])
             ):
                 if not (self.optional_blanks and expected[0:1] in b" \t\n"):
-                    return None
+                    return DataTypeMatch.INVALID
             expected = expected[1:]
         if self.compact_whitespace and not had_whitespace:
-            return None
-        return bytes(matched)
+            return DataTypeMatch.INVALID
+        return DataTypeMatch(bytes(matched), expected_str)
 
     STRING_TYPE_FORMAT: re.Pattern = re.compile(r"^u?string(/[BbCctTWw]*)?$")
 
@@ -523,12 +556,12 @@ class SearchType(StringType):
             else:
                 self.name = f"{self.name}s"
 
-    def match(self, data: bytes, expected: bytes) -> Optional[bytes]:
+    def match(self, data: bytes, expected: bytes) -> DataTypeMatch:
         for i in range(self.repetitions):
-            ret = super().match(data[i:], expected)
-            if ret is not None:
-                return ret
-        return None
+            match = super().match(data[i:], expected)
+            if match:
+                return match
+        return DataTypeMatch.INVALID
 
     SEARCH_TYPE_FORMAT: re.Pattern = re.compile(
         r"^search"
@@ -597,9 +630,9 @@ class PascalStringType(DataType[bytes]):
     def parse_expected(self, specification: str) -> bytes:
         return StringType.parse_string(specification)
 
-    def match(self, data: bytes, expected: bytes) -> Optional[bytes]:
+    def match(self, data: bytes, expected: bytes) -> DataTypeMatch:
         if len(data) < self.byte_length:
-            return None
+            return DataTypeMatch.INVALID
         elif self.byte_length == 1:
             length = data[0]
         elif self.byte_length == 2:
@@ -614,13 +647,16 @@ class PascalStringType(DataType[bytes]):
         if self.count_includes_length:
             length -= self.byte_length
         if len(data) < self.byte_length + length:
-            return None
+            return DataTypeMatch.INVALID
         elif len(expected) != length:
-            return None
+            return DataTypeMatch.INVALID
         if data[self.byte_length:self.byte_length + length] == expected:
-            return expected
+            try:
+                return DataTypeMatch(expected, expected.decode("utf-8"))
+            except UnicodeDecodeError:
+                return DataTypeMatch(expected)
         else:
-            return None
+            return DataTypeMatch.INVALID
 
     PSTRING_TYPE_FORMAT: re.Pattern = re.compile(r"^pstring(/J?[BHhLl]?J?)?$")
 
@@ -681,7 +717,7 @@ class RegexType(DataType[re.Pattern]):
         else:
             return re.compile(specification)
 
-    def match(self, data: bytes, expected: re.Pattern) -> Optional[bytes]:
+    def match(self, data: bytes, expected: re.Pattern) -> DataTypeMatch:
         if self.limit_lines:
             limit = self.length
             offset = 0
@@ -690,18 +726,18 @@ class RegexType(DataType[re.Pattern]):
                 limit -= 1
                 line_offset = data.find(b"\n", start=offset, end=byte_limit)
                 if line_offset < 0:
-                    return None
+                    return DataTypeMatch.INVALID
                 line = data[offset:line_offset]
                 m = expected.search(line)
                 if m:
-                    return data[:offset + m.end()]
+                    return DataTypeMatch(data[:offset + m.end()])
                 offset = line_offset + 1
         else:
             m = expected.search(data[:self.length])
             if m:
-                return data[:m.end()]
+                return DataTypeMatch(data[:m.end()])
             else:
-                return None
+                return DataTypeMatch.INVALID
 
     REGEX_TYPE_FORMAT: re.Pattern = re.compile(r"^regex(/(?P<length>\d+)?(?P<flags>[csl]*))?$")
 
@@ -847,9 +883,9 @@ class NumericDataType(DataType[NumericValue]):
         else:
             return NumericValue.parse(specification, self.base_type.num_bytes)
 
-    def match(self, data: bytes, expected: NumericValue) -> Optional[bytes]:
+    def match(self, data: bytes, expected: NumericValue) -> DataTypeMatch:
         if len(data) < self.base_type.num_bytes:
-            return None
+            return DataTypeMatch.INVALID
         elif self.endianness == Endianness.PDP:
             assert self.base_type.num_bytes == 4
             if self.unsigned:
@@ -866,9 +902,9 @@ class NumericDataType(DataType[NumericValue]):
             value = struct.unpack(struct_fmt, data)
         value = self.preprocess(value)
         if expected.test(value):
-            return data[:self.base_type.num_bytes]
+            return DataTypeMatch(data[:self.base_type.num_bytes], value)
         else:
-            return None
+            return DataTypeMatch.INVALID
 
     @staticmethod
     def parse(fmt: str) -> "NumericDataType":
@@ -935,9 +971,9 @@ class ConstantMatchTest(MagicTest, Generic[T]):
         self.constant: T = constant
 
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[Match]) -> Optional[Match]:
-        matched_bytes = self.data_type.match(data[absolute_offset:], self.constant)
-        if matched_bytes is not None:
-            return Match(self, absolute_offset, len(matched_bytes), parent=parent_match)
+        match = self.data_type.match(data[absolute_offset:], self.constant)
+        if match:
+            return Match(self, absolute_offset, len(match.raw_match), value=match.value, parent=parent_match)
         else:
             return None
 
@@ -957,7 +993,7 @@ class OffsetMatchTest(MagicTest):
 
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[Match]) -> Optional[Match]:
         if self.value.test(absolute_offset):
-            return Match(self, 0, absolute_offset, parent=parent_match)
+            return Match(self, 0, absolute_offset, value=absolute_offset, parent=parent_match)
         else:
             return None
 
@@ -1001,7 +1037,7 @@ class NamedTest(MagicTest):
 
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[Match]) -> Optional[Match]:
         if parent_match is not None:
-            return Match(self, parent_match.offset + parent_match.length, 0, parent=parent_match)
+            return Match(self, parent_match.offset + parent_match.length, 0, value=self.name, parent=parent_match)
         else:
             raise ValueError("A named test must always be called from a `use` test.")
 
@@ -1046,7 +1082,7 @@ class UseTest(MagicTest):
 class DefaultTest(MagicTest):
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[Match]) -> Optional[Match]:
         if parent_match is None or getattr(parent_match, "_cleared", False):
-            return Match(self, absolute_offset, 0)
+            return Match(self, absolute_offset, 0, value=True)
         else:
             return None
 
@@ -1054,10 +1090,10 @@ class DefaultTest(MagicTest):
 class ClearTest(MagicTest):
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[Match]) -> Optional[Match]:
         if parent_match is None:
-            return Match(self, absolute_offset, 0)
+            return Match(self, absolute_offset, 0, value=None)
         else:
             setattr(parent_match, "_cleared", True)
-            return Match(self, absolute_offset, 0, parent_match)
+            return Match(self, absolute_offset, 0, parent_match, value=None)
 
 
 class DERTest(MagicTest):
