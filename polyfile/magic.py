@@ -193,7 +193,7 @@ class IndirectOffset(Offset):
         else:
             fmt = f">{fmt}"
         offset = self.offset.to_absolute(data, last_match)
-        return self.post_process(struct.unpack(fmt, data[offset:offset + self.num_bytes]))
+        return self.post_process(struct.unpack(fmt, data[offset:offset + self.num_bytes])[0])
 
     NUMBER_PATTERN: str = r"(0[xX][\dA-Fa-f]+|\d+)L?"
     INDIRECT_OFFSET_PATTERN: re.Pattern = re.compile(
@@ -656,13 +656,13 @@ class PascalStringType(DataType[bytes]):
             length = data[0]
         elif self.byte_length == 2:
             if self.endianness == Endianness.BIG:
-                length = struct.unpack(">H", data[:2])
+                length = struct.unpack(">H", data[:2])[0]
             else:
-                length = struct.unpack("<H", data[:2])
+                length = struct.unpack("<H", data[:2])[0]
         elif self.endianness == Endianness.BIG:
-            length = struct.unpack(">I", data[:4])
+            length = struct.unpack(">I", data[:4])[0]
         else:
-            length = struct.unpack("<I", data[:4])
+            length = struct.unpack("<I", data[:4])[0]
         if self.count_includes_length:
             length -= self.byte_length
         if len(data) < self.byte_length + length:
@@ -952,17 +952,20 @@ class NumericDataType(DataType[NumericValue]):
         elif self.endianness == Endianness.PDP:
             assert self.base_type.num_bytes == 4
             if self.unsigned:
-                value = (struct.unpack("<H", data[:2]) << 16) | struct.unpack("<H", data[2:4])
+                value = (struct.unpack("<H", data[:2]) << 16)[0] | struct.unpack("<H", data[2:4])[0]
             else:
                 be_data = bytes([data[1], data[0], data[3], data[2]])
-                value = struct.unpack(">i", be_data)
+                value = struct.unpack(">i", be_data)[0]
         else:
             if self.unsigned and self.base_type not in (BaseNumericDataType.DOUBLE, BaseNumericDataType.FLOAT):
-                struct_fmt = self.base_type.value.upper()
+                struct_fmt = self.base_type.struct_fmt.upper()
             else:
-                struct_fmt = self.base_type.value
+                struct_fmt = self.base_type.struct_fmt
             struct_fmt = f"{self.endianness.value}{struct_fmt}"
-            value = struct.unpack(struct_fmt, data)
+            try:
+                value = struct.unpack(struct_fmt, data[:self.base_type.num_bytes])[0]
+            except struct.error:
+                return DataTypeMatch.INVALID
         value = self.preprocess(value)
         if expected.test(value):
             return DataTypeMatch(data[:self.base_type.num_bytes], value)
@@ -1342,7 +1345,8 @@ class MagicMatcher:
                                 message=message,
                                 parent=current_test
                             )
-                        matcher.tests.append(test)
+                        if test.level == 0:
+                            matcher.tests.append(test)
                     current_test = test
                     continue
                 m = MIME_PATTERN.match(line)
