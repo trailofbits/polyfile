@@ -501,6 +501,7 @@ class SearchType(StringType):
             case_insensitive_upper: bool = False,
             compact_whitespace: bool = False,
             optional_blanks: bool = False,
+            match_to_start: bool = False,
             trim: bool = False
     ):
         if repetitions <= 0:
@@ -514,7 +515,13 @@ class SearchType(StringType):
         )
         assert self.name.startswith("string")
         self.name = f"search/{repetitions}{self.name[6:]}"
+        self.match_to_start: bool = match_to_start
         self.repetitions: int = repetitions
+        if match_to_start:
+            if self.name == f"search/{repetitions}":
+                self.name = f"search/{repetitions}/s"
+            else:
+                self.name = f"{self.name}s"
 
     def match(self, data: bytes, expected: bytes) -> Optional[bytes]:
         for i in range(self.repetitions):
@@ -525,8 +532,8 @@ class SearchType(StringType):
 
     SEARCH_TYPE_FORMAT: re.Pattern = re.compile(
         r"^search"
-        r"((/(?P<repetitions1>(0x[\dA-Za-z]+|\d+)))(/(?P<flags1>[BbCctTWw]*))?|"
-        r"/((?P<flags2>[BbCctTWw]*)/)?(?P<repetitions2>(0x[\dA-Za-z]+|\d+)))$"
+        r"((/(?P<repetitions1>(0x[\dA-Za-z]+|\d+)))(/(?P<flags1>[BbCctTWws]*))?|"
+        r"/((?P<flags2>[BbCctTWws]*)/)?(?P<repetitions2>(0x[\dA-Za-z]+|\d+)))$"
     )
 
     @classmethod
@@ -552,7 +559,8 @@ class SearchType(StringType):
             case_insensitive_upper="C" in options,
             compact_whitespace="B" in options or "W" in options,
             optional_blanks="b" in options or "w" in options,
-            trim="T" in options
+            trim="T" in options,
+            match_to_start="s" in options
         )
 
 
