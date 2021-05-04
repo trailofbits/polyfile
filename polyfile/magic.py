@@ -57,6 +57,8 @@ def parse_numeric(text: str) -> int:
         text = text[1:]
     else:
         factor = 1
+    if text.startswith("+"):
+        text = text[1:]
     if text.startswith("0x"):
         return int(text, 16) * factor
     elif text.startswith("0") and len(text) > 1:
@@ -160,7 +162,7 @@ class IndirectOffset(Offset):
         "^\("
         rf"(?P<offset>&?-?{NUMBER_PATTERN})"
         r"((?P<signedness>[.,])(?P<type>[bBcCeEfFgGhHiIlmsSqQ]))?"
-        rf"(?P<post_process>\*?[+-]?{NUMBER_PATTERN})?"
+        rf"(?P<post_process>\*?[+-]?({NUMBER_PATTERN}|\(-?{NUMBER_PATTERN}\)))?"
         "\)$"
     )
 
@@ -199,6 +201,14 @@ class IndirectOffset(Offset):
                 pp = pp[1:]
             else:
                 multiply = False
+            if pp.startswith("+"):
+                pp = pp[1:]
+            if pp.startswith("(") and pp.endswith(")"):
+                # some definition files like `msdos` have indirect offsets of the form: >>>(&0x0f.l+(-4))
+                # Handle those nested parenthesis around the `(-4)` here. This is an undocumented part of the DSL,
+                # so, TODO: confirm we are handling it properly and it's not something more complex like a nested
+                #           indirect offset
+                pp = pp[1:-1]
             operand = parse_numeric(pp)
             if multiply:
                 post_process = lambda n: n * operand
