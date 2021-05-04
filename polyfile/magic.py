@@ -180,7 +180,7 @@ class IndirectOffset(Offset):
         t = t.lower()
         if t in ("b", "c"):
             num_bytes = 1
-        elif t in ("e", "f", "g"):
+        elif t in ("e", "f", "g", "q"):
             num_bytes = 8
         elif t in ("h", "s"):
             num_bytes = 2
