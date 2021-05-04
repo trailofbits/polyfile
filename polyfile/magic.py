@@ -1040,7 +1040,8 @@ class ConstantMatchTest(MagicTest, Generic[T]):
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[Match]) -> Optional[Match]:
         match = self.data_type.match(data[absolute_offset:], self.constant)
         if match:
-            return Match(self, absolute_offset, len(match.raw_match), value=match.value, parent=parent_match)
+            return Match(self, offset=absolute_offset, length=len(match.raw_match), value=match.value,
+                         parent=parent_match)
         else:
             return None
 
@@ -1060,7 +1061,7 @@ class OffsetMatchTest(MagicTest):
 
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[Match]) -> Optional[Match]:
         if self.value.test(absolute_offset):
-            return Match(self, 0, absolute_offset, value=absolute_offset, parent=parent_match)
+            return Match(self, offset=0, length=absolute_offset, value=absolute_offset, parent=parent_match)
         else:
             return None
 
@@ -1124,7 +1125,8 @@ class NamedTest(MagicTest):
 
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[Match]) -> Optional[Match]:
         if parent_match is not None:
-            return Match(self, parent_match.offset + parent_match.length, 0, value=self.name, parent=parent_match)
+            return Match(self, offset=parent_match.offset + parent_match.length, length=0, value=self.name,
+                         parent=parent_match)
         else:
             raise ValueError("A named test must always be called from a `use` test.")
 
@@ -1173,7 +1175,7 @@ class UseTest(MagicTest):
 class DefaultTest(MagicTest):
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[Match]) -> Optional[Match]:
         if parent_match is None or getattr(parent_match, "_cleared", False):
-            return Match(self, absolute_offset, 0, value=True)
+            return Match(self, offset=absolute_offset, length=0, value=True)
         else:
             return None
 
@@ -1181,10 +1183,10 @@ class DefaultTest(MagicTest):
 class ClearTest(MagicTest):
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[Match]) -> Optional[Match]:
         if parent_match is None:
-            return Match(self, absolute_offset, 0, value=None)
+            return Match(self, offset=absolute_offset, length=0, value=None)
         else:
             setattr(parent_match, "_cleared", True)
-            return Match(self, absolute_offset, 0, parent_match, value=None)
+            return Match(self, offset=absolute_offset, length=0, parent=parent_match, value=None)
 
 
 class DERTest(MagicTest):
