@@ -803,8 +803,6 @@ class IntegerValue(NumericValue[int]):
             value = value[1:]
         except KeyError:
             operator = NumericOperator.EQUALS
-        if not value:
-            breakpoint()
         if value[0] == "~":
             int_value = parse_numeric(value[1:])
             int_value = (1 << (num_bytes * 8)) - 1 - int_value
@@ -1130,7 +1128,9 @@ class MagicMatcher:
                     if current_test is None and level != 0:
                         raise ValueError(f"{def_file!s} line {line_number}: Invalid level for test {line!r}")
                     test_str, message = _split_with_escapes(m.group("remainder"))
-                    message = message[:message.find("#")].lstrip()
+                    comment_pos = message.find("#")
+                    if comment_pos >= 0:
+                        message = message[:comment_pos].lstrip()
                     try:
                         offset = Offset.parse(m.group("offset"))
                     except ValueError as e:
@@ -1189,6 +1189,11 @@ class MagicMatcher:
                                     test_str_remainder, message = _split_with_escapes(message)
                                     message = message.lstrip()
                                     test_str = f"&{test_str_remainder}"
+                                if test_str in ("<", ">", "=", "!", "&", "^", "~"):
+                                    # Some files will erroneously add whitespace between the operator and the
+                                    # subsequent value:
+                                    actual_operand, message = _split_with_escapes(message)
+                                    test_str = f"{test_str}{actual_operand}"
                                 constant = data_type.parse_expected(test_str)
                             except ValueError as e:
                                 raise ValueError(f"{def_file!s} line {line_number}: {e!s}")
