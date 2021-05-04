@@ -815,9 +815,10 @@ class BaseNumericDataType(Enum):
     FLOAT = ("float", "f", 4)
     DOUBLE = ("double", "d", 8)
     DATE = ("date", "L", 4)
-    QDATE = ("qdate", "I", 8)
+    QDATE = ("qdate", "Q", 8)
     LDATE = ("ldate", "L", 4)
-    QLDATE = ("qldate", "I", 8)
+    QLDATE = ("qldate", "Q", 8)
+    QWDATE = ("qwdate", "Q", 8)
 
     def __init__(self, name: str, struct_fmt: str, num_bytes: int, post_process: Callable[[int], int] = lambda n: n):
         self.struct_fmt: str = struct_fmt
