@@ -25,6 +25,40 @@ MAGIC_DEFS: List[Path] = [
 ]
 
 
+def unescape(to_unescape: str) -> str:
+    """Processes unicode escape sequences. Also handles libmagic's support for single digit `\\x#` hex escapes."""
+    # first, process single digit hex escapes:
+    b = bytearray()
+    escaped = False
+    byte_escape: Optional[str] = None
+    for c in to_unescape:
+        if escaped:
+            if c == "x":
+                byte_escape = ""
+            escaped = False
+        else:
+            if byte_escape is not None:
+                if not byte_escape:
+                    byte_escape = c
+                elif not c.isnumeric() and not ord("a") <= ord(c.lower()) <= ord("f"):
+                    # the last three bytes were a single byte hex escape, like "\xD" or "\x5"
+                    assert len(b) >= 3
+                    b = b[:-3]
+                    b.append(int(byte_escape, 16))
+                    byte_escape = None
+                else:
+                    byte_escape = None
+            if c == "\\":
+                escaped = True
+        b.append(ord(c))
+    if byte_escape:
+        # the string ended with a single byte hex escape
+        assert len(b) >= 3
+        b = b[:-3]
+        b.append(int(byte_escape, 16))
+    return b.decode("unicode_escape")
+
+
 class Match:
     def __init__(self, test: "MagicTest", value: Any, offset: int, length: int, parent: Optional["Match"] = None):
         self.test: MagicTest = test
@@ -441,60 +475,8 @@ class StringType(DataType[bytes]):
         self.optional_blanks: bool = optional_blanks
         self.trim: bool = trim
 
-    @staticmethod
-    def parse_string(specification: str) -> bytes:
-        chars: List[int] = []
-        escaped = False
-        escapes = {
-            " ": ord(" "),
-            "f": ord("\f"),
-            "n": ord("\n"),
-            "r": ord("\r"),
-            "t": ord("\t"),
-            "\\": ord("\\"),
-            "!": ord("!"),
-            ">": ord(">"),
-            "<": ord("<"),
-            "=": ord("="),
-            "&": ord("&")
-        }
-        byte_escape: Optional[str] = None
-        for c in specification:
-            if byte_escape is not None:
-                if not byte_escape:
-                    byte_escape = c
-                    continue
-                elif not c.isnumeric():
-                    # libmagic allows single digit hex escapes, like "\x0\x0\x0". Handle that here:
-                    chars.append(int(byte_escape, 16))
-                    byte_escape = None
-                    # do not call continue so we fall through and process c as if it were a new character
-                else:
-                    chars.append(int(f"{byte_escape}{c}", 16))
-                    byte_escape = None
-                    continue
-            if escaped:
-                escaped = False
-                if c == "x":
-                    byte_escape = ""
-                elif c.isdigit():
-                    chars.append(int(c))
-                else:
-                    if c not in escapes:
-                        raise ValueError(f"Unexpected escape character \"\\{c}\" in {specification!r}")
-                    chars.append(escapes[c])
-            elif c == "\\":
-                escaped = True
-            else:
-                chars.append(ord(c))
-        if escaped:
-            raise ValueError("Unexpected end of string when processing escape character")
-        elif byte_escape is not None:
-            chars.append(int(byte_escape, 16))
-        return bytes(chars)
-
     def parse_expected(self, specification: str) -> bytes:
-        return StringType.parse_string(specification)
+        return specification.encode("utf-8")
 
     def match(self, data: bytes, expected: bytes) -> DataTypeMatch:
         try:
@@ -666,7 +648,7 @@ class PascalStringType(DataType[bytes]):
         self.count_includes_length: int = count_includes_length
 
     def parse_expected(self, specification: str) -> bytes:
-        return StringType.parse_string(specification)
+        return specification.encode("utf-8")
 
     def match(self, data: bytes, expected: bytes) -> DataTypeMatch:
         if len(data) < self.byte_length:
@@ -767,9 +749,8 @@ class RegexType(DataType[re.Pattern]):
                          f"{['', 'l'][self.limit_lines]}")
 
     def parse_expected(self, specification: str) -> re.Pattern:
-        # regexes need to have escapes processed twice:
-        unescaped_spec = specification.encode("utf-8").decode("unicode_escape")
-        unescaped_spec = unescaped_spec.encode("utf-8").decode("unicode_escape")
+        # regexes need to have escapes processed again:
+        unescaped_spec = unescape(specification)
         # handle POSIX-style character classes:
         unescaped_spec = posix_to_python_re(unescaped_spec)
         try:
@@ -1250,6 +1231,9 @@ class MagicMatcher:
                     if current_test is None and level != 0:
                         raise ValueError(f"{def_file!s} line {line_number}: Invalid level for test {line!r}")
                     test_str, message = _split_with_escapes(m.group("remainder"))
+                    # process any escape characters:
+                    test_str = unescape(test_str)
+                    message = unescape(message)
                     comment_pos = message.find("#")
                     if comment_pos >= 0:
                         message = message[:comment_pos].lstrip()
