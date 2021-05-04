@@ -1018,6 +1018,13 @@ class ClearTest(MagicTest):
             return Match(self, absolute_offset, 0, parent_match)
 
 
+class DERTest(MagicTest):
+    def test(self, data: bytes, absolute_offset: int, parent_match: Optional[Match]) -> Optional[Match]:
+        raise NotImplementedError(
+            "TODO: Implement support for the DER test (e.g., using the Kaitai asn1_der.py parser)"
+        )
+
+
 TEST_PATTERN: re.Pattern = re.compile(
     r"^(?P<level>[>]*)(?P<offset>[^\s!][^\s]*)\s+(?P<data_type>[^\s]+)\s+(?P<remainder>.+)$"
 )
@@ -1084,7 +1091,8 @@ class MagicMatcher:
                         offset = Offset.parse(m.group("offset"))
                     except ValueError as e:
                         raise ValueError(f"{def_file!s} line {line_number}: {e!s}")
-                    if m.group("data_type") == "name":
+                    data_type = m.group("data_type")
+                    if data_type == "name":
                         if current_test is not None:
                             raise ValueError(f"{def_file!s} line {line_number}: A named test must be at level 0")
                         elif test_str in matcher.named_tests:
@@ -1092,23 +1100,23 @@ class MagicMatcher:
                         test = NamedTest(name=test_str, offset=offset, message=message)
                         matcher.named_tests[test_str] = test
                     else:
-                        if m.group("data_type") == "default":
+                        if data_type == "default":
                             if current_test is None:
                                 raise NotImplementedError("TODO: Add support for default tests at level 0")
                             test = DefaultTest(offset=offset, message=message, parent=current_test)
-                        elif m.group("data_type") == "clear":
+                        elif data_type == "clear":
                             if current_test is None:
                                 raise NotImplementedError("TODO: Add support for clear tests at level 0")
                             test = ClearTest(offset=offset, message=message, parent=current_test)
-                        elif m.group("data_type") == "offset":
+                        elif data_type == "offset":
                             expected_value = IntegerValue.parse(test_str, num_bytes=8)
                             test = OffsetMatchTest(offset=offset, value=expected_value, message=message,
                                                    parent=current_test)
-                        elif m.group("data_type") == "indirect" or m.group("data_type") == "indirect/r":
+                        elif data_type == "indirect" or data_type == "indirect/r":
                             test = IndirectTest(matcher=matcher, offset=offset,
                                                 relative=m.group("data_type").endswith("r"),
                                                 message=message, parent=current_test)
-                        elif m.group("data_type") == "use":
+                        elif data_type == "use":
                             if test_str not in matcher.named_tests:
                                 late_binding = True
                                 named_test: Union[str, NamedTest] = test_str
@@ -1126,9 +1134,12 @@ class MagicMatcher:
                             )
                             if late_binding:
                                 late_bindings.append(test)
+                        elif data_type == "der":
+                            # TODO: Update this as necessary once we fully implement the DERTest
+                            test = DERTest(offset=offset, message=message, parent=current_test)
                         else:
                             try:
-                                data_type = DataType.parse(m.group("data_type"))
+                                data_type = DataType.parse(data_type)
                                 # in some definitions a space is put after the "&" in a numeric datatype:
                                 if test_str == "&":
                                     test_str_remainder, message = _split_with_escapes(message)
