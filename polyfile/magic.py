@@ -532,7 +532,7 @@ class StringType(DataType[bytes]):
 class SearchType(StringType):
     def __init__(
             self,
-            repetitions: int,
+            repetitions: Optional[int] = None,
             case_insensitive_lower: bool = False,
             case_insensitive_upper: bool = False,
             compact_whitespace: bool = False,
@@ -540,8 +540,8 @@ class SearchType(StringType):
             match_to_start: bool = False,
             trim: bool = False
     ):
-        if repetitions <= 0:
-            raise ValueError("repetitions must be a positive integer")
+        if repetitions is not None and repetitions <= 0:
+            raise ValueError("repetitions must be either None or a positive integer")
         super().__init__(
             case_insensitive_lower=case_insensitive_lower,
             case_insensitive_upper=case_insensitive_upper,
@@ -549,18 +549,26 @@ class SearchType(StringType):
             optional_blanks=optional_blanks,
             trim=trim
         )
+        self.repetitions: Optional[int] = repetitions
+        if repetitions is None:
+            rep_str = ""
+        else:
+            rep_str = f"/{repetitions}"
         assert self.name.startswith("string")
-        self.name = f"search/{repetitions}{self.name[6:]}"
+        self.name = f"search{rep_str}{self.name[6:]}"
         self.match_to_start: bool = match_to_start
-        self.repetitions: int = repetitions
         if match_to_start:
-            if self.name == f"search/{repetitions}":
-                self.name = f"search/{repetitions}/s"
+            if self.name == f"search{rep_str}":
+                self.name = f"search{rep_str}/s"
             else:
                 self.name = f"{self.name}s"
 
     def match(self, data: bytes, expected: bytes) -> DataTypeMatch:
-        for i in range(self.repetitions):
+        if self.repetitions is None:
+            rep = len(data)
+        else:
+            rep = self.repetitions
+        for i in range(rep):
             match = super().match(data[i:], expected)
             if match:
                 return match
@@ -574,6 +582,9 @@ class SearchType(StringType):
 
     @classmethod
     def parse(cls, format_str: str) -> "SearchType":
+        if format_str == "search":
+            # it's undocumented, but you can apparently use the search test without an explicit repetition number
+            return SearchType()
         m = cls.SEARCH_TYPE_FORMAT.match(format_str)
         if not m:
             raise ValueError(f"Invalid search type declaration: {format_str!r}")
