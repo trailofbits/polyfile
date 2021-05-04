@@ -318,6 +318,8 @@ class DataType(ABC, Generic[T]):
             return TYPES_BY_NAME[fmt]
         elif fmt.startswith("string") or fmt.startswith("ustring"):
             dt = StringType.parse(fmt)
+        elif fmt == "lestring16":
+            dt = LEUTF16Type()
         elif fmt.startswith("pstring"):
             dt = PascalStringType.parse(fmt)
         elif fmt.startswith("search"):
@@ -340,6 +342,20 @@ class DataType(ABC, Generic[T]):
 
     def __repr__(self):
         return f"{self.__class__.__name__}({self.name})"
+
+
+class LEUTF16Type(DataType[bytes]):
+    def __init__(self):
+        super().__init__("lestring16")
+
+    def parse_expected(self, specification: str) -> bytes:
+        return specification.encode("utf-16-le")
+
+    def match(self, data: bytes, expected: bytes) -> Optional[bytes]:
+        if data.startswith(expected):
+            return expected
+        else:
+            return None
 
 
 class StringType(DataType[bytes]):
