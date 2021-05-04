@@ -78,6 +78,17 @@ class Match:
         return f"{self.__class__.__name__}(test={self.test!r}, offset={self.offset}, length={self.length}, " \
                f"parent={self.parent!r})"
 
+    def __str__(self):
+        if self.test.message is not None:
+            # TODO: Fix pasting our value in
+            return self.test.message
+            #if self.value is not None and "%" in self.test.message:
+            #    return self.test.message % (self.value,)
+            #else:
+            #    return self.test.message
+        else:
+            return f"Match[{self.offset}:{self.offset + self.length}]"
+
 
 class Endianness(Enum):
     NATIVE = "="
@@ -753,7 +764,7 @@ class RegexType(DataType[re.Pattern]):
         # regexes need to have escapes processed again:
         unescaped_spec = unescape(specification)
         # handle POSIX-style character classes:
-        unescaped_spec = posix_to_python_re(unescaped_spec)
+        unescaped_spec = posix_to_python_re(unescaped_spec).encode("utf-8")
         try:
             if self.case_insensitive:
                 return re.compile(unescaped_spec, re.IGNORECASE)
@@ -769,7 +780,7 @@ class RegexType(DataType[re.Pattern]):
             byte_limit = 80 * self.length  # libmagic uses an implicit byte limit assuming 80 characters per line
             while limit > 0:
                 limit -= 1
-                line_offset = data.find(b"\n", start=offset, end=byte_limit)
+                line_offset = data.find(b"\n", offset, byte_limit)
                 if line_offset < 0:
                     return DataTypeMatch.INVALID
                 line = data[offset:line_offset]
@@ -811,8 +822,12 @@ class RegexType(DataType[re.Pattern]):
             options: Iterable[str] = ()
         else:
             options = m.group("flags")
+        if m.group("length") is None:
+            length: Optional[int] = None
+        else:
+            length = int(m.group("length"))
         return RegexType(
-            length=m.group("length"),
+            length=length,
             case_insensitive="c" in options,
             match_to_start="s" in options,
             limit_lines="l" in options,
