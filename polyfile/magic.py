@@ -1352,14 +1352,15 @@ class MagicMatcher:
 
     @staticmethod
     def parse(*def_files: Union[str, Path]) -> "MagicMatcher":
-        late_bindings: List[UseTest] = []
+        late_bindings: Dict[str, List[UseTest]] = {}
         matcher = MagicMatcher([])
         for file in def_files:
-            late_bindings.extend(MagicMatcher._parse_file(file, matcher=matcher))
+            late_bindings[file] = list(MagicMatcher._parse_file(file, matcher=matcher))
         # resolve any "use" tests with late binding:
-        for use_test in late_bindings:
-            assert isinstance(use_test.named_test, str)
-            if use_test.named_test not in definition.named_tests:
-                raise ValueError(f"{def_file!s}: Named test {use_test.named_test!r} is not defined")
-            use_test.named_test = definition.named_tests[use_test.named_test]
+        for def_file, use_tests in late_bindings.items():
+            for use_test in use_tests:
+                assert isinstance(use_test.named_test, str)
+                if use_test.named_test not in matcher.named_tests:
+                    raise ValueError(f"{def_file!s}: Named test {use_test.named_test!r} is not defined")
+                use_test.named_test = matcher.named_tests[use_test.named_test]
         return definition
