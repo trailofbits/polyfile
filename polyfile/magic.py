@@ -73,7 +73,7 @@ class Offset(ABC):
     @staticmethod
     def parse(offset: str) -> "Offset":
         if offset.startswith("&"):
-            return RelativeOffset(parse_numeric(offset[1:]))
+            return RelativeOffset(Offset.parse(offset[1:]))
         elif offset.startswith("("):
             return IndirectOffset.parse(offset)
         elif offset.startswith("-"):
@@ -111,17 +111,17 @@ class NegativeOffset(Offset):
 
 
 class RelativeOffset(Offset):
-    def __init__(self, relative_offset: int):
-        self.relative_offset: int = relative_offset
+    def __init__(self, relative_to: Offset):
+        self.relative_to: Offset = relative_to
 
     def to_absolute(self, data: bytes, last_match: Optional[Match]) -> int:
-        return last_match.offset + last_match.length + self.relative_offset
+        return last_match.offset + last_match.length + self.relative_to.to_absolute(data, last_match)
 
     def __repr__(self):
-        return f"{self.__class__.__name__}(relative_offset={self.relative_offset})"
+        return f"{self.__class__.__name__}(relative_to={self.relative_to})"
 
     def __str__(self):
-        return f"&{self.relative_offset}"
+        return f"&{self.relative_to}"
 
 
 class IndirectOffset(Offset):
