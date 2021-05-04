@@ -95,7 +95,7 @@ def parse_numeric(text: str) -> int:
         factor = 1
     if text.startswith("+"):
         text = text[1:]
-    if text.startswith("0x"):
+    if text.startswith("0x") or text.startswith("0X"):
         return int(text, 16) * factor
     elif text.startswith("0") and len(text) > 1:
         return int(text, 8) * factor
@@ -193,7 +193,7 @@ class IndirectOffset(Offset):
         offset = self.offset.to_absolute(data, last_match)
         return self.post_process(struct.unpack(fmt, data[offset:offset + self.num_bytes]))
 
-    NUMBER_PATTERN: str = r"(0x[\dA-Za-z]+|\d+)"
+    NUMBER_PATTERN: str = r"(0[xX][\dA-Fa-f]+|\d+)"
     INDIRECT_OFFSET_PATTERN: re.Pattern = re.compile(
         "^\("
         rf"(?P<offset>&?-?{NUMBER_PATTERN})"
@@ -576,8 +576,8 @@ class SearchType(StringType):
 
     SEARCH_TYPE_FORMAT: re.Pattern = re.compile(
         r"^search"
-        r"((/(?P<repetitions1>(0x[\dA-Za-z]+|\d+)))(/(?P<flags1>[BbCctTWws]*)?)?|"
-        r"/((?P<flags2>[BbCctTWws]*)/?)?(?P<repetitions2>(0x[\dA-Za-z]+|\d+)))$"
+        r"((/(?P<repetitions1>(0[xX][\dA-Fa-f]+|\d+)))(/(?P<flags1>[BbCctTWws]*)?)?|"
+        r"/((?P<flags2>[BbCctTWws]*)/?)?(?P<repetitions2>(0[xX][\dA-Fa-f]+|\d+)))$"
     )
     # NOTE: some specification files like `ber` use `search/b64`, which is undocumented. We treat that equivalent to
     #       the compliant `search/b/64`.
