@@ -164,7 +164,7 @@ class IndirectOffset(Offset):
         "^\("
         rf"(?P<offset>&?-?{NUMBER_PATTERN})"
         r"((?P<signedness>[.,])(?P<type>[bBcCeEfFgGhHiILlmsSqQ]))?"
-        rf"(?P<post_process>\*?[+-]?({NUMBER_PATTERN}|\(-?{NUMBER_PATTERN}\)))?"
+        rf"(?P<post_process>[\*&]?[+-]?({NUMBER_PATTERN}|\(-?{NUMBER_PATTERN}\)))?"
         "\)$"
     )
 
@@ -203,6 +203,11 @@ class IndirectOffset(Offset):
                 pp = pp[1:]
             else:
                 multiply = False
+                if pp.startswith("&"):
+                    bitwise_and = True
+                    pp = pp[1:]
+                else:
+                    bitwise_and = False
             if pp.startswith("+"):
                 pp = pp[1:]
             if pp.startswith("(") and pp.endswith(")"):
@@ -214,6 +219,8 @@ class IndirectOffset(Offset):
             operand = parse_numeric(pp)
             if multiply:
                 post_process = lambda n: n * operand
+            elif bitwise_and:
+                post_process = lambda n: n & operand
             else:
                 post_process = lambda n: n + operand
         return IndirectOffset(
