@@ -590,9 +590,12 @@ class SearchType(StringType):
 
     SEARCH_TYPE_FORMAT: re.Pattern = re.compile(
         r"^search"
-        r"((/(?P<repetitions1>(0x[\dA-Za-z]+|\d+)))(/(?P<flags1>[BbCctTWws]*))?|"
-        r"/((?P<flags2>[BbCctTWws]*)/)?(?P<repetitions2>(0x[\dA-Za-z]+|\d+)))$"
+        r"((/(?P<repetitions1>(0x[\dA-Za-z]+|\d+)))(/(?P<flags1>[BbCctTWws]*)?)?|"
+        r"/((?P<flags2>[BbCctTWws]*)/?)?(?P<repetitions2>(0x[\dA-Za-z]+|\d+)))$"
     )
+    # NOTE: some specification files like `ber` use `search/b64`, which is undocumented. We treat that equivalent to
+    #       the compliant `search/b/64`.
+    # TODO: Figure out if this is correct.
 
     @classmethod
     def parse(cls, format_str: str) -> "SearchType":
@@ -767,7 +770,9 @@ class RegexType(DataType[re.Pattern]):
             else:
                 return DataTypeMatch.INVALID
 
-    REGEX_TYPE_FORMAT: re.Pattern = re.compile(r"^regex(/(?P<length>\d+)?(?P<flags>[csl]*))?$")
+    REGEX_TYPE_FORMAT: re.Pattern = re.compile(r"^regex(/(?P<length>\d+)?(?P<flags>[csl]*)(b\d*)?)?$")
+    # NOTE: some specification files like `cad` use `regex/b`, which is undocumented, and it's unclear from the libmagic
+    #       source code whether it is simply ignored or if it has a purpuse. We ignore it here.
 
     @classmethod
     def parse(cls, format_str: str) -> "RegexType":
