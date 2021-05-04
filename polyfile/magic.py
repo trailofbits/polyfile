@@ -1137,10 +1137,12 @@ class UseTest(MagicTest):
             mime: Optional[str] = None,
             extensions: Iterable[str] = (),
             message: str = "",
-            parent: Optional["MagicTest"] = None
+            parent: Optional["MagicTest"] = None,
+            flip_endianness: bool = False
     ):
         super().__init__(offset=offset, mime=mime, extensions=extensions, message=message, parent=parent)
         self.named_test: NamedTest = named_test
+        self.flip_endianness: bool = flip_endianness
 
     def _match(
             self,
@@ -1148,6 +1150,8 @@ class UseTest(MagicTest):
             only_match_mime: bool = False,
             parent_match: Optional[Match] = None
     ) -> Iterator[Match]:
+        if self.flip_endianness:
+            raise NotImplementedError("TODO: Add support for use tests with flipped endianness")
         yield from self.named_test._match(data, only_match_mime, parent_match)
         if only_match_mime and not self.can_match_mime:
             return
@@ -1286,6 +1290,14 @@ class MagicMatcher:
                                                 relative=m.group("data_type").endswith("r"),
                                                 message=message, parent=current_test)
                         elif data_type == "use":
+                            if test_str.startswith("^"):
+                                flip_endianness = True
+                                test_str = test_str[1:]
+                            elif test_str.startswith("\\^"):
+                                flip_endianness = True
+                                test_str = test_str[2:]
+                            else:
+                                flip_endianness = False
                             if test_str not in matcher.named_tests:
                                 late_binding = True
                                 named_test: Union[str, NamedTest] = test_str
@@ -1299,7 +1311,8 @@ class MagicMatcher:
                                 named_test,
                                 offset=offset,
                                 message=message,
-                                parent=current_test
+                                parent=current_test,
+                                flip_endianness=flip_endianness
                             )
                             if late_binding:
                                 late_bindings.append(test)
@@ -1363,4 +1376,4 @@ class MagicMatcher:
                 if use_test.named_test not in matcher.named_tests:
                     raise ValueError(f"{def_file!s}: Named test {use_test.named_test!r} is not defined")
                 use_test.named_test = matcher.named_tests[use_test.named_test]
-        return definition
+        return matcher
