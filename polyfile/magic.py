@@ -14,6 +14,7 @@ from pathlib import Path
 import re
 import struct
 from typing import Any, Callable, Dict, Generic, Iterable, Iterator, List, Optional, Set, Tuple, TypeVar, Union
+from uuid import UUID, uuid4
 
 DEFS_DIR: Path = Path(__file__).absolute().parent / "magic_defs"
 
@@ -1023,6 +1024,26 @@ class IndirectTest(MagicTest):
             yield match
 
 
+class GUIDTest(MagicTest):
+    def __init__(
+            self,
+            offset: Offset,
+            uuid: Optional[UUID] = None,
+            mime: Optional[str] = None,
+            extensions: Iterable[str] = (),
+            message: str = "",
+            parent: Optional[MagicTest] = None
+    ):
+        super().__init__(offset=offset, mime=mime, extensions=extensions, message=message, parent=parent)
+        if uuid is None:
+            self.uuid: UUID = uuid4()
+        else:
+            self.uuid = uiid
+
+    def test(self, data: bytes, absolute_offset: int, parent_match: Optional[Match]) -> Optional[Match]:
+        return Match(self, str(self.uuid), absolute_offset, 0, parent=parent_match)
+
+
 class NamedTest(MagicTest):
     def __init__(
             self,
@@ -1192,6 +1213,8 @@ class MagicMatcher:
                             expected_value = IntegerValue.parse(test_str, num_bytes=8)
                             test = OffsetMatchTest(offset=offset, value=expected_value, message=message,
                                                    parent=current_test)
+                        elif data_type == "guid":
+                            test = GUIDTest(offset=offset, message=message, parent=current_test)
                         elif data_type == "indirect" or data_type == "indirect/r":
                             test = IndirectTest(matcher=matcher, offset=offset,
                                                 relative=m.group("data_type").endswith("r"),
