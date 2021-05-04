@@ -729,6 +729,23 @@ class PascalStringType(DataType[bytes]):
         )
 
 
+def posix_to_python_re(match: str) -> str:
+    for match_from, replace_with in (
+            ("upper", "A-Z"),
+            ("lower", "a-z"),
+            ("alpha", "A-Za-z"),
+            ("digit", "0-9"),
+            ("xdigit", "0-9A-Fa-f"),
+            ("alnum", "A-Za-z0-9"),
+            ("punct", ",./<>?`;':\"\\[\\]{}\|~!@#$%\\^&*()_+-="),
+            ("blank", " \t"),
+            ("space", " \t\n\r\f\v"),
+            ("word", "\\w")
+    ):
+        match = match.replace(f"[:{match_from}:]", f"{replace_with}")
+    return match
+
+
 class RegexType(DataType[re.Pattern]):
     def __init__(
             self,
@@ -750,10 +767,18 @@ class RegexType(DataType[re.Pattern]):
                          f"{['', 'l'][self.limit_lines]}")
 
     def parse_expected(self, specification: str) -> re.Pattern:
-        if self.case_insensitive:
-            return re.compile(specification, re.IGNORECASE)
-        else:
-            return re.compile(specification)
+        # regexes need to have escapes processed twice:
+        unescaped_spec = specification.encode("utf-8").decode("unicode_escape")
+        unescaped_spec = unescaped_spec.encode("utf-8").decode("unicode_escape")
+        # handle POSIX-style character classes:
+        unescaped_spec = posix_to_python_re(unescaped_spec)
+        try:
+            if self.case_insensitive:
+                return re.compile(unescaped_spec, re.IGNORECASE)
+            else:
+                return re.compile(unescaped_spec)
+        except re.error as e:
+            raise ValueError(str(e))
 
     def match(self, data: bytes, expected: re.Pattern) -> DataTypeMatch:
         if self.limit_lines:
