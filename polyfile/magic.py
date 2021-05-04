@@ -359,7 +359,9 @@ class DataType(ABC, Generic[T]):
         elif fmt.startswith("string") or fmt.startswith("ustring"):
             dt = StringType.parse(fmt)
         elif fmt == "lestring16":
-            dt = LEUTF16Type()
+            dt = UTF16Type(endianness=Endianness.LITTLE)
+        elif fmt == "bestring16":
+            dt = UTF16Type(endianness=Endianness.BIG)
         elif fmt.startswith("pstring"):
             dt = PascalStringType.parse(fmt)
         elif fmt.startswith("search"):
@@ -384,16 +386,28 @@ class DataType(ABC, Generic[T]):
         return f"{self.__class__.__name__}({self.name})"
 
 
-class LEUTF16Type(DataType[bytes]):
-    def __init__(self):
-        super().__init__("lestring16")
+class UTF16Type(DataType[bytes]):
+    def __init__(self, endianness: Endianness):
+        if endianness == Endianness.LITTLE:
+            super().__init__("lestring16")
+        elif endianness == Endianness.BIG:
+            super().__init__("bestring16")
+        else:
+            raise ValueError(f"UTF16 strings only support big and little endianness, not {endianness!r}")
+        self.endianness: Endianness = endianness
 
     def parse_expected(self, specification: str) -> bytes:
-        return specification.encode("utf-16-le")
+        if self.endianness == Endianness.LITTLE:
+            return specification.encode("utf-16-le")
+        else:
+            return specification.encode("utf-16-be")
 
     def match(self, data: bytes, expected: bytes) -> DataTypeMatch:
         if data.startswith(expected):
-            return DataTypeMatch(expected, expected.decode("utf-16-le"))
+            if self.endianness == Endianness.LITTLE:
+                return DataTypeMatch(expected, expected.decode("utf-16-le"))
+            else:
+                return DataTypeMatch(expected, expected.decode("utf-16-be"))
         else:
             return DataTypeMatch.INVALID
 
