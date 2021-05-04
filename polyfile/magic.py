@@ -95,6 +95,8 @@ def parse_numeric(text: str) -> int:
         factor = 1
     if text.startswith("+"):
         text = text[1:]
+    if text.endswith("L"):
+        text = text[:-1]
     if text.startswith("0x") or text.startswith("0X"):
         return int(text, 16) * factor
     elif text.startswith("0") and len(text) > 1:
@@ -193,7 +195,7 @@ class IndirectOffset(Offset):
         offset = self.offset.to_absolute(data, last_match)
         return self.post_process(struct.unpack(fmt, data[offset:offset + self.num_bytes]))
 
-    NUMBER_PATTERN: str = r"(0[xX][\dA-Fa-f]+|\d+)"
+    NUMBER_PATTERN: str = r"(0[xX][\dA-Fa-f]+|\d+)L?"
     INDIRECT_OFFSET_PATTERN: re.Pattern = re.compile(
         "^\("
         rf"(?P<offset>&?-?{NUMBER_PATTERN})"
