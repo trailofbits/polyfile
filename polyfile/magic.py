@@ -232,16 +232,11 @@ class IndirectOffset(Offset):
         if pp is None:
             post_process = lambda n: n
         else:
-            if pp.startswith("*"):
-                multiply = True
+            multiply = pp.startswith("*")
+            bitwise_and = pp.startswith("&")
+            divide = pp.startswith("/")
+            if multiply or bitwise_and or divide:
                 pp = pp[1:]
-            else:
-                multiply = False
-                if pp.startswith("&"):
-                    bitwise_and = True
-                    pp = pp[1:]
-                else:
-                    bitwise_and = False
             if pp.startswith("+"):
                 pp = pp[1:]
             if pp.startswith("(") and pp.endswith(")"):
@@ -255,6 +250,8 @@ class IndirectOffset(Offset):
                 post_process = lambda n: n * operand
             elif bitwise_and:
                 post_process = lambda n: n & operand
+            elif divide:
+                post_process = lambda n: n // operand
             else:
                 post_process = lambda n: n + operand
         return IndirectOffset(
