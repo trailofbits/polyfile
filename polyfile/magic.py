@@ -864,7 +864,9 @@ class NumericDataType(DataType[NumericValue]):
                 ("%", lambda a, b: a % b),
                 ("+", lambda a, b: a + b),
                 ("-", lambda a, b: a - b),
-                ("^", lambda a, b: a ^ b)
+                ("^", lambda a, b: a ^ b),
+                ("/", lambda a, b: [a // b, a / b][isinstance(a, float)]),
+                ("*", lambda a, b: a * b)
         ):
             pos = fmt.find(symbol)
             if pos > 0:
