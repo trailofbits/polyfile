@@ -825,7 +825,7 @@ class RegexType(DataType[re.Pattern]):
                 if m:
                     match = data[:offset + m.end()]
                     try:
-                        value = match.encode("utf-8")
+                        value = match.decode("utf-8")
                     except UnicodeDecodeError:
                         value = match
                     if self.trim:
@@ -837,7 +837,7 @@ class RegexType(DataType[re.Pattern]):
             if m:
                 match = data[:m.end()]
                 try:
-                    value = match.encode("utf-8")
+                    value = match.decode("utf-8")
                 except UnicodeDecodeError:
                     value = match
                 if self.trim:
