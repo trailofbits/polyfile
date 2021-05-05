@@ -59,19 +59,19 @@ def unescape(to_unescape: str) -> str:
     return b.decode("unicode_escape")
 
 
-class Match:
-    def __init__(self, test: "MagicTest", value: Any, offset: int, length: int, parent: Optional["Match"] = None):
+class TestResult:
+    def __init__(self, test: "MagicTest", value: Any, offset: int, length: int, parent: Optional["TestResult"] = None):
         self.test: MagicTest = test
         self.value: Any = value
         self.offset: int = offset
         self.length: int = length
-        self.parent: Optional[Match] = parent
+        self.parent: Optional[TestResult] = parent
 
     def __hash__(self):
         return hash((self.test, self.offset, self.length))
 
     def __eq__(self, other):
-        return isinstance(other, Match) and other.test == self.test and other.offset == self.offset \
+        return isinstance(other, TestResult) and other.test == self.test and other.offset == self.offset \
                and other.length == self.length
 
     def __repr__(self):
@@ -118,7 +118,7 @@ def parse_numeric(text: str) -> int:
 
 class Offset(ABC):
     @abstractmethod
-    def to_absolute(self, data: bytes, last_match: Optional[Match]) -> int:
+    def to_absolute(self, data: bytes, last_match: Optional[TestResult]) -> int:
         raise NotImplementedError()
 
     @staticmethod
@@ -148,7 +148,7 @@ class AbsoluteOffset(Offset):
     def __init__(self, offset: int):
         self.offset: int = offset
 
-    def to_absolute(self, data: bytes, last_match: Optional[Match]) -> int:
+    def to_absolute(self, data: bytes, last_match: Optional[TestResult]) -> int:
         if self.offset >= len(data):
             raise InvalidOffsetError(offset=self)
         return self.offset
@@ -165,7 +165,7 @@ class NamedAbsoluteOffset(AbsoluteOffset):
         super().__init__(offset)
         self.test: NamedTest = test
 
-    def to_absolute(self, data: bytes, last_match: Optional[Match]) -> int:
+    def to_absolute(self, data: bytes, last_match: Optional[TestResult]) -> int:
         while last_match is not None and not last_match.test is self.test:
             last_match = last_match.parent
 
@@ -184,7 +184,7 @@ class NegativeOffset(Offset):
     def __init__(self, magnitude: int):
         self.magnitude: int = magnitude
 
-    def to_absolute(self, data: bytes, last_match: Optional[Match]) -> int:
+    def to_absolute(self, data: bytes, last_match: Optional[TestResult]) -> int:
         if self.magnitude > len(data):
             raise InvalidOffsetError(offset=self)
         return len(data) - self.magnitude
@@ -200,7 +200,7 @@ class RelativeOffset(Offset):
     def __init__(self, relative_to: Offset):
         self.relative_to: Offset = relative_to
 
-    def to_absolute(self, data: bytes, last_match: Optional[Match]) -> int:
+    def to_absolute(self, data: bytes, last_match: Optional[TestResult]) -> int:
         offset = last_match.offset + last_match.length + self.relative_to.to_absolute(data, last_match)
         if len(data) < offset < 0:
             raise InvalidOffsetError(offset=self)
@@ -226,7 +226,7 @@ class IndirectOffset(Offset):
         elif num_bytes not in (1, 2, 4, 8):
             raise ValueError(f"Invalid number of bytes: {num_bytes}")
 
-    def to_absolute(self, data: bytes, last_match: Optional[Match]) -> int:
+    def to_absolute(self, data: bytes, last_match: Optional[TestResult]) -> int:
         if self.num_bytes == 1:
             fmt = "B"
         elif self.num_bytes == 2:
@@ -383,15 +383,15 @@ class MagicTest(ABC):
         return self._can_match_mime
 
     @abstractmethod
-    def test(self, data: bytes, absolute_offset: int, parent_match: Optional[Match]) -> Optional[Match]:
+    def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> Optional[TestResult]:
         raise NotImplementedError()
 
     def _match(
             self,
             data: bytes,
             only_match_mime: bool = False,
-            parent_match: Optional[Match] = None
-    ) -> Iterator[Match]:
+            parent_match: Optional[TestResult] = None
+    ) -> Iterator[TestResult]:
         if only_match_mime and not self.can_match_mime:
             return
         try:
@@ -405,7 +405,7 @@ class MagicTest(ABC):
                 if not only_match_mime or child.can_match_mime:
                     yield from child._match(data=data, only_match_mime=only_match_mime, parent_match=m)
 
-    def match(self, data: bytes, only_match_mime: bool = False) -> Iterator[Match]:
+    def match(self, data: bytes, only_match_mime: bool = False) -> Iterator[TestResult]:
         """Yields all matches for the given data"""
         return self._match(data, only_match_mime=only_match_mime)
 
@@ -1113,11 +1113,11 @@ class ConstantMatchTest(MagicTest, Generic[T]):
         self.data_type: DataType[T] = data_type
         self.constant: T = constant
 
-    def test(self, data: bytes, absolute_offset: int, parent_match: Optional[Match]) -> Optional[Match]:
+    def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> Optional[TestResult]:
         match = self.data_type.match(data[absolute_offset:], self.constant)
         if match:
-            return Match(self, offset=absolute_offset, length=len(match.raw_match), value=match.value,
-                         parent=parent_match)
+            return TestResult(self, offset=absolute_offset, length=len(match.raw_match), value=match.value,
+                              parent=parent_match)
         else:
             return None
 
@@ -1135,9 +1135,9 @@ class OffsetMatchTest(MagicTest):
         super().__init__(offset=offset, mime=mime, extensions=extensions, message=message, parent=parent)
         self.value: IntegerValue = value
 
-    def test(self, data: bytes, absolute_offset: int, parent_match: Optional[Match]) -> Optional[Match]:
+    def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> Optional[TestResult]:
         if self.value.test(absolute_offset):
-            return Match(self, offset=0, length=absolute_offset, value=absolute_offset, parent=parent_match)
+            return TestResult(self, offset=0, length=absolute_offset, value=absolute_offset, parent=parent_match)
         else:
             return None
 
@@ -1157,7 +1157,7 @@ class IndirectTest(MagicTest):
         self.matcher: MagicMatcher = matcher
         self.relative: bool = relative
 
-    def test(self, data: bytes, absolute_offset: int, parent_match: Optional[Match]) -> Optional[Match]:
+    def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> Optional[TestResult]:
         if self.relative:
             if parent_match is None:
                 return None
@@ -1183,8 +1183,8 @@ class GUIDTest(MagicTest):
         else:
             self.uuid = uiid
 
-    def test(self, data: bytes, absolute_offset: int, parent_match: Optional[Match]) -> Optional[Match]:
-        return Match(self, str(self.uuid), absolute_offset, 0, parent=parent_match)
+    def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> Optional[TestResult]:
+        return TestResult(self, str(self.uuid), absolute_offset, 0, parent=parent_match)
 
 
 class NamedTest(MagicTest):
@@ -1200,10 +1200,10 @@ class NamedTest(MagicTest):
         self.name: str = name
         self.named_test = self
 
-    def test(self, data: bytes, absolute_offset: int, parent_match: Optional[Match]) -> Optional[Match]:
+    def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> Optional[TestResult]:
         if parent_match is not None:
-            return Match(self, offset=parent_match.offset + parent_match.length, length=0, value=self.name,
-                         parent=parent_match)
+            return TestResult(self, offset=parent_match.offset + parent_match.length, length=0, value=self.name,
+                              parent=parent_match)
         else:
             raise ValueError("A named test must always be called from a `use` test.")
 
@@ -1230,21 +1230,21 @@ class UseTest(MagicTest):
             self,
             data: bytes,
             only_match_mime: bool = False,
-            parent_match: Optional[Match] = None
-    ) -> Iterator[Match]:
+            parent_match: Optional[TestResult] = None
+    ) -> Iterator[TestResult]:
         if self.flip_endianness:
             raise NotImplementedError("TODO: Add support for use tests with flipped endianness")
-        first_match: Optional[Match] = None
+        first_match: Optional[TestResult] = None
         try:
             absolute_offset = self.offset.to_absolute(data, last_match=parent_match)
         except InvalidOffsetError:
             return None
         if self.mime is not None or self.extensions:
             # This `use` test has its own mime type or extensions, so we need to yield it as its own match
-            use_match = Match(self, None, absolute_offset, 0, parent=parent_match)
+            use_match = TestResult(self, None, absolute_offset, 0, parent=parent_match)
         else:
             use_match = parent_match
-        first_match: Optional[Match] = None
+        first_match: Optional[TestResult] = None
         for named_result in self.referenced_test._match(data, only_match_mime, use_match):
             if first_match is None:
                 first_match = named_result
@@ -1261,29 +1261,29 @@ class UseTest(MagicTest):
             if not only_match_mime or child.can_match_mime:
                 yield from child._match(data=data, only_match_mime=only_match_mime, parent_match=first_match)
 
-    def test(self, data: bytes, absolute_offset: int, parent_match: Optional[Match]) -> Optional[Match]:
+    def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> Optional[TestResult]:
         raise NotImplementedError("This function should never be called")
 
 
 class DefaultTest(MagicTest):
-    def test(self, data: bytes, absolute_offset: int, parent_match: Optional[Match]) -> Optional[Match]:
+    def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> Optional[TestResult]:
         if parent_match is None or getattr(parent_match, "_cleared", False):
-            return Match(self, offset=absolute_offset, length=0, value=True)
+            return TestResult(self, offset=absolute_offset, length=0, value=True)
         else:
             return None
 
 
 class ClearTest(MagicTest):
-    def test(self, data: bytes, absolute_offset: int, parent_match: Optional[Match]) -> Optional[Match]:
+    def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> Optional[TestResult]:
         if parent_match is None:
-            return Match(self, offset=absolute_offset, length=0, value=None)
+            return TestResult(self, offset=absolute_offset, length=0, value=None)
         else:
             setattr(parent_match, "_cleared", True)
-            return Match(self, offset=absolute_offset, length=0, parent=parent_match, value=None)
+            return TestResult(self, offset=absolute_offset, length=0, parent=parent_match, value=None)
 
 
 class DERTest(MagicTest):
-    def test(self, data: bytes, absolute_offset: int, parent_match: Optional[Match]) -> Optional[Match]:
+    def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> Optional[TestResult]:
         raise NotImplementedError(
             "TODO: Implement support for the DER test (e.g., using the Kaitai asn1_der.py parser)"
         )
@@ -1310,6 +1310,73 @@ def _split_with_escapes(text: str) -> Tuple[str, str]:
     return text[:first_length], text[first_length + 1:]
 
 
+class Match:
+    def __init__(self, results: Iterable[TestResult]):
+        self._result_iter: Optional[Iterator[TestResult]] = iter(results)
+        self._results: List[TestResult] = []
+
+    @property
+    def mimetypes(self) -> Iterator[str]:
+        yielded = set()
+        for result in self:
+            if result.test.mime not in yielded:
+                yield result.test.mime
+                yielded.add(result.test.mime)
+
+    @property
+    def extensions(self) -> Iterator[str]:
+        yielded = set()
+        for result in self:
+            new_exts = result.test.extensions - yielded
+            yield from new_exts
+            yielded |= new_exts
+
+    def __bool__(self):
+        return any(m for m in self.mimetypes) or any(e for e in self.extensions) or bool(self.message())
+
+    def __len__(self):
+        if self._result_iter is not None:
+            # we have not yet finished collecting the results
+            for _ in self: pass
+        assert self._result_iter is None
+        return len(self._results)
+
+    def __getitem__(self, index: int) -> TestResult:
+        while self._result_iter is not None and index <= len(self._results):
+            # we have not yet finished collecting the results
+            try:
+                self._results.append(next(self._result_iter))
+            except StopIteration:
+                self._result_iter = None
+        return self._results[index]
+
+    def __iter__(self) -> Iterator[TestResult]:
+        if self._result_iter is None:
+            yield from self._results
+            return
+        i = 0
+        while True:
+            try:
+                yield self[i]
+            except IndexError:
+                break
+            i += 1
+
+    def message(self) -> str:
+        msg = ""
+        for result in self:
+            # TODO: Handle printf string replacements
+            if result.test.message.lstrip().startswith("\b"):
+                msg = f"{msg}{result.test.message.lstrip()[1:]}"
+            elif msg:
+                msg = f"{msg} {result.test.message.lstrip()}"
+            else:
+                msg = result.test.message.lstrip()
+        return msg
+
+    __str__ = message
+
+
 class MagicMatcher:
     def __init__(self, tests: Iterable[MagicTest]):
         self.tests: List[MagicTest] = []
@@ -1322,7 +1389,9 @@ class MagicMatcher:
 
     def match(self, data: bytes, only_match_mime: bool = False) -> Iterator[Match]:
         for test in self.tests:
-            yield from test.match(data, only_match_mime=only_match_mime)
+            m = Match(test.match(data, only_match_mime=only_match_mime))
+            if m:
+                yield m
 
     @staticmethod
     def _parse_file(def_file: Union[str, Path], matcher: "MagicMatcher") -> Iterable[UseTest]:
