@@ -561,12 +561,12 @@ class StringType(DataType[bytes]):
             if not expected:
                 break
             matched.append(b)
-            is_whitespace = bytes([b]) in b" \t\n"
+            is_whitespace = bytes([b]) in b" \t\n\r\f\v"
             if self.trim and last_char is None and is_whitespace:
                 # skip leading whitespace
                 continue
             elif self.compact_whitespace and is_whitespace:
-                if last_char is not None and bytes([last_char]) in b" \t\n":  # type: ignore
+                if last_char is not None and bytes([last_char]) in b" \t\n\r\f\v":  # type: ignore
                     # compact consecutive whitespace
                     continue
                 else:
@@ -576,10 +576,13 @@ class StringType(DataType[bytes]):
                     (self.case_insensitive_lower and b == expected[0:1].lower()[0]) or
                     (self.case_insensitive_upper and b == expected[0:1].upper()[0])
             ):
-                if not (self.optional_blanks and expected[0:1] in b" \t\n"):
+                if not (self.optional_blanks and expected[0:1] in b" \t\n\r\f\v"):
                     return DataTypeMatch.INVALID
             expected = expected[1:]
-        if self.compact_whitespace and not had_whitespace:
+        if expected:
+            # we did not fully match the expected sequence (e.g., there were not enough bytes in the data)
+            return DataTypeMatch.INVALID
+        elif self.compact_whitespace and not had_whitespace:
             return DataTypeMatch.INVALID
         return DataTypeMatch(bytes(matched), expected_str)
 
