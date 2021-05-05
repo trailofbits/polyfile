@@ -289,6 +289,18 @@ class IndirectOffset(Offset):
         return f"({self.offset!s}{['.', ','][self.signed]}{self.num_bytes}{self.endianness}{addend})"
 
 
+class SourceInfo:
+    def __init__(self, path: Path, line: int):
+        self.path: Path = path
+        self.line: int = line
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}(path={self.path!r}, line={self.line})"
+
+    def str(self):
+        return f"{self.path!s}:{self.line}"
+
+
 class MagicTest(ABC):
     def __init__(
             self,
@@ -317,6 +329,7 @@ class MagicTest(ABC):
                 p = p.parent
         else:
             self._can_match_mime = None
+        self.source_info: Optional[SourceInfo] = None
 
     @property
     def can_match_mime(self) -> bool:
@@ -1172,16 +1185,29 @@ class UseTest(MagicTest):
     ) -> Iterator[Match]:
         if self.flip_endianness:
             raise NotImplementedError("TODO: Add support for use tests with flipped endianness")
-        yield from self.named_test._match(data, only_match_mime, parent_match)
-        if only_match_mime and not self.can_match_mime:
+        first_match: Optional[Match] = None
+        absolute_offset = self.offset.to_absolute(data, last_match=parent_match)
+        if self.mime is not None or self.extensions:
+            # This `use` test has its own mime type or extensions, so we need to yield it as its own match
+            use_match = Match(self, None, absolute_offset, 0, parent=parent_match)
+        else:
+            use_match = parent_match
+        first_match: Optional[Match] = None
+        for named_result in self.named_test._match(data, only_match_mime, use_match):
+            if first_match is None:
+                first_match = named_result
+                if use_match is not parent_match:
+                    yield use_match
+            yield named_result
+        if first_match is None:
+            # the named test did not match anything, so don't try any of our children
             return
-        m = self.test(data, self.offset.to_absolute(data, parent_match), parent_match)
-        if m is not None:
-            if not only_match_mime or self.mime is not None:
-                yield m
-            for child in self.children:
-                if not only_match_mime or child.can_match_mime:
-                    yield from child._match(data=data, only_match_mime=only_match_mime, parent_match=m)
+        elif only_match_mime and not self.can_match_mime:
+            # none of our children can produce a mime type
+            return
+        for child in self.children:
+            if not only_match_mime or child.can_match_mime:
+                yield from child._match(data=data, only_match_mime=only_match_mime, parent_match=first_match)
 
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[Match]) -> Optional[Match]:
         raise NotImplementedError("This function should never be called")
@@ -1290,6 +1316,7 @@ class MagicMatcher:
                             raise ValueError(f"{def_file!s} line {line_number}: Duplicate test named {test_str!r}")
                         test = NamedTest(name=test_str, offset=offset, message=message)
                         matcher.named_tests[test_str] = test
+                        test.source_info = SourceInfo(def_file, line_number)
                     else:
                         if data_type == "default":
                             if current_test is None:
@@ -1364,6 +1391,7 @@ class MagicMatcher:
                             )
                         if test.level == 0:
                             matcher.tests.append(test)
+                    test.source_info = SourceInfo(def_file, line_number)
                     current_test = test
                     continue
                 m = MIME_PATTERN.match(line)
