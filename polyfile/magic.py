@@ -160,6 +160,26 @@ class AbsoluteOffset(Offset):
         return str(self.offset)
 
 
+class NamedAbsoluteOffset(AbsoluteOffset):
+    def __init__(self, test: "NamedTest", offset: int):
+        super().__init__(offset)
+        self.test: NamedTest = test
+
+    def to_absolute(self, data: bytes, last_match: Optional[Match]) -> int:
+        while last_match is not None and not last_match.test is self.test:
+            last_match = last_match.parent
+
+        if last_match is None:
+            raise ValueError(f"Could not resolve the match associated with {self!r}")
+
+        if last_match.offset + self.offset >= len(data):
+            raise InvalidOffsetError(offset=self)
+        return last_match.offset + self.offset
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}(test={self.test!r}, offset={self.offset})"
+
+
 class NegativeOffset(Offset):
     def __init__(self, magnitude: int):
         self.magnitude: int = magnitude
@@ -340,8 +360,12 @@ class MagicTest(ABC):
         if self.parent is not None:
             self.level: int = self.parent.level + 1
             self.parent.children.append(self)
+            self.named_test: Optional[NamedTest] = self.parent.named_test
+            if self.named_test is not None and isinstance(offset, AbsoluteOffset):
+                self.offset = NamedAbsoluteOffset(self.named_test, offset.offset)
         else:
             self.level = 0
+            self.named_test = None
         if mime is not None:
             self._can_match_mime: Optional[bool] = True
             p = self.parent
@@ -1174,6 +1198,7 @@ class NamedTest(MagicTest):
     ):
         super().__init__(offset=offset, mime=mime, extensions=extensions, message=message, parent=None)
         self.name: str = name
+        self.named_test = self
 
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[Match]) -> Optional[Match]:
         if parent_match is not None:
@@ -1189,7 +1214,7 @@ class NamedTest(MagicTest):
 class UseTest(MagicTest):
     def __init__(
             self,
-            named_test: NamedTest,
+            referenced_test: NamedTest,
             offset: Offset,
             mime: Optional[str] = None,
             extensions: Iterable[str] = (),
@@ -1198,7 +1223,7 @@ class UseTest(MagicTest):
             flip_endianness: bool = False
     ):
         super().__init__(offset=offset, mime=mime, extensions=extensions, message=message, parent=parent)
-        self.named_test: NamedTest = named_test
+        self.referenced_test: NamedTest = referenced_test
         self.flip_endianness: bool = flip_endianness
 
     def _match(
@@ -1220,7 +1245,7 @@ class UseTest(MagicTest):
         else:
             use_match = parent_match
         first_match: Optional[Match] = None
-        for named_result in self.named_test._match(data, only_match_mime, use_match):
+        for named_result in self.referenced_test._match(data, only_match_mime, use_match):
             if first_match is None:
                 first_match = named_result
                 if use_match is not parent_match:
@@ -1448,8 +1473,8 @@ class MagicMatcher:
         # resolve any "use" tests with late binding:
         for def_file, use_tests in late_bindings.items():
             for use_test in use_tests:
-                assert isinstance(use_test.named_test, str)
-                if use_test.named_test not in matcher.named_tests:
-                    raise ValueError(f"{def_file!s}: Named test {use_test.named_test!r} is not defined")
-                use_test.named_test = matcher.named_tests[use_test.named_test]
+                assert isinstance(use_test.referenced_test, str)
+                if use_test.referenced_test not in matcher.named_tests:
+                    raise ValueError(f"{def_file!s}: Named test {use_test.referenced_test!r} is not defined")
+                use_test.referenced_test = matcher.named_tests[use_test.referenced_test]
         return matcher
