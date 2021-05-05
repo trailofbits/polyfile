@@ -298,7 +298,7 @@ class IndirectOffset(Offset):
 
     def __repr__(self):
         return f"{self.__class__.__name__}(offset={self.offset!r}, num_bytes={self.num_bytes}, "\
-               f"endianness={self.endianness!r}, signed={self.signed}, addend={self.addend})"
+               f"endianness={self.endianness!r}, signed={self.signed}, post_process={self.post_process!r})"
 
     def __str__(self):
         if self.addend == 0:
