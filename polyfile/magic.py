@@ -1145,6 +1145,11 @@ class OffsetMatchTest(MagicTest):
             return None
 
 
+class IndirectResult(TestResult):
+    def __init__(self, test: "IndirectTest", offset: int, parent: Optional[TestResult] = None):
+        super().__init__(test, value=None, offset=offset, length=0, parent=parent)
+
+
 class IndirectTest(MagicTest):
     def __init__(
             self,
@@ -1160,14 +1165,12 @@ class IndirectTest(MagicTest):
         self.matcher: MagicMatcher = matcher
         self.relative: bool = relative
 
-    def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> Optional[TestResult]:
+    def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> Optional[IndirectResult]:
         if self.relative:
             if parent_match is None:
                 return None
             absolute_offset += parent_match.offset
-        for match in self.matcher.match(data[absolute_offset:]):
-            match.offset += absolute_offset
-            yield match
+        return IndirectResult(self, absolute_offset, parent_match)
 
 
 class GUIDTest(MagicTest):
@@ -1314,7 +1317,12 @@ def _split_with_escapes(text: str) -> Tuple[str, str]:
 
 
 class Match:
-    def __init__(self, results: Iterable[TestResult]):
+    def __init__(
+            self, matcher: "MagicMatcher", data: bytes, results: Iterable[TestResult], only_match_mime: bool = False
+    ):
+        self.matcher: MagicMatcher = matcher
+        self.data: bytes = data
+        self.only_match_mime: bool = only_match_mime
         self._result_iter: Optional[Iterator[TestResult]] = iter(results)
         self._results: List[TestResult] = []
 
@@ -1348,7 +1356,11 @@ class Match:
         while self._result_iter is not None and index <= len(self._results):
             # we have not yet finished collecting the results
             try:
-                self._results.append(next(self._result_iter))
+                result = next(self._result_iter)
+                self._results.append(result)
+                if isinstance(result, IndirectResult):
+                    for match in self.matcher.match(self.data[result.offset:], self.only_match_mime):
+                        self._results.extend(match)
             except StopIteration:
                 self._result_iter = None
         return self._results[index]
@@ -1392,7 +1404,7 @@ class MagicMatcher:
 
     def match(self, data: bytes, only_match_mime: bool = False) -> Iterator[Match]:
         for test in self.tests:
-            m = Match(test.match(data, only_match_mime=only_match_mime))
+            m = Match(self, data, test.match(data, only_match_mime=only_match_mime), only_match_mime)
             if m:
                 yield m
 
