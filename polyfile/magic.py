@@ -133,11 +133,24 @@ class Offset(ABC):
             return AbsoluteOffset(parse_numeric(offset))
 
 
+class InvalidOffsetError(IndexError):
+    def __init__(self, message: Optional[str] = None, offset: Optional[Offset] = None):
+        if message is None:
+            if offset is not None:
+                message = f"Invalid Offset: {offset!r}"
+            else:
+                message = "Invalid Offset"
+        super().__init__(message)
+        self.offset: Optional[Offset] = offset
+
+
 class AbsoluteOffset(Offset):
     def __init__(self, offset: int):
         self.offset: int = offset
 
     def to_absolute(self, data: bytes, last_match: Optional[Match]) -> int:
+        if self.offset >= len(data):
+            raise InvalidOffsetError(offset=self)
         return self.offset
 
     def __repr__(self):
@@ -152,6 +165,8 @@ class NegativeOffset(Offset):
         self.magnitude: int = magnitude
 
     def to_absolute(self, data: bytes, last_match: Optional[Match]) -> int:
+        if self.magnitude > len(data):
+            raise InvalidOffsetError(offset=self)
         return len(data) - self.magnitude
 
     def __repr__(self):
@@ -166,7 +181,10 @@ class RelativeOffset(Offset):
         self.relative_to: Offset = relative_to
 
     def to_absolute(self, data: bytes, last_match: Optional[Match]) -> int:
-        return last_match.offset + last_match.length + self.relative_to.to_absolute(data, last_match)
+        offset = last_match.offset + last_match.length + self.relative_to.to_absolute(data, last_match)
+        if len(data) < offset < 0:
+            raise InvalidOffsetError(offset=self)
+        return offset
 
     def __repr__(self):
         return f"{self.__class__.__name__}(relative_to={self.relative_to})"
@@ -204,7 +222,10 @@ class IndirectOffset(Offset):
         else:
             fmt = f">{fmt}"
         offset = self.offset.to_absolute(data, last_match)
-        return self.post_process(struct.unpack(fmt, data[offset:offset + self.num_bytes])[0])
+        to_unpack = data[offset:offset + self.num_bytes]
+        if len(to_unpack) < self.num_bytes:
+            raise InvalidOffsetError(offset=self)
+        return self.post_process(struct.unpack(fmt, to_unpack)[0])
 
     NUMBER_PATTERN: str = r"(0[xX][\dA-Fa-f]+|\d+)L?"
     INDIRECT_OFFSET_PATTERN: re.Pattern = re.compile(
@@ -349,7 +370,10 @@ class MagicTest(ABC):
     ) -> Iterator[Match]:
         if only_match_mime and not self.can_match_mime:
             return
-        m = self.test(data, self.offset.to_absolute(data, parent_match), parent_match)
+        try:
+            m = self.test(data, self.offset.to_absolute(data, parent_match), parent_match)
+        except InvalidOffsetError:
+            return None
         if m is not None:
             if not only_match_mime or self.mime is not None:
                 yield m
@@ -1186,7 +1210,10 @@ class UseTest(MagicTest):
         if self.flip_endianness:
             raise NotImplementedError("TODO: Add support for use tests with flipped endianness")
         first_match: Optional[Match] = None
-        absolute_offset = self.offset.to_absolute(data, last_match=parent_match)
+        try:
+            absolute_offset = self.offset.to_absolute(data, last_match=parent_match)
+        except InvalidOffsetError:
+            return None
         if self.mime is not None or self.extensions:
             # This `use` test has its own mime type or extensions, so we need to yield it as its own match
             use_match = Match(self, None, absolute_offset, 0, parent=parent_match)
