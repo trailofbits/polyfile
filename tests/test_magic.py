@@ -14,7 +14,8 @@ class MagicTest(TestCase):
         self.assertTrue(FILE_TEST_DIR.exists(), "Make sure to run `git submodule init && git submodule update` in the "
                                                 "root of this repository.")
 
-        matcher = MagicMatcher.parse(*MAGIC_DEFS)
+        # skip the DER definition because we don't yet support it (and none of the tests actually require it)
+        matcher = MagicMatcher.parse(*(d for d in MAGIC_DEFS if d.name != "der"))
 
         tests = sorted([
             f.stem for f in FILE_TEST_DIR.glob("*.testfile")

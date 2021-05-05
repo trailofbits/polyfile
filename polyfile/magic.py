@@ -1175,7 +1175,7 @@ class UseTest(MagicTest):
         yield from self.named_test._match(data, only_match_mime, parent_match)
         if only_match_mime and not self.can_match_mime:
             return
-        m = self.test(data, self.offset.to_absolute(parent_match), parent_match)
+        m = self.test(data, self.offset.to_absolute(data, parent_match), parent_match)
         if m is not None:
             if not only_match_mime or self.mime is not None:
                 yield m
