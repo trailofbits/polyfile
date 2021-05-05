@@ -318,7 +318,7 @@ class SourceInfo:
     def __repr__(self):
         return f"{self.__class__.__name__}(path={self.path!r}, line={self.line})"
 
-    def str(self):
+    def __str__(self):
         return f"{self.path!s}:{self.line}"
 
 
