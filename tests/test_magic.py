@@ -25,11 +25,13 @@ class MagicTest(TestCase):
             testfile = FILE_TEST_DIR / f"{test}.testfile"
             result = FILE_TEST_DIR / f"{test}.result"
 
-            print(f"Testing: {test}")
-
             if not testfile.exists() or not result.exists():
                 continue
 
+            print(f"Testing: {test}")
+            with open(result, "r") as f:
+                print(f"\tExpected: {f.read()!r}")
+
             with open(testfile, "rb") as f:
                 for match in matcher.match(f.read()):
-                    print(match)
+                    print(f"\tActual:   {str(match)!r}")

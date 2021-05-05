@@ -1382,11 +1382,14 @@ class Match:
         for result in self:
             # TODO: Handle printf string replacements
             if result.test.message.lstrip().startswith("\b"):
-                msg = f"{msg}{result.test.message.lstrip()[1:]}"
-            elif msg:
-                msg = f"{msg} {result.test.message.lstrip()}"
+                result_str = result.test.message.lstrip()[1:]
             else:
-                msg = result.test.message.lstrip()
+                result_str = result.test.message.lstrip()
+                if msg and not msg[-1] in " \t\r\n\v\f":
+                    msg = f"{msg} "
+            if "%d" in result_str:
+                result_str = result_str.replace("%d", str(result.value))
+            msg = f"{msg}{result_str}"
         return msg
 
     __str__ = message
