@@ -25,38 +25,57 @@ MAGIC_DEFS: List[Path] = [
 ]
 
 
-def unescape(to_unescape: str) -> str:
+def unescape(to_unescape: Union[str, bytes]) -> bytes:
     """Processes unicode escape sequences. Also handles libmagic's support for single digit `\\x#` hex escapes."""
     # first, process single digit hex escapes:
     b = bytearray()
     escaped = False
     byte_escape: Optional[str] = None
+    if isinstance(to_unescape, str):
+        to_unescape = to_unescape.encode("utf-8")
+    ESCAPES = {
+        "n": ord("\n"),
+        "r": ord("\r"),
+        "b": ord("\b"),
+        "v": ord("\v"),
+        "t": ord("\t"),
+        "f": ord("\f")
+    }
     for c in to_unescape:
         if escaped:
-            if c == "x":
+            char = chr(c)
+            if char == "x":
                 byte_escape = ""
+            elif char.isnumeric():
+                b.append(c)
+            elif char in ESCAPES:
+                b.append(ESCAPES[char])
+            else:
+                b.append(c)
             escaped = False
         else:
             if byte_escape is not None:
                 if not byte_escape:
-                    byte_escape = c
-                elif not c.isnumeric() and not ord("a") <= ord(c.lower()) <= ord("f"):
+                    byte_escape = chr(c)
+                    continue
+                elif not chr(c).isnumeric() and not ord("a") <= c <= ord("f") and not ord("A") <= c <= ord("F"):
                     # the last three bytes were a single byte hex escape, like "\xD" or "\x5"
-                    assert len(b) >= 3
-                    b = b[:-3]
                     b.append(int(byte_escape, 16))
                     byte_escape = None
                 else:
+                    b.append(int(f"{byte_escape}{chr(c)}", 16))
                     byte_escape = None
-            if c == "\\":
+                    continue
+            if c == ord("\\"):
                 escaped = True
-        b.append(ord(c))
+            else:
+                b.append(c)
     if byte_escape:
         # the string ended with a single byte hex escape
-        assert len(b) >= 3
-        b = b[:-3]
         b.append(int(byte_escape, 16))
-    return b.decode("unicode_escape")
+    if escaped:
+        raise ValueError(f"Unterminated escape in {to_unescape!r}")
+    return bytes(b)
 
 
 class TestResult:
@@ -97,7 +116,9 @@ class Endianness(Enum):
     PDP = "me"
 
 
-def parse_numeric(text: str) -> int:
+def parse_numeric(text: Union[str, bytes]) -> int:
+    if isinstance(text, bytes):
+        text = text.decode("utf-8")
     text = text.strip()
     if text.startswith("-"):
         factor = -1
@@ -457,7 +478,7 @@ class DataType(ABC, Generic[T]):
         self.name: str = name
 
     @abstractmethod
-    def parse_expected(self, specification: str) -> T:
+    def parse_expected(self, specification: bytes) -> T:
         raise NotImplementedError()
 
     @abstractmethod
@@ -508,7 +529,8 @@ class GUIDType(DataType[Union[UUID, UUIDWildcard]]):
     def __init__(self):
         super().__init__("guid")
 
-    def parse_expected(self, specification: str) -> Union[UUID, UUIDWildcard]:
+    def parse_expected(self, specification: bytes) -> Union[UUID, UUIDWildcard]:
+        specification = specification.decode("utf-8")
         if specification.strip() == "x":
             return UUIDWildcard()
         # there is a bug in the `asf` definition where a guid is missing its last two characters:
@@ -539,11 +561,11 @@ class UTF16Type(DataType[bytes]):
             raise ValueError(f"UTF16 strings only support big and little endianness, not {endianness!r}")
         self.endianness: Endianness = endianness
 
-    def parse_expected(self, specification: str) -> bytes:
+    def parse_expected(self, specification: bytes) -> bytes:
         if self.endianness == Endianness.LITTLE:
-            return specification.encode("utf-16-le")
+            return specification.decode("utf-8").encode("utf-16-le")
         else:
-            return specification.encode("utf-16-be")
+            return specification.decode("utf-8").encode("utf-16-be")
 
     def match(self, data: bytes, expected: bytes) -> DataTypeMatch:
         if data.startswith(expected):
@@ -577,8 +599,8 @@ class StringType(DataType[bytes]):
         self.optional_blanks: bool = optional_blanks
         self.trim: bool = trim
 
-    def parse_expected(self, specification: str) -> bytes:
-        return specification.encode("utf-8")
+    def parse_expected(self, specification: bytes) -> bytes:
+        return specification
 
     def match(self, data: bytes, expected: bytes) -> DataTypeMatch:
         try:
@@ -752,8 +774,8 @@ class PascalStringType(DataType[bytes]):
         self.endianness: Endianness = endianness
         self.count_includes_length: int = count_includes_length
 
-    def parse_expected(self, specification: str) -> bytes:
-        return specification.encode("utf-8")
+    def parse_expected(self, specification: bytes) -> bytes:
+        return specification
 
     def match(self, data: bytes, expected: bytes) -> DataTypeMatch:
         if len(data) < self.byte_length:
@@ -816,7 +838,7 @@ class PascalStringType(DataType[bytes]):
         )
 
 
-def posix_to_python_re(match: str) -> str:
+def posix_to_python_re(match: bytes) -> bytes:
     for match_from, replace_with in (
             ("upper", "A-Z"),
             ("lower", "a-z"),
@@ -829,7 +851,7 @@ def posix_to_python_re(match: str) -> str:
             ("space", " \t\n\r\f\v"),
             ("word", "\\w")
     ):
-        match = match.replace(f"[:{match_from}:]", f"{replace_with}")
+        match = match.replace(f"[:{match_from}:]".encode("utf-8"), f"{replace_with}".encode("utf-8"))
     return match
 
 
@@ -855,11 +877,9 @@ class RegexType(DataType[re.Pattern]):
         super().__init__(f"regex/{self.length}{['', 'c'][case_insensitive]}{['', 's'][match_to_start]}"
                          f"{['', 'l'][self.limit_lines]}{['', 'T'][self.trim]}")
 
-    def parse_expected(self, specification: str) -> re.Pattern:
-        # regexes need to have escapes processed again:
-        unescaped_spec = unescape(specification)
+    def parse_expected(self, specification: bytes) -> re.Pattern:
         # handle POSIX-style character classes:
-        unescaped_spec = posix_to_python_re(unescaped_spec).encode("utf-8")
+        unescaped_spec = posix_to_python_re(specification)
         try:
             if self.case_insensitive:
                 return re.compile(unescaped_spec, re.IGNORECASE)
@@ -1006,7 +1026,9 @@ class NumericWildcard(NumericValue):
 
 class IntegerValue(NumericValue[int]):
     @staticmethod
-    def parse(value: str, num_bytes: int) -> "IntegerValue":
+    def parse(value: Union[str, bytes], num_bytes: int) -> "IntegerValue":
+        if isinstance(value, bytes):
+            value = value.decode("utf-8")
         try:
             operator = NumericOperator.get(value[0])
             value = value[1:]
@@ -1050,11 +1072,11 @@ class NumericDataType(DataType[NumericValue]):
         if self.endianness == Endianness.PDP and self.base_type.num_bytes != 4:
             raise ValueError(f"PDP endianness can only be used with four byte base types, not {self.base_type}")
 
-    def parse_expected(self, specification: str) -> NumericValue:
-        if specification == "x":
+    def parse_expected(self, specification: bytes) -> NumericValue:
+        if specification == b"x":
             return NumericWildcard()
         else:
-            return NumericValue.parse(specification, self.base_type.num_bytes)
+            return NumericValue.parse(specification.decode("utf-8"), self.base_type.num_bytes)
 
     def match(self, data: bytes, expected: NumericValue) -> DataTypeMatch:
         if len(data) < self.base_type.num_bytes:
@@ -1398,8 +1420,9 @@ class Match:
                 result_str = result.test.message.lstrip()
                 if msg and not msg[-1] in " \t\r\n\v\f":
                     msg = f"{msg} "
-            if "%d" in result_str:
-                result_str = result_str.replace("%d", str(result.value))
+            if "%" in result_str.replace("%%", ""):
+                result_str = result_str % (result.value,)
+            result_str = result_str.replace("%%", "%")
             msg = f"{msg}{result_str}"
         return msg
 
@@ -1449,8 +1472,8 @@ class MagicMatcher:
                         raise ValueError(f"{def_file!s} line {line_number}: Invalid level for test {line!r}")
                     test_str, message = _split_with_escapes(m.group("remainder"))
                     # process any escape characters:
-                    test_str = unescape(test_str)
-                    message = unescape(message)
+                    test_bytes = unescape(test_str)
+                    message = unescape(message).decode("utf-8")
                     comment_pos = message.find("#")
                     if comment_pos >= 0:
                         message = message[:comment_pos].lstrip()
@@ -1477,7 +1500,7 @@ class MagicMatcher:
                                 raise NotImplementedError("TODO: Add support for clear tests at level 0")
                             test = ClearTest(offset=offset, message=message, parent=current_test)
                         elif data_type == "offset":
-                            expected_value = IntegerValue.parse(test_str, num_bytes=8)
+                            expected_value = IntegerValue.parse(test_bytes, num_bytes=8)
                             test = OffsetMatchTest(offset=offset, value=expected_value, message=message,
                                                    parent=current_test)
                         elif data_type == "indirect" or data_type == "indirect/r":
@@ -1493,7 +1516,7 @@ class MagicMatcher:
                                 test_str = test_str[2:]
                             else:
                                 flip_endianness = False
-                            if test_str not in matcher.named_tests:
+                            if test_bytes not in matcher.named_tests:
                                 late_binding = True
                                 named_test: Union[str, NamedTest] = test_str
                             else:
@@ -1518,16 +1541,12 @@ class MagicMatcher:
                             try:
                                 data_type = DataType.parse(data_type)
                                 # in some definitions a space is put after the "&" in a numeric datatype:
-                                if test_str == "&":
-                                    test_str_remainder, message = _split_with_escapes(message)
-                                    message = message.lstrip()
-                                    test_str = f"&{test_str_remainder}"
                                 if test_str in ("<", ">", "=", "!", "&", "^", "~"):
                                     # Some files will erroneously add whitespace between the operator and the
                                     # subsequent value:
                                     actual_operand, message = _split_with_escapes(message)
-                                    test_str = f"{test_str}{actual_operand}"
-                                constant = data_type.parse_expected(test_str)
+                                    test_bytes = unescape(f"{test_str}{actual_operand}")
+                                constant = data_type.parse_expected(test_bytes)
                             except ValueError as e:
                                 raise ValueError(f"{def_file!s} line {line_number}: {e!s}")
                             test = ConstantMatchTest(
