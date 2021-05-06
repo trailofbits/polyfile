@@ -960,8 +960,8 @@ class NumericOperator(Enum):
     EQUALS = ("=", lambda a, b: a == b)
     LESS_THAN = ("<", lambda a, b: a < b)
     GREATER_THAN = (">", lambda a, b: a > b)
-    BITWISE_AND = ("&", lambda a, b: a & b)
-    BITWISE_XOR = ("^", lambda a, b: a ^ b)
+    ALL_BITS_SET = ("&", lambda a, b: (a & b) == b)  # value from the file (a) must have set all bits set in b
+    ALL_BITS_CLEAR = ("^", lambda a, b: not (a & b))  # value from the file (a) must have clear all bits set in b
     NOT = ("!", lambda a, b: not (a == b))
 
     def __init__(self, symbol: str, test: Union[Callable[[int, int], bool], Callable[[float, float], bool]]):
@@ -1028,7 +1028,7 @@ class FloatValue(NumericValue[float]):
             value = value[1:]
         except KeyError:
             operator = NumericOperator.EQUALS
-        if operator in (NumericOperator.BITWISE_AND, NumericOperator.BITWISE_XOR):
+        if operator in (NumericOperator.ALL_BITS_SET, NumericOperator.ALL_BITS_CLEAR):
             raise ValueError(f"A floating point value cannot have the {operator.symbol} operator")
         return FloatValue(value=float(value), operator=operator)
 
