@@ -29,8 +29,7 @@ def unescape(to_unescape: Union[str, bytes]) -> bytes:
     """Processes unicode escape sequences. Also handles libmagic's support for single digit `\\x#` hex escapes."""
     # first, process single digit hex escapes:
     b = bytearray()
-    escaped = False
-    byte_escape: Optional[str] = None
+    escaped: Optional[str] = None
     if isinstance(to_unescape, str):
         to_unescape = to_unescape.encode("utf-8")
     ESCAPES = {
@@ -41,40 +40,59 @@ def unescape(to_unescape: Union[str, bytes]) -> bytes:
         "t": ord("\t"),
         "f": ord("\f")
     }
+    terminator = object()
     for c in to_unescape:
-        if escaped:
+        if escaped is not None:
             char = chr(c)
-            if char == "x":
-                byte_escape = ""
-            elif char.isnumeric():
-                b.append(c)
-            elif char in ESCAPES:
-                b.append(ESCAPES[char])
-            else:
-                b.append(c)
-            escaped = False
-        else:
-            if byte_escape is not None:
-                if not byte_escape:
-                    byte_escape = chr(c)
-                    continue
-                elif not chr(c).isnumeric() and not ord("a") <= c <= ord("f") and not ord("A") <= c <= ord("F"):
-                    # the last three bytes were a single byte hex escape, like "\xD" or "\x5"
-                    b.append(int(byte_escape, 16))
-                    byte_escape = None
+            if escaped.isnumeric():
+                if not char.isnumeric() or len(escaped) == 3 or not int(char) < 8:
+                    # this is an octal escape sequence like "\1", "\12", or "\123"
+                    b.append(int(escaped, 8))
+                    escaped = None
                 else:
-                    b.append(int(f"{byte_escape}{chr(c)}", 16))
-                    byte_escape = None
+                    escaped = f"{escaped}{char}"
                     continue
-            if c == ord("\\"):
-                escaped = True
+            elif escaped.startswith("x"):
+                # we are processing a hex escape
+                if not char.isnumeric() and not ord("a") <= c <= ord("f") and not ord("A") <= c <= ord("F"):
+                    if len(escaped) == 1:
+                        raise ValueError(f"Invalid \\x hex escape in {to_unescape!r}")
+                    b.append(int(escaped[1:], 16))
+                    escaped = None
+                elif len(escaped) == 2:
+                    b.append(int(f"{escaped[1:]}{char}", 16))
+                    escaped = None
+                    continue
+                else:
+                    escaped = f"{escaped}{char}"
+                    continue
+            elif not escaped:
+                # the last character was a '\' and this is the first character of the escape
+                if char == "x" or char.isnumeric():
+                    # The escape is either a hex or octal escape
+                    escaped = char
+                elif char in ESCAPES:
+                    b.append(ESCAPES[char])
+                    escaped = None
+                else:
+                    b.append(c)
+                    escaped = None
+                continue
+        assert escaped is None
+        if c == ord("\\"):
+            escaped = ""
+        else:
+            b.append(c)
+    if escaped is not None:
+        if escaped.startswith("x"):
+            if len(escaped) == 1:
+                raise ValueError(f"Invalid \\x hex escape in {to_unescape!r}")
             else:
-                b.append(c)
-    if byte_escape:
-        # the string ended with a single byte hex escape
-        b.append(int(byte_escape, 16))
-    if escaped:
-        raise ValueError(f"Unterminated escape in {to_unescape!r}")
+                b.append(int(escaped[1:], 16))
+        elif escaped.isnumeric():
+            b.append(int(escaped, 8))
+        else:
+            raise ValueError(f"Unterminated escape in {to_unescape!r}")
     return bytes(b)
 
 
