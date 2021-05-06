@@ -1235,6 +1235,9 @@ class NamedTest(MagicTest):
             extensions: Iterable[str] = (),
             message: str = ""
     ):
+        if not message:
+            # by default, named tests should not add a space if they don't contain an explicit message
+            message = "\b"
         super().__init__(offset=offset, mime=mime, extensions=extensions, message=message, parent=None)
         self.name: str = name
         self.named_test = self
