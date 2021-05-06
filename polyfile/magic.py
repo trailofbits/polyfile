@@ -25,6 +25,9 @@ MAGIC_DEFS: List[Path] = [
 ]
 
 
+WHITESPACE: bytes = b" \r\t\n\v\f"
+
+
 def unescape(to_unescape: Union[str, bytes]) -> bytes:
     """Processes unicode escape sequences. Also handles libmagic's support for single digit `\\x#` hex escapes."""
     # first, process single digit hex escapes:
@@ -595,7 +598,133 @@ class UTF16Type(DataType[bytes]):
             return DataTypeMatch.INVALID
 
 
-class StringType(DataType[bytes]):
+class StringTest(ABC):
+    def __init__(self, trim: bool = False, compact_whitespace: bool = False):
+        self.trim: bool = trim
+        self.compact_whitespace: bool = compact_whitespace
+
+    def post_process(self, data: bytes) -> DataTypeMatch:
+        value = data
+        if self.compact_whitespace:
+            value = b"".join(c for prev, c in zip(b"\0" + data, data) if c not in WHITESPACE or prev not in WHITESPACE)
+        if self.trim:
+            value = value.strip()
+        try:
+            value = value.decode("utf-8")
+        except UnicodeDecodeError:
+            pass
+        return DataTypeMatch(data, value)
+
+    @abstractmethod
+    def matches(self, data: bytes) -> DataTypeMatch:
+        raise NotImplementedError()
+
+    @staticmethod
+    def parse(specification: str,
+              trim: bool = False,
+              compact_whitespace: bool = False,
+              case_insensitive_lower: bool = False,
+              case_insensitive_upper: bool = False,
+              optional_blanks: bool = False
+    ):
+        if specification.strip() == "x":
+            return StringWildcard(trim=trim, compact_whitespace=compact_whitespace)
+        elif specification.startswith(">") or specification.startswith("<"):
+            return StringLengthTest(
+                to_match=unescape(specification[1:]),
+                test_smaller=specification.startswith("<"),
+                trim=trim,
+                compact_whitespace=compact_whitespace
+            )
+        else:
+            if specification.startswith("="):
+                specification = specification[1:]
+            return StringMatch(
+                to_match=unescape(specification),
+                trim=trim,
+                compact_whitespace=compact_whitespace,
+                case_insensitive_lower=case_insensitive_lower,
+                case_insensitive_upper=case_insensitive_upper,
+                optional_blanks=optional_blanks
+            )
+
+
+class StringWildcard(StringTest):
+    def matches(self, data: bytes) -> DataTypeMatch:
+        first_null = data.find(b"\0")
+        if first_null >= 0:
+            return self.post_process(data[:first_null])
+        else:
+            return self.post_process(data)
+
+
+class StringLengthTest(StringWildcard):
+    def __init__(self, to_match: bytes, test_smaller: bool, trim: bool = False, compact_whitespace: bool = False):
+        super().__init__(trim=trim, compact_whitespace=compact_whitespace)
+        self.to_match: bytes = to_match
+        self.test_smaller: bool = test_smaller
+
+    def matches(self, data: bytes) -> DataTypeMatch:
+        match = super().matches(data)
+        if self.test_smaller and match.raw_match < self.to_match:
+            return match
+        elif not self.test_smaller and match.raw_match > self.to_match:
+            return match
+        else:
+            return DataTypeMatch.INVALID
+
+
+class StringMatch(StringTest):
+    def __init__(self,
+                 to_match: bytes,
+                 trim: bool = False,
+                 compact_whitespace: bool = False,
+                 case_insensitive_lower: bool = False,
+                 case_insensitive_upper: bool = False,
+                 optional_blanks: bool = False,
+    ):
+        super().__init__(trim=trim, compact_whitespace=compact_whitespace)
+        self.string: bytes = to_match
+        self.case_insensitive_lower: bool = case_insensitive_lower
+        self.case_insensitive_upper: bool = case_insensitive_upper
+        self.optional_blanks: bool = optional_blanks
+
+    def matches(self, data: bytes) -> DataTypeMatch:
+        expected = self.string
+        matched = bytearray()
+        had_whitespace = False
+        last_char: Optional[int] = None
+        for b in data:
+            if not expected:
+                break
+            matched.append(b)
+            is_whitespace = bytes([b]) in WHITESPACE
+            if self.trim and last_char is None and is_whitespace:
+                # skip leading whitespace
+                continue
+            elif self.compact_whitespace and is_whitespace:
+                if last_char is not None and bytes([last_char]) in WHITESPACE:  # type: ignore
+                    # compact consecutive whitespace
+                    continue
+                else:
+                    had_whitespace = True
+            if not (
+                    b == expected[0] or
+                    (self.case_insensitive_lower and b == expected[0:1].lower()[0]) or
+                    (self.case_insensitive_upper and b == expected[0:1].upper()[0])
+            ):
+                if not (self.optional_blanks and expected[0:1] in WHITESPACE):
+                    return DataTypeMatch.INVALID
+            expected = expected[1:]
+        if expected:
+            # we did not fully match the expected sequence (e.g., there were not enough bytes in the data)
+            return DataTypeMatch.INVALID
+        elif self.compact_whitespace and not had_whitespace:
+            return DataTypeMatch.INVALID
+        return self.post_process(bytes(matched))
+
+
+class StringType(DataType[StringTest]):
     def __init__(
             self,
             case_insensitive_lower: bool = False,
@@ -617,45 +746,11 @@ class StringType(DataType[bytes]):
         self.optional_blanks: bool = optional_blanks
         self.trim: bool = trim
 
-    def parse_expected(self, specification: str) -> bytes:
-        return unescape(specification)
+    def parse_expected(self, specification: str) -> StringTest:
+        return StringTest.parse(specification)
 
-    def match(self, data: bytes, expected: bytes) -> DataTypeMatch:
-        try:
-            expected_str = expected.decode("utf-8")
-        except UnicodeDecodeError:
-            expected_str = expected
-        matched = bytearray()
-        had_whitespace = False
-        last_char: Optional[int] = None
-        for b in data:
-            if not expected:
-                break
-            matched.append(b)
-            is_whitespace = bytes([b]) in b" \t\n\r\f\v"
-            if self.trim and last_char is None and is_whitespace:
-                # skip leading whitespace
-                continue
-            elif self.compact_whitespace and is_whitespace:
-                if last_char is not None and bytes([last_char]) in b" \t\n\r\f\v":  # type: ignore
-                    # compact consecutive whitespace
-                    continue
-                else:
-                    had_whitespace = True
-            if not (
-                    b == expected[0] or
-                    (self.case_insensitive_lower and b == expected[0:1].lower()[0]) or
-                    (self.case_insensitive_upper and b == expected[0:1].upper()[0])
-            ):
-                if not (self.optional_blanks and expected[0:1] in b" \t\n\r\f\v"):
-                    return DataTypeMatch.INVALID
-            expected = expected[1:]
-        if expected:
-            # we did not fully match the expected sequence (e.g., there were not enough bytes in the data)
-            return DataTypeMatch.INVALID
-        elif self.compact_whitespace and not had_whitespace:
-            return DataTypeMatch.INVALID
-        return DataTypeMatch(bytes(matched), expected_str)
+    def match(self, data: bytes, expected: StringTest) -> DataTypeMatch:
+        return expected.matches(data)
 
     STRING_TYPE_FORMAT: re.Pattern = re.compile(r"^u?string(/[BbCctTWw]*)?$")
 
