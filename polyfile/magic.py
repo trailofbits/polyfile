@@ -14,7 +14,7 @@ from pathlib import Path
 import re
 import struct
 from typing import Any, Callable, Dict, Generic, Iterable, Iterator, List, Optional, Set, Tuple, TypeVar, Union
-from uuid import UUID, uuid4
+from uuid import UUID
 
 DEFS_DIR: Path = Path(__file__).absolute().parent / "magic_defs"
 
@@ -480,6 +480,8 @@ class DataType(ABC, Generic[T]):
             dt = SearchType.parse(fmt)
         elif fmt.startswith("regex"):
             dt = RegexType.parse(fmt)
+        elif fmt == "guid":
+            dt = GUIDType()
         else:
             dt = NumericDataType.parse(fmt)
         if dt.name in TYPES_BY_NAME:
@@ -496,6 +498,35 @@ class DataType(ABC, Generic[T]):
 
     def __repr__(self):
         return f"{self.__class__.__name__}({self.name})"
+
+
+class UUIDWildcard:
+    pass
+
+
+class GUIDType(DataType[Union[UUID, UUIDWildcard]]):
+    def __init__(self):
+        super().__init__("guid")
+
+    def parse_expected(self, specification: str) -> Union[UUID, UUIDWildcard]:
+        if specification.strip() == "x":
+            return UUIDWildcard()
+        # there is a bug in the `asf` definition where a guid is missing its last two characters:
+        if specification.strip().upper() == "B61BE100-5B4E-11CF-A8FD-00805F5C44":
+            specification = "B61BE100-5B4E-11CF-A8FD-00805F5C442B"
+        return UUID(specification)
+
+    def match(self, data: bytes, expected: Union[UUID, UUIDWildcard]) -> DataTypeMatch:
+        if len(data) < 16:
+            return DataTypeMatch.INVALID
+        try:
+            uuid = UUID(bytes_le=data[:16])
+        except ValueError:
+            return DataTypeMatch.INVALID
+        if isinstance(expected, UUIDWildcard) or uuid == expected:
+            return DataTypeMatch(data[:16], uuid)
+        else:
+            return DataTypeMatch.INVALID
 
 
 class UTF16Type(DataType[bytes]):
@@ -1173,26 +1204,6 @@ class IndirectTest(MagicTest):
         return IndirectResult(self, absolute_offset, parent_match)
 
 
-class GUIDTest(MagicTest):
-    def __init__(
-            self,
-            offset: Offset,
-            uuid: Optional[UUID] = None,
-            mime: Optional[str] = None,
-            extensions: Iterable[str] = (),
-            message: str = "",
-            parent: Optional[MagicTest] = None
-    ):
-        super().__init__(offset=offset, mime=mime, extensions=extensions, message=message, parent=parent)
-        if uuid is None:
-            self.uuid: UUID = uuid4()
-        else:
-            self.uuid = uiid
-
-    def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> Optional[TestResult]:
-        return TestResult(self, str(self.uuid), absolute_offset, 0, parent=parent_match)
-
-
 class NamedTest(MagicTest):
     def __init__(
             self,
@@ -1469,8 +1480,6 @@ class MagicMatcher:
                             expected_value = IntegerValue.parse(test_str, num_bytes=8)
                             test = OffsetMatchTest(offset=offset, value=expected_value, message=message,
                                                    parent=current_test)
-                        elif data_type == "guid":
-                            test = GUIDTest(offset=offset, message=message, parent=current_test)
                         elif data_type == "indirect" or data_type == "indirect/r":
                             test = IndirectTest(matcher=matcher, offset=offset,
                                                 relative=m.group("data_type").endswith("r"),

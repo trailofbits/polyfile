@@ -30,8 +30,11 @@ class MagicTest(TestCase):
 
             print(f"Testing: {test}")
             with open(result, "r") as f:
-                print(f"\tExpected: {f.read()!r}")
+                expected = f.read()
+                print(f"\tExpected: {expected!r}")
 
             with open(testfile, "rb") as f:
                 for match in matcher.match(f.read()):
-                    print(f"\tActual:   {str(match)!r}")
+                    actual = str(match)
+                    print(f"\tActual:   {actual!r}")
+                    self.assertEqual(expected, actual)
