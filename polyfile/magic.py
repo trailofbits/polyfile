@@ -100,12 +100,37 @@ def unescape(to_unescape: Union[str, bytes]) -> bytes:
 
 
 class TestResult:
-    def __init__(self, test: "MagicTest", value: Any, offset: int, length: int, parent: Optional["TestResult"] = None):
+    def __init__(
+            self, test: "MagicTest",
+            value: Any,
+            offset: int,
+            length: int,
+            parent: Optional["TestResult"] = None
+    ):
         self.test: MagicTest = test
         self.value: Any = value
         self.offset: int = offset
         self.length: int = length
         self.parent: Optional[TestResult] = parent
+        if parent is not None:
+            assert self.test.named_test is self.test or parent.test.level == self.test.level - 1
+            if not isinstance(self.test, UseTest):
+                parent.child_matched = True
+        self._child_matched: bool = False
+
+    @property
+    def child_matched(self) -> bool:
+        return self._child_matched
+
+    @child_matched.setter
+    def child_matched(self, did_match: bool):
+        if did_match and isinstance(self.test, NamedTest):
+            assert isinstance(self.parent.test, UseTest)
+            self.parent.child_matched = True
+            if self.parent.parent is not None:
+                self.parent.parent.child_matched = True
+        self._child_matched = did_match
+
 
     def __hash__(self):
         return hash((self.test, self.offset, self.length))
@@ -444,9 +469,13 @@ class MagicTest(ABC):
         if only_match_mime and not self.can_match_mime:
             return
         try:
-            m = self.test(data, self.offset.to_absolute(data, parent_match), parent_match)
+            absolute_offset = self.offset.to_absolute(data, parent_match)
         except InvalidOffsetError:
             return None
+        m = self.test(data, absolute_offset, parent_match)
+        #print(
+        #    f"{self.source_info!s}\t{m is not None}\t{absolute_offset}\t{data[absolute_offset:absolute_offset + 20]!r}"
+        #)
         if m is not None:
             if not only_match_mime or self.mime is not None:
                 yield m
@@ -476,18 +505,23 @@ T = TypeVar("T")
 class DataTypeMatch:
     INVALID: "DataTypeMatch"
 
-    def __init__(self, raw_match: Optional[bytes] = None, value: Optional[Any] = None):
+    def __init__(self, raw_match: Optional[bytes] = None, value: Optional[Any] = None, initial_offset: int = 0):
         self.raw_match: Optional[bytes] = raw_match
         if value is None and raw_match is not None:
             self.value: Optional[bytes] = raw_match
         else:
             self.value = value
+        self.initial_offset: int = initial_offset
 
     def __bool__(self):
         return self.raw_match is not None
 
     def __repr__(self):
-        return f"{self.__class__.__name__}(raw_match={self.raw_match!r}, value={self.value!r})"
+        if self.initial_offset != 0:
+            io = f", initial_offset={self.initial_offset}"
+        else:
+            io = ""
+        return f"{self.__class__.__name__}(raw_match={self.raw_match!r}, value={self.value!r}{io})"
 
     def __str__(self):
         if self.value is not None:
@@ -821,6 +855,7 @@ class SearchType(StringType):
         for i in range(rep):
             match = super().match(data[i:], expected)
             if match:
+                match.initial_offset = i
                 return match
         return DataTypeMatch.INVALID
 
@@ -1292,8 +1327,8 @@ class ConstantMatchTest(MagicTest, Generic[T]):
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> Optional[TestResult]:
         match = self.data_type.match(data[absolute_offset:], self.constant)
         if match:
-            return TestResult(self, offset=absolute_offset, length=len(match.raw_match), value=match.value,
-                              parent=parent_match)
+            return TestResult(self, offset=absolute_offset + match.initial_offset, length=len(match.raw_match),
+                              value=match.value, parent=parent_match)
         else:
             return None
 
@@ -1430,8 +1465,8 @@ class UseTest(MagicTest):
 
 class DefaultTest(MagicTest):
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> Optional[TestResult]:
-        if parent_match is None or parent_match.test.level < self.level or getattr(parent_match, "_cleared", False):
-            return TestResult(self, offset=absolute_offset, length=0, value=True)
+        if parent_match is None or not parent_match.child_matched:
+            return TestResult(self, offset=absolute_offset, length=0, value=True, parent=parent_match)
         else:
             return None
 
@@ -1441,7 +1476,7 @@ class ClearTest(MagicTest):
         if parent_match is None:
             return TestResult(self, offset=absolute_offset, length=0, value=None)
         else:
-            setattr(parent_match, "_cleared", True)
+            parent_match.child_matched = False
             return TestResult(self, offset=absolute_offset, length=0, parent=parent_match, value=None)
 
 
