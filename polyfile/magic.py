@@ -211,8 +211,15 @@ class NamedAbsoluteOffset(AbsoluteOffset):
         while last_match is not None and not last_match.test is self.test:
             last_match = last_match.parent
 
+        if last_match is not None:
+            # At this point, last_match should be equal to the match generated from the NamedTest,
+            # and its parent should be the match associated with the UseTest
+            last_match = last_match.parent
+
         if last_match is None:
             raise ValueError(f"Could not resolve the match associated with {self!r}")
+
+        assert isinstance(last_match.test, UseTest)
 
         if last_match.offset + self.offset >= len(data):
             raise InvalidOffsetError(offset=self)
@@ -1351,6 +1358,12 @@ class NamedTest(MagicTest):
         if not message:
             # by default, named tests should not add a space if they don't contain an explicit message
             message = "\b"
+        assert offset.offset == 0
+        class NamedTestOffset(Offset):
+            def to_absolute(self, data: bytes, last_match: Optional[TestResult]) -> int:
+                assert last_match is not None
+                return last_match.offset
+        offset = NamedTestOffset()
         super().__init__(offset=offset, mime=mime, extensions=extensions, message=message, parent=None)
         self.name: str = name
         self.named_test = self
@@ -1394,17 +1407,12 @@ class UseTest(MagicTest):
             absolute_offset = self.offset.to_absolute(data, last_match=parent_match)
         except InvalidOffsetError:
             return None
-        if self.mime is not None or self.extensions:
-            # This `use` test has its own mime type or extensions, so we need to yield it as its own match
-            use_match = TestResult(self, None, absolute_offset, 0, parent=parent_match)
-        else:
-            use_match = parent_match
+        use_match = TestResult(self, None, absolute_offset, 0, parent=parent_match)
         first_match: Optional[TestResult] = None
         for named_result in self.referenced_test._match(data, only_match_mime, use_match):
             if first_match is None:
                 first_match = named_result
-                if use_match is not parent_match:
-                    yield use_match
+                yield use_match
             yield named_result
         if first_match is None:
             # the named test did not match anything, so don't try any of our children
@@ -1422,7 +1430,7 @@ class UseTest(MagicTest):
 
 class DefaultTest(MagicTest):
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> Optional[TestResult]:
-        if parent_match is None or getattr(parent_match, "_cleared", False):
+        if parent_match is None or parent_match.test.level < self.level or getattr(parent_match, "_cleared", False):
             return TestResult(self, offset=absolute_offset, length=0, value=True)
         else:
             return None
