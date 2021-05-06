@@ -478,7 +478,7 @@ class DataType(ABC, Generic[T]):
         self.name: str = name
 
     @abstractmethod
-    def parse_expected(self, specification: bytes) -> T:
+    def parse_expected(self, specification: str) -> T:
         raise NotImplementedError()
 
     @abstractmethod
@@ -529,8 +529,7 @@ class GUIDType(DataType[Union[UUID, UUIDWildcard]]):
     def __init__(self):
         super().__init__("guid")
 
-    def parse_expected(self, specification: bytes) -> Union[UUID, UUIDWildcard]:
-        specification = specification.decode("utf-8")
+    def parse_expected(self, specification: str) -> Union[UUID, UUIDWildcard]:
         if specification.strip() == "x":
             return UUIDWildcard()
         # there is a bug in the `asf` definition where a guid is missing its last two characters:
@@ -561,11 +560,12 @@ class UTF16Type(DataType[bytes]):
             raise ValueError(f"UTF16 strings only support big and little endianness, not {endianness!r}")
         self.endianness: Endianness = endianness
 
-    def parse_expected(self, specification: bytes) -> bytes:
+    def parse_expected(self, specification: str) -> bytes:
+        specification = unescape(specification).decode("utf-8")
         if self.endianness == Endianness.LITTLE:
-            return specification.decode("utf-8").encode("utf-16-le")
+            return specification.encode("utf-16-le")
         else:
-            return specification.decode("utf-8").encode("utf-16-be")
+            return specification.encode("utf-16-be")
 
     def match(self, data: bytes, expected: bytes) -> DataTypeMatch:
         if data.startswith(expected):
@@ -599,8 +599,8 @@ class StringType(DataType[bytes]):
         self.optional_blanks: bool = optional_blanks
         self.trim: bool = trim
 
-    def parse_expected(self, specification: bytes) -> bytes:
-        return specification
+    def parse_expected(self, specification: str) -> bytes:
+        return unescape(specification)
 
     def match(self, data: bytes, expected: bytes) -> DataTypeMatch:
         try:
@@ -775,7 +775,7 @@ class PascalStringType(DataType[bytes]):
         self.count_includes_length: int = count_includes_length
 
     def parse_expected(self, specification: bytes) -> bytes:
-        return specification
+        return unescape(specification)
 
     def match(self, data: bytes, expected: bytes) -> DataTypeMatch:
         if len(data) < self.byte_length:
@@ -877,9 +877,9 @@ class RegexType(DataType[re.Pattern]):
         super().__init__(f"regex/{self.length}{['', 'c'][case_insensitive]}{['', 's'][match_to_start]}"
                          f"{['', 'l'][self.limit_lines]}{['', 'T'][self.trim]}")
 
-    def parse_expected(self, specification: bytes) -> re.Pattern:
+    def parse_expected(self, specification: str) -> re.Pattern:
         # handle POSIX-style character classes:
-        unescaped_spec = posix_to_python_re(specification)
+        unescaped_spec = posix_to_python_re(unescape(specification))
         try:
             if self.case_insensitive:
                 return re.compile(unescaped_spec, re.IGNORECASE)
@@ -1072,11 +1072,11 @@ class NumericDataType(DataType[NumericValue]):
         if self.endianness == Endianness.PDP and self.base_type.num_bytes != 4:
             raise ValueError(f"PDP endianness can only be used with four byte base types, not {self.base_type}")
 
-    def parse_expected(self, specification: bytes) -> NumericValue:
-        if specification == b"x":
+    def parse_expected(self, specification: str) -> NumericValue:
+        if specification == "x":
             return NumericWildcard()
         else:
-            return NumericValue.parse(specification.decode("utf-8"), self.base_type.num_bytes)
+            return NumericValue.parse(specification, self.base_type.num_bytes)
 
     def match(self, data: bytes, expected: NumericValue) -> DataTypeMatch:
         if len(data) < self.base_type.num_bytes:
@@ -1474,8 +1474,6 @@ class MagicMatcher:
                     if current_test is None and level != 0:
                         raise ValueError(f"{def_file!s} line {line_number}: Invalid level for test {line!r}")
                     test_str, message = _split_with_escapes(m.group("remainder"))
-                    # process any escape characters:
-                    test_bytes = unescape(test_str)
                     message = unescape(message).decode("utf-8")
                     comment_pos = message.find("#")
                     if comment_pos >= 0:
@@ -1503,7 +1501,7 @@ class MagicMatcher:
                                 raise NotImplementedError("TODO: Add support for clear tests at level 0")
                             test = ClearTest(offset=offset, message=message, parent=current_test)
                         elif data_type == "offset":
-                            expected_value = IntegerValue.parse(test_bytes, num_bytes=8)
+                            expected_value = IntegerValue.parse(test_str, num_bytes=8)
                             test = OffsetMatchTest(offset=offset, value=expected_value, message=message,
                                                    parent=current_test)
                         elif data_type == "indirect" or data_type == "indirect/r":
@@ -1519,7 +1517,7 @@ class MagicMatcher:
                                 test_str = test_str[2:]
                             else:
                                 flip_endianness = False
-                            if test_bytes not in matcher.named_tests:
+                            if test_str not in matcher.named_tests:
                                 late_binding = True
                                 named_test: Union[str, NamedTest] = test_str
                             else:
@@ -1548,8 +1546,8 @@ class MagicMatcher:
                                     # Some files will erroneously add whitespace between the operator and the
                                     # subsequent value:
                                     actual_operand, message = _split_with_escapes(message)
-                                    test_bytes = unescape(f"{test_str}{actual_operand}")
-                                constant = data_type.parse_expected(test_bytes)
+                                    test_str = f"{test_str}{actual_operand}"
+                                constant = data_type.parse_expected(test_str)
                             except ValueError as e:
                                 raise ValueError(f"{def_file!s} line {line_number}: {e!s}")
                             test = ConstantMatchTest(
