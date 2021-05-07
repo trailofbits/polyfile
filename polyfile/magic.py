@@ -11,6 +11,7 @@ details about the file.
 import logging
 from abc import ABC, abstractmethod
 from enum import Enum
+import json
 from pathlib import Path
 import re
 import struct
@@ -1518,6 +1519,16 @@ class UseTest(MagicTest):
         raise NotImplementedError("This function should never be called")
 
 
+class JSONTest(MagicTest):
+    def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> Optional[TestResult]:
+        try:
+            parsed = json.loads(data[absolute_offset:])
+            return TestResult(self, offset=absolute_offset, length=len(data) - absolute_offset, value=parsed,
+                              parent=parent_match)
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            return None
+
+
 class DefaultTest(MagicTest):
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> Optional[TestResult]:
         if parent_match is None or not parent_match.child_matched:
@@ -1717,6 +1728,8 @@ class MagicMatcher:
                             expected_value = IntegerValue.parse(test_str, num_bytes=8)
                             test = OffsetMatchTest(offset=offset, value=expected_value, message=message,
                                                    parent=current_test)
+                        elif data_type == "json":
+                            test = JSONTest(offset=offset, message=message, parent=current_test)
                         elif data_type == "indirect" or data_type == "indirect/r":
                             test = IndirectTest(matcher=matcher, offset=offset,
                                                 relative=m.group("data_type").endswith("r"),
