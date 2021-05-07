@@ -1184,7 +1184,7 @@ class NumericValue(Generic[T]):
         self.operator: NumericOperator = operator
 
     def test(self, to_match: T) -> bool:
-        return self.operator.test(self.value, to_match)
+        return self.operator.test(to_match, self.value)
 
     @staticmethod
     def parse(value: str, num_bytes: int) -> "NumericValue":

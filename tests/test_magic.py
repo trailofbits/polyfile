@@ -38,7 +38,6 @@ class MagicTest(TestCase):
 
         tests = sorted([
             f.stem for f in FILE_TEST_DIR.glob("*.testfile")
-            if f.stem == "pgp-binary-key-v2-phil"
         ])
 
         for test in tests:
