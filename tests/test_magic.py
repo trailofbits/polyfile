@@ -19,7 +19,6 @@ class MagicTest(TestCase):
 
         tests = sorted([
             f.stem for f in FILE_TEST_DIR.glob("*.testfile")
-            if f.stem == "bcachefs"
         ])
 
         for test in tests:

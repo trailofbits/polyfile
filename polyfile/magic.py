@@ -1631,9 +1631,6 @@ class MagicMatcher:
                         raise ValueError(f"{def_file!s} line {line_number}: Invalid level for test {line!r}")
                     test_str, message = _split_with_escapes(m.group("remainder"))
                     message = unescape(message).decode("utf-8")
-                    comment_pos = message.find("#")
-                    if comment_pos >= 0:
-                        message = message[:comment_pos].lstrip()
                     try:
                         offset = Offset.parse(m.group("offset"))
                     except ValueError as e:
