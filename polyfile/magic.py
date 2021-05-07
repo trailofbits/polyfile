@@ -1186,7 +1186,7 @@ class RegexType(DataType[re.Pattern]):
 BASE_NUMERIC_TYPES_BY_NAME: Dict[str, "BaseNumericDataType"] = {}
 
 
-DATE_FORMAT: str = "%a %b %d %H:%M:%S %Y"
+DATE_FORMAT: str = "%a %b %e %H:%M:%S %Y"
 
 
 def local_date(ms_since_epoch: int) -> str:
