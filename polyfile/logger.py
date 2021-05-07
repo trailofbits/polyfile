@@ -3,6 +3,7 @@ import sys
 
 
 STATUS = 15
+TRACE = 5
 
 
 class StatusLogHandler(logging.StreamHandler):
@@ -28,6 +29,7 @@ class StatusLogHandler(logging.StreamHandler):
 
 
 logging.addLevelName(STATUS, "STATUS")
+logging.addLevelName(TRACE, "TRACE")
 
 DEFAULT_STATUS_LOG_HANDLER = StatusLogHandler()
 
@@ -41,8 +43,12 @@ class StatusLogger(logging.getLoggerClass()):
         if self.isEnabledFor(STATUS):
             self._log(STATUS, msg, args, **kwargs)
 
+    def trace(self, msg, *args, **kwargs):
+        if self.isEnabledFor(TRACE):
+            self._log(TRACE, msg, args, **kwargs)
+
     def clear_status(self):
-        self.status('')
+        self.status("")
 
 
 logging.setLoggerClass(StatusLogger)

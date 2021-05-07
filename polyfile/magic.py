@@ -24,7 +24,7 @@ from typing import (
 )
 from uuid import UUID
 
-from .logger import getStatusLogger
+from .logger import getStatusLogger, TRACE
 
 log = getStatusLogger("libmagic")
 
@@ -551,8 +551,8 @@ class MagicTest(ABC):
         except InvalidOffsetError:
             return None
         m = self.test(data, absolute_offset, parent_match)
-        if logging.root.level >= logging.DEBUG and (m is not None or self.level > 0):
-            log.debug(
+        if logging.root.level >= TRACE and (m is not None or self.level > 0):
+            log.trace(
                 f"{self.source_info!s}\t{m is not None}\t{absolute_offset}\t"
                 f"{data[absolute_offset:absolute_offset + 20]!r}"
             )
@@ -1580,7 +1580,7 @@ class UseTest(MagicTest):
             absolute_offset = self.offset.to_absolute(data, last_match=parent_match)
         except InvalidOffsetError:
             return None
-        log.debug(
+        log.trace(
             f"{self.source_info!s}\tTrue\t{absolute_offset}\t{data[absolute_offset:absolute_offset + 20]!r}"
         )
         use_match = TestResult(self, None, absolute_offset, 0, parent=parent_match)

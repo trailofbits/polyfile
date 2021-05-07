@@ -1,4 +1,3 @@
-import logging
 from pathlib import Path
 from typing import Callable, Optional
 from unittest import TestCase
@@ -8,7 +7,7 @@ import polyfile.magic
 from polyfile.magic import MagicMatcher, MAGIC_DEFS
 
 
-# logger.setLevel(logging.DEBUG)
+# logger.setLevel(logger.TRACE)
 
 FILE_TEST_DIR: Path = Path(__file__).parent.parent / "file" / "tests"
 

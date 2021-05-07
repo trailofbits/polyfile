@@ -42,6 +42,7 @@ def main(argv=None):
     parser.add_argument('--require-match', action='store_true', help='If no matches are found, exit with code 127')
     parser.add_argument('--max-matches', type=int, default=None, help='Stop scanning after having found this many matches')
     parser.add_argument('--debug', '-d', action='store_true', help='Print debug information')
+    parser.add_argument('--trace', '-dd', action='store_true', help='Print extra verbose debug information')
     parser.add_argument('--quiet', '-q', action='store_true', help='Suppress all log output (overrides --debug)')
     parser.add_argument('--version', '-v', action='store_true', help='Print PolyFile\'s version information to STDERR')
     parser.add_argument('-dumpversion', action='store_true', help='Print PolyFile\'s raw version information to STDOUT and exit')
@@ -79,10 +80,12 @@ def main(argv=None):
             # so instead of blocking on STDIN just exit
             exit(0)
 
-    if args.debug:
-        logger.setLevel(logging.DEBUG)
-    elif args.quiet:
+    if args.quiet:
         logger.setLevel(logging.CRITICAL)
+    elif args.trace:
+        logger.setLevel(logger.TRACE)
+    elif args.debug:
+        logger.setLevel(logging.DEBUG)
     else:
         logger.setLevel(logger.STATUS)
 
