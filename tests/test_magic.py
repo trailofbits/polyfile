@@ -1,12 +1,27 @@
 from pathlib import Path
+from typing import Callable, Optional
 from unittest import TestCase
 
+import polyfile.magic
 from polyfile.magic import MagicMatcher, MAGIC_DEFS
 
 
 FILE_TEST_DIR: Path = Path(__file__).parent.parent / "file" / "tests"
 
 class MagicTest(TestCase):
+    _old_local_date: Optional[Callable[[int], str]] = None
+
+    @classmethod
+    def setUpClass(cls):
+        # the libmagic test corpus assumes the local time zone is UTC, so hack magic to get it to work:
+        cls._old_local_date = polyfile.magic.local_date
+        polyfile.magic.local_date = polyfile.magic.utc_date
+
+    @classmethod
+    def tearDownClass(cls):
+        # undo our UTC hack
+        polyfile.magic.local_date = cls._old_local_date
+
     def test_parsing(self):
         _ = MagicMatcher.parse(*MAGIC_DEFS)
 

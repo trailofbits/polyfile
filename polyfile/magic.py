@@ -13,6 +13,7 @@ from enum import Enum
 from pathlib import Path
 import re
 import struct
+from time import gmtime, localtime, strftime
 from typing import Any, Callable, Dict, Generic, Iterable, Iterator, List, Optional, Set, Tuple, TypeVar, Union
 from uuid import UUID
 
@@ -1108,6 +1109,17 @@ class RegexType(DataType[re.Pattern]):
 BASE_NUMERIC_TYPES_BY_NAME: Dict[str, "BaseNumericDataType"] = {}
 
 
+DATE_FORMAT: str = "%a %b %d %H:%M:%S %Y"
+
+
+def local_date(ms_since_epoch: int) -> str:
+    return strftime(DATE_FORMAT, localtime(ms_since_epoch / 1000.0))
+
+
+def utc_date(ms_since_epoch: int) -> str:
+    return strftime(DATE_FORMAT, gmtime(ms_since_epoch / 1000.0))
+
+
 class BaseNumericDataType(Enum):
     BYTE = ("byte", "b", 1)
     SHORT = ("short", "h", 2)
@@ -1115,16 +1127,21 @@ class BaseNumericDataType(Enum):
     QUAD = ("quad", "q", 8)
     FLOAT = ("float", "f", 4)
     DOUBLE = ("double", "d", 8)
-    DATE = ("date", "L", 4)
-    QDATE = ("qdate", "Q", 8)
-    LDATE = ("ldate", "L", 4)
-    QLDATE = ("qldate", "Q", 8)
+    DATE = ("date", "L", 4, lambda n : utc_date(n * 1000))
+    QDATE = ("qdate", "Q", 8, utc_date)
+    LDATE = ("ldate", "L", 4, lambda n: local_date(n * 1000))
+    QLDATE = ("qldate", "Q", 8, local_date)
     QWDATE = ("qwdate", "Q", 8)
 
-    def __init__(self, name: str, struct_fmt: str, num_bytes: int, post_process: Callable[[int], int] = lambda n: n):
+    def __init__(
+            self, name: str,
+            struct_fmt: str,
+            num_bytes: int,
+            to_value: Callable[[int], Any] = lambda n: n
+    ):
         self.struct_fmt: str = struct_fmt
         self.num_bytes: int = num_bytes
-        self.post_process: Callable[[int], int] = post_process
+        self.to_value: Callable[[int], Any] = to_value
         BASE_NUMERIC_TYPES_BY_NAME[name] = self
 
 
@@ -1255,7 +1272,7 @@ class NumericDataType(DataType[NumericValue]):
                 return DataTypeMatch.INVALID
         value = self.preprocess(value)
         if expected.test(value):
-            return DataTypeMatch(data[:self.base_type.num_bytes], value)
+            return DataTypeMatch(data[:self.base_type.num_bytes], self.base_type.to_value(value))
         else:
             return DataTypeMatch.INVALID
 
