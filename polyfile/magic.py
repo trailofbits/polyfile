@@ -1186,7 +1186,7 @@ class NumericValue(Generic[T]):
         self.value: T = value
         self.operator: NumericOperator = operator
 
-    def test(self, to_match: T) -> bool:
+    def test(self, to_match: T, unsigned: bool, num_bytes: int) -> bool:
         return self.operator.test(to_match, self.value)
 
     @staticmethod
@@ -1207,11 +1207,31 @@ class NumericWildcard(NumericValue):
     def __init__(self):
         super().__init__(None)
 
-    def test(self, to_match) -> bool:
+    def test(self, to_match, unsigned, num_bytes) -> bool:
         return True
 
 
 class IntegerValue(NumericValue[int]):
+    def test(self, to_match: T, unsigned: bool, num_bytes: int) -> bool:
+        to_test = self.value
+        bits = 8 * num_bytes
+        if unsigned:
+            max_value = (1 << bits) - 1
+            min_value = 0
+            if to_test < 0:
+                # convert the value to a bit-equivalent unsigned value
+                to_test += 2**bits
+        else:
+            max_value = (1 << bits) >> 1
+            min_value = ~max_value
+            if to_test > max_value:
+                # convert the value to a bit-equivalent signed value
+                to_test -= 2 ** bits
+        if not (min_value <= to_test <= max_value):
+            raise ValueError(f"Invalid integer constant {self.value} for comparing to a "
+                             f"{['signed', 'n unsigned'][unsigned]} {num_bytes}-byte integer")
+        return self.operator.test(to_match, to_test)
+
     @staticmethod
     def parse(value: Union[str, bytes], num_bytes: int) -> "IntegerValue":
         if isinstance(value, bytes):
@@ -1286,7 +1306,7 @@ class NumericDataType(DataType[NumericValue]):
             except struct.error:
                 return DataTypeMatch.INVALID
         value = self.preprocess(value)
-        if expected.test(value):
+        if expected.test(value, self.unsigned, self.base_type.num_bytes):
             return DataTypeMatch(data[:self.base_type.num_bytes], self.base_type.to_value(value))
         else:
             return DataTypeMatch.INVALID
