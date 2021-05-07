@@ -28,8 +28,8 @@ class MagicTest(TestCase):
 
     def test_parsing(self):
         matcher = MagicMatcher.parse(*MAGIC_DEFS)
-        print(f"# MIME types: {len(matcher.mimetypes())}")
-        print("\n".join(sorted(matcher.extensions())))
+        print(f"# MIME Types:      {len(matcher.mimetypes())}")
+        print(f"# File Extensions: {len(matcher.extensions())}")
 
     def test_file_corpus(self):
         self.assertTrue(FILE_TEST_DIR.exists(), "Make sure to run `git submodule init && git submodule update` in the "

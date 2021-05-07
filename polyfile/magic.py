@@ -1866,7 +1866,7 @@ class MagicMatcher:
                 if m:
                     if current_test is None:
                         raise ValueError(f"{def_file!s} line {line_number}: Unexpected ext: {line!r}")
-                    current_test.extensions.add(m.group(1))
+                    current_test.extensions |= {ext for ext in re.split(r"[/,]", m.group(1)) if ext}
                     continue
                 raise ValueError(f"{def_file!s} line {line_number}: Unexpected line\n{raw_line!r}")
         return late_bindings
