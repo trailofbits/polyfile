@@ -866,7 +866,7 @@ class SearchType(StringType):
             else:
                 self.name = f"{self.name}s"
 
-    def match(self, data: bytes, expected: bytes) -> DataTypeMatch:
+    def match(self, data: bytes, expected: StringTest) -> DataTypeMatch:
         if self.repetitions is None:
             rep = len(data)
         else:
@@ -918,7 +918,7 @@ class SearchType(StringType):
         )
 
 
-class PascalStringType(DataType[bytes]):
+class PascalStringType(DataType[StringTest]):
     def __init__(
             self,
             byte_length: int = 1,
@@ -948,10 +948,10 @@ class PascalStringType(DataType[bytes]):
         self.endianness: Endianness = endianness
         self.count_includes_length: int = count_includes_length
 
-    def parse_expected(self, specification: bytes) -> bytes:
-        return unescape(specification)
+    def parse_expected(self, specification: str) -> StringTest:
+        return StringTest.parse(specification)
 
-    def match(self, data: bytes, expected: bytes) -> DataTypeMatch:
+    def match(self, data: bytes, expected: StringTest) -> DataTypeMatch:
         if len(data) < self.byte_length:
             return DataTypeMatch.INVALID
         elif self.byte_length == 1:
@@ -969,15 +969,10 @@ class PascalStringType(DataType[bytes]):
             length -= self.byte_length
         if len(data) < self.byte_length + length:
             return DataTypeMatch.INVALID
-        elif len(expected) != length:
-            return DataTypeMatch.INVALID
-        if data[self.byte_length:self.byte_length + length] == expected:
-            try:
-                return DataTypeMatch(expected, expected.decode("utf-8"))
-            except UnicodeDecodeError:
-                return DataTypeMatch(expected)
-        else:
-            return DataTypeMatch.INVALID
+        m = expected.matches(data[self.byte_length:self.byte_length + length])
+        if m:
+            m.raw_match = data[:self.byte_length + length]
+        return m
 
     PSTRING_TYPE_FORMAT: re.Pattern = re.compile(r"^pstring(/J?[BHhLl]?J?)?$")
 
