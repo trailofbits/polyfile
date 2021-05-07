@@ -8,6 +8,7 @@ This implementation is also optimized to only test for the file's MIME types; it
 details about the file.
 
 """
+import logging
 from abc import ABC, abstractmethod
 from enum import Enum
 from pathlib import Path
@@ -483,9 +484,11 @@ class MagicTest(ABC):
         except InvalidOffsetError:
             return None
         m = self.test(data, absolute_offset, parent_match)
-        log.debug(
-            f"{self.source_info!s}\t{m is not None}\t{absolute_offset}\t{data[absolute_offset:absolute_offset + 20]!r}"
-        )
+        if logging.root.level >= logging.DEBUG and (m is not None or self.level > 0):
+            log.debug(
+                f"{self.source_info!s}\t{m is not None}\t{absolute_offset}\t"
+                f"{data[absolute_offset:absolute_offset + 20]!r}"
+            )
         if m is not None:
             if not only_match_mime or self.mime is not None:
                 yield m

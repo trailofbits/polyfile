@@ -8,7 +8,7 @@ import polyfile.magic
 from polyfile.magic import MagicMatcher, MAGIC_DEFS
 
 
-# logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.DEBUG)
 
 FILE_TEST_DIR: Path = Path(__file__).parent.parent / "file" / "tests"
 
