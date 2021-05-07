@@ -8,10 +8,12 @@ This implementation is also optimized to only test for the file's MIME types; it
 details about the file.
 
 """
-import logging
 from abc import ABC, abstractmethod
+import csv
 from enum import Enum
+from io import StringIO
 import json
+import logging
 from pathlib import Path
 import re
 import struct
@@ -1529,6 +1531,37 @@ class JSONTest(MagicTest):
             return None
 
 
+class CSVTest(MagicTest):
+    def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> Optional[TestResult]:
+        try:
+            text = data[absolute_offset:].decode("utf-8")
+        except UnicodeDecodeError:
+            return None
+        for dialect in csv.list_dialects():
+            string_data = StringIO(text, newline="")
+            reader = csv.reader(string_data, dialect=dialect)
+            valid = False
+            try:
+                for i, row in enumerate(reader):
+                    if i == 0:
+                        num_cols = len(row)
+                        if num_cols < 2:
+                            # CSVs should have at least two rows:
+                            break
+                        valid = True
+                    elif len(row) != num_cols:
+                        # every row of the CSV should have the same number of columns
+                        valid = False
+                        break
+            except csv.Error:
+                continue
+            if valid:
+                # every row was valid, and we had at least one row
+                return TestResult(self, offset=absolute_offset, length=len(data) - absolute_offset, value=dialect,
+                                  parent=parent_match)
+        return None
+
+
 class DefaultTest(MagicTest):
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> Optional[TestResult]:
         if parent_match is None or not parent_match.child_matched:
@@ -1730,6 +1763,8 @@ class MagicMatcher:
                                                    parent=current_test)
                         elif data_type == "json":
                             test = JSONTest(offset=offset, message=message, parent=current_test)
+                        elif data_type == "csv":
+                            test = CSVTest(offset=offset, message=message, parent=current_test)
                         elif data_type == "indirect" or data_type == "indirect/r":
                             test = IndirectTest(matcher=matcher, offset=offset,
                                                 relative=m.group("data_type").endswith("r"),
