@@ -19,7 +19,9 @@ from pathlib import Path
 import re
 import struct
 from time import gmtime, localtime, strftime
-from typing import Any, Callable, Dict, Generic, Iterable, Iterator, List, Optional, Set, Tuple, TypeVar, Union
+from typing import (
+    Any, Callable, Dict, FrozenSet, Generic, Iterable, Iterator, List, Optional, Set, Tuple, TypeVar, Union
+)
 from uuid import UUID
 
 from .logger import getStatusLogger
@@ -454,11 +456,17 @@ class MagicTest(ABC):
                 self.offset = NamedAbsoluteOffset(self.named_test, offset.offset)
         else:
             self.level = 0
-            self.named_test = None
+            self.named_test: Optional[NamedTest] = None
         self._can_match_mime: Optional[bool] = None
         self._can_be_indirect: Optional[bool] = None
         self.mime = mime
         self.source_info: Optional[SourceInfo] = None
+
+    def referenced_tests(self) -> Set["NamedTest"]:
+        result: Set[NamedTest] = set()
+        for child in self.children:
+            result |= child.referenced_tests()
+        return result
 
     @property
     def mime(self) -> Optional[str]:
@@ -495,27 +503,36 @@ class MagicTest(ABC):
 
     def mimetypes(self) -> Iterator[str]:
         """Yields all possible MIME types that this test or any of its children could match against"""
-        if not self.can_match_mime:
+        if self._can_match_mime is not None and not self._can_match_mime:
             return
         tests = [self]
+        attempted_tests: Set[MagicTest] = set(tests)
         yielded: Set[str] = set()
         while tests:
             test = tests.pop()
             if test.mime is not None and test.mime not in yielded:
                 yield test.mime
                 yielded.add(test.mime)
-            tests.extend((child for child in test.children if child.can_match_mime))
+            new_children = {
+                child for child in test.children
+                if child._can_match_mime is None or child._can_match_mime
+            } - attempted_tests
+            attempted_tests |= new_children
+            tests.extend(new_children)
 
     def all_extensions(self) -> Iterator[str]:
         """Yields all possible extensions that this test or any of its children could match against"""
         tests = [self]
+        attempted_tests: Set[MagicTest] = set(tests)
         yielded: Set[str] = set()
         while tests:
             test = tests.pop()
             new_extensions = test.extensions - yielded
             yield from new_extensions
             yielded |= new_extensions
-            tests.extend((child for child in test.children))
+            new_children = set(test.children) - attempted_tests
+            attempted_tests |= new_children
+            tests.extend(new_children)
 
     @abstractmethod
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> Optional[TestResult]:
@@ -1512,6 +1529,15 @@ class NamedTest(MagicTest):
         else:
             raise ValueError("A named test must always be called from a `use` test.")
 
+    @property
+    def can_match_mime(self) -> bool:
+        if self._can_match_mime is None:
+            self._can_match_mime = self.can_be_indirect or any(
+                child.can_match_mime for child in self.children
+                if not isinstance(child, UseTest) or child.named_test.name != self.name
+            )
+        return self._can_match_mime
+
     def __str__(self):
         return self.name
 
@@ -1530,6 +1556,16 @@ class UseTest(MagicTest):
         super().__init__(offset=offset, mime=mime, extensions=extensions, message=message, parent=parent)
         self.referenced_test: NamedTest = referenced_test
         self.flip_endianness: bool = flip_endianness
+
+    def referenced_tests(self) -> Set[NamedTest]:
+        result = super().referenced_tests() | {self.referenced_test}
+        if self.named_test is None or self.named_test.name != self.referenced_test.name:
+            result |= self.referenced_test.referenced_tests()
+        return result
+
+    @property
+    def can_match_mime(self) -> bool:
+        return self.mime is not None or self.referenced_test.can_match_mime
 
     def _match(
             self,
@@ -1777,17 +1813,21 @@ class MagicMatcher:
         """
         if mimetypes is None and extensions is None:
             return self
-        tests = {
+        tests: Set[MagicTest] = {
             indirect_test for indirect_test in self.tests_that_can_be_indirect
             if not any(True for _ in indirect_test.mimetypes())
-        } | set(self.named_tests.values())
+        }
         if mimetypes is not None:
             for mime in mimetypes:
                 tests |= self.tests_by_mime[mime]
         if extensions is not None:
             for ext in extensions:
                 tests |= self.tests_by_ext[ext]
-        return MagicMatcher(tests)
+        # add in all necessary named tests:
+        required_named_tests = set()
+        for test in tests:
+            required_named_tests |= test.referenced_tests()
+        return MagicMatcher(tests | required_named_tests)
 
     def __iter__(self) -> Iterator[MagicTest]:
         return iter(self._tests)
@@ -1809,7 +1849,9 @@ class MagicMatcher:
                 yield m
 
     @staticmethod
-    def _parse_file(def_file: Union[str, Path], matcher: "MagicMatcher") -> Iterable[UseTest]:
+    def _parse_file(
+            def_file: Union[str, Path], matcher: "MagicMatcher"
+    ) -> Tuple[Iterable[MagicTest], Iterable[UseTest]]:
         current_test: Optional[MagicTest] = None
         late_bindings: List[UseTest] = []
         level_zero_tests: List[MagicTest] = []
@@ -1940,16 +1982,17 @@ class MagicMatcher:
                     current_test.extensions |= {ext for ext in re.split(r"[/,]", m.group(1)) if ext}
                     continue
                 raise ValueError(f"{def_file!s} line {line_number}: Unexpected line\n{raw_line!r}")
-        for test in level_zero_tests:
-            matcher.add(test)
-        return late_bindings
+        return level_zero_tests, late_bindings
 
     @staticmethod
     def parse(*def_files: Union[str, Path]) -> "MagicMatcher":
         late_bindings: Dict[str, List[UseTest]] = {}
+        zero_level_tests: List[MagicTest] = []
         matcher = MagicMatcher([])
         for file in def_files:
-            late_bindings[file] = list(MagicMatcher._parse_file(file, matcher=matcher))
+            zl, lb = MagicMatcher._parse_file(file, matcher=matcher)
+            late_bindings[file] = list(lb)
+            zero_level_tests.extend(zl)
         # resolve any "use" tests with late binding:
         for def_file, use_tests in late_bindings.items():
             for use_test in use_tests:
@@ -1957,4 +2000,6 @@ class MagicMatcher:
                 if use_test.referenced_test not in matcher.named_tests:
                     raise ValueError(f"{def_file!s}: Named test {use_test.referenced_test!r} is not defined")
                 use_test.referenced_test = matcher.named_tests[use_test.referenced_test]
+        for test in zero_level_tests:
+            matcher.add(test)
         return matcher
