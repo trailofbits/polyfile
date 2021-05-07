@@ -414,12 +414,13 @@ class IndirectOffset(Offset):
 
 
 class SourceInfo:
-    def __init__(self, path: Path, line: int):
+    def __init__(self, path: Path, line: int, original_line: Optional[str] = None):
         self.path: Path = path
         self.line: int = line
+        self.original_line: Optional[str] = original_line
 
     def __repr__(self):
-        return f"{self.__class__.__name__}(path={self.path!r}, line={self.line})"
+        return f"{self.__class__.__name__}(path={self.path!r}, line={self.line}, original_line={self.original_line!r})"
 
     def __str__(self):
         return f"{self.path!s}:{self.line}"
@@ -497,7 +498,10 @@ class MagicTest(ABC):
         return self._match(data, only_match_mime=only_match_mime)
 
     def __str__(self):
-        s = f"{'>' * self.level}{self.offset!s}\t{self.message}"
+        if self.source_info is not None and self.source_info.original_line is not None:
+            s = f"{self.source_info.path.name}:{self.source_info.line} {self.source_info.original_line}"
+        else:
+            s = f"{'>' * self.level}{self.offset!s}\t{self.message}"
         if self.mime is not None:
             s = f"{s}\n!:mime\t{self.mime}"
         for e in self.extensions:
@@ -1460,8 +1464,6 @@ class UseTest(MagicTest):
             only_match_mime: bool = False,
             parent_match: Optional[TestResult] = None
     ) -> Iterator[TestResult]:
-        if self.source_info.line == 170 and self.source_info.path.name == "pgp-binary-keys":
-            breakpoint()
         if self.flip_endianness:
             raise NotImplementedError("TODO: Add support for use tests with flipped endianness")
         first_match: Optional[TestResult] = None
@@ -1473,13 +1475,13 @@ class UseTest(MagicTest):
             f"{self.source_info!s}\tTrue\t{absolute_offset}\t{data[absolute_offset:absolute_offset + 20]!r}"
         )
         use_match = TestResult(self, None, absolute_offset, 0, parent=parent_match)
-        first_match: Optional[TestResult] = None
+        yielded = False
         for named_result in self.referenced_test._match(data, only_match_mime, use_match):
-            if first_match is None:
-                first_match = named_result
+            if not yielded:
+                yielded = True
                 yield use_match
             yield named_result
-        if first_match is None:
+        if not yielded:
             # the named test did not match anything, so don't try any of our children
             return
         elif only_match_mime and not self.can_match_mime:
@@ -1487,7 +1489,7 @@ class UseTest(MagicTest):
             return
         for child in self.children:
             if not only_match_mime or child.can_match_mime:
-                yield from child._match(data=data, only_match_mime=only_match_mime, parent_match=first_match)
+                yield from child._match(data=data, only_match_mime=only_match_mime, parent_match=use_match)
 
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> Optional[TestResult]:
         raise NotImplementedError("This function should never be called")
@@ -1678,7 +1680,7 @@ class MagicMatcher:
                             raise ValueError(f"{def_file!s} line {line_number}: Duplicate test named {test_str!r}")
                         test = NamedTest(name=test_str, offset=offset, message=message)
                         matcher.named_tests[test_str] = test
-                        test.source_info = SourceInfo(def_file, line_number)
+                        test.source_info = SourceInfo(def_file, line_number, line)
                     else:
                         if data_type == "default":
                             if current_test is None:
@@ -1747,7 +1749,7 @@ class MagicMatcher:
                             )
                         if test.level == 0:
                             matcher.tests.append(test)
-                    test.source_info = SourceInfo(def_file, line_number)
+                    test.source_info = SourceInfo(def_file, line_number, line)
                     current_test = test
                     continue
                 m = MIME_PATTERN.match(line)
