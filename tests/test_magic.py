@@ -1,10 +1,14 @@
+import logging
 from pathlib import Path
 from typing import Callable, Optional
 from unittest import TestCase
 
+from polyfile import logger
 import polyfile.magic
 from polyfile.magic import MagicMatcher, MAGIC_DEFS
 
+
+logger.setLevel(logging.DEBUG)
 
 FILE_TEST_DIR: Path = Path(__file__).parent.parent / "file" / "tests"
 
@@ -34,6 +38,7 @@ class MagicTest(TestCase):
 
         tests = sorted([
             f.stem for f in FILE_TEST_DIR.glob("*.testfile")
+            if f.stem == "pgp-binary-key-v2-phil"
         ])
 
         for test in tests:

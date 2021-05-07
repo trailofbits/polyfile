@@ -17,6 +17,10 @@ from time import gmtime, localtime, strftime
 from typing import Any, Callable, Dict, Generic, Iterable, Iterator, List, Optional, Set, Tuple, TypeVar, Union
 from uuid import UUID
 
+from .logger import getStatusLogger
+
+log = getStatusLogger("libmagic")
+
 DEFS_DIR: Path = Path(__file__).absolute().parent / "magic_defs"
 
 MAGIC_DEFS: List[Path] = [
@@ -276,7 +280,11 @@ class RelativeOffset(Offset):
         self.relative_to: Offset = relative_to
 
     def to_absolute(self, data: bytes, last_match: Optional[TestResult]) -> int:
-        offset = last_match.offset + last_match.length + self.relative_to.to_absolute(data, last_match)
+        if isinstance(self.relative_to, NegativeOffset):
+            difference = -self.relative_to.magnitude
+        else:
+            difference = self.relative_to.to_absolute(data, last_match)
+        offset = last_match.offset + last_match.length + difference
         if len(data) < offset < 0:
             raise InvalidOffsetError(offset=self)
         return offset
@@ -474,9 +482,9 @@ class MagicTest(ABC):
         except InvalidOffsetError:
             return None
         m = self.test(data, absolute_offset, parent_match)
-        #print(
-        #    f"{self.source_info!s}\t{m is not None}\t{absolute_offset}\t{data[absolute_offset:absolute_offset + 20]!r}"
-        #)
+        log.debug(
+            f"{self.source_info!s}\t{m is not None}\t{absolute_offset}\t{data[absolute_offset:absolute_offset + 20]!r}"
+        )
         if m is not None:
             if not only_match_mime or self.mime is not None:
                 yield m
@@ -1452,6 +1460,8 @@ class UseTest(MagicTest):
             only_match_mime: bool = False,
             parent_match: Optional[TestResult] = None
     ) -> Iterator[TestResult]:
+        if self.source_info.line == 170 and self.source_info.path.name == "pgp-binary-keys":
+            breakpoint()
         if self.flip_endianness:
             raise NotImplementedError("TODO: Add support for use tests with flipped endianness")
         first_match: Optional[TestResult] = None
@@ -1459,6 +1469,9 @@ class UseTest(MagicTest):
             absolute_offset = self.offset.to_absolute(data, last_match=parent_match)
         except InvalidOffsetError:
             return None
+        log.debug(
+            f"{self.source_info!s}\tTrue\t{absolute_offset}\t{data[absolute_offset:absolute_offset + 20]!r}"
+        )
         use_match = TestResult(self, None, absolute_offset, 0, parent=parent_match)
         first_match: Optional[TestResult] = None
         for named_result in self.referenced_test._match(data, only_match_mime, use_match):
