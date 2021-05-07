@@ -1572,11 +1572,13 @@ class Match:
     def message(self) -> str:
         msg = ""
         for result in self:
-            # TODO: Handle printf string replacements
-            if result.test.message.lstrip().startswith("\b"):
-                result_str = result.test.message.lstrip()[1:]
+            m = result.test.message.lstrip()
+            if not m:
+                continue
+            elif m.startswith("\b"):
+                result_str = m[1:]
             else:
-                result_str = result.test.message.lstrip()
+                result_str = m
                 if msg and not msg[-1] in " \t\r\n\v\f":
                     msg = f"{msg} "
             if "%" in result_str.replace("%%", ""):
