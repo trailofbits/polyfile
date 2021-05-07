@@ -27,7 +27,9 @@ class MagicTest(TestCase):
         polyfile.magic.local_date = cls._old_local_date
 
     def test_parsing(self):
-        _ = MagicMatcher.parse(*MAGIC_DEFS)
+        matcher = MagicMatcher.parse(*MAGIC_DEFS)
+        print(f"# MIME types: {len(matcher.mimetypes())}")
+        print("\n".join(sorted(matcher.extensions())))
 
     def test_file_corpus(self):
         self.assertTrue(FILE_TEST_DIR.exists(), "Make sure to run `git submodule init && git submodule update` in the "

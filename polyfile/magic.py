@@ -440,7 +440,7 @@ class MagicTest(ABC):
             parent: Optional["MagicTest"] = None
     ):
         self.offset: Offset = offset
-        self.mime: Optional[str] = mime
+        self._mime: Optional[str] = None
         self.extensions: Set[str] = set(extensions)
         self.message: str = message
         self.parent: Optional[MagicTest] = parent
@@ -454,15 +454,29 @@ class MagicTest(ABC):
         else:
             self.level = 0
             self.named_test = None
-        if mime is not None:
-            self._can_match_mime: Optional[bool] = True
-            p = self.parent
-            while p is not None and p._can_match_mime is None:
-                p._can_match_mime = True
-                p = p.parent
-        else:
-            self._can_match_mime = None
+        self._can_match_mime: Optional[bool] = None
+        self.mime = mime
         self.source_info: Optional[SourceInfo] = None
+
+    @property
+    def mime(self) -> Optional[str]:
+        return self._mime
+
+    @mime.setter
+    def mime(self, new_mime: Optional[str]):
+        if self._mime is not None:
+            if self._mime == new_mime:
+                return
+            raise ValueError("The mime type of a test may not be changed once it is set")
+        elif new_mime is None:
+            # the mime is already None, and we are setting it to None, so just ignore
+            return
+        self._mime = new_mime
+        self._can_match_mime = True
+        p = self.parent
+        while p is not None and p._can_match_mime is None:
+            p._can_match_mime = True
+            p = p.parent
 
     @property
     def can_match_mime(self) -> bool:
@@ -1696,6 +1710,27 @@ class MagicMatcher:
                 self.named_tests[test.name] = test
             else:
                 self.tests.append(test)
+
+    def mimetypes(self) -> Set[str]:
+        """Returns the set of MIME types this matcher is capable of matching"""
+        mimes = set()
+        tests = [test for test in self.tests if test.can_match_mime]
+        while tests:
+            test = tests.pop()
+            if test.mime is not None:
+                mimes.add(test.mime)
+            tests.extend([child for child in test.children if child.can_match_mime])
+        return mimes
+
+    def extensions(self) -> Set[str]:
+        """Returns the set of extensions this matcher is capable of matching"""
+        extensions = set()
+        tests = [test for test in self.tests]
+        while tests:
+            test = tests.pop()
+            extensions |= test.extensions
+            tests.extend(test.children)
+        return extensions
 
     def match(self, data: bytes, only_match_mime: bool = False) -> Iterator[Match]:
         for test in self.tests:
