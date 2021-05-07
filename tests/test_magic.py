@@ -28,8 +28,14 @@ class MagicTest(TestCase):
 
     def test_parsing(self):
         matcher = MagicMatcher.parse(*MAGIC_DEFS)
-        print(f"# MIME Types:      {len(matcher.mimetypes())}")
-        print(f"# File Extensions: {len(matcher.extensions())}")
+        print(f"# MIME Types:      {len(matcher.mimetypes)}")
+        print(f"# File Extensions: {len(matcher.extensions)}")
+
+    def test_only_matching(self):
+        matcher = MagicMatcher.parse(*MAGIC_DEFS)
+        self.assertIs(matcher, matcher.only_match())
+        self.assertIn("application/zip", matcher.only_match(mimetypes=("application/zip",)).mimetypes)
+        self.assertIn("com", matcher.only_match(extensions=("com",)).extensions)
 
     def test_file_corpus(self):
         self.assertTrue(FILE_TEST_DIR.exists(), "Make sure to run `git submodule init && git submodule update` in the "

@@ -9,6 +9,7 @@ details about the file.
 
 """
 from abc import ABC, abstractmethod
+from collections import defaultdict
 import csv
 from enum import Enum
 from io import StringIO
@@ -455,6 +456,7 @@ class MagicTest(ABC):
             self.level = 0
             self.named_test = None
         self._can_match_mime: Optional[bool] = None
+        self._can_be_indirect: Optional[bool] = None
         self.mime = mime
         self.source_info: Optional[SourceInfo] = None
 
@@ -481,8 +483,39 @@ class MagicTest(ABC):
     @property
     def can_match_mime(self) -> bool:
         if self._can_match_mime is None:
-            self._can_match_mime = any(child.can_match_mime for child in self.children)
+            self._can_match_mime = self.can_be_indirect or any(child.can_match_mime for child in self.children)
         return self._can_match_mime
+
+    @property
+    def can_be_indirect(self) -> bool:
+        """Returns whether this test or any of its children has an indirect test"""
+        if self._can_be_indirect is None:
+            self._can_be_indirect = any(c.can_be_indirect for c in self.children)
+        return self._can_be_indirect
+
+    def mimetypes(self) -> Iterator[str]:
+        """Yields all possible MIME types that this test or any of its children could match against"""
+        if not self.can_match_mime:
+            return
+        tests = [self]
+        yielded: Set[str] = set()
+        while tests:
+            test = tests.pop()
+            if test.mime is not None and test.mime not in yielded:
+                yield test.mime
+                yielded.add(test.mime)
+            tests.extend((child for child in test.children if child.can_match_mime))
+
+    def all_extensions(self) -> Iterator[str]:
+        """Yields all possible extensions that this test or any of its children could match against"""
+        tests = [self]
+        yielded: Set[str] = set()
+        while tests:
+            test = tests.pop()
+            new_extensions = test.extensions - yielded
+            yield from new_extensions
+            yielded |= new_extensions
+            tests.extend((child for child in test.children))
 
     @abstractmethod
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> Optional[TestResult]:
@@ -1436,6 +1469,11 @@ class IndirectTest(MagicTest):
         super().__init__(offset=offset, mime=mime, extensions=extensions, message=message, parent=parent)
         self.matcher: MagicMatcher = matcher
         self.relative: bool = relative
+        self._can_be_indirect = True
+        p = parent
+        while p is not None:
+            p._can_be_indirect = True
+            p = p.parent
 
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> Optional[IndirectResult]:
         if self.relative:
@@ -1702,38 +1740,70 @@ class Match:
 
 
 class MagicMatcher:
-    def __init__(self, tests: Iterable[MagicTest]):
-        self.tests: List[MagicTest] = []
+    def __init__(self, tests: Iterable[MagicTest] = ()):
+        self._tests: List[MagicTest] = []
         self.named_tests: Dict[str, NamedTest] = {}
+        self.tests_by_mime: Dict[str, Set[MagicTest]] = defaultdict(set)
+        self.tests_by_ext: Dict[str, Set[MagicTest]] = defaultdict(set)
+        self.tests_that_can_be_indirect: Set[MagicTest] = set()
         for test in tests:
-            if isinstance(test, NamedTest):
-                self.named_tests[test.name] = test
-            else:
-                self.tests.append(test)
+            self.add(test)
 
-    def mimetypes(self) -> Set[str]:
+    def add(self, test: MagicTest):
+        if isinstance(test, NamedTest):
+            if test.name in self.named_tests:
+                raise ValueError(f"A test named {test.name} already exists in this matcher!")
+            self.named_tests[test.name] = test
+        else:
+            self._tests.append(test)
+            for mime in test.mimetypes():
+                self.tests_by_mime[mime].add(test)
+            for ext in test.all_extensions():
+                self.tests_by_ext[ext].add(test)
+            if test.can_be_indirect:
+                self.tests_that_can_be_indirect.add(test)
+
+    def only_match(
+            self,
+            mimetypes: Optional[Iterable[str]] = None,
+            extensions: Optional[Iterable[str]] = None
+    ) -> "MagicMatcher":
+        """
+        Returns the simplest possible matcher that is capable of matching against all the given mimetypes or extensions.
+
+        If either argument is None, the resulting matcher will match against all such values. Therefore, if both
+        arguments are None, the resulting matcher will be equivalent to this matcher.
+
+        """
+        if mimetypes is None and extensions is None:
+            return self
+        tests = {
+            indirect_test for indirect_test in self.tests_that_can_be_indirect
+            if not any(True for _ in indirect_test.mimetypes())
+        } | set(self.named_tests.values())
+        if mimetypes is not None:
+            for mime in mimetypes:
+                tests |= self.tests_by_mime[mime]
+        if extensions is not None:
+            for ext in extensions:
+                tests |= self.tests_by_ext[ext]
+        return MagicMatcher(tests)
+
+    def __iter__(self) -> Iterator[MagicTest]:
+        return iter(self._tests)
+
+    @property
+    def mimetypes(self) -> Iterable[str]:
         """Returns the set of MIME types this matcher is capable of matching"""
-        mimes = set()
-        tests = [test for test in self.tests if test.can_match_mime]
-        while tests:
-            test = tests.pop()
-            if test.mime is not None:
-                mimes.add(test.mime)
-            tests.extend([child for child in test.children if child.can_match_mime])
-        return mimes
+        return self.tests_by_mime.keys()
 
-    def extensions(self) -> Set[str]:
+    @property
+    def extensions(self) -> Iterable[str]:
         """Returns the set of extensions this matcher is capable of matching"""
-        extensions = set()
-        tests = [test for test in self.tests]
-        while tests:
-            test = tests.pop()
-            extensions |= test.extensions
-            tests.extend(test.children)
-        return extensions
+        return self.tests_by_ext.keys()
 
     def match(self, data: bytes, only_match_mime: bool = False) -> Iterator[Match]:
-        for test in self.tests:
+        for test in self._tests:
             m = Match(self, data, test.match(data, only_match_mime=only_match_mime), only_match_mime)
             if m:
                 yield m
@@ -1742,6 +1812,7 @@ class MagicMatcher:
     def _parse_file(def_file: Union[str, Path], matcher: "MagicMatcher") -> Iterable[UseTest]:
         current_test: Optional[MagicTest] = None
         late_bindings: List[UseTest] = []
+        level_zero_tests: List[MagicTest] = []
         with open(def_file, "rb") as f:
             for line_number, raw_line in enumerate(f.readlines()):
                 line_number += 1
@@ -1849,7 +1920,7 @@ class MagicMatcher:
                                 parent=current_test
                             )
                         if test.level == 0:
-                            matcher.tests.append(test)
+                            level_zero_tests.append(test)
                     test.source_info = SourceInfo(def_file, line_number, line)
                     current_test = test
                     continue
@@ -1869,6 +1940,8 @@ class MagicMatcher:
                     current_test.extensions |= {ext for ext in re.split(r"[/,]", m.group(1)) if ext}
                     continue
                 raise ValueError(f"{def_file!s} line {line_number}: Unexpected line\n{raw_line!r}")
+        for test in level_zero_tests:
+            matcher.add(test)
         return late_bindings
 
     @staticmethod
