@@ -1581,7 +1581,10 @@ class Match:
                 result_str = m
                 if msg and not msg[-1] in " \t\r\n\v\f":
                     msg = f"{msg} "
-            if "%" in result_str.replace("%%", ""):
+            if "%u" in result_str and result.value < 0:
+                # sometimes we parsed a negative value and want to print it as an unsigned int:
+                result_str = result_str % (result.value + 2**(8 * result.length),)
+            elif "%" in result_str.replace("%%", ""):
                 result_str = result_str % (result.value,)
             result_str = result_str.replace("%%", "%")
             msg = f"{msg}{result_str}"
