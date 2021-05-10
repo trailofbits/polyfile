@@ -81,10 +81,13 @@ class StatusLogger(logging.getLoggerClass()):
         for i, obj in enumerate(iterable):
             current_time = time()
             elapsed_time = current_time - start_time
-            new_percent = i / size
-            if elapsed_time >= delay and (
+            if size == 1:
+                new_percent = 1.0
+            else:
+                new_percent = i / (size - 1)
+            if (elapsed_time >= delay and (
                     current_time - last_update_time >= update_interval or new_percent >= last_percent + 0.01
-            ):
+            )) or i == size - 1:
                 last_update_time = current_time
                 last_percent = new_percent
                 print_msg(new_percent, i + 1)
