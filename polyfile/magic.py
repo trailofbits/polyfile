@@ -1161,8 +1161,6 @@ class RegexType(DataType[re.Pattern]):
             if self.case_insensitive:
                 return re.compile(unescaped_spec, re.IGNORECASE)
             else:
-                if unescaped_spec.startswith(b"[["):
-                    breakpoint()
                 return re.compile(unescaped_spec)
         except re.error as e:
             raise ValueError(str(e))
