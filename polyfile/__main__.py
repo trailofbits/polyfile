@@ -129,11 +129,9 @@ def main(argv=None):
         with open(file_path, "rb") as f:
             for match in matcher.match(f.read(), only_match_mime=True):
                 new_mimetypes = set(match.mimetypes) - mimetypes
-                if new_mimetypes:
-                    if mimetypes:
-                        print("")
-                    print("\n".join(new_mimetypes))
-                    mimetypes |= new_mimetypes
+                for m in new_mimetypes:
+                    log.print(m)
+                mimetypes |= new_mimetypes
         sys.exit(0)
         matches = []
         try:

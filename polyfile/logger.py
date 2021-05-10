@@ -11,7 +11,20 @@ TRACE = 5
 class StatusLogHandler(logging.StreamHandler):
     def __init__(self, stream=sys.stderr.buffer):
         super().__init__(stream=stream)
-        self._status = b''
+        self._status: bytes = b''
+
+    def print(self, text: str):
+        if self._status and self.stream.isatty():
+            self.stream.write(f"\r{' ' * len(self._status)}\r".encode('utf-8'))
+            self.stream.flush()
+            sys.stdout.write(text)
+            sys.stdout.write("\n")
+            sys.stdout.flush()
+            self.stream.write(self._status)
+            self.stream.flush()
+        else:
+            sys.stdout.write(text)
+            sys.stdout.write("\n")
 
     def emit(self, record):
         isatty = self.stream.isatty()
@@ -47,6 +60,9 @@ class StatusLogger(logging.getLoggerClass()):
     def status(self, msg, *args, **kwargs):
         if self.isEnabledFor(STATUS):
             self._log(STATUS, msg, args, **kwargs)
+
+    def print(self, text: str):
+        DEFAULT_STATUS_LOG_HANDLER.print(text)
 
     def range(
             self,
