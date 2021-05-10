@@ -1860,7 +1860,7 @@ class MagicMatcher:
         return self.tests_by_ext.keys()
 
     def match(self, data: bytes, only_match_mime: bool = False) -> Iterator[Match]:
-        for test in self._tests:
+        for test in log.range(self._tests, desc="matching", unit=" tests", delay=1.0):
             m = Match(self, data, test.match(data, only_match_mime=only_match_mime), only_match_mime)
             if m:
                 yield m

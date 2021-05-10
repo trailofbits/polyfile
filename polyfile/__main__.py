@@ -123,6 +123,18 @@ def main(argv=None):
     sigterm_handler = SIGTERMHandler()
 
     with PathOrStdin(args.FILE) as file_path:
+        from .magic import MagicMatcher, MAGIC_DEFS
+        matcher = MagicMatcher.parse(*MAGIC_DEFS)
+        mimetypes = set()
+        with open(file_path, "rb") as f:
+            for match in matcher.match(f.read(), only_match_mime=True):
+                new_mimetypes = set(match.mimetypes) - mimetypes
+                if new_mimetypes:
+                    if mimetypes:
+                        print("")
+                    print("\n".join(new_mimetypes))
+                    mimetypes |= new_mimetypes
+        sys.exit(0)
         matches = []
         try:
             if args.max_matches is None or args.max_matches > 0:

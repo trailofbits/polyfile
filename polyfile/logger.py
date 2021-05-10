@@ -1,5 +1,7 @@
 import logging
 import sys
+from time import time
+from typing import Collection, Iterator, Optional, TypeVar
 
 
 STATUS = 15
@@ -34,6 +36,9 @@ logging.addLevelName(TRACE, "TRACE")
 DEFAULT_STATUS_LOG_HANDLER = StatusLogHandler()
 
 
+T = TypeVar("T")
+
+
 class StatusLogger(logging.getLoggerClass()):
     def __init__(self, name, level=logging.NOTSET):
         super().__init__(name, level)
@@ -42,6 +47,48 @@ class StatusLogger(logging.getLoggerClass()):
     def status(self, msg, *args, **kwargs):
         if self.isEnabledFor(STATUS):
             self._log(STATUS, msg, args, **kwargs)
+
+    def range(
+            self,
+            iterable: Collection[T],
+            desc: str = "",
+            unit: str = "",
+            delay: float = 0.0,
+            update_interval: float = 0.5
+    ) -> Iterator[T]:
+        if not self.isEnabledFor(STATUS) or len(iterable) == 0:
+            yield from iterable
+            return
+        size = len(iterable)
+        start_time = time()
+        last_update_time: float = 0.0
+        last_percent: float = -1.0
+        def print_msg(percent: float, item: int):
+            msg = desc.strip()
+            if msg:
+                msg = f"{msg} "
+            bar = "=" * int(30 * percent)
+            if bar:
+                bar = f"{bar[:-1]}>"
+            bar = f"|{bar}{'-' * (30 - len(bar))}|"
+            pct = f"{percent * 100.0:.1f}%"
+            pct_pos = (len(bar) - len(pct)) // 2
+            bar = f"{bar[:pct_pos]}{pct}{bar[pct_pos + len(pct):]}"
+            msg = f"{msg}{bar} {item}/{size}{unit}"
+            self.status(msg)
+        if delay == 0.0:
+            print_msg(0.0, 0)
+        for i, obj in enumerate(iterable):
+            current_time = time()
+            elapsed_time = current_time - start_time
+            new_percent = i / size
+            if elapsed_time >= delay and (
+                    current_time - last_update_time >= update_interval or new_percent >= last_percent + 0.01
+            ):
+                last_update_time = current_time
+                last_percent = new_percent
+                print_msg(new_percent, i + 1)
+            yield obj
 
     def trace(self, msg, *args, **kwargs):
         if self.isEnabledFor(TRACE):
@@ -54,7 +101,7 @@ class StatusLogger(logging.getLoggerClass()):
 logging.setLoggerClass(StatusLogger)
 
 
-def getStatusLogger(name):
+def getStatusLogger(name) -> StatusLogger:
     return logging.getLogger(name)
 
 
