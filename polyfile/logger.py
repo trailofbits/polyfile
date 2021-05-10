@@ -102,7 +102,7 @@ class StatusLogger(logging.getLoggerClass()):
             else:
                 new_percent = i / (size - 1)
             if (elapsed_time >= delay and (
-                    current_time - last_update_time >= update_interval or new_percent >= last_percent + 0.01
+                    current_time - last_update_time >= update_interval or new_percent >= last_percent + 0.1
             )) or i == size - 1:
                 last_update_time = current_time
                 last_percent = new_percent
