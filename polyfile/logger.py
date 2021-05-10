@@ -68,7 +68,7 @@ class StatusLogger(logging.getLoggerClass()):
             if msg:
                 msg = f"{msg} "
             bar = "=" * int(30 * percent)
-            if bar:
+            if bar and percent < 1.0:
                 bar = f"{bar[:-1]}>"
             bar = f"|{bar}{'-' * (30 - len(bar))}|"
             pct = f"{percent * 100.0:.1f}%"
