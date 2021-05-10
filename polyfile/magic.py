@@ -446,21 +446,75 @@ class MagicTest(ABC):
         self._mime: Optional[str] = None
         self.extensions: Set[str] = set(extensions)
         self.message: str = message
-        self.parent: Optional[MagicTest] = parent
+        self._parent: Optional[MagicTest] = parent
         self.children: List[MagicTest] = []
-        if self.parent is not None:
+        if parent is not None:
             self.level: int = self.parent.level + 1
-            self.parent.children.append(self)
-            self.named_test: Optional[NamedTest] = self.parent.named_test
+            parent.children.append(self)
+            self.named_test: Optional[NamedTest] = parent.named_test
             if self.named_test is not None and isinstance(offset, AbsoluteOffset):
                 self.offset = NamedAbsoluteOffset(self.named_test, offset.offset)
+            if mime is not None:
+                parent.can_match_mime = True
         else:
             self.level = 0
             self.named_test: Optional[NamedTest] = None
-        self._can_match_mime: Optional[bool] = None
-        self._can_be_indirect: Optional[bool] = None
+        self.can_match_mime: bool = mime is not None
+        """
+        Whether or not this test or any of its descendants can match a MIME type.
+        This is currently set after parsing all of the definition files.
+        Any custom implementation should set it manually after this object is created.
+        
+        """
+        self.can_be_indirect: bool = False
+        """
+        Whether or not this test or any of its descendants can be an indirect test.
+        This is currently set after parsing all of the definition files.
+        Any custom implementation should set it manually after this object is created.
+
+        """
         self.mime = mime
         self.source_info: Optional[SourceInfo] = None
+
+    @property
+    def parent(self) -> Optional["MagicTest"]:
+        return self._parent
+
+    def ancestors(self) -> Iterator["MagicTest"]:
+        """Yields all ancestors of this test. NamedTest will also include all UseTest ancestors that call it."""
+        stack: List[MagicTest] = [self]
+        history: Set[MagicTest] = set(stack)
+        while stack:
+            test = stack.pop()
+            if test is not self:
+                yield test
+            if isinstance(test, NamedTest):
+                new_tests = test.used_by - history
+                stack.extend(new_tests)
+                history |= new_tests
+            if test.parent is not None and test.parent not in history:
+                stack.append(test.parent)
+                history.add(test.parent)
+
+    def descendants(self) -> Iterator["MagicTest"]:
+        """
+        Yields all descendants of this test.
+        UseTests will also include all referenced NamedTests and their descendants.
+
+        """
+        stack: List[MagicTest] = [self]
+        history: Set[MagicTest] = set(stack)
+        while stack:
+            test = stack.pop()
+            if test is not self:
+                yield test
+            if test.parent is not None and test.parent not in history:
+                new_tests = [child for child in test.children if child not in history]
+                stack.extend(reversed(new_tests))
+                history |= set(new_tests)
+            if isinstance(test, UseTest):
+                stack.append(test.referenced_test)
+                history.add(test.referenced_test)
 
     def referenced_tests(self) -> Set["NamedTest"]:
         result: Set[NamedTest] = set()
@@ -482,57 +536,29 @@ class MagicTest(ABC):
             # the mime is already None, and we are setting it to None, so just ignore
             return
         self._mime = new_mime
-        self._can_match_mime = True
-        p = self.parent
-        while p is not None and p._can_match_mime is None:
-            p._can_match_mime = True
-            p = p.parent
-
-    @property
-    def can_match_mime(self) -> bool:
-        if self._can_match_mime is None:
-            self._can_match_mime = self.can_be_indirect or any(child.can_match_mime for child in self.children)
-        return self._can_match_mime
-
-    @property
-    def can_be_indirect(self) -> bool:
-        """Returns whether this test or any of its children has an indirect test"""
-        if self._can_be_indirect is None:
-            self._can_be_indirect = any(c.can_be_indirect for c in self.children)
-        return self._can_be_indirect
+        self.can_match_mime = True
 
     def mimetypes(self) -> Iterator[str]:
-        """Yields all possible MIME types that this test or any of its children could match against"""
-        if self._can_match_mime is not None and not self._can_match_mime:
+        """Yields all possible MIME types that this test or any of its descendants could match against"""
+        if not self.can_match_mime:
             return
-        tests = [self]
-        attempted_tests: Set[MagicTest] = set(tests)
         yielded: Set[str] = set()
-        while tests:
-            test = tests.pop()
-            if test.mime is not None and test.mime not in yielded:
-                yield test.mime
-                yielded.add(test.mime)
-            new_children = {
-                child for child in test.children
-                if child._can_match_mime is None or child._can_match_mime
-            } - attempted_tests
-            attempted_tests |= new_children
-            tests.extend(new_children)
+        if self.mime is not None:
+            yield self.mime
+            yielded.add(self.mime)
+        for d in self.descendants():
+            if d.mime is not None:
+                yield d.mime
+                yielded.add(d.mime)
 
     def all_extensions(self) -> Iterator[str]:
-        """Yields all possible extensions that this test or any of its children could match against"""
-        tests = [self]
-        attempted_tests: Set[MagicTest] = set(tests)
-        yielded: Set[str] = set()
-        while tests:
-            test = tests.pop()
-            new_extensions = test.extensions - yielded
+        """Yields all possible extensions that this test or any of its descendants could match against"""
+        yield from self.extensions
+        yielded = set(self.extensions)
+        for d in self.descendants():
+            new_extensions = d.extensions - yielded
             yield from new_extensions
             yielded |= new_extensions
-            new_children = set(test.children) - attempted_tests
-            attempted_tests |= new_children
-            tests.extend(new_children)
 
     @abstractmethod
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> Optional[TestResult]:
@@ -1486,10 +1512,12 @@ class IndirectTest(MagicTest):
         super().__init__(offset=offset, mime=mime, extensions=extensions, message=message, parent=parent)
         self.matcher: MagicMatcher = matcher
         self.relative: bool = relative
-        self._can_be_indirect = True
+        self.can_match_mime = True
+        self.can_be_indirect = True
         p = parent
         while p is not None:
-            p._can_be_indirect = True
+            p.can_be_indirect = True
+            p.can_match_mime = True
             p = p.parent
 
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> Optional[IndirectResult]:
@@ -1521,6 +1549,7 @@ class NamedTest(MagicTest):
         super().__init__(offset=offset, mime=mime, extensions=extensions, message=message, parent=None)
         self.name: str = name
         self.named_test = self
+        self.used_by: Set[UseTest] = set()
 
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> Optional[TestResult]:
         if parent_match is not None:
@@ -1528,15 +1557,6 @@ class NamedTest(MagicTest):
                               parent=parent_match)
         else:
             raise ValueError("A named test must always be called from a `use` test.")
-
-    @property
-    def can_match_mime(self) -> bool:
-        if self._can_match_mime is None:
-            self._can_match_mime = self.can_be_indirect or any(
-                child.can_match_mime for child in self.children
-                if not isinstance(child, UseTest) or child.named_test.name != self.name
-            )
-        return self._can_match_mime
 
     def __str__(self):
         return self.name
@@ -1556,16 +1576,13 @@ class UseTest(MagicTest):
         super().__init__(offset=offset, mime=mime, extensions=extensions, message=message, parent=parent)
         self.referenced_test: NamedTest = referenced_test
         self.flip_endianness: bool = flip_endianness
+        referenced_test.used_by.add(self)
 
     def referenced_tests(self) -> Set[NamedTest]:
         result = super().referenced_tests() | {self.referenced_test}
         if self.named_test is None or self.named_test.name != self.referenced_test.name:
             result |= self.referenced_test.referenced_tests()
         return result
-
-    @property
-    def can_match_mime(self) -> bool:
-        return self.mime is not None or self.referenced_test.can_match_mime
 
     def _match(
             self,
@@ -1851,10 +1868,12 @@ class MagicMatcher:
     @staticmethod
     def _parse_file(
             def_file: Union[str, Path], matcher: "MagicMatcher"
-    ) -> Tuple[Iterable[MagicTest], Iterable[UseTest]]:
+    ) -> Tuple[Iterable[MagicTest], Iterable[UseTest], Set[MagicTest], Set[IndirectTest]]:
         current_test: Optional[MagicTest] = None
         late_bindings: List[UseTest] = []
         level_zero_tests: List[MagicTest] = []
+        tests_with_mime: Set[MagicTest] = set()
+        indirect_tests: Set[IndirectTest] = set()
         with open(def_file, "rb") as f:
             for line_number, raw_line in enumerate(f.readlines()):
                 line_number += 1
@@ -1912,6 +1931,7 @@ class MagicMatcher:
                             test = IndirectTest(matcher=matcher, offset=offset,
                                                 relative=m.group("data_type").endswith("r"),
                                                 message=message, parent=current_test)
+                            indirect_tests.add(test)
                         elif data_type == "use":
                             if test_str.startswith("^"):
                                 flip_endianness = True
@@ -1923,7 +1943,10 @@ class MagicMatcher:
                                 flip_endianness = False
                             if test_str not in matcher.named_tests:
                                 late_binding = True
-                                named_test: Union[str, NamedTest] = test_str
+                                class LateBindingNamedTest(NamedTest):
+                                    def __init__(self):
+                                        super().__init__(test_str, offset=AbsoluteOffset(0))
+                                named_test: NamedTest = LateBindingNamedTest()
                             else:
                                 late_binding = False
                                 named_test = matcher.named_tests[test_str]
@@ -1974,6 +1997,7 @@ class MagicMatcher:
                         raise ValueError(f"{def_file!s} line {line_number}: Duplicate mime types for test "
                                          f"{current_test!r}: {current_test.mime!r} and {m.group(1)}")
                     current_test.mime = m.group(1)
+                    tests_with_mime.add(current_test)
                     continue
                 m = EXTENSION_PATTERN.match(line)
                 if m:
@@ -1982,24 +2006,38 @@ class MagicMatcher:
                     current_test.extensions |= {ext for ext in re.split(r"[/,]", m.group(1)) if ext}
                     continue
                 raise ValueError(f"{def_file!s} line {line_number}: Unexpected line\n{raw_line!r}")
-        return level_zero_tests, late_bindings
+        return level_zero_tests, late_bindings, tests_with_mime, indirect_tests
 
     @staticmethod
     def parse(*def_files: Union[str, Path]) -> "MagicMatcher":
         late_bindings: Dict[str, List[UseTest]] = {}
         zero_level_tests: List[MagicTest] = []
+        tests_with_mime: Set[MagicTest] = set()
+        indirect_tests: Set[IndirectTest] = set()
         matcher = MagicMatcher([])
         for file in def_files:
-            zl, lb = MagicMatcher._parse_file(file, matcher=matcher)
+            zl, lb, wm, it = MagicMatcher._parse_file(file, matcher=matcher)
             late_bindings[file] = list(lb)
             zero_level_tests.extend(zl)
+            tests_with_mime |= wm
+            indirect_tests |= it
         # resolve any "use" tests with late binding:
         for def_file, use_tests in late_bindings.items():
             for use_test in use_tests:
-                assert isinstance(use_test.referenced_test, str)
-                if use_test.referenced_test not in matcher.named_tests:
-                    raise ValueError(f"{def_file!s}: Named test {use_test.referenced_test!r} is not defined")
-                use_test.referenced_test = matcher.named_tests[use_test.referenced_test]
+                if use_test.referenced_test.name not in matcher.named_tests:
+                    raise ValueError(f"{def_file!s}: Named test {use_test.referenced_test.name!r} is not defined")
+                named_test = matcher.named_tests[use_test.referenced_test.name]
+                use_test.referenced_test = named_test
+                named_test.used_by.add(use_test)
+        for test in tests_with_mime:
+            assert test.can_match_mime
+            for ancestor in test.ancestors():
+                ancestor.can_match_mime = True
+        for test in indirect_tests:
+            assert test.can_be_indirect
+            assert test.can_match_mime
+            for ancestor in test.ancestors():
+                ancestor.can_be_indirect = True
         for test in zero_level_tests:
             matcher.add(test)
         return matcher
