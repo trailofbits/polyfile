@@ -961,11 +961,26 @@ class SearchType(StringType):
             rep = len(data)
         else:
             rep = self.repetitions
+        if not self.optional_blanks and not self.case_insensitive_upper and not self.case_insensitive_lower and \
+                isinstance(expected, StringMatch):
+            # we can use built-in search for more efficiency
+            # TODO: Add support for this optimization when the case insensitivity options are enabled
+            first_match = data.find(expected.string)
+            if 0 <= first_match <= rep:
+                m = expected.matches(data[first_match:])
+                assert m
+                m.initial_offset = first_match
+                return m
+            else:
+                return DataTypeMatch.INVALID
         for i in range(rep):
             match = super().match(data[i:], expected)
             if match:
                 match.initial_offset = i
                 return match
+            elif isinstance(expected, (StringWildcard, StringLengthTest)):
+                # TODO: Confirm that this short circuit is correct
+                break
         return DataTypeMatch.INVALID
 
     SEARCH_TYPE_FORMAT: re.Pattern = re.compile(
