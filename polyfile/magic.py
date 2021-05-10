@@ -339,11 +339,11 @@ class IndirectOffset(Offset):
 
     NUMBER_PATTERN: str = r"(0[xX][\dA-Fa-f]+|\d+)L?"
     INDIRECT_OFFSET_PATTERN: re.Pattern = re.compile(
-        "^\("
+        r"^\("
         rf"(?P<offset>&?-?{NUMBER_PATTERN})"
         r"((?P<signedness>[.,])(?P<type>[bBcCeEfFgGhHiILlmsSqQ]))?"
         rf"(?P<post_process>[\*&/]?[+-]?({NUMBER_PATTERN}|\(-?{NUMBER_PATTERN}\)))?"
-        "\)$"
+        r"\)$"
     )
 
     @classmethod
@@ -1120,9 +1120,12 @@ def posix_to_python_re(match: bytes) -> bytes:
             ("digit", "0-9"),
             ("xdigit", "0-9A-Fa-f"),
             ("alnum", "A-Za-z0-9"),
-            ("punct", ",./<>?`;':\"\\[\\]{}\|~!@#$%\\^&*()_+-="),
+            ("punct", ",./<>?`;':\"\\[\\]{}\\|~!@#$%\\^&*()_+-=\\\\"),
             ("blank", " \t"),
             ("space", " \t\n\r\f\v"),
+            ("cntrl", "\0-\x1f\x7f"),
+            ("graph", "^\0-\x1f\x7f "),
+            ("print", "^\0-\x1f\x7f"),
             ("word", "\\w")
     ):
         match = match.replace(f"[:{match_from}:]".encode("utf-8"), f"{replace_with}".encode("utf-8"))
@@ -1158,6 +1161,8 @@ class RegexType(DataType[re.Pattern]):
             if self.case_insensitive:
                 return re.compile(unescaped_spec, re.IGNORECASE)
             else:
+                if unescaped_spec.startswith(b"[["):
+                    breakpoint()
                 return re.compile(unescaped_spec)
         except re.error as e:
             raise ValueError(str(e))
