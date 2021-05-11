@@ -13,17 +13,17 @@ class StatusLogHandler(logging.StreamHandler):
         super().__init__(stream=stream)
         self._status: bytes = b''
 
-    def print(self, text: str):
+    def print(self, text):
         if self._status and self.stream.isatty():
             self.stream.write(f"\r{' ' * len(self._status)}\r".encode('utf-8'))
             self.stream.flush()
-            sys.stdout.write(text)
+            sys.stdout.write(str(text))
             sys.stdout.write("\n")
             sys.stdout.flush()
             self.stream.write(self._status)
             self.stream.flush()
         else:
-            sys.stdout.write(text)
+            sys.stdout.write(str(text))
             sys.stdout.write("\n")
 
     def emit(self, record):

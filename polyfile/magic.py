@@ -1739,7 +1739,7 @@ class Match:
     def mimetypes(self) -> Iterator[str]:
         yielded = set()
         for result in self:
-            if result.test.mime not in yielded:
+            if result.test.mime not in yielded and result.test.mime is not None:
                 yield result.test.mime
                 yielded.add(result.test.mime)
 
@@ -1880,7 +1880,7 @@ class MagicMatcher:
     def match(self, data: bytes, only_match_mime: bool = False) -> Iterator[Match]:
         for test in log.range(self._tests, desc="matching", unit=" tests", delay=1.0):
             m = Match(self, data, test.match(data, only_match_mime=only_match_mime), only_match_mime)
-            if m:
+            if m and (not only_match_mime or any(t is not None for t in m.mimetypes)):
                 yield m
 
     @staticmethod
