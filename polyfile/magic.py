@@ -577,7 +577,7 @@ class MagicTest(ABC):
         except InvalidOffsetError:
             return None
         m = self.test(data, absolute_offset, parent_match)
-        if logging.root.level >= TRACE and (m is not None or self.level > 0):
+        if logging.root.level <= TRACE and (m is not None or self.level > 0):
             log.trace(
                 f"{self.source_info!s}\t{m is not None}\t{absolute_offset}\t"
                 f"{data[absolute_offset:absolute_offset + 20]!r}"
@@ -1505,7 +1505,7 @@ class OffsetMatchTest(MagicTest):
         self.value: IntegerValue = value
 
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> Optional[TestResult]:
-        if self.value.test(absolute_offset):
+        if self.value.test(absolute_offset, unsigned=True, num_bytes=8):
             return TestResult(self, offset=0, length=absolute_offset, value=absolute_offset, parent=parent_match)
         else:
             return None
