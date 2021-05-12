@@ -12,17 +12,18 @@ VERSION_MODULE_PATH = os.path.join(os.path.realpath(os.path.dirname(__file__)), 
 
 
 # Build the entire Kaitai struct format library:
-POLYTRACKER_DIR: Path = Path(__file__).absolute().parent
-COMPILE_SCRIPT: Path = POLYTRACKER_DIR / "polyfile" / "kaitai" / "compiler.py"
-KAITAI_FORMAT_LIBRARY: Path = POLYTRACKER_DIR / "kaitai_struct_formats"
-KAITAI_PARSERS_DIR: Path = POLYTRACKER_DIR / "polyfile" / "kaitai" / "parsers"
+POLYFILE_DIR: Path = Path(__file__).absolute().parent
+COMPILE_SCRIPT: Path = POLYFILE_DIR / "polyfile" / "kaitai" / "compiler.py"
+KAITAI_FORMAT_LIBRARY: Path = POLYFILE_DIR / "kaitai_struct_formats"
+KAITAI_PARSERS_DIR: Path = POLYFILE_DIR / "polyfile" / "kaitai" / "parsers"
 MANIFEST_PATH: Path = KAITAI_PARSERS_DIR / "manifest.json"
+README_PATH: Path = POLYFILE_DIR / "README.md"
 
 
 # Make sure the ktaitai_struct_formats submodlue is cloned:
 if not (KAITAI_FORMAT_LIBRARY / "README.md").exists():
-    subprocess.check_call(["git", "submodule", "init"], cwd=str(POLYTRACKER_DIR))
-    subprocess.check_call(["git", "submodule", "update"], cwd=str(POLYTRACKER_DIR))
+    subprocess.check_call(["git", "submodule", "init"], cwd=str(POLYFILE_DIR))
+    subprocess.check_call(["git", "submodule", "update"], cwd=str(POLYFILE_DIR))
 
 
 def compile_ksy(path: Path) -> List[Tuple[str, str]]:
@@ -107,24 +108,21 @@ def get_version_string():
         exec(f.read(), version)
     return version['VERSION_STRING']
 
-
-if sys.version_info < (3, 7):
-    # dataclasses were only added in Python 3.7
-    additional_requirements = [
-        "dataclasses>=0.8"
-    ]
-else:
-    additional_requirements = []
+with open(README_PATH, "r") as readme:
+    README = readme.read()
 
 setup(
     name='polyfile',
     description='A utility to recursively map the structure of a file.',
+    long_description=README,
+    long_description_content_type="text/markdown",
     url='https://github.com/trailofbits/polyfile',
     author='Trail of Bits',
     version=get_version_string(),
     packages=find_packages(exclude=("tests",)),
     python_requires='>=3.6',
     install_requires=[
+        "dataclasses;python_version<'3.7'",  # dataclasses were only added in Python 3.7
         'graphviz',
         'intervaltree',
         'jinja2',
@@ -133,7 +131,7 @@ setup(
         'Pillow>=5.0.0',
         'pyyaml>=3.13',
         'setuptools'
-    ] + additional_requirements,
+    ],
     extras_require={
         'demangle': ['cxxfilt'],
         "dev": ["mypy", "pytest", "flake8"]
@@ -146,8 +144,9 @@ setup(
     },
     package_data={"polyfile": [
         os.path.join("templates", "*"),
-        str(KAITAI_PARSERS_DIR / "*.py"),
-        str(KAITAI_PARSERS_DIR / "manifest.json")
+        os.path.join("kaitai", "parsers", "*.py"),
+        os.path.join("kaitai", "parsers", "manifest.json"),
+        os.path.join("magic_defs", "*")
     ]},
     include_package_data=True,
     classifiers=[
