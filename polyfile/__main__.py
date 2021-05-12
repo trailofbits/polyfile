@@ -96,7 +96,7 @@ def main(argv=None):
             def __init__(self):
                 self.last_percent = -1
 
-            def __call__(self, pos, length):
+            def __call__(self, pos: int, length: int):
                 if length == 0:
                     percent = 0.0
                 else:
@@ -123,21 +123,11 @@ def main(argv=None):
     sigterm_handler = SIGTERMHandler()
 
     with PathOrStdin(args.FILE) as file_path:
-        from .magic import MagicMatcher, MAGIC_DEFS
-        matcher = MagicMatcher.parse(*MAGIC_DEFS)
-        mimetypes = set()
-        with open(file_path, "rb") as f:
-            for match in matcher.match(f.read(), only_match_mime=True):
-                new_mimetypes = match.mimetypes - mimetypes
-                for m in new_mimetypes:
-                    log.print(m)
-                mimetypes |= new_mimetypes
-        sys.exit(0)
         matches = []
         try:
             if args.max_matches is None or args.max_matches > 0:
                 matcher = polyfile.Matcher(args.try_all_offsets, submatch=not args.only_match)
-                for match in matcher.match(file_path, progress_callback=progress_callback, trid_defs=trid_defs):
+                for match in matcher.match(file_path, progress_callback=progress_callback):
                     if sigterm_handler.terminated:
                         break
                     if hasattr(match.match, 'filetype'):

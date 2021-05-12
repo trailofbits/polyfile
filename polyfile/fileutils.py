@@ -1,7 +1,9 @@
 import mmap
 import os
+from pathlib import Path
 import tempfile as tf
 import sys
+from typing import IO, Optional, Union
 
 
 def make_stream(path_or_stream, mode='rb', close_on_exit=None):
@@ -51,9 +53,18 @@ class PathOrStdin:
 
 
 class FileStream:
-    def __init__(self, path_or_stream, start=0, length=None, mode='rb', close_on_exit=None):
+    def __init__(
+            self,
+            path_or_stream: Union[str, Path, IO, "FileStream"],
+            start: int = 0,
+            length: Optional[int] = None,
+            mode: str = "rb",
+            close_on_exit: Optional[bool] = None
+    ):
+        if isinstance(path_or_stream, Path):
+            path_or_stream = str(path_or_stream)
         if isinstance(path_or_stream, str):
-            self._stream = open(path_or_stream, mode)
+            self._stream: IO = open(path_or_stream, mode)
             if close_on_exit is None:
                 close_on_exit = True
         else:

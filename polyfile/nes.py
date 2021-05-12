@@ -143,7 +143,7 @@ def render_chr(chr_bytes: bytes) -> Image:
     return img
 
 
-@submatcher('rom-nes.trid.xml')
+@submatcher("application/x-nes-rom")
 class INESMatcher(Match):
     def submatch(self, file_stream):
         yield from parse_ines(file_stream, parent=self)

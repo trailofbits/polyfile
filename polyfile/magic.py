@@ -1815,6 +1815,8 @@ class Match:
 
 
 class MagicMatcher:
+    _DEFAULT_INSTANCE: Optional["MagicMatcher"] = None
+
     def __init__(self, tests: Iterable[MagicTest] = ()):
         self._tests: List[MagicTest] = []
         self.named_tests: Dict[str, NamedTest] = {}
@@ -1823,6 +1825,13 @@ class MagicMatcher:
         self.tests_that_can_be_indirect: Set[MagicTest] = set()
         for test in tests:
             self.add(test)
+
+    @classmethod
+    @property
+    def DEFAULT_INSTANCE(cls) -> "MagicMatcher":
+        if cls._DEFAULT_INSTANCE is None:
+            cls._DEFAULT_INSTANCE = MagicMatcher.parse(*MAGIC_DEFS)
+        return cls._DEFAULT_INSTANCE
 
     def add(self, test: MagicTest):
         if isinstance(test, NamedTest):
