@@ -14,6 +14,7 @@ from . import polyfile
 from . import trid
 from . import version
 from .fileutils import PathOrStdin
+from .magic import MagicMatcher
 
 
 log = logger.getStatusLogger("polyfile")
@@ -57,20 +58,8 @@ def main(argv=None):
         exit(0)
 
     if args.list:
-        trid.load()
-        longest_name = max(map(len, (d.name for d in trid.DEFS)))
-        for name, filetype in sorted((d.name, d.filetype) for d in trid.DEFS):
-            if name.endswith('.trid.xml'):
-                name = name[:-len('.trid.xml')]
-            if sys.stdout.isatty():
-                sys.stdout.write(f"{name}")
-                sys.stdout.flush()
-                sys.stderr.write(f' {"." * (longest_name - len(name) - 2)} \x1B[3m{filetype}\x1B[23m')
-                sys.stderr.flush()
-                sys.stdout.write('\n')
-                sys.stdout.flush()
-            else:
-                sys.stdout.write(f"{name}\t{filetype}\n")
+        for mimetype in sorted(MagicMatcher.DEFAULT_INSTANCE.mimetypes):
+            print(mimetype)
         exit(0)
 
     if args.version:

@@ -11,16 +11,19 @@ from .kaitai.parsers.png import Png
 from .kaitai.parsers.sqlite3 import Sqlite3
 from .polyfile import submatcher, InvalidMatch, Match, Submatch
 
-KAITAI_TRID_MAPPING: Dict[str, Type[KaitaiStruct]] = {
-    "bitmap-gif.trid.xml": Gif,
-    "bitmap-gif-anim.trid.xml": Gif,
-    "bitmap-jpeg.trid.xml": Jpeg,
-    "bitmap-png.trid.xml": Png,
-    "pcap-ext-be.trid.xml": Pcap,
-    "pcap-ext-le.trid.xml": Pcap,
-    "acp-le.trid.xml": Pcap,
-    "sqlite-3x.trid.xml": Sqlite3
+
+KAITAI_MIME_MAPPING: Dict[str, str] = {
+    "image/gif": "image/gif.ksy",
+    "image/png": "image/png.ksy",
+    "image/jpeg": "image/jpeg.ksy",
+    "image/vnd.microsoft.icon": "image/ico.ksy",
+#    "image/wmf": "image/wmf.ksy",  # there is currently a problem with this parser in Python
+    "application/vnd.tcpdump.pcap": "network/pcap.ksy",
+    "application/x-sqlite3": "database/sqlite3.ksy",
+    "application/x-rar": "archive/rar.ksy",
+    "font/sfnt": "font/ttf.ksy"
 }
+
 IMAGE_MIMETYPES: Dict[Type[KaitaiStruct], str] = {
     Gif: "image/gif",
     Jpeg: "image/jpeg",
@@ -50,12 +53,16 @@ def ast_to_matches(ast: RootNode, parent: Match) -> Iterator[Submatch]:
         stack.extend(reversed([(new_node, c) for c in node.children]))
 
 
-for trid_def, kaitai_def in KAITAI_TRID_MAPPING.items():
-    @submatcher(trid_def)
+for mimetype, kaitai_path in KAITAI_MIME_MAPPING.items():
+    kaitai_parser = KaitaiParser.load(kaitai_path)
+
+    @submatcher(mimetype)
     class KaitaiMatcher(Match):
         def submatch(self, file_stream):
             try:
-                ast = KaitaiParser(kaitai_def).parse(file_stream).ast
+                ast = kaitai_parser.parse(file_stream).ast
             except (Exception, KaitaiStructError):
                 raise InvalidMatch()
             yield from ast_to_matches(ast, parent=self)
+
+    del kaitai_parser
