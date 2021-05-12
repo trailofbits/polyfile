@@ -232,7 +232,7 @@ class FileStream:
                 length = len(self) - (index.stop - index.start)
         return FileStream(self, start=index.start, length=length, close_on_exit=False)
 
-    def __enter__(self):
+    def __enter__(self) -> "FileStream":
         self._entries += 1
         return self
 

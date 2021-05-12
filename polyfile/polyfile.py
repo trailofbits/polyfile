@@ -147,8 +147,45 @@ class Matcher:
         self.try_all_offsets: bool = try_all_offsets
         self.submatch: bool = submatch
 
+    def handle_mimetype(self, mimetype: str, match_obj: Any, data: bytes, file_stream: Union[str, Path, IO, FileStream],
+                        parent: Optional[Match] = None) -> Iterator[Match]:
+        if self.submatch and mimetype in CUSTOM_MATCHERS:
+            m = CUSTOM_MATCHERS[mimetype](
+                mimetype,
+                match_obj,
+                0,
+                length=len(data),
+                parent=parent,
+                matcher=self
+            )
+            # Don't yield this custom match until we've tried its submatch function
+            # (which may throw an InvalidMatch, meaning that this match is invalid)
+            try:
+                with FileStream(file_stream) as fs:
+                    submatch_iter = m.submatch(fs)
+                    try:
+                        first_submatch = next(submatch_iter)
+                        has_first = True
+                    except StopIteration:
+                        has_first = False
+                    yield m
+                    if has_first:
+                        yield first_submatch
+                        yield from submatch_iter
+            except InvalidMatch:
+                pass
+        else:
+            yield Match(
+                mimetype,
+                match_obj,
+                0,
+                length=len(data),
+                parent=parent,
+                matcher=self
+            )
+
     def match(self, file_stream: Union[str, Path, IO, FileStream], parent: Optional[Match] = None,
-              progress_callback: Optional[Callable[[int, int], Any]] = None):
+              progress_callback: Optional[Callable[[int, int], Any]] = None) -> Iterator[Match]:
         with FileStream(file_stream) as f:
             matched_mimetypes: Set[str] = set()
             data = f.read()
@@ -157,37 +194,4 @@ class Matcher:
                     if mimetype in matched_mimetypes:
                         continue
                     matched_mimetypes.add(mimetype)
-                    if self.submatch and mimetype in CUSTOM_MATCHERS:
-                        m = CUSTOM_MATCHERS[mimetype](
-                            mimetype,
-                            magic_match,
-                            0,
-                            length=len(data),
-                            parent=parent,
-                            matcher=self
-                        )
-                        # Don't yield this custom match until we've tried its submatch function
-                        # (which may throw an InvalidMatch, meaning that this match is invalid)
-                        try:
-                            with FileStream(file_stream) as fs:
-                                submatch_iter = m.submatch(fs)
-                                try:
-                                    first_submatch = next(submatch_iter)
-                                    has_first = True
-                                except StopIteration:
-                                    has_first = False
-                                yield m
-                                if has_first:
-                                    yield first_submatch
-                                    yield from submatch_iter
-                        except InvalidMatch:
-                            pass
-                    else:
-                        yield Match(
-                            mimetype,
-                            magic_match,
-                            0,
-                            length=len(data),
-                            parent=parent,
-                            matcher=self
-                        )
+                    yield from self.handle_mimetype(mimetype, magic_match, data, file_stream, parent)
