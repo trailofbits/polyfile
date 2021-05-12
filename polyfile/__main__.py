@@ -34,20 +34,30 @@ class SIGTERMHandler:
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description='A utility to recursively map the structure of a file.')
-    parser.add_argument('FILE', nargs='?', default='-', help='The file to analyze; pass \'-\' or omit to read from STDIN')
-    parser.add_argument('--filetype', '-f', action='append', help='Explicitly match against the given filetype or filetype wildcard (default is to match against all filetypes)')
-    parser.add_argument('--list', '-l', action='store_true', help='list the supported filetypes (for the `--filetype` argument) and exit')
+    parser.add_argument('FILE', nargs='?', default='-',
+                        help='the file to analyze; pass \'-\' or omit to read from STDIN')
+    parser.add_argument('--filetype', '-f', action='append',
+                        help='explicitly match against the given filetype or filetype wildcard (default is to match'
+                             'against all filetypes)')
+    parser.add_argument('--list', '-l', action='store_true',
+                        help='list the supported filetypes (for the `--filetype` argument) and exit')
     parser.add_argument('--html', '-t', type=argparse.FileType('wb'), required=False,
-                        help='Path to write an interactive HTML file for exploring the PDF')
-    parser.add_argument('--try-all-offsets', '-a', action='store_true', help='Search for a file match at every possible offset; this can be very slow for larger files')
-    parser.add_argument('--only-match', '-m', action='store_true', help='Do not attempt to parse known filetypes; only match against file magic')
-    parser.add_argument('--require-match', action='store_true', help='If no matches are found, exit with code 127')
-    parser.add_argument('--max-matches', type=int, default=None, help='Stop scanning after having found this many matches')
-    parser.add_argument('--debug', '-d', action='store_true', help='Print debug information')
-    parser.add_argument('--trace', '-dd', action='store_true', help='Print extra verbose debug information')
-    parser.add_argument('--quiet', '-q', action='store_true', help='Suppress all log output (overrides --debug)')
-    parser.add_argument('--version', '-v', action='store_true', help='Print PolyFile\'s version information to STDERR')
-    parser.add_argument('-dumpversion', action='store_true', help='Print PolyFile\'s raw version information to STDOUT and exit')
+                        help='path to write an interactive HTML file for exploring the PDF')
+    # parser.add_argument('--try-all-offsets', '-a', action='store_true',
+    #                     help='Search for a file match at every possible offset; this can be very slow for larger '
+    #                     'files')
+    parser.add_argument('--only-match-mime', '-I', action='store_true',
+                        help='just print out the matching MIME types for the file, one on each line')
+    parser.add_argument('--only-match', '-m', action='store_true',
+                        help='do not attempt to parse known filetypes; only match against file magic')
+    parser.add_argument('--require-match', action='store_true', help='if no matches are found, exit with code 127')
+    parser.add_argument('--max-matches', type=int, default=None,
+                        help='stop scanning after having found this many matches')
+    parser.add_argument('--debug', '-d', action='store_true', help='print debug information')
+    parser.add_argument('--trace', '-dd', action='store_true', help='print extra verbose debug information')
+    parser.add_argument('--quiet', '-q', action='store_true', help='suppress all log output (overrides --debug)')
+    parser.add_argument('--version', '-v', action='store_true', help='print PolyFile\'s version information to STDERR')
+    parser.add_argument('-dumpversion', action='store_true', help='print PolyFile\'s raw version information to STDOUT and exit')
 
     if argv is None:
         argv = sys.argv
@@ -96,7 +106,29 @@ def main(argv=None):
     with PathOrStdin(args.FILE) as file_path:
         matches = []
         try:
-            if args.max_matches is None or args.max_matches > 0:
+            if args.only_match_mime:
+                with open(file_path, "rb") as f:
+                    omm = sys.stderr.isatty() and sys.stdout.isatty() and logging.root.level <= logging.INFO
+                    mimetypes = set()
+                    if magic_matcher is None:
+                        magic_matcher = MagicMatcher.DEFAULT_INSTANCE
+                    for match in magic_matcher.match(f.read(), only_match_mime=omm):
+                        new_mimetypes = match.mimetypes - mimetypes
+                        mimetypes |= new_mimetypes
+                        matches.extend(new_mimetypes)
+                        for mimetype in new_mimetypes:
+                            if omm:
+                                log.clear_status()
+                                sys.stdout.write(mimetype)
+                                sys.stdout.flush()
+                                sys.stderr.write("\t")
+                                sys.stderr.write(str(match))
+                                sys.stderr.flush()
+                                sys.stdout.write("\n")
+                                sys.stdout.flush()
+                            else:
+                                print(mimetype)
+            elif args.max_matches is None or args.max_matches > 0:
                 matcher = polyfile.Matcher(args.try_all_offsets, submatch=not args.only_match, matcher=magic_matcher)
                 for match in matcher.match(file_path):
                     if sigterm_handler.terminated:
@@ -133,6 +165,8 @@ def main(argv=None):
         if args.require_match and not matches:
             log.info("No matches found, exiting")
             exit(127)
+        elif args.only_match_mime:
+            exit(0)
         md5 = hashlib.md5()
         sha1 = hashlib.sha1()
         sha256 = hashlib.sha256()
