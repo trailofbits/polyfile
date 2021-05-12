@@ -7,6 +7,7 @@ import os
 import re
 import signal
 import sys
+from typing import Optional
 
 from . import html
 from . import logger
@@ -78,36 +79,17 @@ def main(argv=None):
     else:
         logger.setLevel(logger.STATUS)
 
-    if args.quiet:
-        progress_callback = None
-    else:
-        class ProgressCallback:
-            def __init__(self):
-                self.last_percent = -1
-
-            def __call__(self, pos: int, length: int):
-                if length == 0:
-                    percent = 0.0
-                else:
-                    percent = int(pos / length * 10000.0) / 100.0
-
-                if percent > self.last_percent:
-                    log.status(f"{percent:.2f}% {pos}/{length}")
-                    self.last_percent = percent
-
-        progress_callback = ProgressCallback()
-
     if args.filetype:
-        trid.load()
         regex = r'|'.join(fr"({ f.replace('*', '.*').replace('?', '.?') })" for f in args.filetype)
         matcher = re.compile(regex)
-        trid_defs = [d for d in trid.DEFS if matcher.fullmatch(d.name[:-len('.trid.xml')])]
-        if not trid_defs:
+        mimetypes = [mimetype for mimetype in MagicMatcher.DEFAULT_INSTANCE.mimetypes if matcher.fullmatch(mimetype)]
+        if not mimetypes:
             log.error(f"Filetype argument(s) { args.filetype } did not match any known definitions!")
             exit(1)
-        log.info(f"Only matching against these types: {[d.name[:-len('.trid.xml')] for d in trid_defs ]}")
+        log.info(f"Only matching against these types: {', '.join(mimetypes)}")
+        magic_matcher: Optional[MagicMatcher] = MagicMatcher.DEFAULT_INSTANCE.only_match(mimetypes=mimetypes)
     else:
-        trid_defs = None
+        magic_matcher = None
 
     sigterm_handler = SIGTERMHandler()
 
@@ -115,8 +97,8 @@ def main(argv=None):
         matches = []
         try:
             if args.max_matches is None or args.max_matches > 0:
-                matcher = polyfile.Matcher(args.try_all_offsets, submatch=not args.only_match)
-                for match in matcher.match(file_path, progress_callback=progress_callback):
+                matcher = polyfile.Matcher(args.try_all_offsets, submatch=not args.only_match, matcher=magic_matcher)
+                for match in matcher.match(file_path):
                     if sigterm_handler.terminated:
                         break
                     if hasattr(match.match, 'filetype'):
@@ -185,8 +167,6 @@ def main(argv=None):
             args.html.write(html.generate(file_path, sbud).encode('utf-8'))
             args.html.close()
             log.info(f"Saved HTML output to {args.html.name}")
-        if progress_callback is not None:
-            log.clear_status()
         if sigterm_handler.terminated:
             sys.exit(128 + signal.SIGTERM)
 

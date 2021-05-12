@@ -1,7 +1,7 @@
 import base64
 from json import dumps
 from pathlib import Path
-from typing import Any, Callable, Dict, IO, Iterator, List, Optional, Set, Tuple, Type, Union
+from typing import Any, Dict, IO, Iterator, List, Optional, Set, Tuple, Type, Union
 
 from .fileutils import FileStream
 from . import logger
@@ -184,8 +184,7 @@ class Matcher:
                 matcher=self
             )
 
-    def match(self, file_stream: Union[str, Path, IO, FileStream], parent: Optional[Match] = None,
-              progress_callback: Optional[Callable[[int, int], Any]] = None) -> Iterator[Match]:
+    def match(self, file_stream: Union[str, Path, IO, FileStream], parent: Optional[Match] = None) -> Iterator[Match]:
         with FileStream(file_stream) as f:
             matched_mimetypes: Set[str] = set()
             data = f.read()
