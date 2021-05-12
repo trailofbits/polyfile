@@ -112,7 +112,7 @@ def main(argv=None):
                     mimetypes = set()
                     if magic_matcher is None:
                         magic_matcher = MagicMatcher.DEFAULT_INSTANCE
-                    for match in magic_matcher.match(f.read(), only_match_mime=omm):
+                    for match in magic_matcher.match(f.read(), only_match_mime=True):
                         new_mimetypes = match.mimetypes - mimetypes
                         mimetypes |= new_mimetypes
                         matches.extend(new_mimetypes)
