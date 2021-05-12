@@ -20,10 +20,11 @@ import re
 import struct
 from time import gmtime, localtime, strftime
 from typing import (
-    Any, Callable, Dict, FrozenSet, Generic, Iterable, Iterator, List, Optional, Set, Tuple, TypeVar, Union
+    Any, Callable, Dict, Generic, Iterable, Iterator, List, Optional, Set, Tuple, TypeVar, Union
 )
 from uuid import UUID
 
+from .iterators import LazyIterableSet
 from .logger import getStatusLogger, TRACE
 
 log = getStatusLogger("libmagic")
@@ -538,7 +539,7 @@ class MagicTest(ABC):
         self._mime = new_mime
         self.can_match_mime = True
 
-    def mimetypes(self) -> Iterator[str]:
+    def _mimetypes(self) -> Iterator[str]:
         """Yields all possible MIME types that this test or any of its descendants could match against"""
         if not self.can_match_mime:
             return
@@ -551,7 +552,11 @@ class MagicTest(ABC):
                 yield d.mime
                 yielded.add(d.mime)
 
-    def all_extensions(self) -> Iterator[str]:
+    def mimetypes(self) -> LazyIterableSet[str]:
+        """Returns the set of all possible MIME types that this test or any of its descendants could match against"""
+        return LazyIterableSet(self._mimetypes())
+
+    def _all_extensions(self) -> Iterator[str]:
         """Yields all possible extensions that this test or any of its descendants could match against"""
         yield from self.extensions
         yielded = set(self.extensions)
@@ -559,6 +564,10 @@ class MagicTest(ABC):
             new_extensions = d.extensions - yielded
             yield from new_extensions
             yielded |= new_extensions
+
+    def all_extensions(self) -> LazyIterableSet[str]:
+        """Returns the set of all possible extensions that this test or any of its descendants could match against"""
+        return LazyIterableSet(self._all_extensions())
 
     @abstractmethod
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> Optional[TestResult]:
@@ -1736,20 +1745,15 @@ class Match:
         self._results: List[TestResult] = []
 
     @property
-    def mimetypes(self) -> Iterator[str]:
-        yielded = set()
-        for result in self:
-            if result.test.mime not in yielded and result.test.mime is not None:
-                yield result.test.mime
-                yielded.add(result.test.mime)
+    def mimetypes(self) -> LazyIterableSet[str]:
+        return LazyIterableSet((result.test.mime for result in self if result.test.mime is not None))
 
     @property
-    def extensions(self) -> Iterator[str]:
-        yielded = set()
-        for result in self:
-            new_exts = result.test.extensions - yielded
-            yield from new_exts
-            yielded |= new_exts
+    def extensions(self) -> LazyIterableSet[str]:
+        def _extensions():
+            for result in self:
+                yield from result.test.extensions
+        return LazyIterableSet(_extensions())
 
     def __bool__(self):
         return any(m for m in self.mimetypes) or any(e for e in self.extensions) or bool(self.message())
