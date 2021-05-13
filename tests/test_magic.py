@@ -60,14 +60,16 @@ class MagicTest(TestCase):
                 print(f"\tExpected: {expected!r}")
 
             with open(testfile, "rb") as f:
+                matches = set()
                 for match in matcher.match(f.read()):
                     actual = str(match)
+                    matches.add(actual)
                     print(f"\tActual:   {actual!r}")
-                    if testfile.stem not in ("JW07022A.mp3", "cl8m8ocofedso", "gedcom", "regex-eol", "uf2"):
-                        # The files we skip fail because:
-                        #   1. a mismatch between the database we have and the one used to generate the results in
-                        #      the test corpus;
-                        #   2. there is a bug in our implementation that we have not yet fixed; and/or
-                        #   3. our output is technically correct but we output it slightly differently (e.g., we output
-                        #      "0x000000" instead of "00000000"
-                        self.assertEqual(expected, actual)
+                if testfile.stem not in ("JW07022A.mp3", "cl8m8ocofedso", "gedcom", "regex-eol", "uf2"):
+                    # The files we skip fail because:
+                    #   1. a mismatch between the database we have and the one used to generate the results in
+                    #      the test corpus;
+                    #   2. there is a bug in our implementation that we have not yet fixed; and/or
+                    #   3. our output is technically correct but we output it slightly differently (e.g., we output
+                    #      "0x000000" instead of "00000000"
+                    self.assertIn(expected, matches)
