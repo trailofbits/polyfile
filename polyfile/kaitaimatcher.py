@@ -46,7 +46,7 @@ def ast_to_matches(ast: RootNode, parent: Match) -> Iterator[Submatch]:
 
         if node is ast and node.obj.__class__ in IMAGE_MIMETYPES:  # type: ignore
             # this is an image type, so create a preview
-            new_node.img_data = f"data:{IMAGE_MIMETYPES[kaitai_def]};base64," \
+            new_node.img_data = f"data:{IMAGE_MIMETYPES[node.obj.__class__]};base64," \
                                 f"{base64.b64encode(ast.raw_value).decode('utf-8')}"
 
         yield new_node
@@ -54,15 +54,13 @@ def ast_to_matches(ast: RootNode, parent: Match) -> Iterator[Submatch]:
 
 
 for mimetype, kaitai_path in KAITAI_MIME_MAPPING.items():
-    kaitai_parser = KaitaiParser.load(kaitai_path)
-
     @submatcher(mimetype)
     class KaitaiMatcher(Match):
+        kaitai_parser = KaitaiParser.load(kaitai_path)
+
         def submatch(self, file_stream):
             try:
-                ast = kaitai_parser.parse(file_stream).ast
+                ast = self.kaitai_parser.parse(file_stream).ast
             except (Exception, KaitaiStructError):
                 raise InvalidMatch()
             yield from ast_to_matches(ast, parent=self)
-
-    del kaitai_parser

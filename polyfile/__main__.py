@@ -134,7 +134,7 @@ def main(argv=None):
                     if omm:
                         log.clear_status()
             elif args.max_matches is None or args.max_matches > 0:
-                matcher = polyfile.Matcher(args.try_all_offsets, submatch=not args.only_match, matcher=magic_matcher)
+                matcher = polyfile.Matcher(submatch=not args.only_match, matcher=magic_matcher)
                 for match in matcher.match(file_path):
                     if sigterm_handler.terminated:
                         break
