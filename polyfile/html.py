@@ -58,7 +58,7 @@ def generate(file_path, sbud):
                         return '\u2424</span><br /><span>'
                 elif b == b'\t':
                     if monospace:
-                        return b'\u2b7e'
+                        return b'\xE2\xAD\xBE'
                     else:
                         return '\t'
                 elif b == b'\r':
@@ -100,7 +100,7 @@ def generate(file_path, sbud):
             if 'decoded' in m:
                 decoded = ''
                 for b in base64.b64decode(m['decoded']).replace(b'\r\n', b'<br />') \
-                        .replace(b'\n', b'<br />').replace(b'\r', b'\u23ce'):
+                        .replace(b'\n', b'<br />').replace(b'\r', b'\xE2\x8F\x8E'):
                     try:
                         decoded += bytes([b]).decode('utf-8')
                     except UnicodeDecodeError:
