@@ -76,9 +76,11 @@ You can optionally have PolyFile output an interactive HTML page containing a la
 polyfile INPUT_FILE --html output.html > output.json
 ```
 
-## File Support
+### File Support
 
-PolyFile can identify all 10,000+ file formats in the [TrID database](http://mark0.net/soft-trid-deflist.html).
+PolyFile has a cleanroom, [pure Python implementation of the libmagic file classifier](#libmagic-implementation), and
+supports all 263 MIME types that it can identify.
+
 It currently has support for parsing and semantically mapping the following formats:
 * PDF, using an instrumented version of [Didier Stevens' public domain, permissive, forensic parser](https://blog.didierstevens.com/programs/pdf-tools/)
 * ZIP, including reursive identification of all ZIP contents
@@ -91,9 +93,37 @@ For an example that exercises all of these file formats, run:
 curl -v --silent https://www.sultanik.com/files/ESultanikResume.pdf | polyfile --html ESultanikResume.html - > ESultanikResume.json
 ```
 
-## Output Format
+Prior to PolyFile version 0.3.0, it used the [TrID database](http://mark0.net/soft-trid-deflist.html) for file
+identificaiton rather than the libmagic file definitions. This proved to be very slow (since TrID has many duplicate
+entries) and prone to false positives (since TrID's file definitions are much simpler than libmagic's). The original
+TrID matching code is still shipped with PolyFile and can be invoked programmatically, but it is not used by default.
+
+### Output Format
 
 PolyFile outputs its mapping in an extension of the [SBuD](https://github.com/corkami/sbud) JSON format described [in the documentation](docs/json_format.md).
+
+### libMagic Implementation
+
+PolyFile has a cleanroom implementation of [libmagic (used in the `file` command)](https://github.com/file/file).
+It can be invoked programmatically by running:
+```python
+from polyfile.magic import MagicMatcher
+
+with open("file_to_test", "rb") as f:
+    # the default instance automatically loads all file definitions
+    for match in MagicMatcher.DEFAULT_INSTANCE.match(f.read()):
+        for mimetype in match.mimetypes:
+            print(f"Matched MIME: {mimetype}")
+        print(f"Match string: {match!s}")
+```
+To load a specific or custom file definition:
+```python
+list_of_paths_to_definitions = ["def1", "def2"]
+matcher = MagicMatcher.parse(*list_of_paths_to_definitions)
+with open("file_to_test", "rb") as f:
+    for match in matcher.match(f.read()):
+        ...
+```
 
 ## Merging Output From PolyTracker
 

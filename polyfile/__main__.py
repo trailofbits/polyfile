@@ -7,6 +7,7 @@ import os
 import re
 import signal
 import sys
+from typing import Optional
 
 from . import html
 from . import logger
@@ -14,6 +15,7 @@ from . import polyfile
 from . import trid
 from . import version
 from .fileutils import PathOrStdin
+from .magic import MagicMatcher
 
 
 log = logger.getStatusLogger("polyfile")
@@ -32,19 +34,30 @@ class SIGTERMHandler:
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description='A utility to recursively map the structure of a file.')
-    parser.add_argument('FILE', nargs='?', default='-', help='The file to analyze; pass \'-\' or omit to read from STDIN')
-    parser.add_argument('--filetype', '-f', action='append', help='Explicitly match against the given filetype or filetype wildcard (default is to match against all filetypes)')
-    parser.add_argument('--list', '-l', action='store_true', help='list the supported filetypes (for the `--filetype` argument) and exit')
+    parser.add_argument('FILE', nargs='?', default='-',
+                        help='the file to analyze; pass \'-\' or omit to read from STDIN')
+    parser.add_argument('--filetype', '-f', action='append',
+                        help='explicitly match against the given filetype or filetype wildcard (default is to match'
+                             'against all filetypes)')
+    parser.add_argument('--list', '-l', action='store_true',
+                        help='list the supported filetypes (for the `--filetype` argument) and exit')
     parser.add_argument('--html', '-t', type=argparse.FileType('wb'), required=False,
-                        help='Path to write an interactive HTML file for exploring the PDF')
-    parser.add_argument('--try-all-offsets', '-a', action='store_true', help='Search for a file match at every possible offset; this can be very slow for larger files')
-    parser.add_argument('--only-match', '-m', action='store_true', help='Do not attempt to parse known filetypes; only match against file magic')
-    parser.add_argument('--require-match', action='store_true', help='If no matches are found, exit with code 127')
-    parser.add_argument('--max-matches', type=int, default=None, help='Stop scanning after having found this many matches')
-    parser.add_argument('--debug', '-d', action='store_true', help='Print debug information')
-    parser.add_argument('--quiet', '-q', action='store_true', help='Suppress all log output (overrides --debug)')
-    parser.add_argument('--version', '-v', action='store_true', help='Print PolyFile\'s version information to STDERR')
-    parser.add_argument('-dumpversion', action='store_true', help='Print PolyFile\'s raw version information to STDOUT and exit')
+                        help='path to write an interactive HTML file for exploring the PDF')
+    # parser.add_argument('--try-all-offsets', '-a', action='store_true',
+    #                     help='Search for a file match at every possible offset; this can be very slow for larger '
+    #                     'files')
+    parser.add_argument('--only-match-mime', '-I', action='store_true',
+                        help='just print out the matching MIME types for the file, one on each line')
+    parser.add_argument('--only-match', '-m', action='store_true',
+                        help='do not attempt to parse known filetypes; only match against file magic')
+    parser.add_argument('--require-match', action='store_true', help='if no matches are found, exit with code 127')
+    parser.add_argument('--max-matches', type=int, default=None,
+                        help='stop scanning after having found this many matches')
+    parser.add_argument('--debug', '-d', action='store_true', help='print debug information')
+    parser.add_argument('--trace', '-dd', action='store_true', help='print extra verbose debug information')
+    parser.add_argument('--quiet', '-q', action='store_true', help='suppress all log output (overrides --debug)')
+    parser.add_argument('--version', '-v', action='store_true', help='print PolyFile\'s version information to STDERR')
+    parser.add_argument('-dumpversion', action='store_true', help='print PolyFile\'s raw version information to STDOUT and exit')
 
     if argv is None:
         argv = sys.argv
@@ -56,20 +69,8 @@ def main(argv=None):
         exit(0)
 
     if args.list:
-        trid.load()
-        longest_name = max(map(len, (d.name for d in trid.DEFS)))
-        for name, filetype in sorted((d.name, d.filetype) for d in trid.DEFS):
-            if name.endswith('.trid.xml'):
-                name = name[:-len('.trid.xml')]
-            if sys.stdout.isatty():
-                sys.stdout.write(f"{name}")
-                sys.stdout.flush()
-                sys.stderr.write(f' {"." * (longest_name - len(name) - 2)} \x1B[3m{filetype}\x1B[23m')
-                sys.stderr.flush()
-                sys.stdout.write('\n')
-                sys.stdout.flush()
-            else:
-                sys.stdout.write(f"{name}\t{filetype}\n")
+        for mimetype in sorted(MagicMatcher.DEFAULT_INSTANCE.mimetypes):
+            print(mimetype)
         exit(0)
 
     if args.version:
@@ -79,52 +80,62 @@ def main(argv=None):
             # so instead of blocking on STDIN just exit
             exit(0)
 
-    if args.debug:
-        logger.setLevel(logging.DEBUG)
-    elif args.quiet:
+    if args.quiet:
         logger.setLevel(logging.CRITICAL)
+    elif args.trace:
+        logger.setLevel(logger.TRACE)
+    elif args.debug:
+        logger.setLevel(logging.DEBUG)
     else:
         logger.setLevel(logger.STATUS)
 
-    if args.quiet:
-        progress_callback = None
-    else:
-        class ProgressCallback:
-            def __init__(self):
-                self.last_percent = -1
-
-            def __call__(self, pos, length):
-                if length == 0:
-                    percent = 0.0
-                else:
-                    percent = int(pos / length * 10000.0) / 100.0
-
-                if percent > self.last_percent:
-                    log.status(f"{percent:.2f}% {pos}/{length}")
-                    self.last_percent = percent
-
-        progress_callback = ProgressCallback()
-
     if args.filetype:
-        trid.load()
         regex = r'|'.join(fr"({ f.replace('*', '.*').replace('?', '.?') })" for f in args.filetype)
         matcher = re.compile(regex)
-        trid_defs = [d for d in trid.DEFS if matcher.fullmatch(d.name[:-len('.trid.xml')])]
-        if not trid_defs:
+        mimetypes = [mimetype for mimetype in MagicMatcher.DEFAULT_INSTANCE.mimetypes if matcher.fullmatch(mimetype)]
+        if not mimetypes:
             log.error(f"Filetype argument(s) { args.filetype } did not match any known definitions!")
             exit(1)
-        log.info(f"Only matching against these types: {[d.name[:-len('.trid.xml')] for d in trid_defs ]}")
+        log.info(f"Only matching against these types: {', '.join(mimetypes)}")
+        magic_matcher: Optional[MagicMatcher] = MagicMatcher.DEFAULT_INSTANCE.only_match(mimetypes=mimetypes)
     else:
-        trid_defs = None
+        magic_matcher = None
 
     sigterm_handler = SIGTERMHandler()
 
     with PathOrStdin(args.FILE) as file_path:
         matches = []
         try:
-            if args.max_matches is None or args.max_matches > 0:
-                matcher = polyfile.Matcher(args.try_all_offsets, submatch=not args.only_match)
-                for match in matcher.match(file_path, progress_callback=progress_callback, trid_defs=trid_defs):
+            if args.only_match_mime:
+                with open(file_path, "rb") as f:
+                    if magic_matcher is None:
+                        magic_matcher = MagicMatcher.DEFAULT_INSTANCE
+                    omm = sys.stderr.isatty() and sys.stdout.isatty() and logging.root.level <= logging.INFO
+                    if omm:
+                        # figure out the longest MIME type so we can make sure the columns are aligned
+                        longest_mimetype = max(len(mimetype) for mimetype in magic_matcher.mimetypes)
+                    mimetypes = set()
+                    for match in magic_matcher.match(f.read(), only_match_mime=True):
+                        new_mimetypes = match.mimetypes - mimetypes
+                        mimetypes |= new_mimetypes
+                        matches.extend(new_mimetypes)
+                        for mimetype in new_mimetypes:
+                            if omm:
+                                log.clear_status()
+                                sys.stdout.write(mimetype)
+                                sys.stdout.flush()
+                                sys.stderr.write("." * (longest_mimetype - len(mimetype) + 1))
+                                sys.stderr.write(str(match))
+                                sys.stderr.flush()
+                                sys.stdout.write("\n")
+                                sys.stdout.flush()
+                            else:
+                                print(mimetype)
+                    if omm:
+                        log.clear_status()
+            elif args.max_matches is None or args.max_matches > 0:
+                matcher = polyfile.Matcher(submatch=not args.only_match, matcher=magic_matcher)
+                for match in matcher.match(file_path):
                     if sigterm_handler.terminated:
                         break
                     if hasattr(match.match, 'filetype'):
@@ -159,6 +170,8 @@ def main(argv=None):
         if args.require_match and not matches:
             log.info("No matches found, exiting")
             exit(127)
+        elif args.only_match_mime:
+            exit(0)
         md5 = hashlib.md5()
         sha1 = hashlib.sha1()
         sha256 = hashlib.sha256()
@@ -193,8 +206,6 @@ def main(argv=None):
             args.html.write(html.generate(file_path, sbud).encode('utf-8'))
             args.html.close()
             log.info(f"Saved HTML output to {args.html.name}")
-        if progress_callback is not None:
-            log.clear_status()
         if sigterm_handler.terminated:
             sys.exit(128 + signal.SIGTERM)
 

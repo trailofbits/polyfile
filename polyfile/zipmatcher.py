@@ -9,7 +9,7 @@ from .kaitaimatcher import ast_to_matches
 from .polyfile import InvalidMatch, Match, submatcher
 
 
-@submatcher('zip-vgm.trid.xml')
+@submatcher("application/zip")
 class ZipFile(Match):
     def submatch(self, file_stream):
         yielded = False

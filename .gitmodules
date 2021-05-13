@@ -1,3 +1,6 @@
 [submodule "kaitai_struct_formats"]
 	path = kaitai_struct_formats
 	url = https://github.com/kaitai-io/kaitai_struct_formats.git
+[submodule "file"]
+	path = file
+	url = https://github.com/file/file.git

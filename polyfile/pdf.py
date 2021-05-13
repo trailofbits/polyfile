@@ -345,7 +345,7 @@ def parse_pdf(file_stream, matcher: Matcher, parent=None):
                 yield from parse_object(file_stream, object, matcher=matcher, parent=parent)
 
 
-@submatcher('adobe_pdf.trid.xml', 'adobe_pdf-utf8.trid.xml')
+@submatcher("application/pdf")
 class PDF(Match):
     def submatch(self, file_stream):
         yield from parse_pdf(file_stream, matcher=self.matcher, parent=self)
