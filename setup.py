@@ -108,6 +108,7 @@ def get_version_string():
         exec(f.read(), version)
     return version['VERSION_STRING']
 
+
 with open(README_PATH, "r") as readme:
     README = readme.read()
 

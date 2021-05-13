@@ -16,7 +16,7 @@ def git_branch():
 
 
 # Change DEV_BUILD to False when deploying to PyPI
-DEV_BUILD = False
+DEV_BUILD = True
 
 
 __version__ = (0, 3, 0)
