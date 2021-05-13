@@ -57,7 +57,7 @@ def unique(iterator: Iterator[T], elements: Optional[Set[T]] = None) -> Iterator
             elements.add(t)
 
 
-class LazyIterableSet(Generic[T], AbstractSet, Set[T], LazyIterableSequence[T]):
+class LazyIterableSet(Generic[T], AbstractSet, LazyIterableSequence[T]):
     """
     A collection that is both a set and a sequence that
     """
