@@ -1301,8 +1301,8 @@ class NumericValue(Generic[T]):
         self.value: T = value
         self.operator: NumericOperator = operator
 
-    def test(self, to_match: T, unsigned: bool, num_bytes: int) -> bool:
-        return self.operator.test(to_match, self.value)
+    def test(self, to_match: T, unsigned: bool, num_bytes: int, preprocess: Callable[[int], int] = lambda x: x) -> bool:
+        return self.operator.test(preprocess(to_match), self.value)
 
     @staticmethod
     def parse(value: str, num_bytes: int) -> "NumericValue":
@@ -1322,29 +1322,34 @@ class NumericWildcard(NumericValue):
     def __init__(self):
         super().__init__(None)
 
-    def test(self, to_match, unsigned, num_bytes) -> bool:
+    def test(self, to_match, unsigned, num_bytes, preprocess: Callable[[int], int] = lambda x: x) -> bool:
         return True
 
 
 class IntegerValue(NumericValue[int]):
-    def test(self, to_match: T, unsigned: bool, num_bytes: int) -> bool:
-        to_test = self.value
+    @staticmethod
+    def normalize_signedness(value: int, unsigned: bool, num_bytes: int) -> int:
         bits = 8 * num_bytes
         if unsigned:
             max_value = (1 << bits) - 1
             min_value = 0
-            if to_test < 0:
+            if value < 0:
                 # convert the value to a bit-equivalent unsigned value
-                to_test += 2**bits
+                value += 2**bits
         else:
             max_value = (1 << bits) >> 1
             min_value = ~max_value
-            if to_test > max_value:
+            if value > max_value:
                 # convert the value to a bit-equivalent signed value
-                to_test -= 2 ** bits
-        if not (min_value <= to_test <= max_value):
-            raise ValueError(f"Invalid integer constant {self.value} for comparing to a "
+                value -= 2 ** bits
+        if not (min_value <= value <= max_value):
+            raise ValueError(f"Invalid integer constant {value} for comparing to a "
                              f"{['signed', 'n unsigned'][unsigned]} {num_bytes}-byte integer")
+        return value
+
+    def test(self, to_match: int, unsigned: bool, num_bytes: int, preprocess: Callable[[int], int] = lambda x: x) -> bool:
+        to_test = IntegerValue.normalize_signedness(self.value, unsigned, num_bytes)
+        to_match = IntegerValue.normalize_signedness(preprocess(to_match), unsigned, num_bytes)
         return self.operator.test(to_match, to_test)
 
     @staticmethod
@@ -1420,8 +1425,8 @@ class NumericDataType(DataType[NumericValue]):
                 value = struct.unpack(struct_fmt, data[:self.base_type.num_bytes])[0]
             except struct.error:
                 return DataTypeMatch.INVALID
-        value = self.preprocess(value)
-        if expected.test(value, self.unsigned, self.base_type.num_bytes):
+        if expected.test(value, self.unsigned, self.base_type.num_bytes, self.preprocess):
+            value = self.preprocess(value)
             return DataTypeMatch(data[:self.base_type.num_bytes], self.base_type.to_value(value))
         else:
             return DataTypeMatch.INVALID
@@ -1567,7 +1572,8 @@ class NamedTest(MagicTest):
         if not message:
             # by default, named tests should not add a space if they don't contain an explicit message
             message = "\b"
-        assert offset.offset == 0
+        assert isinstance(offset, AbsoluteOffset) and offset.offset == 0
+
         class NamedTestOffset(Offset):
             def to_absolute(self, data: bytes, last_match: Optional[TestResult]) -> int:
                 assert last_match is not None
