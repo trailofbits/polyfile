@@ -138,44 +138,42 @@ A separate utility called `polymerge` is installed with PolyFile specifically de
 tools.
 
 ```
-usage: polymerge [-h] [--cfg CFG] [--cfg-pdf CFG_PDF]
-                 [--dataflow [DATAFLOW [DATAFLOW ...]]]
-                 [--no-intermediate-functions] [--demangle]
-                 [--type-hierarchy TYPE_HIERARCHY]
-                 [--type-hierarchy-pdf TYPE_HIERARCHY_PDF]
-                 [--diff [DIFF [DIFF ...]]] [--debug] [--quiet] [--version]
-                 [-dumpversion]
-                 FILES [FILES ...]
+usage: polyfile [-h] [--filetype FILETYPE] [--list] [--html HTML]
+                [--only-match-mime] [--only-match] [--require-match]
+                [--max-matches MAX_MATCHES] [--debug] [--trace] [--quiet]
+                [--version] [-dumpversion]
+                [FILE]
 
-A utility to merge the JSON output of `polyfile`
-with a polytracker.json file from PolyTracker.
-
-https://github.com/trailofbits/polyfile/
-https://github.com/trailofbits/polytracker/
+A utility to recursively map the structure of a file.
 
 positional arguments:
-  FILES                 Path to the PolyFile JSON output and/or the PolyTracker JSON output. Merging will only occur if both files are provided. The `--cfg` and `--type-hierarchy` options can be used if only a single file is provided, but no merging will occur.
+  FILE                  the file to analyze; pass '-' or omit to read from
+                        STDIN
 
 optional arguments:
   -h, --help            show this help message and exit
-  --cfg CFG, -c CFG     Optional path to output a Graphviz .dot file representing the control flow graph of the program trace
-  --cfg-pdf CFG_PDF, -p CFG_PDF
-                        Similar to --cfg, but renders the graph to a PDF instead of outputting the .dot source
-  --dataflow [DATAFLOW [DATAFLOW ...]]
-                        For the CFG generation options, only render functions that participated in dataflow. `--dataflow 10` means that only functions in the dataflow related to byte 10 should be included. `--dataflow 10:30` means that only functions operating on bytes 10 through 29 should be included. The beginning or end of a range can be omitted and will default to the beginning and end of the file, respectively. Multiple `--dataflow` ranges can be specified. `--dataflow :` will render the CFG only with functions that operated on tainted bytes. Omitting `--dataflow` will produce a CFG containing all functions.
-  --no-intermediate-functions
-                        To be used in conjunction with `--dataflow`. If enabled, only functions in the dataflow graph if they operated on the tainted bytes. This can result in a disjoint dataflow graph.
-  --demangle            Demangle C++ function names in the CFG (requires that PolyFile was installed with the `demangle` option, or that the `cxxfilt` Python module is installed.)
-  --type-hierarchy TYPE_HIERARCHY, -t TYPE_HIERARCHY
-                        Optional path to output a Graphviz .dot file representing the type hierarchy extracted from PolyFile
-  --type-hierarchy-pdf TYPE_HIERARCHY_PDF, -y TYPE_HIERARCHY_PDF
-                        Similar to --type-hierarchy, but renders the graph to a PDF instead of outputting the .dot source
-  --diff [DIFF [DIFF ...]]
-                        Diff an arbitrary number of input polytracker.json files, all treated as the same class, against one or more polytracker.json provided after `--diff` arguments
-  --debug, -d           Print debug information
-  --quiet, -q           Suppress all log output (overrides --debug)
-  --version, -v         Print PolyMerge's version information and exit
-  -dumpversion          Print PolyMerge's raw version information and exit
+  --filetype FILETYPE, -f FILETYPE
+                        explicitly match against the given filetype or
+                        filetype wildcard (default is to matchagainst all
+                        filetypes)
+  --list, -l            list the supported filetypes (for the `--filetype`
+                        argument) and exit
+  --html HTML, -t HTML  path to write an interactive HTML file for exploring
+                        the PDF
+  --only-match-mime, -I
+                        just print out the matching MIME types for the file,
+                        one on each line
+  --only-match, -m      do not attempt to parse known filetypes; only match
+                        against file magic
+  --require-match       if no matches are found, exit with code 127
+  --max-matches MAX_MATCHES
+                        stop scanning after having found this many matches
+  --debug, -d           print debug information
+  --trace, -dd          print extra verbose debug information
+  --quiet, -q           suppress all log output (overrides --debug)
+  --version, -v         print PolyFile's version information to STDERR
+  -dumpversion          print PolyFile's raw version information to STDOUT and
+                        exit
 ```
 
 The output of `polymerge` is the same as [PolyFile’s output format](docs/json_format.md), augmented with the following:
