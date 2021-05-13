@@ -1,9 +1,11 @@
 import concurrent.futures
 import json
+import shutil
 from multiprocessing import cpu_count
 import os
 from pathlib import Path
 from setuptools import setup, find_packages
+from shutil import which
 import subprocess
 import sys
 from typing import Any, Dict, List, Optional, Tuple
@@ -47,6 +49,10 @@ for definition in KAITAI_FORMAT_LIBRARY.glob("**/*.ksy"):
 if not MANIFEST_PATH.exists() or newest_definition > MANIFEST_PATH.stat().st_mtime:
     # the definitions have been updated, so we need to recompile everything
 
+    if shutil.which("kaitai-struct-compiler") is None:
+        sys.stderr.write("Error: You must have kaitai-struct-compiler installed")
+        sys.exit(1)
+
     num_files = sum(1 for _ in KAITAI_FORMAT_LIBRARY.glob("**/*.ksy"))
 
     try:
@@ -56,16 +62,18 @@ if not MANIFEST_PATH.exists() or newest_definition > MANIFEST_PATH.stat().st_mti
             class TQDM:
                 def __enter__(self):
                     return self
+
                 def __exit__(self, exc_type, exc_val, exc_tb):
                     pass
-                def write(self, message, *args, **kwargs):
+
+                def write(self, message, *_, **__):
                     sys.stderr.write(message)
                     sys.stderr.write("\n")
                     sys.stderr.flush()
+
                 def update(self, n: int):
                     pass
             return TQDM()
-
 
     ksy_manifest: Dict[str, Dict[str, Any]] = {}
 
