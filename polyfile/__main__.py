@@ -108,10 +108,13 @@ def main(argv=None):
         try:
             if args.only_match_mime:
                 with open(file_path, "rb") as f:
-                    omm = sys.stderr.isatty() and sys.stdout.isatty() and logging.root.level <= logging.INFO
-                    mimetypes = set()
                     if magic_matcher is None:
                         magic_matcher = MagicMatcher.DEFAULT_INSTANCE
+                    omm = sys.stderr.isatty() and sys.stdout.isatty() and logging.root.level <= logging.INFO
+                    if omm:
+                        # figure out the longest MIME type so we can make sure the columns are aligned
+                        longest_mimetype = max(len(mimetype) for mimetype in magic_matcher.mimetypes)
+                    mimetypes = set()
                     for match in magic_matcher.match(f.read(), only_match_mime=True):
                         new_mimetypes = match.mimetypes - mimetypes
                         mimetypes |= new_mimetypes
@@ -121,13 +124,15 @@ def main(argv=None):
                                 log.clear_status()
                                 sys.stdout.write(mimetype)
                                 sys.stdout.flush()
-                                sys.stderr.write("\t")
+                                sys.stderr.write("." * (longest_mimetype - len(mimetype) + 1))
                                 sys.stderr.write(str(match))
                                 sys.stderr.flush()
                                 sys.stdout.write("\n")
                                 sys.stdout.flush()
                             else:
                                 print(mimetype)
+                    if omm:
+                        log.clear_status()
             elif args.max_matches is None or args.max_matches > 0:
                 matcher = polyfile.Matcher(args.try_all_offsets, submatch=not args.only_match, matcher=magic_matcher)
                 for match in matcher.match(file_path):
