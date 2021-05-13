@@ -1,11 +1,10 @@
-from collections.abc import Sequence, Set as AbstractSet
-from typing import Generic, TypeVar, Iterable, Iterator, List, Optional, Set
-
+from collections.abc import Sequence as AbstractSequence, Set as AbstractSet
+from typing import Generic, TypeVar, Iterable, Iterator, List, Optional, Sequence, Set
 
 T = TypeVar("T")
 
 
-class LazyIterableSequence(Generic[T], Sequence[T]):
+class LazyIterableSequence(Generic[T], Sequence[T], AbstractSequence):
     """A thread-safe list lazily generated from an iterator"""
     def __init__(self, source: Iterable[T]):
         self._source_iter: Optional[Iterator[T]] = iter(source)
