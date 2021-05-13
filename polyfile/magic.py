@@ -18,6 +18,7 @@ import logging
 from pathlib import Path
 import re
 import struct
+import sys
 from time import gmtime, localtime, strftime
 from typing import (
     Any, Callable, Dict, Generic, Iterable, Iterator, List, Optional, Set, Tuple, TypeVar, Union
@@ -26,6 +27,12 @@ from uuid import UUID
 
 from .iterators import LazyIterableSet
 from .logger import getStatusLogger, TRACE
+
+if sys.version_info < (3, 9):
+    from typing import Pattern
+else:
+    from re import Pattern
+
 
 log = getStatusLogger("libmagic")
 
@@ -339,11 +346,11 @@ class IndirectOffset(Offset):
         return self.post_process(struct.unpack(fmt, to_unpack)[0])
 
     NUMBER_PATTERN: str = r"(0[xX][\dA-Fa-f]+|\d+)L?"
-    INDIRECT_OFFSET_PATTERN: re.Pattern = re.compile(
+    INDIRECT_OFFSET_PATTERN: Pattern[str] = re.compile(
         r"^\("
         rf"(?P<offset>&?-?{NUMBER_PATTERN})"
         r"((?P<signedness>[.,])(?P<type>[bBcCeEfFgGhHiILlmsSqQ]))?"
-        rf"(?P<post_process>[\*&/]?[+-]?({NUMBER_PATTERN}|\(-?{NUMBER_PATTERN}\)))?"
+        rf"(?P<post_process>[*&/]?[+-]?({NUMBER_PATTERN}|\(-?{NUMBER_PATTERN}\)))?"
         r"\)$"
     )
 
@@ -911,7 +918,7 @@ class StringType(DataType[StringTest]):
     def match(self, data: bytes, expected: StringTest) -> DataTypeMatch:
         return expected.matches(data)
 
-    STRING_TYPE_FORMAT: re.Pattern = re.compile(r"^u?string(/[BbCctTWw]*)?$")
+    STRING_TYPE_FORMAT: Pattern[str] = re.compile(r"^u?string(/[BbCctTWw]*)?$")
 
     @classmethod
     def parse(cls, format_str: str) -> "StringType":
@@ -992,7 +999,7 @@ class SearchType(StringType):
                 break
         return DataTypeMatch.INVALID
 
-    SEARCH_TYPE_FORMAT: re.Pattern = re.compile(
+    SEARCH_TYPE_FORMAT: Pattern[str] = re.compile(
         r"^search"
         r"((/(?P<repetitions1>(0[xX][\dA-Fa-f]+|\d+)))(/(?P<flags1>[BbCctTWws]*)?)?|"
         r"/((?P<flags2>[BbCctTWws]*)/?)?(?P<repetitions2>(0[xX][\dA-Fa-f]+|\d+)))$"
@@ -1088,7 +1095,7 @@ class PascalStringType(DataType[StringTest]):
             m.raw_match = data[:self.byte_length + length]
         return m
 
-    PSTRING_TYPE_FORMAT: re.Pattern = re.compile(r"^pstring(/J?[BHhLl]?J?)?$")
+    PSTRING_TYPE_FORMAT: Pattern[str] = re.compile(r"^pstring(/J?[BHhLl]?J?)?$")
 
     @classmethod
     def parse(cls, format_str: str) -> "PascalStringType":
@@ -1141,7 +1148,7 @@ def posix_to_python_re(match: bytes) -> bytes:
     return match
 
 
-class RegexType(DataType[re.Pattern]):
+class RegexType(DataType[Pattern[bytes]]):
     def __init__(
             self,
             length: Optional[int] = None,
@@ -1163,7 +1170,7 @@ class RegexType(DataType[re.Pattern]):
         super().__init__(f"regex/{self.length}{['', 'c'][case_insensitive]}{['', 's'][match_to_start]}"
                          f"{['', 'l'][self.limit_lines]}{['', 'T'][self.trim]}")
 
-    def parse_expected(self, specification: str) -> re.Pattern:
+    def parse_expected(self, specification: str) -> Pattern[bytes]:
         # handle POSIX-style character classes:
         unescaped_spec = posix_to_python_re(unescape(specification))
         try:
@@ -1174,7 +1181,7 @@ class RegexType(DataType[re.Pattern]):
         except re.error as e:
             raise ValueError(str(e))
 
-    def match(self, data: bytes, expected: re.Pattern) -> DataTypeMatch:
+    def match(self, data: bytes, expected: Pattern[bytes]) -> DataTypeMatch:
         if self.limit_lines:
             limit = self.length
             offset = 0
@@ -1210,7 +1217,7 @@ class RegexType(DataType[re.Pattern]):
             else:
                 return DataTypeMatch.INVALID
 
-    REGEX_TYPE_FORMAT: re.Pattern = re.compile(r"^regex(/(?P<length>\d+)?(?P<flags>[cslT]*)(b\d*)?)?$")
+    REGEX_TYPE_FORMAT: Pattern[str] = re.compile(r"^regex(/(?P<length>\d+)?(?P<flags>[cslT]*)(b\d*)?)?$")
     # NOTE: some specification files like `cad` use `regex/b`, which is undocumented, and it's unclear from the libmagic
     #       source code whether it is simply ignored or if it has a purpuse. We ignore it here.
 
@@ -1719,11 +1726,11 @@ class DERTest(MagicTest):
         )
 
 
-TEST_PATTERN: re.Pattern = re.compile(
+TEST_PATTERN: Pattern[str] = re.compile(
     r"^(?P<level>[>]*)(?P<offset>[^\s!][^\s]*)\s+(?P<data_type>[^\s]+)\s+(?P<remainder>.+)$"
 )
-MIME_PATTERN: re.Pattern = re.compile(r"^!:mime\s+([^\s]+)\s*(#.*)?$")
-EXTENSION_PATTERN: re.Pattern = re.compile(r"^!:ext\s+([^\s]+)\s*(#.*)?$")
+MIME_PATTERN: Pattern[str] = re.compile(r"^!:mime\s+([^\s]+)\s*(#.*)?$")
+EXTENSION_PATTERN: Pattern[str] = re.compile(r"^!:ext\s+([^\s]+)\s*(#.*)?$")
 
 
 def _split_with_escapes(text: str) -> Tuple[str, str]:
