@@ -791,12 +791,16 @@ class StringTest(ABC):
               compact_whitespace: bool = False,
               case_insensitive_lower: bool = False,
               case_insensitive_upper: bool = False,
-              optional_blanks: bool = False
-    ):
+              optional_blanks: bool = False) -> "StringTest":
         if specification.strip() == "x":
             return StringWildcard(trim=trim, compact_whitespace=compact_whitespace)
-        elif specification.startswith(">") or specification.startswith("<"):
-            return StringLengthTest(
+        if specification.startswith("!"):
+            negate = True
+            specification = specification[1:]
+        else:
+            negate = False
+        if specification.startswith(">") or specification.startswith("<"):
+            test = StringLengthTest(
                 to_match=unescape(specification[1:]),
                 test_smaller=specification.startswith("<"),
                 trim=trim,
@@ -805,7 +809,7 @@ class StringTest(ABC):
         else:
             if specification.startswith("="):
                 specification = specification[1:]
-            return StringMatch(
+            test = StringMatch(
                 to_match=unescape(specification),
                 trim=trim,
                 compact_whitespace=compact_whitespace,
@@ -813,6 +817,10 @@ class StringTest(ABC):
                 case_insensitive_upper=case_insensitive_upper,
                 optional_blanks=optional_blanks
             )
+        if negate:
+            return NegatedStringTest(test)
+        else:
+            return test
 
 
 class StringWildcard(StringTest):
@@ -822,6 +830,19 @@ class StringWildcard(StringTest):
             return self.post_process(data[:first_null])
         else:
             return self.post_process(data)
+
+
+class NegatedStringTest(StringWildcard):
+    def __init__(self, parent_test: StringTest):
+        super().__init__(trim=parent_test.trim, compact_whitespace=parent_test.compact_whitespace)
+        self.parent: StringTest = parent_test
+
+    def matches(self, data: bytes) -> DataTypeMatch:
+        result = self.parent.matches(data)
+        if result == DataTypeMatch.INVALID:
+            return super().matches(data)
+        else:
+            return DataTypeMatch.INVALID
 
 
 class StringLengthTest(StringWildcard):
