@@ -10,8 +10,6 @@ import subprocess
 import sys
 from typing import Any, Dict, List, Optional, Tuple
 
-VERSION_MODULE_PATH = os.path.join(os.path.realpath(os.path.dirname(__file__)), "polyfile", "version.py")
-
 
 # Build the entire Kaitai struct format library:
 POLYFILE_DIR: Path = Path(__file__).absolute().parent
@@ -110,13 +108,6 @@ if not MANIFEST_PATH.exists() or newest_definition > MANIFEST_PATH.stat().st_mti
         json.dump(ksy_manifest, f)
 
 
-def get_version_string():
-    version = {}
-    with open(VERSION_MODULE_PATH) as f:
-        exec(f.read(), version)
-    return version['VERSION_STRING']
-
-
 with open(README_PATH, "r") as readme:
     README = readme.read()
 
@@ -127,7 +118,7 @@ setup(
     long_description_content_type="text/markdown",
     url='https://github.com/trailofbits/polyfile',
     author='Trail of Bits',
-    version=get_version_string(),
+    version="0.3.3",
     packages=find_packages(exclude=("tests",)),
     python_requires='>=3.6',
     install_requires=[

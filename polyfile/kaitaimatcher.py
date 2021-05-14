@@ -19,7 +19,8 @@ KAITAI_MIME_MAPPING: Dict[str, str] = {
     "application/vnd.tcpdump.pcap": "network/pcap.ksy",
     "application/x-sqlite3": "database/sqlite3.ksy",
     "application/x-rar": "archive/rar.ksy",
-    "font/sfnt": "font/ttf.ksy"
+    "font/sfnt": "font/ttf.ksy",
+    "application/x-pie-executable": "executable/elf.ksy"
 }
 
 IMAGE_MIMETYPES = {
