@@ -1,11 +1,14 @@
 import base64
 from json import dumps
 from pathlib import Path
+import pkg_resources
 from typing import Any, Dict, IO, Iterator, List, Optional, Set, Tuple, Type, Union
 
 from .fileutils import FileStream
 from . import logger
 from .magic import MagicMatcher, MatchContext
+
+__version__: str = pkg_resources.require("polyfile")[0].version
 
 CUSTOM_MATCHERS: Dict[str, Type["Match"]] = {}
 

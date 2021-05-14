@@ -12,9 +12,9 @@ from typing import Optional
 from . import html
 from . import logger
 from . import polyfile
-from . import version
 from .fileutils import PathOrStdin
 from .magic import MagicMatcher, MatchContext
+from .polyfile import __version__
 
 
 log = logger.getStatusLogger("polyfile")
@@ -56,7 +56,8 @@ def main(argv=None):
     parser.add_argument('--trace', '-dd', action='store_true', help='print extra verbose debug information')
     parser.add_argument('--quiet', '-q', action='store_true', help='suppress all log output (overrides --debug)')
     parser.add_argument('--version', '-v', action='store_true', help='print PolyFile\'s version information to STDERR')
-    parser.add_argument('-dumpversion', action='store_true', help='print PolyFile\'s raw version information to STDOUT and exit')
+    parser.add_argument('-dumpversion', action='store_true',
+                        help='print PolyFile\'s raw version information to STDOUT and exit')
 
     if argv is None:
         argv = sys.argv
@@ -64,7 +65,7 @@ def main(argv=None):
     args = parser.parse_args(argv[1:])
 
     if args.dumpversion:
-        print(' '.join(map(str, version.__version__)))
+        print(__version__)
         exit(0)
 
     if args.list:
@@ -73,7 +74,7 @@ def main(argv=None):
         exit(0)
 
     if args.version:
-        sys.stderr.write(f"PolyFile version {version.VERSION_STRING}\n")
+        sys.stderr.write(f"PolyFile version {__version__}\n")
         if args.FILE == '-' and sys.stdin.isatty():
             # No file argument was provided and it doesn't look like anything was piped into STDIN,
             # so instead of blocking on STDIN just exit
@@ -201,7 +202,7 @@ def main(argv=None):
             'fileName': filename,
             'length': file_length,
             'versions': {
-                'polyfile': version.VERSION_STRING
+                'polyfile': __version__
             },
             'struc': [
                 match.to_obj() for match in matches

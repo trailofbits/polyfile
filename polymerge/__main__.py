@@ -14,7 +14,7 @@ except ModuleNotFoundError:
 
 from intervaltree import IntervalTree
 
-from polyfile import logger, version
+from polyfile import logger, __version__
 
 from .polymerge import merge, polyfile_type_graph
 from . import polytracker
@@ -109,12 +109,12 @@ https://github.com/trailofbits/polytracker/
     parser.add_argument('--quiet', '-q', action='store_true', help='Suppress all log output (overrides --debug)')
     parser.add_argument('--version', '-v',
                         action='version',
-                        version=f"PolyMerge version {version.VERSION_STRING}\n",
+                        version=f"PolyMerge version {__version__}\n",
                         help='Print PolyMerge\'s version information and exit'
     )
     parser.add_argument('-dumpversion',
                         action='version',
-                        version=' '.join(map(str, version.__version__)),
+                        version=__version__,
                         help='Print PolyMerge\'s raw version information and exit'
     )
 
