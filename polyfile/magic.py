@@ -21,7 +21,7 @@ import struct
 import sys
 from time import gmtime, localtime, strftime
 from typing import (
-    Any, Callable, Dict, Generic, Iterable, Iterator, List, Optional, Set, Tuple, TypeVar, Union
+    Any, BinaryIO, Callable, Dict, Generic, Iterable, Iterator, List, Optional, Set, Tuple, TypeVar, Union
 )
 from uuid import UUID
 
@@ -46,6 +46,14 @@ MAGIC_DEFS: List[Path] = [
 
 
 WHITESPACE: bytes = b" \r\t\n\v\f"
+ESCAPES = {
+    "n": ord("\n"),
+    "r": ord("\r"),
+    "b": ord("\b"),
+    "v": ord("\v"),
+    "t": ord("\t"),
+    "f": ord("\f")
+}
 
 
 def unescape(to_unescape: Union[str, bytes]) -> bytes:
@@ -55,15 +63,6 @@ def unescape(to_unescape: Union[str, bytes]) -> bytes:
     escaped: Optional[str] = None
     if isinstance(to_unescape, str):
         to_unescape = to_unescape.encode("utf-8")
-    ESCAPES = {
-        "n": ord("\n"),
-        "r": ord("\r"),
-        "b": ord("\b"),
-        "v": ord("\v"),
-        "t": ord("\t"),
-        "f": ord("\f")
-    }
-    terminator = object()
     for c in to_unescape:
         if escaped is not None:
             char = chr(c)
@@ -150,7 +149,6 @@ class TestResult:
             if self.parent.parent is not None:
                 self.parent.parent.child_matched = True
         self._child_matched = did_match
-
 
     def __hash__(self):
         return hash((self.test, self.offset, self.length))
@@ -435,19 +433,130 @@ class SourceInfo:
         return f"{self.path!s}:{self.line}"
 
 
+class MatchContext:
+    def __init__(self, data: bytes, path: Optional[Path] = None, only_match_mime: bool = False):
+        self.data: bytes = data
+        self.path: Optional[Path] = path
+        self.only_match_mime: bool = only_match_mime
+
+    def __getitem__(self, s: slice) -> "MatchContext":
+        if not isinstance(s, slice):
+            raise ValueError("Match contexts can only be sliced")
+        return MatchContext(data=self.data[s], path=self.path, only_match_mime=self.only_match_mime)
+
+    @property
+    def is_executable(self) -> bool:
+        if self.path is None:
+            log.warning("Unable to determine if the input data is executable; assuming it is not.")
+            return False
+        try:
+            return bool(self.path.stat().st_mode & 0o111)
+        except FileNotFoundError:
+            log.warning(f"Unable to determine if the data from {self.path} is executable; assuming it is not.")
+            return False
+
+    @staticmethod
+    def load(stream_or_path: Union[str, Path, BinaryIO], only_match_mime: bool = False) -> "MatchContext":
+        if isinstance(stream_or_path, str) or isinstance(stream_or_path, Path):
+            with open(stream_or_path, "rb") as f:
+                return MatchContext.load(f, only_match_mime)
+        if hasattr(stream_or_path, "name") and stream_or_path.name is not None:
+            path: Optional[Path] = Path(stream_or_path.name)
+        else:
+            path = None
+        return MatchContext(stream_or_path.read(), path, only_match_mime)
+
+
+class Message(ABC):
+    @abstractmethod
+    def resolve(self, context: MatchContext) -> str:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def possibilities(self) -> Iterator[str]:
+        raise NotImplementedError()
+
+    @staticmethod
+    def parse(message: str) -> "Message":
+        try:
+            return TernaryExecutableMessage.parse(message)
+        except ValueError:
+            return ConstantMessage(message)
+
+
+class ConstantMessage(Message):
+    def __init__(self, message: str):
+        self.message: str = message
+
+    def possibilities(self) -> Iterator[str]:
+        yield self.message
+
+    def resolve(self, context: MatchContext) -> str:
+        return self.message
+
+    def __eq__(self, other):
+        return isinstance(other, ConstantMessage) and other.message == self.message
+
+    def __str__(self):
+        return self.message
+
+
+class TernaryMessage(Message, ABC):
+    def __init__(self, true_value: str, false_value: str):
+        self.true_value: str = true_value
+        self.false_value: str = false_value
+
+    def possibilities(self) -> Iterator[str]:
+        yield self.true_value
+        yield self.false_value
+
+    def __eq__(self, other):
+        return isinstance(other, TernaryMessage) and other.false_value == self.false_value and \
+               other.true_value == self.true_value and other.__class__ == self.__class__
+
+
+class TernaryExecutableMessage(TernaryMessage):
+    def resolve(self, context: MatchContext) -> str:
+        if context.is_executable:
+            return self.true_value
+        else:
+            return self.false_value
+
+    TERNARY_EXECUTABLE_PATTERN: Pattern[str] = re.compile(
+        r"^(?P<before>.*?)\${x\?(?P<true>[^:]+):(?P<false>[^}]+)}(?P<after>.*)$"
+    )
+
+    @staticmethod
+    def parse(message: str) -> "TernaryExecutableMessage":
+        m = TernaryExecutableMessage.TERNARY_EXECUTABLE_PATTERN.match(message)
+        if not m:
+            raise ValueError(f"Invalid ternary message: {message!r}")
+        before = m.group("before")
+        after = m.group("after")
+        true_msg = f"{before}{m.group('true')}{after}"
+        false_msg = f"{before}{m.group('false')}{after}"
+        return TernaryExecutableMessage(true_value=true_msg, false_value=false_msg)
+
+    def __str__(self):
+        return f"${{x?{self.true_value}:{self.false_value}}}"
+
+
 class MagicTest(ABC):
     def __init__(
             self,
             offset: Offset,
-            mime: Optional[str] = None,
+            mime: Optional[Union[str, TernaryExecutableMessage]] = None,
             extensions: Iterable[str] = (),
-            message: str = "",
+            message: Union[str, Message] = "",
             parent: Optional["MagicTest"] = None
     ):
         self.offset: Offset = offset
-        self._mime: Optional[str] = None
+        self._mime: Optional[Message] = None
         self.extensions: Set[str] = set(extensions)
-        self.message: str = message
+        if isinstance(message, Message):
+            self.message: Message = message
+        else:
+            self.message = Message.parse(message)
         self._parent: Optional[MagicTest] = parent
         self.children: List[MagicTest] = []
         if parent is not None:
@@ -510,10 +619,9 @@ class MagicTest(ABC):
             test = stack.pop()
             if test is not self:
                 yield test
-            if test.parent is not None and test.parent not in history:
-                new_tests = [child for child in test.children if child not in history]
-                stack.extend(reversed(new_tests))
-                history |= set(new_tests)
+            new_tests = [child for child in test.children if child not in history]
+            stack.extend(reversed(new_tests))
+            history |= set(new_tests)
             if isinstance(test, UseTest):
                 stack.append(test.referenced_test)
                 history.add(test.referenced_test)
@@ -525,11 +633,13 @@ class MagicTest(ABC):
         return result
 
     @property
-    def mime(self) -> Optional[str]:
+    def mime(self) -> Optional[Message]:
         return self._mime
 
     @mime.setter
-    def mime(self, new_mime: Optional[str]):
+    def mime(self, new_mime: Optional[Union[str, Message]]):
+        if isinstance(new_mime, str):
+            new_mime = Message.parse(new_mime)
         if self._mime is not None:
             if self._mime == new_mime:
                 return
@@ -546,12 +656,14 @@ class MagicTest(ABC):
             return
         yielded: Set[str] = set()
         if self.mime is not None:
-            yield self.mime
-            yielded.add(self.mime)
+            yielded |= set(self.mime.possibilities())
+            yield from yielded
         for d in self.descendants():
             if d.mime is not None:
-                yield d.mime
-                yielded.add(d.mime)
+                possibilities = set(d.mime.possibilities())
+                new_mimes = possibilities - yielded
+                yield from new_mimes
+                yielded |= new_mimes
 
     def mimetypes(self) -> LazyIterableSet[str]:
         """Returns the set of all possible MIME types that this test or any of its descendants could match against"""
@@ -574,34 +686,33 @@ class MagicTest(ABC):
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> Optional[TestResult]:
         raise NotImplementedError()
 
-    def _match(
-            self,
-            data: bytes,
-            only_match_mime: bool = False,
-            parent_match: Optional[TestResult] = None
-    ) -> Iterator[TestResult]:
-        if only_match_mime and not self.can_match_mime:
+    def _match(self, context: MatchContext, parent_match: Optional[TestResult] = None) -> Iterator[TestResult]:
+        if context.only_match_mime and not self.can_match_mime:
             return
         try:
-            absolute_offset = self.offset.to_absolute(data, parent_match)
+            absolute_offset = self.offset.to_absolute(context.data, parent_match)
         except InvalidOffsetError:
             return None
-        m = self.test(data, absolute_offset, parent_match)
+        m = self.test(context.data, absolute_offset, parent_match)
         if logging.root.level <= TRACE and (m is not None or self.level > 0):
             log.trace(
                 f"{self.source_info!s}\t{m is not None}\t{absolute_offset}\t"
-                f"{data[absolute_offset:absolute_offset + 20]!r}"
+                f"{context.data[absolute_offset:absolute_offset + 20]!r}"
             )
         if m is not None:
-            if not only_match_mime or self.mime is not None:
+            if not context.only_match_mime or self.mime is not None:
                 yield m
             for child in self.children:
-                if not only_match_mime or child.can_match_mime:
-                    yield from child._match(data=data, only_match_mime=only_match_mime, parent_match=m)
+                if not context.only_match_mime or child.can_match_mime:
+                    yield from child._match(context=context, parent_match=m)
 
-    def match(self, data: bytes, only_match_mime: bool = False) -> Iterator[TestResult]:
+    def match(self, to_match: Union[bytes, BinaryIO, str, Path, MatchContext]) -> Iterator[TestResult]:
         """Yields all matches for the given data"""
-        return self._match(data, only_match_mime=only_match_mime)
+        if isinstance(to_match, bytes):
+            to_match = MatchContext(data=to_match)
+        elif not isinstance(to_match, MatchContext):
+            to_match = MatchContext.load(to_match)
+        return self._match(to_match)
 
     def __str__(self):
         if self.source_info is not None and self.source_info.original_line is not None:
@@ -1639,24 +1750,19 @@ class UseTest(MagicTest):
             result |= self.referenced_test.referenced_tests()
         return result
 
-    def _match(
-            self,
-            data: bytes,
-            only_match_mime: bool = False,
-            parent_match: Optional[TestResult] = None
-    ) -> Iterator[TestResult]:
+    def _match(self, context: MatchContext, parent_match: Optional[TestResult] = None) -> Iterator[TestResult]:
         if self.flip_endianness:
             raise NotImplementedError("TODO: Add support for use tests with flipped endianness")
         try:
-            absolute_offset = self.offset.to_absolute(data, last_match=parent_match)
+            absolute_offset = self.offset.to_absolute(context.data, last_match=parent_match)
         except InvalidOffsetError:
             return None
         log.trace(
-            f"{self.source_info!s}\tTrue\t{absolute_offset}\t{data[absolute_offset:absolute_offset + 20]!r}"
+            f"{self.source_info!s}\tTrue\t{absolute_offset}\t{context.data[absolute_offset:absolute_offset + 20]!r}"
         )
         use_match = TestResult(self, None, absolute_offset, 0, parent=parent_match)
         yielded = False
-        for named_result in self.referenced_test._match(data, only_match_mime, use_match):
+        for named_result in self.referenced_test._match(context, use_match):
             if not yielded:
                 yielded = True
                 yield use_match
@@ -1664,12 +1770,12 @@ class UseTest(MagicTest):
         if not yielded:
             # the named test did not match anything, so don't try any of our children
             return
-        elif only_match_mime and not self.can_match_mime:
+        elif context.only_match_mime and not self.can_match_mime:
             # none of our children can produce a mime type
             return
         for child in self.children:
-            if not only_match_mime or child.can_match_mime:
-                yield from child._match(data=data, only_match_mime=only_match_mime, parent_match=use_match)
+            if not context.only_match_mime or child.can_match_mime:
+                yield from child._match(context=context, parent_match=use_match)
 
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> Optional[TestResult]:
         raise NotImplementedError("This function should never be called")
@@ -1763,17 +1869,26 @@ def _split_with_escapes(text: str) -> Tuple[str, str]:
 
 class Match:
     def __init__(
-            self, matcher: "MagicMatcher", data: bytes, results: Iterable[TestResult], only_match_mime: bool = False
+            self, matcher: "MagicMatcher", context: MatchContext, results: Iterable[TestResult]
     ):
         self.matcher: MagicMatcher = matcher
-        self.data: bytes = data
-        self.only_match_mime: bool = only_match_mime
+        self.context: MatchContext = context
         self._result_iter: Optional[Iterator[TestResult]] = iter(results)
         self._results: List[TestResult] = []
 
     @property
+    def data(self) -> bytes:
+        return self.context.data
+
+    @property
+    def only_match_mime(self) -> bool:
+        return self.context.only_match_mime
+
+    @property
     def mimetypes(self) -> LazyIterableSet[str]:
-        return LazyIterableSet((result.test.mime for result in self if result.test.mime is not None))
+        return LazyIterableSet((
+            result.test.mime.resolve(self.context) for result in self if result.test.mime is not None)
+        )
 
     @property
     def extensions(self) -> LazyIterableSet[str]:
@@ -1799,7 +1914,7 @@ class Match:
                 result = next(self._result_iter)
                 self._results.append(result)
                 if isinstance(result, IndirectResult):
-                    for match in self.matcher.match(self.data[result.offset:], self.only_match_mime):
+                    for match in self.matcher.match(self.context[result.offset:]):
                         self._results.extend(match)
             except StopIteration:
                 self._result_iter = None
@@ -1820,7 +1935,7 @@ class Match:
     def message(self) -> str:
         msg = ""
         for result in self:
-            m = result.test.message.lstrip()
+            m = result.test.message.resolve(self.context).lstrip()
             if not m:
                 continue
             elif m.startswith("\b"):
@@ -1925,10 +2040,14 @@ class MagicMatcher:
         """Returns the set of extensions this matcher is capable of matching"""
         return self.tests_by_ext.keys()
 
-    def match(self, data: bytes, only_match_mime: bool = False) -> Iterator[Match]:
+    def match(self, to_match: Union[bytes, BinaryIO, str, Path, MatchContext]) -> Iterator[Match]:
+        if isinstance(to_match, bytes):
+            to_match = MatchContext(to_match)
+        elif not isinstance(to_match, MatchContext):
+            to_match = MatchContext.load(to_match)
         for test in log.range(self._tests, desc="matching", unit=" tests", delay=1.0):
-            m = Match(self, data, test.match(data, only_match_mime=only_match_mime), only_match_mime)
-            if m and (not only_match_mime or any(t is not None for t in m.mimetypes)):
+            m = Match(matcher=self, context=to_match, results=test.match(to_match))
+            if m and (not to_match.only_match_mime or any(t is not None for t in m.mimetypes)):
                 yield m
 
     @staticmethod

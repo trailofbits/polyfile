@@ -2,7 +2,7 @@ from pathlib import Path
 from typing import Callable, Optional
 from unittest import TestCase
 
-from polyfile import logger
+# from polyfile import logger
 import polyfile.magic
 from polyfile.magic import MagicMatcher, MAGIC_DEFS
 
@@ -10,6 +10,7 @@ from polyfile.magic import MagicMatcher, MAGIC_DEFS
 # logger.setLevel(logger.TRACE)
 
 FILE_TEST_DIR: Path = Path(__file__).parent.parent / "file" / "tests"
+
 
 class MagicTest(TestCase):
     _old_local_date: Optional[Callable[[int], str]] = None
@@ -35,6 +36,17 @@ class MagicTest(TestCase):
         self.assertIs(matcher, matcher.only_match())
         self.assertIn("application/zip", matcher.only_match(mimetypes=("application/zip",)).mimetypes)
         self.assertIn("com", matcher.only_match(extensions=("com",)).extensions)
+
+    def test_can_match_mime(self):
+        for d in MAGIC_DEFS:
+            if d.name == "elf":
+                elf_def = d
+                break
+        else:
+            self.fail("Could not find the elf test!")
+        matcher = MagicMatcher.parse(elf_def)
+        self.assertIn("application/x-pie-executable", matcher.mimetypes)
+        self.assertIn("application/x-sharedlib", matcher.mimetypes)
 
     def test_file_corpus(self):
         self.assertTrue(FILE_TEST_DIR.exists(), "Make sure to run `git submodule init && git submodule update` in the "

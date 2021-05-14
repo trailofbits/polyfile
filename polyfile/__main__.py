@@ -12,10 +12,9 @@ from typing import Optional
 from . import html
 from . import logger
 from . import polyfile
-from . import trid
 from . import version
 from .fileutils import PathOrStdin
-from .magic import MagicMatcher
+from .magic import MagicMatcher, MatchContext
 
 
 log = logger.getStatusLogger("polyfile")
@@ -122,7 +121,7 @@ def main(argv=None):
                         # figure out the longest MIME type so we can make sure the columns are aligned
                         longest_mimetype = max(len(mimetype) for mimetype in magic_matcher.mimetypes)
                     mimetypes = set()
-                    for match in magic_matcher.match(f.read(), only_match_mime=True):
+                    for match in magic_matcher.match(MatchContext.load(f, only_match_mime=True)):
                         new_mimetypes = match.mimetypes - mimetypes
                         mimetypes |= new_mimetypes
                         matches.extend(new_mimetypes)

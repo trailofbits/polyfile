@@ -5,7 +5,7 @@ from typing import Any, Dict, IO, Iterator, List, Optional, Set, Tuple, Type, Un
 
 from .fileutils import FileStream
 from . import logger
-from .magic import MagicMatcher
+from .magic import MagicMatcher, MatchContext
 
 CUSTOM_MATCHERS: Dict[str, Type["Match"]] = {}
 
@@ -187,10 +187,10 @@ class Matcher:
     def match(self, file_stream: Union[str, Path, IO, FileStream], parent: Optional[Match] = None) -> Iterator[Match]:
         with FileStream(file_stream) as f:
             matched_mimetypes: Set[str] = set()
-            data = f.read()
-            for magic_match in self.magic_matcher.match(data, only_match_mime=True):
+            context = MatchContext.load(f, only_match_mime=True)
+            for magic_match in self.magic_matcher.match(context):
                 for mimetype in magic_match.mimetypes:
                     if mimetype in matched_mimetypes:
                         continue
                     matched_mimetypes.add(mimetype)
-                    yield from self.handle_mimetype(mimetype, magic_match, data, file_stream, parent)
+                    yield from self.handle_mimetype(mimetype, magic_match, context.data, file_stream, parent)
