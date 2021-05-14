@@ -419,13 +419,7 @@ class IndirectOffset(Offset):
                f"endianness={self.endianness!r}, signed={self.signed}, post_process={self.post_process!r})"
 
     def __str__(self):
-        if self.addend == 0:
-            addend = ""
-        elif self.addend < 0:
-            addend = str(self.addend)
-        else:
-            addend = f"+{self.addend}"
-        return f"({self.offset!s}{['.', ','][self.signed]}{self.num_bytes}{self.endianness}{addend})"
+        return f"({self.offset!s}{['.', ','][self.signed]}{self.num_bytes}{self.endianness})"
 
 
 class SourceInfo:
@@ -1439,7 +1433,7 @@ class NumericDataType(DataType[NumericValue]):
         elif self.endianness == Endianness.PDP:
             assert self.base_type.num_bytes == 4
             if self.unsigned:
-                value = (struct.unpack("<H", data[:2]) << 16)[0] | struct.unpack("<H", data[2:4])[0]
+                value = (struct.unpack("<H", data[:2])[0] << 16) | struct.unpack("<H", data[2:4])[0]
             else:
                 be_data = bytes([data[1], data[0], data[3], data[2]])
                 value = struct.unpack(">i", be_data)[0]
@@ -2015,6 +2009,7 @@ class MagicMatcher:
                                 flip_endianness = False
                             if test_str not in matcher.named_tests:
                                 late_binding = True
+
                                 class LateBindingNamedTest(NamedTest):
                                     def __init__(self):
                                         super().__init__(test_str, offset=AbsoluteOffset(0))
