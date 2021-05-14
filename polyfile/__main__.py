@@ -103,7 +103,14 @@ def main(argv=None):
 
     sigterm_handler = SIGTERMHandler()
 
-    with PathOrStdin(args.FILE) as file_path:
+    try:
+        path_or_stdin = PathOrStdin(args.FILE)
+    except KeyboardInterrupt:
+        # this will happen if the user presses ^C wile reading from STDIN
+        exit(1)
+        return  # this is here because linters are dumb and will complain about the next line without it
+
+    with path_or_stdin as file_path:
         matches = []
         try:
             if args.only_match_mime:
