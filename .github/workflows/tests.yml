@@ -27,6 +27,8 @@ jobs:
         python-version: ${{ matrix.python-version }}
     - name: Install dependencies
       run: |
+        curl -LO https://github.com/kaitai-io/kaitai_struct_compiler/releases/download/0.9/kaitai-struct-compiler_0.9_all.deb
+        sudo apt-get install ./kaitai-struct-compiler_0.9_all.deb
         python -m pip install --upgrade pip
         pip install setuptools
         pip install .[dev]
