@@ -1653,7 +1653,6 @@ class UseTest(MagicTest):
     ) -> Iterator[TestResult]:
         if self.flip_endianness:
             raise NotImplementedError("TODO: Add support for use tests with flipped endianness")
-        first_match: Optional[TestResult] = None
         try:
             absolute_offset = self.offset.to_absolute(data, last_match=parent_match)
         except InvalidOffsetError:
