@@ -1848,8 +1848,23 @@ class Match:
     __str__ = message
 
 
-class MagicMatcher:
+class DefaultMagicMatcher:
     _DEFAULT_INSTANCE: Optional["MagicMatcher"] = None
+
+    def __get__(self, instance, owner) -> "MagicMatcher":
+        if DefaultMagicMatcher._DEFAULT_INSTANCE is None:
+            DefaultMagicMatcher._DEFAULT_INSTANCE = MagicMatcher.parse(*MAGIC_DEFS)
+        return DefaultMagicMatcher._DEFAULT_INSTANCE
+
+    def __set__(self, instance, value: Optional["MagicMatcher"]):
+        DefaultMagicMatcher._DEFAULT_INSTANCE = value
+
+    def __delete__(self, instance):
+        DefaultMagicMatcher._DEFAULT_INSTANCE = None
+
+
+class MagicMatcher:
+    DEFAULT_INSTANCE: "MagicMatcher" = DefaultMagicMatcher()  # type: ignore
 
     def __init__(self, tests: Iterable[MagicTest] = ()):
         self._tests: List[MagicTest] = []
@@ -1859,13 +1874,6 @@ class MagicMatcher:
         self.tests_that_can_be_indirect: Set[MagicTest] = set()
         for test in tests:
             self.add(test)
-
-    @classmethod
-    @property
-    def DEFAULT_INSTANCE(cls) -> "MagicMatcher":
-        if cls._DEFAULT_INSTANCE is None:
-            cls._DEFAULT_INSTANCE = MagicMatcher.parse(*MAGIC_DEFS)
-        return cls._DEFAULT_INSTANCE
 
     def add(self, test: MagicTest):
         if isinstance(test, NamedTest):

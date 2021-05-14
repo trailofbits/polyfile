@@ -19,7 +19,7 @@ def git_branch():
 DEV_BUILD = False
 
 
-__version__ = (0, 3, 1)
+__version__ = (0, 3, 2)
 
 if DEV_BUILD:
     branch_name = git_branch()
