@@ -83,7 +83,7 @@ supports all 263 MIME types that it can identify.
 
 It currently has support for parsing and semantically mapping the following formats:
 * PDF, using an instrumented version of [Didier Stevens' public domain, permissive, forensic parser](https://blog.didierstevens.com/programs/pdf-tools/)
-* ZIP, including reursive identification of all ZIP contents
+* ZIP, including recursive identification of all ZIP contents
 * JPEG/JFIF, using its [Kaitai Struct grammar](https://formats.kaitai.io/jpeg/index.html)
 * [iNES](https://wiki.nesdev.com/w/index.php/INES)
 * [Any other format](https://formats.kaitai.io/index.html) specified in a [KSY grammar](https://doc.kaitai.io/user_guide.html)
@@ -94,7 +94,7 @@ curl -v --silent https://www.sultanik.com/files/ESultanikResume.pdf | polyfile -
 ```
 
 Prior to PolyFile version 0.3.0, it used the [TrID database](http://mark0.net/soft-trid-deflist.html) for file
-identificaiton rather than the libmagic file definitions. This proved to be very slow (since TrID has many duplicate
+identification rather than the libmagic file definitions. This proved to be very slow (since TrID has many duplicate
 entries) and prone to false positives (since TrID's file definitions are much simpler than libmagic's). The original
 TrID matching code is still shipped with PolyFile and can be invoked programmatically, but it is not used by default.
 
@@ -154,7 +154,7 @@ optional arguments:
   -h, --help            show this help message and exit
   --filetype FILETYPE, -f FILETYPE
                         explicitly match against the given filetype or
-                        filetype wildcard (default is to matchagainst all
+                        filetype wildcard (default is to match against all
                         filetypes)
   --list, -l            list the supported filetypes (for the `--filetype`
                         argument) and exit
@@ -201,6 +201,6 @@ the future, but here is the current method employed by `polymerge`:
 This research was developed by [Trail of
 Bits](https://www.trailofbits.com/) with funding from the Defense
 Advanced Research Projects Agency (DARPA) under the SafeDocs program
-as a subcontractor to [Galois](https://galois.com). It is licensed under the [Apache 2.0 lisense](LICENSE).
+as a subcontractor to [Galois](https://galois.com). It is licensed under the [Apache 2.0 license](LICENSE).
 The [PDF parser](polyfile/pdfparser.py) is modified from the parser developed by Didier Stevens and released into the
  public domain. © 2019, Trail of Bits.
