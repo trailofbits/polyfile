@@ -10,7 +10,7 @@ if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class VlqBase128Le(KaitaiStruct):
-    """A variable-length unsigned integer using base128 encoding. 1-byte groups
+    """A variable-length unsigned/signed integer using base128 encoding. 1-byte groups
     consist of 1-bit flag of continuation and 7-bit value chunk, and are ordered
     "least significant group first", i.e. in "little-endian" manner.
     
@@ -99,11 +99,31 @@ class VlqBase128Le(KaitaiStruct):
 
     @property
     def value(self):
-        """Resulting value as normal integer."""
+        """Resulting unsigned value as normal integer."""
         if hasattr(self, '_m_value'):
             return self._m_value if hasattr(self, '_m_value') else None
 
         self._m_value = (((((((self.groups[0].value + ((self.groups[1].value << 7) if self.len >= 2 else 0)) + ((self.groups[2].value << 14) if self.len >= 3 else 0)) + ((self.groups[3].value << 21) if self.len >= 4 else 0)) + ((self.groups[4].value << 28) if self.len >= 5 else 0)) + ((self.groups[5].value << 35) if self.len >= 6 else 0)) + ((self.groups[6].value << 42) if self.len >= 7 else 0)) + ((self.groups[7].value << 49) if self.len >= 8 else 0))
         return self._m_value if hasattr(self, '_m_value') else None
+
+    @property
+    def sign_bit(self):
+        if hasattr(self, '_m_sign_bit'):
+            return self._m_sign_bit if hasattr(self, '_m_sign_bit') else None
+
+        self._m_sign_bit = (1 << ((7 * self.len) - 1))
+        return self._m_sign_bit if hasattr(self, '_m_sign_bit') else None
+
+    @property
+    def value_signed(self):
+        """
+        .. seealso::
+           Source - https://graphics.stanford.edu/~seander/bithacks.html#VariableSignExtend
+        """
+        if hasattr(self, '_m_value_signed'):
+            return self._m_value_signed if hasattr(self, '_m_value_signed') else None
+
+        self._m_value_signed = ((self.value ^ self.sign_bit) - self.sign_bit)
+        return self._m_value_signed if hasattr(self, '_m_value_signed') else None
 
 

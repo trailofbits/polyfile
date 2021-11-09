@@ -20,7 +20,10 @@ KAITAI_MIME_MAPPING: Dict[str, str] = {
     "application/x-sqlite3": "database/sqlite3.ksy",
     "application/x-rar": "archive/rar.ksy",
     "font/sfnt": "font/ttf.ksy",
-    "application/x-pie-executable": "executable/elf.ksy"
+    "application/x-pie-executable": "executable/elf.ksy",
+# Uncomment this when/if Kaitai fixes its upstream compilation bug for ICC
+# (https://github.com/kaitai-io/kaitai_struct_formats/issues/347#ref-commit-fde2866)
+#    "application/vnd.iccprofile": "image/icc_4.ksy"
 }
 
 IMAGE_MIMETYPES = {

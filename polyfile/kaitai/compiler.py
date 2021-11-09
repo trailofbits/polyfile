@@ -22,6 +22,15 @@ class KaitaiError(RuntimeError):
     pass
 
 
+class CompilationError(KaitaiError):
+    def __init__(self, ksy_file: str, message: str):
+        super().__init__(message)
+        self.ksy_file: str = ksy_file
+
+    def __str__(self):
+        return f"{self.ksy_file}: {super().__str__()}"
+
+
 def has_kaitai_compiler() -> bool:
     return shutil.which(KAITAI_COMPILER_NAME) is not None
 
@@ -68,6 +77,9 @@ def compile(ksy_path: Union[str, Path], output_directory: Union[str, Path]) -> C
 
     first_spec_name = result[ksy_path]["firstSpecName"]
     first_spec = result[ksy_path]["output"]["python"][first_spec_name]
+    if "errors" in first_spec:
+        for error in first_spec["errors"]:
+            raise CompilationError(ksy_file=error["file"], message=error["message"])
     return CompiledKSY(
         class_name=first_spec["topLevelName"],
         python_path=output_directory / first_spec["files"][0]["fileName"],

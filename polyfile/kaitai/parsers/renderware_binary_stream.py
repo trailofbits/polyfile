@@ -13,7 +13,7 @@ if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
 class RenderwareBinaryStream(KaitaiStruct):
     """
     .. seealso::
-       Source - https://www.gtamodding.com/wiki/RenderWare_binary_stream_file
+       Source - https://gtamods.com/wiki/RenderWare_binary_stream_file
     """
 
     class Sections(Enum):
@@ -240,7 +240,7 @@ class RenderwareBinaryStream(KaitaiStruct):
     class StructClump(KaitaiStruct):
         """
         .. seealso::
-           Source - https://www.gtamodding.com/wiki/RpClump
+           Source - https://gtamods.com/wiki/RpClump
         """
         SEQ_FIELDS = ["num_atomics", "num_lights", "num_cameras"]
         def __init__(self, _io, _parent=None, _root=None):
@@ -268,7 +268,7 @@ class RenderwareBinaryStream(KaitaiStruct):
     class StructGeometry(KaitaiStruct):
         """
         .. seealso::
-           Source - https://www.gtamodding.com/wiki/RpGeometry
+           Source - https://gtamods.com/wiki/RpGeometry
         """
         SEQ_FIELDS = ["format", "num_triangles", "num_vertices", "num_morph_targets", "surf_prop", "geometry", "morph_targets"]
         def __init__(self, _io, _parent=None, _root=None):
@@ -402,7 +402,7 @@ class RenderwareBinaryStream(KaitaiStruct):
     class StructGeometryList(KaitaiStruct):
         """
         .. seealso::
-           Source - https://www.gtamodding.com/wiki/Geometry_List_(RW_Section)#Structure
+           Source - https://gtamods.com/wiki/Geometry_List_(RW_Section)#Structure
         """
         SEQ_FIELDS = ["num_geometries"]
         def __init__(self, _io, _parent=None, _root=None):
@@ -515,7 +515,7 @@ class RenderwareBinaryStream(KaitaiStruct):
     class SurfaceProperties(KaitaiStruct):
         """
         .. seealso::
-           Source - https://www.gtamodding.com/wiki/RpGeometry
+           Source - https://gtamods.com/wiki/RpGeometry
         """
         SEQ_FIELDS = ["ambient", "specular", "diffuse"]
         def __init__(self, _io, _parent=None, _root=None):
@@ -539,7 +539,7 @@ class RenderwareBinaryStream(KaitaiStruct):
     class StructFrameList(KaitaiStruct):
         """
         .. seealso::
-           Source - https://www.gtamodding.com/wiki/Frame_List_(RW_Section)#Structure
+           Source - https://gtamods.com/wiki/Frame_List_(RW_Section)#Structure
         """
         SEQ_FIELDS = ["num_frames", "frames"]
         def __init__(self, _io, _parent=None, _root=None):
@@ -569,7 +569,7 @@ class RenderwareBinaryStream(KaitaiStruct):
     class Matrix(KaitaiStruct):
         """
         .. seealso::
-           Source - https://www.gtamodding.com/wiki/Frame_List_(RW_Section)#Structure
+           Source - https://gtamods.com/wiki/Frame_List_(RW_Section)#Structure
         """
         SEQ_FIELDS = ["entries"]
         def __init__(self, _io, _parent=None, _root=None):
@@ -596,7 +596,7 @@ class RenderwareBinaryStream(KaitaiStruct):
     class Vector3d(KaitaiStruct):
         """
         .. seealso::
-           Source - https://www.gtamodding.com/wiki/Frame_List_(RW_Section)#Structure
+           Source - https://gtamods.com/wiki/Frame_List_(RW_Section)#Structure
         """
         SEQ_FIELDS = ["x", "y", "z"]
         def __init__(self, _io, _parent=None, _root=None):
@@ -724,7 +724,7 @@ class RenderwareBinaryStream(KaitaiStruct):
     class Frame(KaitaiStruct):
         """
         .. seealso::
-           Source - https://www.gtamodding.com/wiki/Frame_List_(RW_Section)#Structure
+           Source - https://gtamods.com/wiki/Frame_List_(RW_Section)#Structure
         """
         SEQ_FIELDS = ["rotation_matrix", "position", "cur_frame_idx", "matrix_creation_flags"]
         def __init__(self, _io, _parent=None, _root=None):
