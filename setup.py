@@ -122,6 +122,7 @@ setup(
     python_requires='>=3.6',
     install_requires=[
         "dataclasses;python_version<'3.7'",  # dataclasses were only added in Python 3.7
+        'cint',
         'graphviz',
         'intervaltree',
         'jinja2',

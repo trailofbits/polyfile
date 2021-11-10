@@ -25,8 +25,10 @@ from typing import (
 )
 from uuid import UUID
 
+from .arithmetic import CStyleInt, make_c_style_int
 from .iterators import LazyIterableSet
 from .logger import getStatusLogger, TRACE
+
 
 if sys.version_info < (3, 9):
     from typing import Pattern
@@ -1419,14 +1421,23 @@ class NumericOperator(Enum):
     ALL_BITS_CLEAR = ("^", lambda a, b: not (a & b))  # value from the file (a) must have clear all bits set in b
     NOT = ("!", lambda a, b: not (a == b))
 
-    def __init__(self, symbol: str, test: Union[Callable[[int, int], bool], Callable[[float, float], bool]]):
+    def __init__(self, symbol: str, test: Union[
+            Callable[[int, int], bool],
+            Callable[[float, float], bool],
+            Callable[[CStyleInt, CStyleInt], bool]
+    ]):
         self.symbol: str = symbol
-        self.test: Union[Callable[[int, int], bool], Callable[[float, float], bool]] = test
+        self.test: Union[
+            Callable[[int, int], bool], Callable[[float, float], bool], Callable[[CStyleInt, CStyleInt], bool]
+        ] = test
         NUMERIC_OPERATORS_BY_SYMBOL[symbol] = self
 
     @staticmethod
     def get(symbol: str) -> "NumericOperator":
         return NUMERIC_OPERATORS_BY_SYMBOL[symbol]
+
+    def __str__(self):
+        return self.symbol
 
 
 class NumericValue(Generic[T]):
@@ -1434,7 +1445,7 @@ class NumericValue(Generic[T]):
         self.value: T = value
         self.operator: NumericOperator = operator
 
-    def test(self, to_match: T, unsigned: bool, num_bytes: int, preprocess: Callable[[int], int] = lambda x: x) -> bool:
+    def test(self, to_match: T, unsigned: bool, num_bytes: int, preprocess: Callable[[T], T] = lambda x: x) -> bool:
         return self.operator.test(preprocess(to_match), self.value)
 
     @staticmethod
@@ -1450,6 +1461,9 @@ class NumericValue(Generic[T]):
             pass
         raise ValueError(f"Could not parse numeric type {value!r}")
 
+    def __str__(self):
+        return f"{self.operator}{self.value!s}"
+
 
 class NumericWildcard(NumericValue):
     def __init__(self):
@@ -1460,30 +1474,16 @@ class NumericWildcard(NumericValue):
 
 
 class IntegerValue(NumericValue[int]):
-    @staticmethod
-    def normalize_signedness(value: int, unsigned: bool, num_bytes: int) -> int:
-        bits = 8 * num_bytes
-        if unsigned:
-            max_value = (1 << bits) - 1
-            min_value = 0
-            if value < 0:
-                # convert the value to a bit-equivalent unsigned value
-                value += 2**bits
-        else:
-            max_value = (1 << bits) >> 1
-            min_value = ~max_value
-            if value > max_value:
-                # convert the value to a bit-equivalent signed value
-                value -= 2 ** bits
-        if not (min_value <= value <= max_value):
-            raise ValueError(f"Invalid integer constant {value} for comparing to a "
-                             f"{['signed', 'n unsigned'][unsigned]} {num_bytes}-byte integer")
-        return value
-
-    def test(self, to_match: int, unsigned: bool, num_bytes: int, preprocess: Callable[[int], int] = lambda x: x) -> bool:
-        to_test = IntegerValue.normalize_signedness(self.value, unsigned, num_bytes)
-        to_match = IntegerValue.normalize_signedness(preprocess(to_match), unsigned, num_bytes)
-        return self.operator.test(to_match, to_test)
+    def test(
+            self,
+            to_match: int,
+            unsigned: bool,
+            num_bytes: int,
+            preprocess: Callable[[CStyleInt], CStyleInt] = lambda x: x
+    ) -> bool:
+        to_test = make_c_style_int(value=self.value, num_bytes=num_bytes, signed=not unsigned)
+        to_match = make_c_style_int(value=to_match, num_bytes=num_bytes, signed=not unsigned)
+        return self.operator.test(preprocess(to_match), to_test)
 
     @staticmethod
     def parse(value: Union[str, bytes], num_bytes: int) -> "IntegerValue":
