@@ -77,7 +77,7 @@ class MagicTest(TestCase):
                     actual = str(match)
                     matches.add(actual)
                     print(f"\tActual:   {actual!r}")
-                if testfile.stem not in ("JW07022A.mp3", "cl8m8ocofedso", "gedcom", "regex-eol", "uf2"):
+                if testfile.stem not in ("JW07022A.mp3", "gedcom", "regex-eol", "uf2"):
                     # The files we skip fail because:
                     #   1. a mismatch between the database we have and the one used to generate the results in
                     #      the test corpus;
