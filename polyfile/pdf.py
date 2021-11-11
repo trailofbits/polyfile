@@ -35,7 +35,10 @@ def _emit_dict(parsed, parent, pdf_offset):
         if isinstance(value, pdfparser.ParsedDictionary):
             value_end = value.end.offset.offset + len(value.end.token)
         else:
-            value_end = value[-1].offset.offset + len(value[-1].token)
+            if not value:
+                value_end = key.offset.offset + len(key.token)
+            else:
+                value_end = value[-1].offset.offset + len(value[-1].token)
         pair_offset = key.offset.offset - dict_obj.offset
         pair = Submatch(
             "KeyValuePair",
@@ -54,7 +57,7 @@ def _emit_dict(parsed, parent, pdf_offset):
         )
         if isinstance(value, pdfparser.ParsedDictionary):
             yield from _emit_dict(value, pair, pdf_offset)
-        else:
+        elif value:
             value_length = value[-1].offset.offset + len(value[-1].token) - value[0].offset.offset
             yield Submatch(
                 "Value",
