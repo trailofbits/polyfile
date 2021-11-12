@@ -486,8 +486,14 @@ class PDFLiteral(PSLiteral):
             super().__init__(PSBytes(name, pdf_offset=pdf_offset, pdf_bytes=pdf_bytes))
         else:
             super().__init__(name)
-        self.pdf_offset: int = pdf_offset
-        self.pdf_bytes: int = pdf_bytes
+
+    @property
+    def pdf_bytes(self) -> int:
+        return self.name.pdf_bytes + 1
+
+    @property
+    def pdf_offset(self) -> int:
+        return self.name.pdf_offset - 1
 
     def __eq__(self, other):
         return isinstance(other, PSLiteral) and self.name == other.name
@@ -535,6 +541,10 @@ class PDFDict(dict):
         return ret
 
 
+class PDFList(PSSequence, list):
+    pass
+
+
 def make_ps_object(value, pdf_offset: int, pdf_bytes: int) -> Union[PDFBaseParserToken, PSStr]:
     if isinstance(value, PSLiteral):
         return PDFLiteral(value.name, pdf_offset=pdf_offset, pdf_bytes=pdf_bytes)
@@ -579,17 +589,21 @@ class PDFParser(PDFMinerParser):
         transformed = []
         for obj in objs:
             if len(obj) == 2 and isinstance(obj[1], dict):
-                length = self._curtokenpos - obj[0]
+                length = self._curtokenpos + 1 - obj[0]
                 assert length > 0
-                transformed.append((obj[0], PDFDict(obj[1], pdf_offset=obj[0], pdf_bytes=length)))
+                transformed.append((obj[0], PDFDict(obj[1], pdf_offset=obj[0], pdf_bytes=length + 2)))
+            elif len(obj) == 2 and isinstance(obj[1], list):
+                length = self._curtokenpos + 1 - obj[0]
+                assert length > 0
+                transformed.append((obj[0], PDFList(obj[1], pdf_offset=obj[0], pdf_bytes=length)))
             elif len(obj) == 2 and isinstance(obj[1], PDFStream):
                 stream: PDFStream = obj[1]
                 pos = obj[0]
                 transformed.append((pos, PDFObjectStream(stream, pdf_offset=pos, pdf_bytes=len(stream.rawdata))))
-            elif len(obj) == 2 and isinstance(obj[1], PSObject):
+            elif len(obj) == 2 and isinstance(obj[1], PSObject) and not isinstance(obj[1], PDFLiteral):
                 pos = obj[0]
                 psobj = obj[1]
-                length = self._curtokenpos - obj[0]
+                length = self._curtokenpos + 1 - obj[0]
                 setattr(psobj, "pdf_offset", pos)
                 setattr(psobj, "pdf_bytes", length)
                 transformed.append((pos, psobj))
@@ -598,8 +612,16 @@ class PDFParser(PDFMinerParser):
         return super().push(*transformed)
 
     def _add_token(self, obj: PSBaseParserToken):
-        pos = self._curtokenpos
-        length = len(self._curtoken)
+        if hasattr(obj, "pdf_offset"):
+            pos = obj.pdf_offset
+        else:
+            pos = self._curtokenpos
+        if hasattr(obj, "pdf_bytes"):
+            length = obj.pdf_bytes
+        elif isinstance(obj, PSLiteral):
+            length = len(self._curtoken)
+        else:
+            length = len(self._curtoken)
         obj = make_ps_object(obj, pdf_offset=pos, pdf_bytes=length)
         return super()._add_token(obj)
 
@@ -658,7 +680,22 @@ def parse_object(obj, matcher: Matcher, parent=None):
         )
         yield match
         yield from parse_object(obj.attrs, matcher=matcher, parent=match)
+        data = obj.get_data()
+        # recursively match against the deflated contents
+        with Tempfile(data) as f:
+            yield from matcher.match(f, parent=match)
         log.clear_status()
+    elif isinstance(obj, PDFList):
+        list_obj = Submatch(
+            "PDFList",
+            '',
+            relative_offset=obj.pdf_offset - parent.offset,
+            length=obj.pdf_bytes,
+            parent=parent
+        )
+        yield list_obj
+        for item in obj:
+            yield from parse_object(item, matcher=matcher, parent=list_obj)
     elif isinstance(obj, PDFDict):
         dict_obj = Submatch(
             "PDFDictionary",
@@ -684,7 +721,23 @@ def parse_object(obj, matcher: Matcher, parent=None):
                 length=key.pdf_bytes,
                 parent=pair
             )
-            yield from parse_object(value, matcher=matcher, parent=pair)
+            value_match = Submatch(
+                "Value",
+                value,
+                relative_offset=value.pdf_offset - key.pdf_offset,
+                length=value.pdf_bytes,
+                parent=pair
+            )
+            yield value_match
+            yield from parse_object(value, matcher=matcher, parent=value_match)
+    elif hasattr(obj, "pdf_offset") and hasattr(obj, "pdf_bytes"):
+        yield Submatch(
+            obj.__class__.__name__,
+            obj,
+            relative_offset=obj.pdf_offset - parent.offset,
+            length=obj.pdf_bytes,
+            parent=parent
+        )
 
     # yield Submatch(
     #     "PDFObjectID",
@@ -707,9 +760,26 @@ class PDF(Match):
         from pdfminer.pdfdocument import PDFDocument
         parser = PDFParser(RawPDFStream(file_stream))
         doc = PDFDocument(parser)
+        yielded = set()
         for xref in doc.xrefs:
             for objid in xref.get_objids():
                 obj = doc.getobj(objid)
-                # _ = obj.get_data()
-                yield from parse_object(obj, self.matcher, self)
+                if isinstance(obj, PDFObjectStream):
+                    if (obj.objid, obj.genno) in yielded:
+                        continue
+                    yielded.add((obj.objid, obj.genno))
+                    yield from parse_object(obj, self.matcher, self)
+                else:
+                    if objid in yielded:
+                        continue
+                    yielded.add(objid)
+                    match = Submatch(
+                        name="PDFObject",
+                        display_name=f"PDFObject{objid}",
+                        match_obj=objid,
+                        relative_offset=obj.pdf_offset,
+                        length=obj.pdf_bytes,
+                        parent=self
+                    )
+                    yield from parse_object(obj, self.matcher, match)
         #yield from parse_pdf(file_stream, matcher=self.matcher, parent=self)
