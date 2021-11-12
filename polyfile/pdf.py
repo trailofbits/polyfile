@@ -1,6 +1,8 @@
 import zlib
 from typing import Dict, Iterator, List, Optional, Type
 
+from pdfminer.ascii85 import ascii85decode
+
 from . import pdfparser
 from .kaitai.parser import KaitaiParser
 from .fileutils import Tempfile
@@ -154,6 +156,21 @@ class ASCIIHexDecoder(StreamFilter):
             length=len(raw_content),
             parent=parent,
             decoded=bytes(data)
+        )
+
+
+class ASCII85Decoder(StreamFilter):
+    name = "ASCII85"
+
+    def decode(self, matcher: Matcher, raw_content: bytes, parent: Submatch) -> Iterator[Submatch]:
+        decoded = ascii85decode(raw_content)
+        yield Submatch(
+            f"{self.name}Encoded",
+            raw_content,
+            relative_offset=0,
+            length=len(raw_content),
+            parent=parent,
+            decoded=bytes(decoded)
         )
 
 
