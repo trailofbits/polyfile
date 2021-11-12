@@ -365,7 +365,271 @@ def parse_pdf(file_stream, matcher: Matcher, parent=None):
                 yield from parse_object(file_stream, object, matcher=matcher, parent=parent)
 
 
+from pdfminer.pdfparser import PDFParser as PDFMinerParser
+from pdfminer.psparser import PSBaseParserToken, PSKeyword, PSObject, PSLiteral, PSStackEntry, ExtraT
+from pdfminer.pdfdocument import PDFXRef, KWD, PDFNoValidXRef, PSEOF, dict_value
+from typing import Tuple, Union
+
+
+def load_trailer(self, parser: PDFMinerParser) -> None:
+    try:
+        (_, kwd) = parser.nexttoken()
+        assert kwd == KWD(b'trailer'), f"{kwd!s} != {KWD(b'trailer')!s}"
+        (_, dic) = parser.nextobject()
+    except PSEOF:
+        x = parser.pop(1)
+        if not x:
+            raise PDFNoValidXRef('Unexpected EOF - file corrupted')
+        (_, dic) = x[0]
+    self.trailer.update(dict_value(dic))
+    log.debug('trailer=%r', self.trailer)
+    return
+
+PDFXRef.load_trailer = load_trailer
+
+
+class PSToken:
+    pdf_offset: int
+    pdf_bytes: int
+
+    def __new__(cls, *args, **kwargs):
+        ret = super().__new__(cls, *args)
+        ret.pdf_offset = kwargs["pdf_offset"]
+        ret.pdf_bytes = kwargs["pdf_bytes"]
+        return ret
+
+    def __str__(self):
+        return super().__str__()
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}({super().__repr__()}, pdf_offset={self.pdf_offset!r}, "\
+               f"pdf_bytes={self.pdf_bytes!r})"
+
+
+class PSInt(PSToken, int):
+    pass
+
+
+class PSSequence(PSToken):
+    def __getitem__(self, item):
+        if isinstance(item, int):
+            value = super().__getitem__(item)
+            return make_ps_object(value, pdf_offset=self.pdf_offset+item, pdf_bytes=self.pdf_bytes-item)
+        elif isinstance(item, slice):
+            if item.start is None:
+                start = 0
+            else:
+                start = item.start
+            if item.stop is None:
+                stop = self.pdf_bytes
+            else:
+                stop = item.stop
+            return self.__class__(
+                super().__getitem__(item),
+                pdf_offset=self.pdf_offset+start,
+                pdf_bytes=self.pdf_bytes-(stop - start)
+            )
+        else:
+            return super().__getitem__(item)
+
+
+class PSStr(PSSequence, str):
+    def encode(self, encoding: str = ..., errors: str = ...) -> bytes:
+        return PSBytes(super().encode(encoding, errors), pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes)
+
+
+class PSBytes(PSSequence, bytes):
+    def __new__(cls, *args, **kwargs):
+        kwargs = dict(kwargs)
+        if "pdf_bytes" not in kwargs:
+            kwargs["pdf_bytes"] = len(args[0])
+        return super().__new__(cls, *args, **kwargs)
+
+    def decode(self, encoding: str = ..., errors: str = ...) -> PSStr:
+        return PSStr(super().decode(encoding, errors), pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes)
+
+
+class PSFloat(PSToken, float):
+    pass
+
+
+class PSBool:
+    def __init__(self, value: bool, pdf_offset: int, pdf_bytes: int):
+        self.value: bool = value
+        self.pdf_offset: int = pdf_offset
+        self.pdf_bytes: int = pdf_bytes
+
+    def __bool__(self):
+        return self.value
+
+    def __eq__(self, other):
+        return self.value == bool(other)
+
+    def __ne__(self, other):
+        return self.value != bool(other)
+
+    def __hash__(self):
+        return hash(self.value)
+
+    def __str__(self):
+        return str(self.value)
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}(value={self.value!r}, pdf_offset={self.pdf_offset!r})"
+
+
+class PDFLiteral(PSLiteral):
+    def __init__(self, name: PSLiteral.NameType, pdf_offset: int, pdf_bytes: int):
+        if isinstance(name, str) and not isinstance(name, PSStr):
+            super().__init__(PSStr(name, pdf_offset=pdf_offset, pdf_bytes=pdf_bytes))
+        elif isinstance(name, bytes) and not isinstance(name, PSBytes):
+            super().__init__(PSBytes(name, pdf_offset=pdf_offset, pdf_bytes=pdf_bytes))
+        else:
+            super().__init__(name)
+        self.pdf_offset: int = pdf_offset
+        self.pdf_bytes: int = pdf_bytes
+
+    def __eq__(self, other):
+        return isinstance(other, PSLiteral) and self.name == other.name
+
+
+class PDFKeyword(PSKeyword):
+    def __init__(self, name: bytes, pdf_offset: int, pdf_bytes: int):
+        if not isinstance(name, PSBytes):
+            super().__init__(PSBytes(name, pdf_offset=pdf_offset, pdf_bytes=pdf_bytes))
+        else:
+            super().__init__(name)
+        self.pdf_offset: int = pdf_offset
+        self.pdf_bytes: int = pdf_bytes
+
+    def __eq__(self, other):
+        return isinstance(other, PSKeyword) and self.name == other.name
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}({self.name!r}, pdf_offset={self.pdf_offset}, pdf_bytes={self.pdf_bytes})"
+
+    def __str__(self):
+        return f"/{self.name!s}"
+
+
+PDFBaseParserToken = Union[PSFloat, PSBool, PDFLiteral, PSKeyword, PSBytes, PSInt]
+
+
+
+class PDFDict(dict):
+    pdf_offset: int
+    pdf_bytes: int
+
+    def __init__(self, *args, **kwargs):
+        kwargs = dict(kwargs)
+        if "pdf_offset" in kwargs:
+            del kwargs["pdf_offset"]
+        if "pdf_bytes" in kwargs:
+            del kwargs["pdf_bytes"]
+        super().__init__(*args, **kwargs)
+
+    def __new__(cls, *args, pdf_offset: int, pdf_bytes: int, **kwargs):
+        ret = super().__new__(cls, *args, **kwargs)
+        ret.pdf_offset = pdf_offset
+        ret.pdf_bytes = pdf_bytes
+        return ret
+
+
+def make_ps_object(value, pdf_offset: int, pdf_bytes: int) -> Union[PDFBaseParserToken, PSStr]:
+    if isinstance(value, PSLiteral):
+        return PDFLiteral(value.name, pdf_offset=pdf_offset, pdf_bytes=pdf_bytes)
+    #elif isinstance(value, PSKeyword):
+    #    return PDFKeyword(value.name, pdf_offset=pdf_offset, pdf_bytes=pdf_bytes)
+    elif isinstance(value, PDFDict):
+        value.pdf_offset = pdf_offset
+        value.pdf_bytes = pdf_bytes
+        return value
+    elif isinstance(value, dict):
+        return PDFDict(value, pdf_offset=pdf_offset, pdf_bytes=pdf_bytes)
+    elif isinstance(value, PSObject):
+        setattr(value, "pdf_offset", pdf_offset)
+        setattr(value, "pdf_bytes", pdf_bytes)
+        return value
+    elif isinstance(value, int):
+        supertype = PSInt
+    elif isinstance(value, float):
+        supertype = PSFloat
+    elif isinstance(value, bool):
+        supertype = PSBool
+    elif isinstance(value, bytes):
+        supertype = PSBytes
+    elif isinstnace(value, str):
+        supertype = PSStr
+    else:
+        raise NotImplementedError(f"Add suppport for PSSequences containing elements of type {type(value)}")
+    return supertype(value, pdf_offset=pdf_offset, pdf_bytes=pdf_bytes)
+
+
+class PDFParser(PDFMinerParser):
+    def push(self, *objs: PSStackEntry[ExtraT]):
+        transformed = []
+        for obj in objs:
+            if len(obj) == 2 and isinstance(obj[1], dict):
+                length = self._curtokenpos - obj[0]
+                assert length > 0
+                transformed.append((obj[0], PDFDict(obj[1], pdf_offset=obj[0], pdf_bytes=length)))
+            else:
+                transformed.append(obj)
+        return super().push(*transformed)
+
+    def _add_token(self, obj: PSBaseParserToken):
+        pos = self._curtokenpos
+        length = len(self._curtoken)
+        obj = make_ps_object(obj, pdf_offset=pos, pdf_bytes=length)
+        return super()._add_token(obj)
+
+    def nextobject(self) -> PSStackEntry[ExtraT]:
+        ret = super().nextobject()
+        return ret
+
+    # def nexttoken(self) -> Tuple[int, PSBaseParserToken]:
+    #     pos, token = super().nexttoken()
+    #     if isinstance(token, PSObject):
+    #         setattr(token, "pdf_offset", pos)
+    #     elif isinstance(token, int):
+    #         token = PSInt(token, pdf_offset=pos)
+    #     elif isinstance(token, bytes):
+    #         token = PSBytes(token, pdf_offset=pos)
+    #     elif isinstance(token, float):
+    #         token = PSFloat(token, pdf_offset=pos)
+    #     elif isinstance(token, bool):
+    #         token - PSBool(token, pdf_offset=pos)
+    #     else:
+    #         raise NotImplementedError(f"Add support for tokens of type {type(token)}")
+    #     return pos, token
+
+    #def do_keyword(self, pos: int, token: PSKeyword) -> None:
+
+
+class RawPDFStream:
+    def __init__(self, file_stream):
+        self._file_stream = file_stream
+
+    def read(self, *args, **kwargs):
+        offset_before = self._file_stream.tell()
+        ret = self._file_stream.read(*args, **kwargs)
+        if isinstance(ret, bytes):
+            ret = PSBytes(ret, pdf_offset=offset_before)
+        return ret
+
+    def __getattr__(self, item):
+        return getattr(self._file_stream, item)
+
+
 @submatcher("application/pdf")
 class PDF(Match):
     def submatch(self, file_stream):
-        yield from parse_pdf(file_stream, matcher=self.matcher, parent=self)
+        from pdfminer.pdfdocument import PDFDocument
+        parser = PDFParser(RawPDFStream(file_stream))
+        doc = PDFDocument(parser)
+        for xref in doc.xrefs:
+            for objid in xref.get_objids():
+                print(doc.getobj(objid))
+        print(doc)
+        return iter(())
+        #yield from parse_pdf(file_stream, matcher=self.matcher, parent=self)
