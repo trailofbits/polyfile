@@ -365,7 +365,7 @@ def parse_pdf(file_stream, matcher: Matcher, parent=None):
                 yield from parse_object(file_stream, object, matcher=matcher, parent=parent)
 
 
-from pdfminer.pdfparser import PDFParser as PDFMinerParser
+from pdfminer.pdfparser import PDFParser as PDFMinerParser, PDFStream, PDFObjRef
 from pdfminer.psparser import PSBaseParserToken, PSKeyword, PSObject, PSLiteral, PSStackEntry, ExtraT
 from pdfminer.pdfdocument import PDFXRef, KWD, PDFNoValidXRef, PSEOF, dict_value
 from typing import Tuple, Union
@@ -565,6 +565,15 @@ def make_ps_object(value, pdf_offset: int, pdf_bytes: int) -> Union[PDFBaseParse
     return supertype(value, pdf_offset=pdf_offset, pdf_bytes=pdf_bytes)
 
 
+class PDFObjectStream(PDFStream):
+    def __init__(self, parent: PDFStream, pdf_offset: int, pdf_bytes: int):
+        super().__init__(
+            attrs=parent.attrs,
+            rawdata=PSBytes(parent.rawdata, pdf_offset=pdf_offset, pdf_bytes=pdf_bytes),
+            decipher=parent.decipher
+        )
+
+
 class PDFParser(PDFMinerParser):
     def push(self, *objs: PSStackEntry[ExtraT]):
         transformed = []
@@ -573,6 +582,17 @@ class PDFParser(PDFMinerParser):
                 length = self._curtokenpos - obj[0]
                 assert length > 0
                 transformed.append((obj[0], PDFDict(obj[1], pdf_offset=obj[0], pdf_bytes=length)))
+            elif len(obj) == 2 and isinstance(obj[1], PDFStream):
+                stream: PDFStream = obj[1]
+                pos = obj[0]
+                transformed.append((pos, PDFObjectStream(stream, pdf_offset=pos, pdf_bytes=len(stream.rawdata))))
+            elif len(obj) == 2 and isinstance(obj[1], PSObject):
+                pos = obj[0]
+                psobj = obj[1]
+                length = self._curtokenpos - obj[0]
+                setattr(psobj, "pdf_offset", pos)
+                setattr(psobj, "pdf_bytes", length)
+                transformed.append((pos, psobj))
             else:
                 transformed.append(obj)
         return super().push(*transformed)
@@ -621,6 +641,66 @@ class RawPDFStream:
         return getattr(self._file_stream, item)
 
 
+def parse_object(obj, matcher: Matcher, parent=None):
+    if isinstance(obj, PDFObjectStream):
+        log.status(f"Parsing PDF obj {obj.objid} {obj.genno}")
+        if parent is None or isinstance(parent, PDF):
+            parent_offset = 0
+        else:
+            parent_offset = parent.offset
+        match = Submatch(
+            name="PDFObject",
+            display_name=f"PDFObject{obj.objid}.{obj.genno}",
+            match_obj=(obj.objid, obj.genno),
+            relative_offset=obj.attrs.pdf_offset,
+            length=obj.rawdata.pdf_offset - obj.attrs.pdf_offset + obj.rawdata.pdf_bytes,
+            parent=parent
+        )
+        yield match
+        yield from parse_object(obj.attrs, matcher=matcher, parent=match)
+        log.clear_status()
+    elif isinstance(obj, PDFDict):
+        dict_obj = Submatch(
+            "PDFDictionary",
+            '',
+            relative_offset=obj.pdf_offset - parent.offset,
+            length=obj.pdf_bytes,
+            parent=parent
+        )
+        yield dict_obj
+        for key, value in obj.items():
+            pair = Submatch(
+                "KeyValuePair",
+                '',
+                relative_offset=key.pdf_offset - dict_obj.offset,
+                length=value.pdf_offset + value.pdf_bytes - key.pdf_offset,
+                parent=dict_obj
+            )
+            yield pair
+            yield Submatch(
+                "Key",
+                key,
+                relative_offset=0,
+                length=key.pdf_bytes,
+                parent=pair
+            )
+            yield from parse_object(value, matcher=matcher, parent=pair)
+
+    # yield Submatch(
+    #     "PDFObjectID",
+    #     object.id,
+    #     relative_offset=0,
+    #     length=len(objid.token),
+    #     parent=obj
+    # )
+    # yield Submatch(
+    #     "PDFObjectVersion",
+    #     object.version,
+    #     relative_offset=objversion.offset.offset - objid.offset.offset,
+    #     length=len(objversion.token),
+    #     parent=obj
+    # )
+
 @submatcher("application/pdf")
 class PDF(Match):
     def submatch(self, file_stream):
@@ -629,7 +709,7 @@ class PDF(Match):
         doc = PDFDocument(parser)
         for xref in doc.xrefs:
             for objid in xref.get_objids():
-                print(doc.getobj(objid))
-        print(doc)
-        return iter(())
+                obj = doc.getobj(objid)
+                # _ = obj.get_data()
+                yield from parse_object(obj, self.matcher, self)
         #yield from parse_pdf(file_stream, matcher=self.matcher, parent=self)
