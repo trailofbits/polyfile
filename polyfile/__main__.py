@@ -165,6 +165,8 @@ def main(argv=None):
                 sys.stdout.flush()
                 sys.stderr.flush()
                 sys.stderr.write("\n\nCaught keyboard interrupt.\n")
+                if not sys.stderr.isatty() or not sys.stdin.isatty():
+                    sys.exit(128 + 15)
                 while True:
                     sys.stderr.write("Would you like PolyFile to output its current progress? [Yn] ")
                     result = input()
