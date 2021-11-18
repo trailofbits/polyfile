@@ -776,6 +776,7 @@ def parse_object(obj, matcher: Matcher, parent=None):
             parent_offset = 0
         else:
             parent_offset = parent.offset
+        data = obj.get_data()
         match = Submatch(
             name="PDFObject",
             display_name=f"PDFObject{obj.objid}.{obj.genno}",
@@ -786,7 +787,6 @@ def parse_object(obj, matcher: Matcher, parent=None):
         )
         yield match
         yield from parse_object(obj.attrs, matcher=matcher, parent=match)
-        data = obj.get_data()
         # recursively match against the deflated contents
         with Tempfile(data) as f:
             yield from matcher.match(f, parent=match)
@@ -842,7 +842,7 @@ def parse_object(obj, matcher: Matcher, parent=None):
             yield value_match
             yield from parse_object(value, matcher=matcher, parent=value_match)
     elif isinstance(obj, PDFDeciphered):
-        yield Submatch(
+        deciphered = Submatch(
             "PDFDeciphered",
             obj.original_bytes,
             decoded=obj,
@@ -850,6 +850,9 @@ def parse_object(obj, matcher: Matcher, parent=None):
             length=obj.pdf_bytes,
             parent=parent
         )
+        yield deciphered
+        with Tempfile(obj) as f:
+            yield from matcher.match(f, parent=deciphered)
     elif hasattr(obj, "pdf_offset") and hasattr(obj, "pdf_bytes"):
         yield Submatch(
             obj.__class__.__name__,
