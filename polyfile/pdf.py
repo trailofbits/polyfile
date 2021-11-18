@@ -604,7 +604,11 @@ class PDFParser(PDFMinerParser):
                 pos = obj[0]
                 psobj = obj[1]
                 length = self._curtokenpos + 1 - obj[0]
-                setattr(psobj, "pdf_offset", pos)
+                if isinstance(psobj, PDFObjRef):
+                    orig_pos = pos
+                    pos = min(pos, psobj.objid.pdf_offset)
+                    length += orig_pos - pos
+                setattr(psobj, "pdf_offset", pos) 
                 setattr(psobj, "pdf_bytes", length)
                 transformed.append((pos, psobj))
             else:
@@ -625,9 +629,17 @@ class PDFParser(PDFMinerParser):
         obj = make_ps_object(obj, pdf_offset=pos, pdf_bytes=length)
         return super()._add_token(obj)
 
-    def nextobject(self) -> PSStackEntry[ExtraT]:
-        ret = super().nextobject()
-        return ret
+    def do_keyword(self, pos: int, token: PSKeyword):
+        if token is self.KEYWORD_R:
+            # reference to indirect object
+            try:
+                ((_, objid), (_, genno)) = self.pop(2)
+                obj = PDFObjRef(self.doc, objid, genno)
+                self.push((pos, obj))
+            except PSSyntaxError:
+                pass
+        else:
+            super().do_keyword(pos, token)
 
     # def nexttoken(self) -> Tuple[int, PSBaseParserToken]:
     #     pos, token = super().nexttoken()
