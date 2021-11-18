@@ -371,6 +371,11 @@ from pdfminer.pdfdocument import (
     PDFDocument, PDFXRef, KWD, PDFNoValidXRef, PSEOF, dict_value, LITERAL_XREF, LITERAL_OBJSTM, LITERAL_CATALOG,
     DecipherCallable, PDFObjectNotFound
 )
+from pdfminer.pdftypes import (
+    LITERALS_FLATE_DECODE, LITERALS_ASCIIHEX_DECODE, LITERALS_CCITTFAX_DECODE, LITERALS_RUNLENGTH_DECODE,
+    LITERAL_CRYPT, LITERALS_LZW_DECODE, LITERALS_DCT_DECODE, LITERALS_JBIG2_DECODE, LITERALS_ASCII85_DECODE,
+    int_value, apply_png_predictor
+)
 from typing import Tuple, Union
 
 
@@ -408,7 +413,10 @@ class PSToken:
         return PSFloat(self, pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes)
 
     def __bytes__(self):
-        return PSBytes(self, pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes)
+        if isinstance(self, PSBytes):
+            return self
+        else:
+            return PSBytes(self, pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes)
 
     def __hex__(self):
         return PSStr(super().__hex__(), pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes)
@@ -439,11 +447,21 @@ class PSSequence(PSToken):
                 stop = self.pdf_bytes
             else:
                 stop = item.stop
-            return self.__class__(
-                super().__getitem__(item),
-                pdf_offset=self.pdf_offset+start,
-                pdf_bytes=self.pdf_bytes-(stop - start)
-            )
+            try:
+                return self.__class__(
+                    super().__getitem__(item),
+                    pdf_offset=self.pdf_offset+start,
+                    pdf_bytes=self.pdf_bytes-(stop - start)
+                )
+            except ValueError:
+                if isinstance(self, PSBytes):
+                    return PSBytes(
+                        super().__getitem__(item),
+                        pdf_offset=self.pdf_offset+start,
+                        pdf_bytes=self.pdf_bytes-(stop - start)
+                    )
+                else:
+                    raise
         else:
             return super().__getitem__(item)
 
@@ -478,7 +496,7 @@ class PDFDeciphered(PSBytes):
             original_bytes = kwargs["original_bytes"]
             del kwargs["original_bytes"]
         else:
-            raise ValueError(f"{self.__class__.__name__}.__init__ requires the `original_bytes` argument")
+            raise ValueError(f"{cls.__name__}.__init__ requires the `original_bytes` argument")
         ret = super().__new__(cls, *args, **kwargs)
         setattr(ret, "original_bytes", original_bytes)
         return ret
@@ -644,6 +662,75 @@ def make_ps_object(value, pdf_offset: int, pdf_bytes: int) -> Union[PDFBaseParse
     return supertype(value, pdf_offset=pdf_offset, pdf_bytes=pdf_bytes)
 
 
+class DecodingError(bytes):
+    message: Optional[str]
+
+    def __new__(cls, *args, **kwargs):
+        kwargs = dict(kwargs)
+        if "message" in kwargs:
+            message = kwargs["message"]
+            del kwargs["message"]
+        else:
+            message = None
+        ret = super().__new__(cls, b'')
+        setattr(ret, "message", message)
+        return ret
+
+
+class PDFStreamFilter(PSBytes):
+    name: str
+    original_bytes: bytes
+    error: Optional[DecodingError]
+
+    def __new__(cls, *args, **kwargs):
+        kwargs = dict(kwargs)
+        if "pdf_bytes" not in kwargs:
+            kwargs["pdf_bytes"] = len(args[0])
+        if "original_bytes" in kwargs:
+            original_bytes = kwargs["original_bytes"]
+            del kwargs["original_bytes"]
+        else:
+            raise ValueError(f"{cls.__name__}.__init__ requires the `original_bytes` argument")
+        if "name" in kwargs:
+            name = kwargs["name"]
+            del kwargs["name"]
+        else:
+            raise ValueError(f"{cls.__name__}.__init__ requires the `name` argument")
+        if isinstance(args[0], DecodingError):
+            error = args[0]
+        else:
+            error = None
+        ret = super().__new__(cls, *args, **kwargs)
+        setattr(ret, "original_bytes", original_bytes)
+        setattr(ret, "name", name)
+        setattr(ret, "error", error)
+        return ret
+
+
+class PNGPredictor(PSBytes):
+    params: PDFDict
+    original_bytes: bytes
+
+    def __new__(cls, *args, **kwargs):
+        kwargs = dict(kwargs)
+        if "pdf_bytes" not in kwargs:
+            kwargs["pdf_bytes"] = len(args[0])
+        if "original_bytes" in kwargs:
+            original_bytes = kwargs["original_bytes"]
+            del kwargs["original_bytes"]
+        else:
+            raise ValueError(f"{cls.__name__}.__init__ requires the `original_bytes` argument")
+        if "params" in kwargs:
+            params = kwargs["params"]
+            del kwargs["params"]
+        else:
+            raise ValueError(f"{cls.__name__}.__init__ requires the `params` argument")
+        ret = super().__new__(cls, *args, **kwargs)
+        setattr(ret, "original_bytes", original_bytes)
+        setattr(ret, "params", params)
+        return ret
+
+
 class PDFObjectStream(PDFStream):
     def __init__(self, parent: PDFStream, pdf_offset: int, pdf_bytes: int):
         super().__init__(
@@ -676,6 +763,90 @@ class PDFObjectStream(PDFStream):
             return self.rawdata
         else:
             raise ValueError(f"PDFObjectStream {self!r} does not have any data")
+
+    def decode(self):
+        assert self.data is None \
+               and self.rawdata is not None, str((self.data, self.rawdata))
+        data = self.rawdata
+        if self.decipher:
+            # Handle encryption
+            assert self.objid is not None
+            assert self.genno is not None
+            data = self.decipher(self.objid, self.genno, data, self.attrs)
+        filters = self.get_filters()
+        if not filters:
+            self.data = data
+            self.rawdata = None
+            return
+        for (f, params) in filters:
+            decoded: Optional[bytes] = None
+            if f in LITERALS_FLATE_DECODE:
+                # will get errors if the document is encrypted.
+                try:
+                    decoded = zlib.decompress(data)
+                except zlib.error as e:
+                    decoded = DecodingError(str(e))
+            elif f in LITERALS_LZW_DECODE:
+                decoded = lzwdecode(data)
+            elif f in LITERALS_ASCII85_DECODE:
+                decoded = ascii85decode(data)
+            elif f in LITERALS_ASCIIHEX_DECODE:
+                decoded = asciihexdecode(data)
+            elif f in LITERALS_RUNLENGTH_DECODE:
+                decoded = rldecode(data)
+            elif f in LITERALS_CCITTFAX_DECODE:
+                decoded = ccittfaxdecode(data, params)
+            elif f in LITERALS_DCT_DECODE:
+                # This is probably a JPG stream
+                # it does not need to be decoded twice.
+                # Just return the stream to the user.
+                pass
+            elif f in LITERALS_JBIG2_DECODE:
+                pass
+            elif f == LITERAL_CRYPT:
+                # not yet..
+                raise PDFNotImplementedError('/Crypt filter is unsupported')
+            else:
+                raise PDFNotImplementedError('Unsupported filter: %r' % f)
+            if decoded is not None:
+                if isinstance(f, PDFLiteral):
+                    name = f.name
+                else:
+                    name = f
+                data = PDFStreamFilter(
+                    decoded,
+                    pdf_offset=data.pdf_offset,
+                    pdf_bytes=data.pdf_bytes,
+                    original_bytes=data,
+                    name=name
+                )
+            # apply predictors
+            if params and 'Predictor' in params:
+                pred = int_value(params['Predictor'])
+                if pred == 1:
+                    # no predictor
+                    pass
+                elif 10 <= pred:
+                    # PNG predictor
+                    colors = int_value(params.get('Colors', 1))
+                    columns = int_value(params.get('Columns', 1))
+                    raw_bits_per_component = params.get('BitsPerComponent', 8)
+                    bitspercomponent = int_value(raw_bits_per_component)
+                    predicted = apply_png_predictor(pred, colors, columns,
+                                               bitspercomponent, data)
+                    data = PNGPredictor(
+                        predicted,
+                        pdf_offset=data.pdf_offset,
+                        pdf_bytes=data.pdf_bytes,
+                        original_bytes=data,
+                        params=params
+                    )
+                else:
+                    error_msg = 'Unsupported predictor: %r' % pred
+                    raise PDFNotImplementedError(error_msg)
+        self.data = data
+        self.rawdata = None
+        return
 
 
 class PDFParser(PDFMinerParser):
@@ -787,10 +958,35 @@ def parse_object(obj, matcher: Matcher, parent=None):
         )
         yield match
         yield from parse_object(obj.attrs, matcher=matcher, parent=match)
-        # recursively match against the deflated contents
-        with Tempfile(data) as f:
-            yield from matcher.match(f, parent=match)
+        yield from parse_object(data, matcher=matcher, parent=match)
         log.clear_status()
+    elif isinstance(obj, PDFStreamFilter):
+        filter_obj = Submatch(
+            f"{obj.name!s}",
+            bytes(obj.original_bytes),
+            relative_offset=obj.pdf_offset - parent.offset,
+            length=obj.pdf_bytes,
+            parent=parent
+        )
+        yield filter_obj
+        if obj.error is None:
+            yield Submatch(
+                "DecodedStream",
+                bytes(obj),
+                relative_offset=obj.pdf_offset - parent.offset,
+                length=obj.pdf_bytes,
+                parent=filter_obj,
+                decoded=bytes(obj)
+            )
+        else:
+            yield Submatch(
+                "DecodingError",
+                obj.error.message,
+                relative_offset=obj.pdf_offset - parent.offset,
+                length=obj.pdf_bytes,
+                parent=filter_obj
+            )
+        yield from parse_object(obj.original_bytes, matcher=matcher, parent=filter_obj)
     elif isinstance(obj, PDFList):
         list_obj = Submatch(
             "PDFList",
@@ -853,6 +1049,31 @@ def parse_object(obj, matcher: Matcher, parent=None):
         yield deciphered
         with Tempfile(obj) as f:
             yield from matcher.match(f, parent=deciphered)
+    elif isinstance(obj, PSBytes):
+        if isinstance(obj, PNGPredictor):
+            match = Submatch(
+                "PNGPredictor",
+                bytes(obj.original_bytes),
+                decoded=obj,
+                relative_offset=obj.pdf_offset - parent.offset,
+                length=obj.pdf_bytes,
+                parent=parent
+            )
+            yield from parse_object(obj.params, matcher=matcher, parent=match)
+            yield from parse_object(obj.original_bytes, matcher=matcher, parent=match)
+        else:
+            match = Submatch(
+                obj.__class__.__name__,
+                bytes(obj),
+                relative_offset=obj.pdf_offset - parent.offset,
+                length=obj.pdf_bytes,
+                parent=parent
+            )
+        if hasattr(obj, "original_bytes"):
+            yield from parse_object(obj.original_bytes, matcher=matcher, parent=match)
+        # recursively match against the deflated contents
+        with Tempfile(obj) as f:
+            yield from matcher.match(f, parent=match)
     elif hasattr(obj, "pdf_offset") and hasattr(obj, "pdf_bytes"):
         yield Submatch(
             obj.__class__.__name__,
