@@ -367,7 +367,10 @@ def parse_pdf(file_stream, matcher: Matcher, parent=None):
 
 from pdfminer.pdfparser import PDFParser as PDFMinerParser, PDFStream, PDFObjRef
 from pdfminer.psparser import PSBaseParserToken, PSKeyword, PSObject, PSLiteral, PSStackEntry, ExtraT
-from pdfminer.pdfdocument import PDFXRef, KWD, PDFNoValidXRef, PSEOF, dict_value
+from pdfminer.pdfdocument import (
+    PDFDocument, PDFXRef, KWD, PDFNoValidXRef, PSEOF, dict_value, LITERAL_XREF, LITERAL_OBJSTM, LITERAL_CATALOG,
+    DecipherCallable, PDFObjectNotFound
+)
 from typing import Tuple, Union
 
 
@@ -398,8 +401,20 @@ class PSToken:
         ret.pdf_bytes = kwargs["pdf_bytes"]
         return ret
 
+    def __int__(self):
+        return PSInt(self, pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes)
+
+    def __float__(self):
+        return PSFloat(self, pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes)
+
+    def __bytes__(self):
+        return PSBytes(self, pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes)
+
+    def __hex__(self):
+        return PSStr(super().__hex__(), pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes)
+
     def __str__(self):
-        return super().__str__()
+        return PSStr(super().__str__(), pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes)
 
     def __repr__(self):
         return f"{self.__class__.__name__}({super().__repr__()}, pdf_offset={self.pdf_offset!r}, "\
@@ -437,6 +452,9 @@ class PSStr(PSSequence, str):
     def encode(self, encoding: str = ..., errors: str = ...) -> bytes:
         return PSBytes(super().encode(encoding, errors), pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes)
 
+    def __str__(self):
+        return str.__str__(self)
+
 
 class PSBytes(PSSequence, bytes):
     def __new__(cls, *args, **kwargs):
@@ -447,6 +465,23 @@ class PSBytes(PSSequence, bytes):
 
     def decode(self, encoding: str = ..., errors: str = ...) -> PSStr:
         return PSStr(super().decode(encoding, errors), pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes)
+
+
+class PDFDeciphered(PSBytes):
+    original_bytes: bytes
+
+    def __new__(cls, *args, **kwargs):
+        kwargs = dict(kwargs)
+        if "pdf_bytes" not in kwargs:
+            kwargs["pdf_bytes"] = len(args[0])
+        if "original_bytes" in kwargs:
+            original_bytes = kwargs["original_bytes"]
+            del kwargs["original_bytes"]
+        else:
+            raise ValueError(f"{self.__class__.__name__}.__init__ requires the `original_bytes` argument")
+        ret = super().__new__(cls, *args, **kwargs)
+        setattr(ret, "original_bytes", original_bytes)
+        return ret
 
 
 class PSFloat(PSToken, float):
@@ -462,6 +497,9 @@ class PSBool:
     def __bool__(self):
         return self.value
 
+    def __int__(self):
+        return PSInt(int(self.value), pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes)
+
     def __eq__(self, other):
         return self.value == bool(other)
 
@@ -472,10 +510,11 @@ class PSBool:
         return hash(self.value)
 
     def __str__(self):
-        return str(self.value)
+        return PSStr(self.value, pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes)
 
     def __repr__(self):
-        return f"{self.__class__.__name__}(value={self.value!r}, pdf_offset={self.pdf_offset!r})"
+        return f"{self.__class__.__name__}(value={self.value!r}, pdf_offset={self.pdf_offset!r}, "\
+               f"pdf_bytes={self.pdf_bytes!r})"
 
 
 class PDFLiteral(PSLiteral):
@@ -521,6 +560,15 @@ class PDFKeyword(PSKeyword):
 PDFBaseParserToken = Union[PSFloat, PSBool, PDFLiteral, PSKeyword, PSBytes, PSInt]
 
 
+"""
+pdfminer.pdfdocument unfortunately tests for equality with these literals using `is` rather than `==`, so we must
+return their singletons from a dict rather than our instrumented PDFLiteral objects:
+"""
+PROTECTED_LITERALS: Dict[str, PSLiteral] = {
+    LITERAL_OBJSTM.name: LITERAL_OBJSTM,
+    LITERAL_XREF.name: LITERAL_XREF,
+    LITERAL_CATALOG.name: LITERAL_CATALOG
+}
 
 class PDFDict(dict):
     pdf_offset: int
@@ -534,6 +582,13 @@ class PDFDict(dict):
             del kwargs["pdf_bytes"]
         super().__init__(*args, **kwargs)
 
+    def get(self, key, default = None):
+        result = super().get(key, default)
+        if isinstance(result, PDFLiteral) and result.name in PROTECTED_LITERALS:
+            # we must return the protected literals as their singleton version:
+            return PROTECTED_LITERALS[result.name]
+        return result
+
     def __new__(cls, *args, pdf_offset: int, pdf_bytes: int, **kwargs):
         ret = super().__new__(cls, *args, **kwargs)
         ret.pdf_offset = pdf_offset
@@ -542,7 +597,21 @@ class PDFDict(dict):
 
 
 class PDFList(PSSequence, list):
-    pass
+    @staticmethod
+    def load(iterable) -> "PDFList":
+        start_offset: Optional[int] = None
+        end_offset: Optional[int] = None
+        items = []
+        for item in iterable:
+            if hasattr(item, "pdf_offset") and hasattr(item, "pdf_bytes"):
+                if start_offset is None or start_offset > item.pdf_offset:
+                    start_offset = item.pdf_offset
+                if end_offset is None or end_offset < item.pdf_offset + item.pdf_bytes:
+                    end_offset = item.pdf_offset + item.pdf_bytes
+            items.append(item)
+        if start_offset is None or end_offset is None:
+            raise ValueError(f"Cannot determine PDF bounds for list {items!r}")
+        return PDFList(items, pdf_offset=start_offset, pdf_bytes=end_offset - start_offset)
 
 
 def make_ps_object(value, pdf_offset: int, pdf_bytes: int) -> Union[PDFBaseParserToken, PSStr]:
@@ -582,6 +651,31 @@ class PDFObjectStream(PDFStream):
             rawdata=PSBytes(parent.rawdata, pdf_offset=pdf_offset, pdf_bytes=pdf_bytes),
             decipher=parent.decipher
         )
+        self.pdf_offset: int = pdf_offset
+        self.pdf_bytes: int = pdf_bytes
+        self.data = parent.data
+        self.objid = parent.objid
+        self.genno = parent.genno
+
+    @property
+    def data(self) -> Optional[PSBytes]:
+        return self._data
+
+    @data.setter
+    def data(self, new_value: Optional[bytes]):
+        if new_value is not None and not isinstance(new_value, PSBytes):
+            self._data = PSBytes(new_value, pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes)
+        else:
+            self._data = new_value
+
+    @property
+    def data_value(self) -> PSBytes:
+        if self.data is not None:
+            return self.data
+        elif self.rawdata is not None:
+            return self.rawdata
+        else:
+            raise ValueError(f"PDFObjectStream {self!r} does not have any data")
 
 
 class PDFParser(PDFMinerParser):
@@ -687,7 +781,7 @@ def parse_object(obj, matcher: Matcher, parent=None):
             display_name=f"PDFObject{obj.objid}.{obj.genno}",
             match_obj=(obj.objid, obj.genno),
             relative_offset=obj.attrs.pdf_offset,
-            length=obj.rawdata.pdf_offset - obj.attrs.pdf_offset + obj.rawdata.pdf_bytes,
+            length=obj.data_value.pdf_offset - obj.attrs.pdf_offset + obj.data_value.pdf_bytes,
             parent=parent
         )
         yield match
@@ -718,6 +812,11 @@ def parse_object(obj, matcher: Matcher, parent=None):
         )
         yield dict_obj
         for key, value in obj.items():
+            if not hasattr(value, "pdf_offset") or not hasattr(value, "pdf_bytes"):
+                if isinstance(value, list):
+                    value = PDFList.load(value)
+                else:
+                    raise ValueError(f"Unexpected PDF dictionary value {value!r}")
             pair = Submatch(
                 "KeyValuePair",
                 '',
@@ -742,6 +841,15 @@ def parse_object(obj, matcher: Matcher, parent=None):
             )
             yield value_match
             yield from parse_object(value, matcher=matcher, parent=value_match)
+    elif isinstance(obj, PDFDeciphered):
+        yield Submatch(
+            "PDFDeciphered",
+            obj.original_bytes,
+            decoded=obj,
+            relative_offset=obj.pdf_offset - parent.offset,
+            length=obj.pdf_bytes,
+            parent=parent
+        )
     elif hasattr(obj, "pdf_offset") and hasattr(obj, "pdf_bytes"):
         yield Submatch(
             obj.__class__.__name__,
@@ -766,23 +874,56 @@ def parse_object(obj, matcher: Matcher, parent=None):
     #     parent=obj
     # )
 
+class InstrumentedPDFDocument(PDFDocument):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._decipher: Optional[DecipherCallable] = None
+
+    @property
+    def decipher(self) -> DecipherCallable:
+        if self._decipher is None:
+            return None
+        else:
+            return self.do_decipher
+
+    @decipher.setter
+    def decipher(self, new_value: DecipherCallable):
+        self._decipher = new_value
+
+    def do_decipher(self, *args, **kwargs) -> PSBytes:
+        deciphered = self._decipher(*args, **kwargs)
+        if isinstance(deciphered, bytes) and not isinstance(deciphered, PSBytes):
+            for arg in args:
+                if isinstance(arg, PSBytes):
+                    deciphered = PDFDeciphered(
+                        deciphered,
+                        pdf_offset=arg.pdf_offset,
+                        pdf_bytes=arg.pdf_bytes,
+                        original_bytes=arg
+                    )
+                    break
+        return deciphered
+
+
 @submatcher("application/pdf")
 class PDF(Match):
     def submatch(self, file_stream):
-        from pdfminer.pdfdocument import PDFDocument
         parser = PDFParser(RawPDFStream(file_stream))
-        doc = PDFDocument(parser)
+        doc = InstrumentedPDFDocument(parser)
         yielded = set()
         for xref in doc.xrefs:
             for objid in xref.get_objids():
-                obj = doc.getobj(objid)
+                try:
+                    obj = doc.getobj(objid)
+                except PDFObjectNotFound:
+                    continue
                 if isinstance(obj, PDFObjectStream):
                     if (obj.objid, obj.genno) in yielded:
                         continue
                     yielded.add((obj.objid, obj.genno))
                     yield from parse_object(obj, self.matcher, self)
                 else:
-                    if objid in yielded:
+                    if objid in yielded or not hasattr(obj, "pdf_offset") or not hasattr(obj, "pdf_bytes"):
                         continue
                     yielded.add(objid)
                     match = Submatch(
