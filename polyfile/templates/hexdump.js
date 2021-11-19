@@ -141,6 +141,8 @@ function formatChar(c, monospace) {
         }
     } else if(c == '\r') {
         return '\u240d';
+    } else if(c == '\0') {
+        return '\u2400';
     }
     return c.replace('>', '&gt;').replace('<', '&lt;');
 }
