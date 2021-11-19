@@ -860,7 +860,11 @@ class cPDFParseDictionary:
         if dataTrimmed == []:
             self.parsed = None
         elif self.isOpenDictionary(dataTrimmed[0]) and (self.isCloseDictionary(dataTrimmed[-1]) or self.couldBeCloseDictionary(dataTrimmed[-1])):
-            self.parsed = self.ParseDictionary(dataTrimmed)[0]
+            pd = self.ParseDictionary(dataTrimmed)
+            if pd is None:
+                self.parsed = None
+            else:
+                self.parsed = pd[0]
         else:
             self.parsed = None
 
