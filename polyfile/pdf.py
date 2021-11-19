@@ -738,6 +738,7 @@ class PDFObjectStream(PDFStream):
             rawdata=PSBytes(parent.rawdata, pdf_offset=pdf_offset, pdf_bytes=pdf_bytes),
             decipher=parent.decipher
         )
+        self.parent: PDFStream = parent
         self.pdf_offset: int = pdf_offset
         self.pdf_bytes: int = pdf_bytes
         self.data = parent.data
@@ -1098,10 +1099,26 @@ def parse_object(obj, matcher: Matcher, parent=None):
     #     parent=obj
     # )
 
+# class NonZeroIndexXRef(PDFXRef):
+#     @property
+#     def trailer(self) -> :
+
+
 class InstrumentedPDFDocument(PDFDocument):
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+        self._xrefs = []
         self._decipher: Optional[DecipherCallable] = None
+        super().__init__(*args, **kwargs)
+
+    # @property
+    # def xrefs(self):
+    #     if not self._xrefs:
+    #         pass
+    #     return self._xrefs
+    #
+    # @xrefs.setter
+    # def xrefs(self, new_value):
+    #     self._xrefs = new_value
 
     @property
     def decipher(self) -> DecipherCallable:
