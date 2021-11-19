@@ -122,27 +122,25 @@ function scrollToByte(byte_id) {
 }
 
 function formatChar(c, monospace) {
-    if(typeof monospace === 'undefined') {
+    if (typeof monospace === 'undefined') {
         monospace = true;
     }
-    if(typeof c === 'undefined' || c.length == 0 || c == ' ') {
+    if (typeof c === 'undefined' || c.length == 0 || c == ' ') {
         return '&nbsp;';
-    } else if(c == '\n') {
-        if(monospace) {
-            return '\u2424';
+    } else if (c == '\n') {
+        if (monospace) {
+            return '\u24A0';
         } else {
-            '\u2424</span><br /><span>';
+            '\u24A0</span><br /><span>';
         }
-    } else if(c == '\t') {
-        if(monospace) {
+    } else if (c == '\t') {
+        if (monospace) {
             return '\u2b7e';
         } else {
             return '\t';
         }
-    } else if(c == '\r') {
-        return '\u240d';
-    } else if(c == '\0') {
-        return '\u2400';
+    } else if (c.charCodeAt(0) < 32) {
+        return String.fromCharCode(0x2400 + c.charCodeAt(0));
     }
     return c.replace('>', '&gt;').replace('<', '&lt;');
 }
