@@ -378,6 +378,8 @@ from pdfminer.pdftypes import (
 )
 from typing import Tuple, Union
 
+from .fileutils import FileStream
+
 
 def load_trailer(self, parser: PDFMinerParser) -> None:
     try:
@@ -1149,6 +1151,16 @@ class InstrumentedPDFDocument(PDFDocument):
 @submatcher("application/pdf")
 class PDF(Match):
     def submatch(self, file_stream):
+        # pdfminer expects %PDF to be at byte offset zero in the file
+        pdf_header_index = file_stream.first_index_of(b"%PDF")
+        if pdf_header_index > 0:
+            # the PDF header does not start at byte offset zero!
+            with FileStream(file_stream, start=pdf_header_index) as f:
+                for match in self.submatch(f):
+                    # account for the offset
+                    match._offset += pdf_header_index
+                    yield match
+            return
         parser = PDFParser(RawPDFStream(file_stream))
         doc = InstrumentedPDFDocument(parser)
         yielded = set()

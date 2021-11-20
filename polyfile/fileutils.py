@@ -191,6 +191,16 @@ class FileStream:
                         return False
         return True
 
+    def first_index_of(self, byte_sequence: bytes) -> int:
+        with mmap.mmap(self.fileno(), 0, access=mmap.ACCESS_READ) as filecontent:
+            start_offset = self.offset()
+            end_offset = start_offset + len(self)
+            index = filecontent.find(byte_sequence, start_offset, end_offset)
+            if start_offset <= index < end_offset:
+                return index - start_offset
+            else:
+                return -1
+
     @property
     def content(self) -> bytes:
         with self.save_pos():
