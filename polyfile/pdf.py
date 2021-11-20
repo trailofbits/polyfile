@@ -381,11 +381,18 @@ from typing import Tuple, Union
 from .fileutils import FileStream
 
 
-def load_trailer(self, parser: PDFMinerParser) -> None:
+def load_trailer(self, parser: "PDFParser") -> None:
     try:
         (_, kwd) = parser.nexttoken()
         assert kwd == KWD(b'trailer'), f"{kwd!s} != {KWD(b'trailer')!s}"
-        (_, dic) = parser.nextobject()
+        flush_before = parser.auto_flush
+        try:
+            # This might be a bug in pdfminer, or it's just that we are using it wrong, but we need to
+            # flush our entire token stack to the results list in order to parse the trailer dict:
+            parser.auto_flush = True
+            (_, dic) = parser.nextobject()
+        finally:
+            parser.auto_flush = flush_before
     except PSEOF:
         x = parser.pop(1)
         if not x:
@@ -853,6 +860,8 @@ class PDFObjectStream(PDFStream):
 
 
 class PDFParser(PDFMinerParser):
+    auto_flush: bool = False
+
     def push(self, *objs: PSStackEntry[ExtraT]):
         transformed = []
         for obj in objs:
@@ -896,6 +905,12 @@ class PDFParser(PDFMinerParser):
             length = len(self._curtoken)
         obj = make_ps_object(obj, pdf_offset=pos, pdf_bytes=length)
         return super()._add_token(obj)
+
+    def flush(self):
+        if self.auto_flush:
+            self.add_results(*self.popall())
+        else:
+            super().flush()
 
     def do_keyword(self, pos: int, token: PSKeyword):
         if token is self.KEYWORD_R:
