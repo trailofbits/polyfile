@@ -43,6 +43,15 @@ class Match:
                  img_data: Optional[str] = None,
                  decoded: Optional[bytes] = None
     ):
+        self._children: List[Match] = []
+        self.name: str = name
+        self.matcher: Optional[Matcher] = None
+        self.match = match_obj
+        self.img_data: Optional[str] = img_data
+        self.decoded: Optional[bytes] = decoded
+        self._offset: int = relative_offset
+        self._length: Optional[int] = length
+        self._parent: Optional[Match] = parent
         if parent is not None:
             if not isinstance(parent, Match):
                 raise ValueError("The parent must be an instance of a Match")
@@ -51,19 +60,11 @@ class Match:
                 matcher = parent.matcher
         if matcher is None:
             raise(ValueError("A Match must be initialized with `parent` and/or `matcher` not being None"))
-        self.matcher: Optional[Matcher] = matcher
-        self.name: str = name
+        self.matcher = matcher
         if display_name is None:
             self.display_name: str = name
         else:
             self.display_name = display_name
-        self.match = match_obj
-        self.img_data: Optional[str] = img_data
-        self.decoded: Optional[bytes] = decoded
-        self._offset: int = relative_offset
-        self._length: Optional[int] = length
-        self._parent: Optional[Match] = parent
-        self._children: List[Match] = []
 
     @property
     def children(self) -> Tuple["Match", ...]:
