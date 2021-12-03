@@ -36,7 +36,7 @@ def main(argv=None):
     parser.add_argument('FILE', nargs='?', default='-',
                         help='the file to analyze; pass \'-\' or omit to read from STDIN')
     parser.add_argument('--filetype', '-f', action='append',
-                        help='explicitly match against the given filetype or filetype wildcard (default is to match'
+                        help='explicitly match against the given filetype or filetype wildcard (default is to match '
                              'against all filetypes)')
     parser.add_argument('--list', '-l', action='store_true',
                         help='list the supported filetypes (for the `--filetype` argument) and exit')
