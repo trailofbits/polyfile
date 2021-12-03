@@ -209,7 +209,11 @@ class Debugger:
         print()
         print_context(data, absolute_offset)
         while True:
-            command = input("(polyfile) ")
+            try:
+                command = input("(polyfile) ")
+            except EOFError:
+                # the user pressed ^D to quit
+                exit(0)
             if not command:
                 if self.last_command is None:
                     continue
@@ -232,6 +236,18 @@ class Debugger:
                 return
             elif "quit".startswith(command):
                 exit(0)
+            elif "delete".startswith(command):
+                if args:
+                    try:
+                        breakpoint_num = int(args)
+                    except ValueError:
+                        breakpoint_num = -1
+                    if not (0 <= breakpoint_num < len(self.breakpoints)):
+                        print(f"Error: Invalid breakpoint \"{args}\"")
+                        continue
+                    b = self.breakpoints[breakpoint_num]
+                    self.breakpoints = self.breakpoints[:breakpoint_num] + self.breakpoints[breakpoint_num + 1:]
+                    print(f"Deleted {b!s}")
             elif "breakpoint".startswith(command):
                 if args:
                     for b_type in BREAKPOINT_TYPES:
@@ -255,8 +271,8 @@ class Debugger:
                 while test_stack[-1].parent is not None:
                     test_stack.append(test_stack[-1].parent)
                 for i, t in enumerate(reversed(test_stack)):
+                    cmd = str(t).replace("\n", "\n  ")
                     if i == len(test_stack) - 1:
-                        cmd = str(t).replace("\n", "\n  ")
                         print(f"> {cmd}")
                     else:
                         print(f"  {cmd}")
