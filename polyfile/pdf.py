@@ -476,6 +476,12 @@ class PSSequence(PSToken):
 
 
 class PSStr(PSSequence, str):
+    def __new__(cls, *args, **kwargs):
+        retval = super().__new__(cls, *args, **kwargs)
+        if retval == "Linearized":
+            breakpoint()
+        return retval
+
     def encode(self, encoding: str = ..., errors: str = ...) -> bytes:
         return PSBytes(super().encode(encoding, errors), pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes)
 
@@ -547,15 +553,15 @@ class PSBool:
 class PDFLiteral(PSLiteral):
     def __init__(self, name: PSLiteral.NameType, pdf_offset: int, pdf_bytes: int):
         if isinstance(name, str) and not isinstance(name, PSStr):
-            super().__init__(PSStr(name, pdf_offset=pdf_offset, pdf_bytes=pdf_bytes))
+            super().__init__(PSStr(name, pdf_offset=pdf_offset + 1, pdf_bytes=pdf_bytes))
         elif isinstance(name, bytes) and not isinstance(name, PSBytes):
-            super().__init__(PSBytes(name, pdf_offset=pdf_offset, pdf_bytes=pdf_bytes))
+            super().__init__(PSBytes(name, pdf_offset=pdf_offset + 1, pdf_bytes=pdf_bytes))
         else:
             super().__init__(name)
 
     @property
     def pdf_bytes(self) -> int:
-        return self.name.pdf_bytes + 1
+        return self.name.pdf_bytes + 1  # add one to account for the leading "/"
 
     @property
     def pdf_offset(self) -> int:
@@ -567,6 +573,7 @@ class PDFLiteral(PSLiteral):
 
 class PDFKeyword(PSKeyword):
     def __init__(self, name: bytes, pdf_offset: int, pdf_bytes: int):
+        pdf_bytes = len(name)  # sometimes we actually lose the length of the token, so rely on the keyword name
         if not isinstance(name, PSBytes):
             super().__init__(PSBytes(name, pdf_offset=pdf_offset, pdf_bytes=pdf_bytes))
         else:
@@ -597,7 +604,7 @@ PROTECTED_LITERALS: Dict[str, PSLiteral] = {
     LITERAL_CATALOG.name: LITERAL_CATALOG
 }
 
-class PDFDict(dict):
+class PDFDict(dict, Dict[PSStr, Union[PDFBaseParserToken, PSStr, "PDFDict", "PDFList"]]):
     pdf_offset: int
     pdf_bytes: int
 
@@ -644,8 +651,9 @@ class PDFList(PSSequence, list):
 def make_ps_object(value, pdf_offset: int, pdf_bytes: int) -> Union[PDFBaseParserToken, PSStr]:
     if isinstance(value, PSLiteral):
         return PDFLiteral(value.name, pdf_offset=pdf_offset, pdf_bytes=pdf_bytes)
-    #elif isinstance(value, PSKeyword):
-    #    return PDFKeyword(value.name, pdf_offset=pdf_offset, pdf_bytes=pdf_bytes)
+    # Unfortunately, we can't convert PSKeywords to PDFKeywords here because pdfminer requires them to be singletons
+    # elif isinstance(value, PSKeyword):
+    #     return PDFKeyword(value.name, pdf_offset=pdf_offset, pdf_bytes=pdf_bytes)
     elif isinstance(value, PDFDict):
         value.pdf_offset = pdf_offset
         value.pdf_bytes = pdf_bytes
@@ -654,6 +662,9 @@ def make_ps_object(value, pdf_offset: int, pdf_bytes: int) -> Union[PDFBaseParse
         return PDFDict(value, pdf_offset=pdf_offset, pdf_bytes=pdf_bytes)
     elif isinstance(value, PSObject):
         setattr(value, "pdf_offset", pdf_offset)
+        if isinstance(value, PSKeyword):
+            # sometimes the byte count gets off, so set it to the name size
+            pdf_bytes = len(value.name)
         setattr(value, "pdf_bytes", pdf_bytes)
         return value
     elif isinstance(value, int):
@@ -862,6 +873,43 @@ class PDFObjectStream(PDFStream):
 class PDFParser(PDFMinerParser):
     auto_flush: bool = False
 
+    @staticmethod
+    def string_escape(data: Union[bytes, int]) -> str:
+        if not isinstance(data, int):
+            return "".join(PDFParser.string_escape(d) for d in data)
+        elif data == ord('\n'):
+            return "\\n"
+        elif data == ord('\t'):
+            return "\\t"
+        elif data == ord('\r'):
+            return "\\r"
+        elif data == 0:
+            return "\\0"
+        elif data == ord('\\'):
+            return "\\\\"
+        elif 32 <= data <= 126:
+            return chr(data)
+        else:
+            return f"\\x{data:02X}"
+
+    def token_context(self, token: Union[PDFBaseParserToken, PSStr], padding_bytes: int = 10) -> str:
+        pos_before = self.fp.tell()
+        try:
+            bytes_before = min(token.pdf_offset, padding_bytes)
+            self.fp.seek(token.pdf_offset - bytes_before)
+            if bytes_before > 0:
+                context_before = PDFParser.string_escape(self.fp.read(bytes_before))
+            else:
+                context_before = ""
+            content = PDFParser.string_escape(self.fp.read(token.pdf_bytes))
+            context_after = PDFParser.string_escape(self.fp.read(padding_bytes))
+            return f"{context_before}{content}{context_after}\n" \
+                   f"{' ' * len(context_before)}" \
+                   f"{'^' * len(content)}" \
+                   f"{' ' * len(context_after)}"
+        finally:
+            self.fp.seek(pos_before)
+
     def push(self, *objs: PSStackEntry[ExtraT]):
         transformed = []
         for obj in objs:
@@ -904,6 +952,7 @@ class PDFParser(PDFMinerParser):
         else:
             length = len(self._curtoken)
         obj = make_ps_object(obj, pdf_offset=pos, pdf_bytes=length)
+        # log.info(f"\n{self.token_context(obj)}")
         return super()._add_token(obj)
 
     def flush(self):
