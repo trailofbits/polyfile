@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Callable, List, Optional, Type, TypeVar
+from typing import Callable, List, Optional, Type, TypeVar, Union
 
 from .magic import MagicTest, TestResult, TEST_TYPES
 
@@ -96,8 +96,35 @@ class InstrumentedTest:
         self.original_test = None
 
 
-def print_context(data: bytes, offset: int):
-    pass
+def string_escape(data: Union[bytes, int]) -> str:
+    if not isinstance(data, int):
+        return "".join(string_escape(d) for d in data)
+    elif data == ord('\n'):
+        return "\\n"
+    elif data == ord('\t'):
+        return "\\t"
+    elif data == ord('\r'):
+        return "\\r"
+    elif data == 0:
+        return "\\0"
+    elif data == ord('\\'):
+        return "\\\\"
+    elif 32 <= data <= 126:
+        return chr(data)
+    else:
+        return f"\\x{data:02X}"
+
+
+def print_context(data: bytes, offset: int, context_bytes: int = 32):
+    bytes_before = min(offset, context_bytes)
+    context_before = string_escape(data[:bytes_before])
+    if 0 <= offset < len(data):
+        current_byte = string_escape(data[offset])
+    else:
+        current_byte = ""
+    context_after = string_escape(data[offset + 1:offset + context_bytes])
+    print(f"{context_before}{current_byte}{context_after}")
+    print(f"{' ' * len(context_before)}{'^' * len(current_byte)}{' ' * len(context_after)}")
 
 
 class Debugger:
@@ -155,12 +182,17 @@ class Debugger:
             absolute_offset: int,
             parent_match: Optional[TestResult]
     ) -> Optional[TestResult]:
-        if "image/png" in test.mimetypes() or self.should_break(test, data, absolute_offset, parent_match):
+        if self.should_break(test, data, absolute_offset, parent_match):
             self.repl(test, data, absolute_offset, parent_match)
         if instrumented_test.original_test is None:
             result = instrumented_test.test.test(test, data, absolute_offset, parent_match)
         else:
             result = instrumented_test.original_test(test, data, absolute_offset, parent_match)
+        if self.single_stepping:
+            if result is None:
+                print("Test failed.\n")
+            else:
+                print("Test succeeded.\n")
         return result
 
     def repl(
@@ -174,6 +206,8 @@ class Debugger:
             if b.should_break(test, data, absolute_offset, parent_match):
                 print(str(b))
         print(test)
+        print()
+        print_context(data, absolute_offset)
         while True:
             command = input("(polyfile) ")
             if not command:
