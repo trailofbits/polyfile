@@ -1212,6 +1212,28 @@ class InstrumentedPDFDocument(PDFDocument):
         return deciphered
 
 
+from .magic import AbsoluteOffset, MagicMatcher, MagicTest, TestResult
+
+
+# The default libmagic test for detecting PDFs is too restrictive:
+class RelaxedPDFMatcher(MagicTest):
+    def __init__(self):
+        super().__init__(
+            offset=AbsoluteOffset(0),
+            mime="application/pdf",
+            extensions=("pdf",),
+            message="Malformed PDF"
+        )
+
+    def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> Optional[TestResult]:
+        if b"%PDF-" in data:
+            return TestResult(self, value=data, offset=0, length=len(data))
+        return None
+
+
+MagicMatcher.DEFAULT_INSTANCE.add(RelaxedPDFMatcher())
+
+
 @submatcher("application/pdf")
 class PDF(Match):
     def submatch(self, file_stream):
