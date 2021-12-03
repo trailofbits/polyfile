@@ -15,16 +15,14 @@ CUSTOM_MATCHERS: Dict[str, Type["Match"]] = {}
 log = logger.getStatusLogger("polyfile")
 
 
-class submatcher:
-    def __init__(self, *filetypes):
-        self.filetypes = filetypes
-
-    def __call__(self, MatcherClass: Type["Match"]):
-        if not hasattr(MatcherClass, 'submatch'):
-            raise ValueError(f"Matcher class {MatcherClass} must implement the `submatch` function")
-        for ft in self.filetypes:
-            CUSTOM_MATCHERS[ft] = MatcherClass
-        return MatcherClass
+def submatcher(*filetypes: str):
+    def wrapper(matcher_class: Type["Match"]):
+        if not hasattr(matcher_class, 'submatch'):
+            raise ValueError(f"Matcher class {matcher_class} must implement the `submatch` function")
+        for ft in filetypes:
+            CUSTOM_MATCHERS[ft] = matcher_class
+        return matcher_class
+    return wrapper
 
 
 class InvalidMatch(ValueError):
