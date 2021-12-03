@@ -66,4 +66,5 @@ class LazyIterableSet(Generic[T], AbstractSet, LazyIterableSequence[T]):
         super().__init__(unique(iter(source), elements=self._set))
 
     def __contains__(self, x: object) -> bool:
+        self._complete()
         return x in self._set
