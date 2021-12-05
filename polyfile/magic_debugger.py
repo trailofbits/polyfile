@@ -3,7 +3,11 @@ from enum import Enum
 import sys
 from typing import Any, Callable, List, Optional, Type, TypeVar, Union
 
+from .logger import getStatusLogger
 from .magic import MagicTest, TestResult, TEST_TYPES
+
+
+log = getStatusLogger("polyfile")
 
 
 class ANSIColor(Enum):
@@ -253,6 +257,7 @@ class Debugger:
             absolute_offset: int,
             parent_match: Optional[TestResult]
     ):
+        log.clear_status()
         for b in self.breakpoints:
             if b.should_break(test, data, absolute_offset, parent_match):
                 self.write(b, color=ANSIColor.MAGENTA)
