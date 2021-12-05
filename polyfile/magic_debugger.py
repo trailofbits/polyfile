@@ -1,7 +1,23 @@
 from abc import ABC, abstractmethod
-from typing import Callable, List, Optional, Type, TypeVar, Union
+from enum import Enum
+import sys
+from typing import Any, Callable, List, Optional, Type, TypeVar, Union
 
 from .magic import MagicTest, TestResult, TEST_TYPES
+
+
+class ANSIColor(Enum):
+    BLACK = 30
+    RED = 31
+    GREEN = 32
+    YELLOW = 33
+    BLUE = 34
+    MAGENTA = 35
+    CYAN = 36
+    WHITE = 37
+
+    def to_code(self) -> str:
+        return f"\u001b[{self.value}m"
 
 
 B = TypeVar("B", bound="Breakpoint")
@@ -115,18 +131,6 @@ def string_escape(data: Union[bytes, int]) -> str:
         return f"\\x{data:02X}"
 
 
-def print_context(data: bytes, offset: int, context_bytes: int = 32):
-    bytes_before = min(offset, context_bytes)
-    context_before = string_escape(data[:bytes_before])
-    if 0 <= offset < len(data):
-        current_byte = string_escape(data[offset])
-    else:
-        current_byte = ""
-    context_after = string_escape(data[offset + 1:offset + context_bytes])
-    print(f"{context_before}{current_byte}{context_after}")
-    print(f"{' ' * len(context_before)}{'^' * len(current_byte)}{' ' * len(context_after)}")
-
-
 class Debugger:
     def __init__(self):
         self.instrumented_tests: List[InstrumentedTest] = []
@@ -174,6 +178,53 @@ class Debugger:
             b.should_break(test, data, absolute_offset, parent_match) for b in self.breakpoints
         )
 
+    def write_test(self, test: MagicTest):
+        if test.source_info is not None and test.source_info.original_line is not None:
+            self.write(f"{test.source_info.path.name}:{test.source_info.line} ", dim=True)
+            self.write(test.source_info.original_line.strip(), color=ANSIColor.BLUE)
+        else:
+            self.write(f"{'>' * test.level}{test.offset!s}\t")
+            self.write(test.message, color=ANSIColor.BLUE)
+        if test.mime is not None:
+            self.write("\n!:mime\t", dim=True)
+            self.write(test.mime, color=ANSIColor.BLUE)
+        for e in test.extensions:
+            self.write("\n!:ext\t", dim=True)
+            self.write(str(e), color=ANSIColor.BLUE)
+
+    def write(self, message: Any, bold: bool = False, dim: bool = False, color: Optional[ANSIColor] = None):
+        if sys.stdout.isatty():
+            if isinstance(message, MagicTest):
+                self.write_test(message)
+                return
+            prefixes: List[str] = []
+            if bold and not dim:
+                prefixes.append("\u001b[1m")
+            elif dim and not bold:
+                prefixes.append("\u001b[2m")
+            if color is not None:
+                prefixes.append(color.to_code())
+            if prefixes:
+                sys.stdout.write(f"{''.join(prefixes)}{message!s}\u001b[0m")
+                return
+        sys.stdout.write(str(message))
+
+    def print_context(self, data: bytes, offset: int, context_bytes: int = 32):
+        bytes_before = min(offset, context_bytes)
+        context_before = string_escape(data[:bytes_before])
+        if 0 <= offset < len(data):
+            current_byte = string_escape(data[offset])
+        else:
+            current_byte = ""
+        context_after = string_escape(data[offset + 1:offset + context_bytes])
+        self.write(context_before)
+        self.write(current_byte, bold=True)
+        self.write(context_after)
+        self.write("\n")
+        self.write(f"{' ' * len(context_before)}")
+        self.write(f"{'^' * len(current_byte)}", bold=True)
+        self.write(f"{' ' * len(context_after)}\n")
+
     def debug(
             self,
             instrumented_test: InstrumentedTest,
@@ -190,9 +241,9 @@ class Debugger:
             result = instrumented_test.original_test(test, data, absolute_offset, parent_match)
         if self.single_stepping:
             if result is None:
-                print("Test failed.\n")
+                self.write("Test failed.\n\n", color=ANSIColor.RED)
             else:
-                print("Test succeeded.\n")
+                self.write("Test succeeded.\n\n", color=ANSIColor.GREEN)
         return result
 
     def repl(
@@ -204,13 +255,16 @@ class Debugger:
     ):
         for b in self.breakpoints:
             if b.should_break(test, data, absolute_offset, parent_match):
-                print(str(b))
-        print(test)
-        print()
-        print_context(data, absolute_offset)
+                self.write(b, color=ANSIColor.MAGENTA)
+                self.write("\n")
+        self.write(test)
+        self.write("\n\n")
+        self.print_context(data, absolute_offset)
         while True:
             try:
-                command = input("(polyfile) ")
+                self.write("(polyfile) ", bold=True)
+                sys.stdout.flush()
+                command = input()
             except EOFError:
                 # the user pressed ^D to quit
                 exit(0)
@@ -247,25 +301,29 @@ class Debugger:
                         continue
                     b = self.breakpoints[breakpoint_num]
                     self.breakpoints = self.breakpoints[:breakpoint_num] + self.breakpoints[breakpoint_num + 1:]
-                    print(f"Deleted {b!s}")
+                    self.write(f"Deleted {b!s}\n")
             elif "breakpoint".startswith(command):
                 if args:
                     for b_type in BREAKPOINT_TYPES:
                         parsed = b_type.parse(args)
                         if parsed is not None:
-                            print(str(parsed))
+                            self.write(parsed, color=ANSIColor.MAGENTA)
+                            self.write("\n")
                             self.breakpoints.append(parsed)
                             break
                     else:
-                        print("Error: Invalid breakpoint pattern")
+                        self.write("Error: Invalid breakpoint pattern\n", color=ANSIColor.RED)
                 else:
                     if self.breakpoints:
                         for i, b in enumerate(self.breakpoints):
-                            print(f"{i}: {b!s}")
+                            self.write(f"{i}:\t", dim=True)
+                            self.write(b, color=ANSIColor.MAGENTA)
+                            self.write("\n")
                     else:
-                        print("No breakpoints set.")
+                        self.write("No breakpoints set.\n", color=ANSIColor.RED)
                         for b_type in BREAKPOINT_TYPES:
-                            print(str(b_type.usage()))
+                            self.write(b_type.usage())
+                            self.write("\n")
             elif "where".startswith(command) or "info stack".startswith(command) or "backtrace".startswith(command):
                 test_stack = [test]
                 while test_stack[-1].parent is not None:
@@ -287,9 +345,9 @@ class Debugger:
                     cmd = str(t).replace("\n", "\n  ")
                     print(f"  {cmd}")
                 print("")
-                print_context(data, absolute_offset)
+                self.print_context(data, absolute_offset)
             else:
-                print(f"Undefined command: {command!r}. Try \"help\".")
+                self.write(f"Undefined command: {command!r}. Try \"help\".\n", color=ANSIColor.RED)
                 self.last_command = None
                 continue
             self.last_command = command
