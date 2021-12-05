@@ -88,6 +88,34 @@ class MimeBreakpoint(Breakpoint):
         return f"Breakpoint: Matching for MIME {self.mimetype}"
 
 
+class ExtensionBreakpoint(Breakpoint):
+    def __init__(self, ext: str):
+        self.ext: str = ext
+
+    def should_break(
+            self,
+            test: MagicTest,
+            data: bytes,
+            absolute_offset: int,
+            parent_match: Optional[TestResult]
+    ) -> bool:
+        return self.ext in test.all_extensions()
+
+    @classmethod
+    def parse(cls: Type[B], command: str) -> Optional[B]:
+        if command.lower().startswith("ext:"):
+            return MimeBreakpoint(command[len("ext:"):])
+        return None
+
+    @classmethod
+    def usage(cls) -> str:
+        return "`b EXT:EXTENSION` to break when a test is capable of matching that extension. For example, " \
+               "\"b EXT:pdf\"."
+
+    def __str__(self):
+        return f"Breakpoint: Matching for extension {self.ext}"
+
+
 class InstrumentedTest:
     def __init__(self, test: Type[MagicTest], debugger: "Debugger"):
         self.test: Type[MagicTest] = test
