@@ -104,7 +104,7 @@ class ExtensionBreakpoint(Breakpoint):
     @classmethod
     def parse(cls: Type[B], command: str) -> Optional[B]:
         if command.lower().startswith("ext:"):
-            return MimeBreakpoint(command[len("ext:"):])
+            return ExtensionBreakpoint(command[len("ext:"):])
         return None
 
     @classmethod
