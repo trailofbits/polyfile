@@ -5,6 +5,7 @@ from typing import Any, Callable, List, Optional, Type, TypeVar, Union
 
 from .logger import getStatusLogger
 from .magic import MagicTest, TestResult, TEST_TYPES
+from .wildcards import Wildcard
 
 
 log = getStatusLogger("polyfile")
@@ -63,6 +64,7 @@ class Breakpoint(ABC):
 class MimeBreakpoint(Breakpoint):
     def __init__(self, mimetype: str):
         self.mimetype: str = mimetype
+        self.pattern: Wildcard = Wildcard.parse(mimetype)
 
     def should_break(
             self,
@@ -71,7 +73,7 @@ class MimeBreakpoint(Breakpoint):
             absolute_offset: int,
             parent_match: Optional[TestResult]
     ) -> bool:
-        return self.mimetype in test.mimetypes()
+        return self.pattern.is_contained_in(test.mimetypes())
 
     @classmethod
     def parse(cls: Type[B], command: str) -> Optional[B]:
@@ -81,8 +83,9 @@ class MimeBreakpoint(Breakpoint):
 
     @classmethod
     def usage(cls) -> str:
-        return "`b MIME:MIMETYPE` to break when a test is capable of matching that mimetype. For example, " \
-               "\"b MIME:application/pdf\"."
+        return "`b MIME:MIMETYPE` to break when a test is capable of matching that mimetype. "\
+               "The MIMETYPE can include the '*' and '?' wildcards. For example, " \
+               "\"b MIME:application/pdf\" and \"b MIME:*pdf\"."
 
     def __str__(self):
         return f"Breakpoint: Matching for MIME {self.mimetype}"
