@@ -116,6 +116,49 @@ class ExtensionBreakpoint(Breakpoint):
         return f"Breakpoint: Matching for extension {self.ext}"
 
 
+class FileBreakpoint(Breakpoint):
+    def __init__(self, filename: str, line: int):
+        self.filename: str = filename
+        self.line: int = line
+
+    def should_break(
+            self,
+            test: MagicTest,
+            data: bytes,
+            absolute_offset: int,
+            parent_match: Optional[TestResult]
+    ) -> bool:
+        if test.source_info is None or test.source_info.line != self.line:
+            return False
+        if "/" in self.filename:
+            # it is a file path
+            return str(test.source_info.path) == self.filename
+        else:
+            # treat it like a filename
+            return test.source_info.path.name == self.filename
+
+    @classmethod
+    def parse(cls: Type[B], command: str) -> Optional[B]:
+        filename, *remainder = command.split(":")
+        if not remainder:
+            return None
+        try:
+            line = int("".join(remainder))
+        except ValueError:
+            return None
+        if line <= 0:
+            return None
+        return FileBreakpoint(filename, line)
+
+    @classmethod
+    def usage(cls) -> str:
+        return "`b FILENAME:LINE_NO` to break when the line of the given magic file is reached. For example, " \
+               "\"b archive:525\"."
+
+    def __str__(self):
+        return f"Breakpoint: {self.filename} line {self.line}"
+
+
 class InstrumentedTest:
     def __init__(self, test: Type[MagicTest], debugger: "Debugger"):
         self.test: Type[MagicTest] = test
