@@ -546,6 +546,15 @@ class TernaryExecutableMessage(TernaryMessage):
 TEST_TYPES: Set[Type["MagicTest"]] = set()
 
 
+class Comment:
+    def __init__(self, message: str, source_info: Optional[SourceInfo] = None):
+        self.message: str = message
+        self.source_info: Optional[SourceInfo] = source_info
+
+    def __str__(self):
+        return self.message
+
+
 class MagicTest(ABC):
     def __init__(
             self,
@@ -553,7 +562,8 @@ class MagicTest(ABC):
             mime: Optional[Union[str, TernaryExecutableMessage]] = None,
             extensions: Iterable[str] = (),
             message: Union[str, Message] = "",
-            parent: Optional["MagicTest"] = None
+            parent: Optional["MagicTest"] = None,
+            comments: Iterable[Comment] = ()
     ):
         self.offset: Offset = offset
         self._mime: Optional[Message] = None
@@ -591,6 +601,7 @@ class MagicTest(ABC):
         """
         self.mime = mime
         self.source_info: Optional[SourceInfo] = None
+        self.comments: Tuple[Comment, ...] = tuple(comments)
 
     def __init_subclass__(cls, **kwargs):
         TEST_TYPES.add(cls)
@@ -2066,12 +2077,24 @@ class MagicMatcher:
         level_zero_tests: List[MagicTest] = []
         tests_with_mime: Set[MagicTest] = set()
         indirect_tests: Set[IndirectTest] = set()
+        comments: List[Comment] = []
         with open(def_file, "rb") as f:
             for line_number, raw_line in enumerate(f.readlines()):
                 line_number += 1
                 raw_line = raw_line.lstrip()
-                if not raw_line or raw_line.startswith(b"#"):
-                    # skip empty lines and comments
+                if not raw_line:
+                    # skip empty lines
+                    comments = []
+                    continue
+                elif raw_line.startswith(b"#"):
+                    # this is a comment
+                    try:
+                        comments.append(Comment(
+                            message=raw_line[1:].strip().decode("utf-8"),
+                            source_info=SourceInfo(def_file, line_number, raw_line.decode("utf-8"))
+                        ))
+                    except UnicodeDecodeError:
+                        pass
                     continue
                 elif raw_line.startswith(b"!:apple") or raw_line.startswith(b"!:strength"):
                     # ignore these directives for now
@@ -2180,6 +2203,8 @@ class MagicMatcher:
                         if test.level == 0:
                             level_zero_tests.append(test)
                     test.source_info = SourceInfo(def_file, line_number, line)
+                    test.comments = tuple(comments)
+                    comments = []
                     current_test = test
                     continue
                 m = MIME_PATTERN.match(line)

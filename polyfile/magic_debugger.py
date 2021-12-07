@@ -269,21 +269,32 @@ class Debugger:
         )
 
     def write_test(self, test: MagicTest, is_current_test: bool = False):
+        for comment in test.comments:
+            if comment.source_info is not None and comment.source_info.original_line is not None:
+                self.write(f"  {comment.source_info.path.name}:{comment.source_info.line}\t", dim=True)
+                self.write(comment.source_info.original_line.strip(), dim=True)
+                self.write("\n")
+            else:
+                self.write(f"  # {comment!s}\n", dim=True)
         if is_current_test:
             self.write("→ ", bold=True)
         else:
             self.write("  ")
         if test.source_info is not None and test.source_info.original_line is not None:
-            self.write(f"{test.source_info.path.name}:{test.source_info.line} ", dim=True)
+            source_prefix = f"{test.source_info.path.name}:{test.source_info.line}"
+            indent = f"{' ' * len(source_prefix)}\t"
+            self.write(source_prefix, dim=True)
+            self.write("\t")
             self.write(test.source_info.original_line.strip(), color=ANSIColor.BLUE)
         else:
+            indent = ""
             self.write(f"{'>' * test.level}{test.offset!s}\t")
             self.write(test.message, color=ANSIColor.BLUE)
         if test.mime is not None:
-            self.write("\n  !:mime ", dim=True)
+            self.write(f"\n  {indent}!:mime ", dim=True)
             self.write(test.mime, color=ANSIColor.BLUE)
         for e in test.extensions:
-            self.write("\n  !:ext  ", dim=True)
+            self.write(f"\n  {indent}!:ext  ", dim=True)
             self.write(str(e), color=ANSIColor.BLUE)
         self.write("\n")
 
