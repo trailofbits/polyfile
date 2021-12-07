@@ -20,7 +20,7 @@ class Tempfile:
         self._prefix = prefix
         self._suffix = suffix
 
-    def __enter__(self):
+    def __enter__(self) -> str:
         self._temp = tf.NamedTemporaryFile(prefix=self._prefix, suffix=self._suffix, delete=False)
         self._temp.write(self._data)
         self._temp.flush()

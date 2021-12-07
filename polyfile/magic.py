@@ -2082,7 +2082,13 @@ class MagicMatcher:
         for test in tests:
             self.add(test)
 
-    def add(self, test: MagicTest):
+    def add(self, test: Union[MagicTest, Path]):
+        if not isinstance(test, MagicTest):
+            level_zero_tests = self._parse_file(test, self)[0]
+            for test in level_zero_tests:
+                self.add(test)
+            return
+
         if isinstance(test, NamedTest):
             if test.name in self.named_tests:
                 raise ValueError(f"A test named {test.name} already exists in this matcher!")
