@@ -1,4 +1,5 @@
 import argparse
+from contextlib import ExitStack
 import base64
 import hashlib
 import json
@@ -14,6 +15,7 @@ from . import logger
 from . import polyfile
 from .fileutils import PathOrStdin
 from .magic import MagicMatcher, MatchContext
+from .magic_debugger import Debugger
 from .polyfile import __version__
 
 
@@ -54,6 +56,8 @@ def main(argv=None):
                         help='stop scanning after having found this many matches')
     parser.add_argument('--debug', '-d', action='store_true', help='print debug information')
     parser.add_argument('--trace', '-dd', action='store_true', help='print extra verbose debug information')
+    parser.add_argument('--debugger', '-db', action='store_true', help='drop into an interactive debugger for libmagic '
+                                                                       'file definition matching')
     parser.add_argument('--quiet', '-q', action='store_true', help='suppress all log output (overrides --debug)')
     parser.add_argument('--version', '-v', action='store_true', help='print PolyFile\'s version information to STDERR')
     parser.add_argument('-dumpversion', action='store_true',
@@ -110,7 +114,9 @@ def main(argv=None):
         exit(1)
         return  # this is here because linters are dumb and will complain about the next line without it
 
-    with path_or_stdin as file_path:
+    with path_or_stdin as file_path, ExitStack() as stack:
+        if args.debugger:
+            stack.enter_context(Debugger())
         matches = []
         try:
             if args.only_match_mime:

@@ -21,7 +21,7 @@ import struct
 import sys
 from time import gmtime, localtime, strftime
 from typing import (
-    Any, BinaryIO, Callable, Dict, Generic, Iterable, Iterator, List, Optional, Set, Tuple, TypeVar, Union
+    Any, BinaryIO, Callable, Dict, Generic, Iterable, Iterator, List, Optional, Set, Tuple, Type, TypeVar, Union
 )
 from uuid import UUID
 
@@ -166,7 +166,7 @@ class TestResult:
     def __str__(self):
         if self.test.message is not None:
             # TODO: Fix pasting our value in
-            return self.test.message
+            return str(self.test.message)
             #if self.value is not None and "%" in self.test.message:
             #    return self.test.message % (self.value,)
             #else:
@@ -543,6 +543,9 @@ class TernaryExecutableMessage(TernaryMessage):
         return f"${{x?{self.true_value}:{self.false_value}}}"
 
 
+TEST_TYPES: Set[Type["MagicTest"]] = set()
+
+
 class MagicTest(ABC):
     def __init__(
             self,
@@ -588,6 +591,10 @@ class MagicTest(ABC):
         """
         self.mime = mime
         self.source_info: Optional[SourceInfo] = None
+
+    def __init_subclass__(cls, **kwargs):
+        TEST_TYPES.add(cls)
+        return super().__init_subclass__(**kwargs)
 
     @property
     def parent(self) -> Optional["MagicTest"]:
@@ -718,7 +725,7 @@ class MagicTest(ABC):
 
     def __str__(self):
         if self.source_info is not None and self.source_info.original_line is not None:
-            s = f"{self.source_info.path.name}:{self.source_info.line} {self.source_info.original_line}"
+            s = f"{self.source_info.path.name}:{self.source_info.line} {self.source_info.original_line.strip()}"
         else:
             s = f"{'>' * self.level}{self.offset!s}\t{self.message}"
         if self.mime is not None:
