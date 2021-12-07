@@ -5,7 +5,7 @@ from typing import Any, Callable, List, Optional, Type, TypeVar, Union
 
 from .polyfile import __copyright__, __license__, __version__
 from .logger import getStatusLogger
-from .magic import MagicTest, TestResult, TEST_TYPES
+from .magic import MagicTest, SourceInfo, TestResult, TEST_TYPES
 from .wildcards import Wildcard
 
 
@@ -271,7 +271,9 @@ class Debugger:
     def write_test(self, test: MagicTest, is_current_test: bool = False):
         for comment in test.comments:
             if comment.source_info is not None and comment.source_info.original_line is not None:
-                self.write(f"  {comment.source_info.path.name}:{comment.source_info.line}\t", dim=True)
+                self.write(f"  {comment.source_info.path.name}", dim=True, color=ANSIColor.CYAN)
+                self.write(":", dim=True)
+                self.write(f"{comment.source_info.line}\t", dim=True, color=ANSIColor.CYAN)
                 self.write(comment.source_info.original_line.strip(), dim=True)
                 self.write("\n")
             else:
@@ -283,13 +285,15 @@ class Debugger:
         if test.source_info is not None and test.source_info.original_line is not None:
             source_prefix = f"{test.source_info.path.name}:{test.source_info.line}"
             indent = f"{' ' * len(source_prefix)}\t"
-            self.write(source_prefix, dim=True)
+            self.write(test.source_info.path.name, dim=True, color=ANSIColor.CYAN)
+            self.write(":", dim=True)
+            self.write(test.source_info.line, dim=True, color=ANSIColor.CYAN)
             self.write("\t")
-            self.write(test.source_info.original_line.strip(), color=ANSIColor.BLUE)
+            self.write(test.source_info.original_line.strip(), color=ANSIColor.BLUE, bold=True)
         else:
             indent = ""
             self.write(f"{'>' * test.level}{test.offset!s}\t")
-            self.write(test.message, color=ANSIColor.BLUE)
+            self.write(test.message, color=ANSIColor.BLUE, bold=True)
         if test.mime is not None:
             self.write(f"\n  {indent}!:mime ", dim=True)
             self.write(test.mime, color=ANSIColor.BLUE)
