@@ -3,6 +3,7 @@ from enum import Enum
 import sys
 from typing import Any, Callable, List, Optional, Type, TypeVar, Union
 
+from .polyfile import __copyright__, __license__, __version__
 from .logger import getStatusLogger
 from .magic import MagicTest, TestResult, TEST_TYPES
 from .wildcards import Wildcard
@@ -209,13 +210,24 @@ def string_escape(data: Union[bytes, int]) -> str:
         return f"\\x{data:02X}"
 
 
+class StepMode(Enum):
+    RUNNING = 0
+    SINGLE_STEPPING = 1
+    NEXT = 2
+
+
 class Debugger:
     def __init__(self):
         self.instrumented_tests: List[InstrumentedTest] = []
         self.breakpoints: List[Breakpoint] = []
         self._entries: int = 0
-        self.single_stepping: bool = True
+        self.step_mode: StepMode = StepMode.RUNNING
         self.last_command: Optional[str] = None
+        self.last_test: Optional[MagicTest] = None
+        self.last_parent_match: Optional[MagicTest] = None
+        self.data: bytes = b""
+        self.last_offset: int = 0
+        self.last_result: Optional[TestResult] = None
 
     @property
     def enabled(self) -> bool:
@@ -233,6 +245,9 @@ class Debugger:
                 if "test" in test.__dict__:
                     # this class actually implements the test() function
                     self.instrumented_tests.append(InstrumentedTest(test, self))
+            self.write(f"PolyFile {__version__}\n", color=ANSIColor.MAGENTA, bold=True)
+            self.write(f"{__copyright__}\n{__license__}\n\nFor help, type \"help\".\n")
+            self.repl()
 
     def __enter__(self) -> "Debugger":
         self._entries += 1
@@ -245,18 +260,19 @@ class Debugger:
         if self._entries == 0:
             self.enabled = False
 
-    def should_break(
-            self,
-            test: MagicTest,
-            data: bytes,
-            absolute_offset: int,
-            parent_match: Optional[TestResult]
-    ) -> bool:
-        return self.single_stepping or any(
-            b.should_break(test, data, absolute_offset, parent_match) for b in self.breakpoints
+    def should_break(self) -> bool:
+        return self.step_mode == StepMode.SINGLE_STEPPING or (
+            self.step_mode == StepMode.NEXT and self.last_result is not None
+        ) or any(
+            b.should_break(self.last_test, self.data, self.last_offset, self.last_parent_match)
+            for b in self.breakpoints
         )
 
-    def write_test(self, test: MagicTest):
+    def write_test(self, test: MagicTest, is_current_test: bool = False):
+        if is_current_test:
+            self.write("→ ", bold=True)
+        else:
+            self.write("  ")
         if test.source_info is not None and test.source_info.original_line is not None:
             self.write(f"{test.source_info.path.name}:{test.source_info.line} ", dim=True)
             self.write(test.source_info.original_line.strip(), color=ANSIColor.BLUE)
@@ -264,11 +280,12 @@ class Debugger:
             self.write(f"{'>' * test.level}{test.offset!s}\t")
             self.write(test.message, color=ANSIColor.BLUE)
         if test.mime is not None:
-            self.write("\n!:mime\t", dim=True)
+            self.write("\n  !:mime ", dim=True)
             self.write(test.mime, color=ANSIColor.BLUE)
         for e in test.extensions:
-            self.write("\n!:ext\t", dim=True)
+            self.write("\n  !:ext  ", dim=True)
             self.write(str(e), color=ANSIColor.BLUE)
+        self.write("\n")
 
     def write(self, message: Any, bold: bool = False, dim: bool = False, color: Optional[ANSIColor] = None):
         if sys.stdout.isatty():
@@ -311,34 +328,58 @@ class Debugger:
             absolute_offset: int,
             parent_match: Optional[TestResult]
     ) -> Optional[TestResult]:
-        if self.should_break(test, data, absolute_offset, parent_match):
-            self.repl(test, data, absolute_offset, parent_match)
+        self.last_test = test
+        self.data = data
+        self.last_offset = absolute_offset
+        self.last_parent_match = parent_match
         if instrumented_test.original_test is None:
-            result = instrumented_test.test.test(test, data, absolute_offset, parent_match)
+            self.last_result = instrumented_test.test.test(test, data, absolute_offset, parent_match)
         else:
-            result = instrumented_test.original_test(test, data, absolute_offset, parent_match)
-        if self.single_stepping:
-            if result is None:
-                self.write("Test failed.\n\n", color=ANSIColor.RED)
-            else:
-                self.write("Test succeeded.\n\n", color=ANSIColor.GREEN)
-        return result
+            self.last_result = instrumented_test.original_test(test, data, absolute_offset, parent_match)
+        if self.should_break():
+            self.repl()
+        return self.last_result
 
-    def repl(
-            self,
-            test: MagicTest,
-            data: bytes,
-            absolute_offset: int,
-            parent_match: Optional[TestResult]
-    ):
-        log.clear_status()
+    def print_where(self):
+        if self.last_test is None:
+            self.write("The first test has not yet been run.\n", color=ANSIColor.RED)
+            self.write("Use `step`, `next`, or `run` to start testing.\n")
+            return
+        wrote_breakpoints = False
         for b in self.breakpoints:
-            if b.should_break(test, data, absolute_offset, parent_match):
+            if b.should_break(self.last_test, self.data, self.last_offset, self.last_parent_match):
                 self.write(b, color=ANSIColor.MAGENTA)
                 self.write("\n")
-        self.write(test)
-        self.write("\n\n")
-        self.print_context(data, absolute_offset)
+                wrote_breakpoints = True
+        if wrote_breakpoints:
+            self.write("\n")
+        test_stack = [self.last_test]
+        while test_stack[-1].parent is not None:
+            test_stack.append(test_stack[-1].parent)
+        for i, t in enumerate(reversed(test_stack)):
+            if i == len(test_stack) - 1:
+                self.write_test(t, is_current_test=True)
+            else:
+                self.write_test(t)
+        test_stack = list(reversed(self.last_test.children))
+        descendants = []
+        while test_stack:
+            descendant = test_stack.pop()
+            if descendant.can_match_mime:
+                descendants.append(descendant)
+                test_stack.extend(reversed(descendant.children))
+        for t in descendants:
+            self.write_test(t)
+        self.write("\n")
+        self.print_context(self.data, self.last_offset)
+        if self.last_result is None:
+            self.write("Test failed.\n", color=ANSIColor.RED)
+        else:
+            self.write("Test succeeded.\n", color=ANSIColor.GREEN)
+
+    def repl(self):
+        log.clear_status()
+        self.print_where()
         while True:
             try:
                 self.write("(polyfile) ", bold=True)
@@ -358,13 +399,40 @@ class Debugger:
             else:
                 args = ""
             if "help".startswith(command):
-                print("TODO: Usage")
+                usage = [
+                    ("help", "print this message"),
+                    ("continue", "continue execution until the next breakpoint is hit"),
+                    ("step", "step through a single magic test"),
+                    ("next", "continue execution until the next test that matches"),
+                    ("where", "print the context of the current magic test"),
+                    ("breakpoint", "list the current breakpoints or add a new one"),
+                    ("delete", "delete a breakpoint"),
+                    ("quit", "exit the debugger"),
+                ]
+                aliases = {
+                    "step": ("next",),
+                    "where": ("info stack", "backtrace")
+                }
+                left_col_width = max(len(u[0]) for u in usage)
+                left_col_width = max(left_col_width, max(len(c) for a in aliases.values() for c in a))
+                left_col_width += 3
+                for command, msg in usage:
+                    self.write(command, bold=True, color=ANSIColor.BLUE)
+                    self.write(f" {'.' * (left_col_width - len(command) - 2)} ")
+                    self.write(msg)
+                    self.write("\n")
+                self.write("\nAliases:\n", dim=True)
+
             elif "continue".startswith(command) or "run".startswith(command):
-                self.single_stepping = False
+                self.step_mode = StepMode.RUNNING
                 self.last_command = command
                 return
-            elif "step".startswith(command) or "next".startswith(command):
-                self.single_stepping = True
+            elif "step".startswith(command):
+                self.step_mode = StepMode.SINGLE_STEPPING
+                self.last_command = command
+                return
+            elif "next".startswith(command):
+                self.step_mode = StepMode.NEXT
                 self.last_command = command
                 return
             elif "quit".startswith(command):
@@ -404,27 +472,7 @@ class Debugger:
                             self.write(b_type.usage())
                             self.write("\n")
             elif "where".startswith(command) or "info stack".startswith(command) or "backtrace".startswith(command):
-                test_stack = [test]
-                while test_stack[-1].parent is not None:
-                    test_stack.append(test_stack[-1].parent)
-                for i, t in enumerate(reversed(test_stack)):
-                    cmd = str(t).replace("\n", "\n  ")
-                    if i == len(test_stack) - 1:
-                        print(f"> {cmd}")
-                    else:
-                        print(f"  {cmd}")
-                test_stack = list(reversed(test.children))
-                descendants = []
-                while test_stack:
-                    descendant = test_stack.pop()
-                    if descendant.can_match_mime:
-                        descendants.append(descendant)
-                        test_stack.extend(reversed(descendant.children))
-                for t in descendants:
-                    cmd = str(t).replace("\n", "\n  ")
-                    print(f"  {cmd}")
-                print("")
-                self.print_context(data, absolute_offset)
+                self.print_where()
             else:
                 self.write(f"Undefined command: {command!r}. Try \"help\".\n", color=ANSIColor.RED)
                 self.last_command = None
