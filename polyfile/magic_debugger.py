@@ -379,7 +379,8 @@ class Debugger:
 
     def repl(self):
         log.clear_status()
-        self.print_where()
+        if self.last_test is not None:
+            self.print_where()
         while True:
             try:
                 self.write("(polyfile) ", bold=True)
@@ -410,7 +411,6 @@ class Debugger:
                     ("quit", "exit the debugger"),
                 ]
                 aliases = {
-                    "step": ("next",),
                     "where": ("info stack", "backtrace")
                 }
                 left_col_width = max(len(u[0]) for u in usage)
@@ -420,8 +420,17 @@ class Debugger:
                     self.write(command, bold=True, color=ANSIColor.BLUE)
                     self.write(f" {'.' * (left_col_width - len(command) - 2)} ")
                     self.write(msg)
+                    if command in aliases:
+                        self.write(" (aliases: ", dim=True)
+                        alternatives = aliases[command]
+                        for i, alt in enumerate(alternatives):
+                            if i > 0 and len(alternatives) > 2:
+                                self.write(", ", dim=True)
+                            if i == len(alternatives) - 1 and len(alternatives) > 1:
+                                self.write(" and ", dim=True)
+                            self.write(alt, bold=True, color=ANSIColor.BLUE)
+                        self.write(")", dim=True)
                     self.write("\n")
-                self.write("\nAliases:\n", dim=True)
 
             elif "continue".startswith(command) or "run".startswith(command):
                 self.step_mode = StepMode.RUNNING
