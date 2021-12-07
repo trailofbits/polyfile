@@ -5,7 +5,7 @@ from typing import Any, Callable, List, Optional, Type, TypeVar, Union
 
 from .polyfile import __copyright__, __license__, __version__
 from .logger import getStatusLogger
-from .magic import MagicTest, SourceInfo, TestResult, TEST_TYPES
+from .magic import FailedTest, MagicTest, TestResult, TEST_TYPES
 from .wildcards import Wildcard
 
 
@@ -262,7 +262,7 @@ class Debugger:
 
     def should_break(self) -> bool:
         return self.step_mode == StepMode.SINGLE_STEPPING or (
-            self.step_mode == StepMode.NEXT and self.last_result is not None
+            self.step_mode == StepMode.NEXT and self.last_result
         ) or any(
             b.should_break(self.last_test, self.data, self.last_offset, self.last_parent_match)
             for b in self.breakpoints
@@ -387,10 +387,14 @@ class Debugger:
             self.write_test(t)
         self.write("\n")
         self.print_context(self.data, self.last_offset)
-        if self.last_result is None:
-            self.write("Test failed.\n", color=ANSIColor.RED)
-        else:
-            self.write("Test succeeded.\n", color=ANSIColor.GREEN)
+        if self.last_result is not None:
+            if not self.last_result:
+                self.write("Test failed.\n", color=ANSIColor.RED)
+                if isinstance(self.last_result, FailedTest):
+                    self.write(self.last_result.message)
+                    self.write("\n")
+            else:
+                self.write("Test succeeded.\n", color=ANSIColor.GREEN)
 
     def repl(self):
         log.clear_status()
