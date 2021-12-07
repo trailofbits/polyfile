@@ -1212,7 +1212,7 @@ class InstrumentedPDFDocument(PDFDocument):
         return deciphered
 
 
-from .magic import AbsoluteOffset, MagicMatcher, MagicTest, TestResult
+from .magic import AbsoluteOffset, FailedTest, MagicMatcher, MagicTest, MatchedTest, TestResult
 
 
 # The default libmagic test for detecting PDFs is too restrictive:
@@ -1225,10 +1225,10 @@ class RelaxedPDFMatcher(MagicTest):
             message="Malformed PDF"
         )
 
-    def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> Optional[TestResult]:
+    def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
         if b"%PDF-" in data:
-            return TestResult(self, value=data, offset=0, length=len(data))
-        return None
+            return MatchedTest(self, value=data, offset=0, length=len(data))
+        return FailedTest(self, offset=0, message="data did not contain \"%PDF-\"")
 
 
 MagicMatcher.DEFAULT_INSTANCE.add(RelaxedPDFMatcher())
