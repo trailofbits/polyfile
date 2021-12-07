@@ -171,6 +171,42 @@ class ZipFile(Match):
                 matcher=self.matcher,
             )
             yield cd_obj
+            for name, value, relative_offset, length in (
+                    ("Signature", 0x02014b50, 0, 4),
+                    ("VersionMadeBy", cd.version_made_by, 4, 2),
+                    ("VersionNeededToExtract", cd.version_needed_to_extract, 6, 2),
+                    ("GeneralBitFlag", cd.general_bit_flag, 8, 2),
+                    ("CompressionMethod", cd.compression_method, 10, 2),
+                    ("FileLastModificationTime", cd.file_last_modification_time, 12, 2),
+                    ("FileLastModificationDate", cd.file_last_modification_date, 14, 2),
+                    ("CRC32", cd.crc32, 16, 4),
+                    ("CompressedSize", cd.compressed_size, 20, 4),
+                    ("UncompressedSize", cd.uncompressed_size, 24, 4),
+                    ("FileNameLength", cd.file_name_length, 28, 2),
+                    ("ExtraFieldLength", cd.extra_field_length, 30, 2),
+                    ("FileCommentLength", cd.file_comment_length, 32, 2),
+                    ("DiskNumber", cd.disk_number, 34, 2),
+                    ("InternalAttributes", cd.internal_file_attrs, 36, 2),
+                    ("ExternalFileAttributes", cd.external_file_attrs, 38, 4),
+                    ("FileHeaderOffset", cd.file_header_offset, 42, 4),
+                    ("FileName", cd.file_name, 46, cd.file_name_length),
+                    ("ExtraField", cd.extra_field, 46+cd.file_name_length, cd.extra_field_length),
+                    ("Comment", cd.file_comment, 46+cd.file_name_length+cd.extra_field_length, cd.file_comment_length)
+            ):
+                if length == 0:
+                    continue
+                last_obj = Submatch(
+                    name,
+                    match_obj=value,
+                    relative_offset=relative_offset,
+                    length=length,
+                    parent=cd_obj,
+                    matcher=self.matcher
+                )
+                yield last_obj
+                if name == "Comment":
+                    with Tempfile(cd.file_comment) as comment_file:
+                        yield from self.matcher.match(comment_file, parent=last_obj)
 
         eocd_obj = Submatch(
             "EndOfCentralDirectory",
@@ -192,6 +228,8 @@ class ZipFile(Match):
                 ("CommentLength", eocd.comment_length, 20, 2),
                 ("Comment", eocd.comment, 22, eocd.comment_length)
         ):
+            if length == 0:
+                continue
             last_obj = Submatch(
                 name,
                 match_obj=value,
@@ -201,9 +239,9 @@ class ZipFile(Match):
                 matcher=self.matcher
             )
             yield last_obj
-        with Tempfile(eocd.comment) as comment_file:
-            # last_obj should be the comment match
-            yield from self.matcher.match(comment_file, parent=last_obj)
+            if name == "Comment":
+                with Tempfile(eocd.comment) as comment_file:
+                    yield from self.matcher.match(comment_file, parent=last_obj)
         #
         # offset = find_zip_start(file_stream)
         # if offset is None:
