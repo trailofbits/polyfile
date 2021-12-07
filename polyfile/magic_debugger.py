@@ -5,7 +5,7 @@ from typing import Any, Callable, List, Optional, Type, TypeVar, Union
 
 from .polyfile import __copyright__, __license__, __version__
 from .logger import getStatusLogger
-from .magic import MagicTest, TestResult, TEST_TYPES
+from .magic import FailedTest, MagicTest, TestResult, TEST_TYPES
 from .wildcards import Wildcard
 
 
@@ -262,28 +262,43 @@ class Debugger:
 
     def should_break(self) -> bool:
         return self.step_mode == StepMode.SINGLE_STEPPING or (
-            self.step_mode == StepMode.NEXT and self.last_result is not None
+            self.step_mode == StepMode.NEXT and self.last_result
         ) or any(
             b.should_break(self.last_test, self.data, self.last_offset, self.last_parent_match)
             for b in self.breakpoints
         )
 
     def write_test(self, test: MagicTest, is_current_test: bool = False):
+        for comment in test.comments:
+            if comment.source_info is not None and comment.source_info.original_line is not None:
+                self.write(f"  {comment.source_info.path.name}", dim=True, color=ANSIColor.CYAN)
+                self.write(":", dim=True)
+                self.write(f"{comment.source_info.line}\t", dim=True, color=ANSIColor.CYAN)
+                self.write(comment.source_info.original_line.strip(), dim=True)
+                self.write("\n")
+            else:
+                self.write(f"  # {comment!s}\n", dim=True)
         if is_current_test:
             self.write("→ ", bold=True)
         else:
             self.write("  ")
         if test.source_info is not None and test.source_info.original_line is not None:
-            self.write(f"{test.source_info.path.name}:{test.source_info.line} ", dim=True)
-            self.write(test.source_info.original_line.strip(), color=ANSIColor.BLUE)
+            source_prefix = f"{test.source_info.path.name}:{test.source_info.line}"
+            indent = f"{' ' * len(source_prefix)}\t"
+            self.write(test.source_info.path.name, dim=True, color=ANSIColor.CYAN)
+            self.write(":", dim=True)
+            self.write(test.source_info.line, dim=True, color=ANSIColor.CYAN)
+            self.write("\t")
+            self.write(test.source_info.original_line.strip(), color=ANSIColor.BLUE, bold=True)
         else:
+            indent = ""
             self.write(f"{'>' * test.level}{test.offset!s}\t")
-            self.write(test.message, color=ANSIColor.BLUE)
+            self.write(test.message, color=ANSIColor.BLUE, bold=True)
         if test.mime is not None:
-            self.write("\n  !:mime ", dim=True)
+            self.write(f"\n  {indent}!:mime ", dim=True)
             self.write(test.mime, color=ANSIColor.BLUE)
         for e in test.extensions:
-            self.write("\n  !:ext  ", dim=True)
+            self.write(f"\n  {indent}!:ext  ", dim=True)
             self.write(str(e), color=ANSIColor.BLUE)
         self.write("\n")
 
@@ -372,10 +387,14 @@ class Debugger:
             self.write_test(t)
         self.write("\n")
         self.print_context(self.data, self.last_offset)
-        if self.last_result is None:
-            self.write("Test failed.\n", color=ANSIColor.RED)
-        else:
-            self.write("Test succeeded.\n", color=ANSIColor.GREEN)
+        if self.last_result is not None:
+            if not self.last_result:
+                self.write("Test failed.\n", color=ANSIColor.RED)
+                if isinstance(self.last_result, FailedTest):
+                    self.write(self.last_result.message)
+                    self.write("\n")
+            else:
+                self.write("Test succeeded.\n", color=ANSIColor.GREEN)
 
     def repl(self):
         log.clear_status()
