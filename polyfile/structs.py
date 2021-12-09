@@ -116,6 +116,9 @@ class AnnotatedIntType(AnnotatedType):
 
 
 class Field(metaclass=AnnotatedType):
+    start_offset: int
+    num_bytes: int
+
     @classmethod
     @abstractmethod
     def read(cls: Type[T], struct: "Struct", field_name: str, stream: BinaryIO, endianness: Endianness) -> T:
@@ -217,16 +220,24 @@ class StructReadError(RuntimeError):
 
 class Struct(metaclass=StructMeta):
     endianness: Endianness = Endianness.NATIVE
+    start_offset: int
+    num_bytes: int
 
     @classmethod
     def read(cls: Type[T], stream: BinaryIO) -> T:
         ret = cls()
+        setattr(ret, "start_offset", stream.tell())
         for field_name, field in cls.fields.items():
             if field.__class__.endianness is not None:
                 endianness = field.__class__.endianness
             else:
                 endianness = cls.endianness
-            setattr(ret, field_name, field.read(ret, field_name, stream, endianness))
+            offset_before = stream.tell()
+            value = field.read(ret, field_name, stream, endianness)
+            setattr(ret, field_name, value)
+            setattr(value, "start_offset", offset_before)
+            setattr(value, "num_bytes", stream.tell() - offset_before)
+        setattr(ret, "num_bytes", stream.tell() - ret.start_offset)
         return ret
 
 
