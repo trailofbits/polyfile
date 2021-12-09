@@ -136,7 +136,7 @@ class FileStream:
             def __init__(self):
                 self.pos = f.root.tell()
 
-            def __enter__(self, *args, **kwargs):
+            def __enter__(self, *args, **kwargs) -> FileStream:
                 return f
 
             def __exit__(self, *args, **kwargs):

@@ -138,11 +138,11 @@ class IntField(int, Field, metaclass=AnnotatedIntType):
         data = stream.read(cls.size)
         if len(data) != cls.size:
             raise StructReadError(f"Reached the end of stream while expecting {cls!s} for "
-                                  f"{struct.__class_.__name__}.{field_name}")
+                                  f"{struct.__class__.__name__}.{field_name}")
         try:
             return cls(python_struct.unpack(f"{endianness.value}{struct_fmt_int(cls.size, cls.signed)}", data)[0])
         except python_struct.error:
-            raise StructReadError(f"Error unpacking {cls!s} from {data!r} for {struct.__class_.__name__}.{field_name}")
+            raise StructReadError(f"Error unpacking {cls!s} from {data!r} for {struct.__class__.__name__}.{field_name}")
 
 
 class ByteField(bytes, Field, metaclass=AnnotatedSizeType):
@@ -196,6 +196,23 @@ UInt32LE = IntField[4, False, Endianness.LITTLE]
 UInt64LE = IntField[8, False, Endianness.LITTLE]
 
 
+class Constant(ByteField):
+    constant: bytes
+
+    def __class_getitem__(cls: T, to_match: bytes) -> T:
+        c = super().__class_getitem__(len(to_match))
+        setattr(c, "constant", to_match)
+        return c
+
+    @classmethod
+    def read(cls: Type[T], struct: "Struct", field_name: str, stream: BinaryIO, endianness: Endianness) -> T:
+        ret = super().read(struct, field_name, stream, endianness)
+        if ret != cls.constant:
+            raise StructReadError(f"Expected {cls.constant!r} but instead found {ret!r} while parsing "
+                                  f"{struct.__class__.__name__}.{field_name}")
+        return ret
+
+
 class StructMeta(ABCMeta):
     fields: OrderedDictType[str, Type[Field]]
 
@@ -203,7 +220,7 @@ class StructMeta(ABCMeta):
         cls.fields = OrderedDict()
         if "__annotations__" in clsdict:
             for field_name, field_type in clsdict["__annotations__"].items():
-                if issubclass(field_type, Field):
+                if isinstance(field_type, type) and issubclass(field_type, Field):
                     if field_name in cls.fields:
                         raise TypeError(f"Invalid redeclaration of struct field {field_name} in {cls.__name__}")
                     cls.fields[field_name] = field_type
@@ -214,7 +231,7 @@ class StructError(RuntimeError):
     pass
 
 
-class StructReadError(RuntimeError):
+class StructReadError(StructError):
     pass
 
 

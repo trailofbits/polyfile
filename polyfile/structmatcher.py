@@ -1,8 +1,8 @@
 from typing import Iterator, Optional
 
 from .fileutils import Tempfile
-from .polyfile import Match, Matcher, Submatch
-from .structs import Field, Struct
+from .polyfile import InvalidMatch, Match, Matcher, Submatch
+from .structs import Field, Struct, StructError
 
 
 class PolyFileStruct(Struct):
@@ -26,7 +26,7 @@ class PolyFileStruct(Struct):
         )
         yield m
         for field_name in self.fields.keys():
-            value: Field = getattr(self, field)
+            value: Field = getattr(self, field_name)
             s = Submatch(
                 field_name,
                 match_obj=value,
@@ -36,8 +36,11 @@ class PolyFileStruct(Struct):
                 matcher=matcher
             )
             yield s
-            if isinstance(value, PolyFileStruct):
-                yield from value.match(matcher, s)
-            elif isinstance(value, bytes):
-                with Tempfile(value) as tmp:
-                    yield from matcher.match(value, parent=s)
+            try:
+                if isinstance(value, PolyFileStruct):
+                    yield from value.match(matcher, s)
+                elif isinstance(value, bytes):
+                    with Tempfile(value) as tmp:
+                        yield from matcher.match(tmp, parent=s)
+            except (InvalidMatch, StructError):
+                pass
