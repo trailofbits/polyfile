@@ -6,7 +6,9 @@ from typing import Any, Callable, List, Optional, Type, TypeVar, Union
 
 from .polyfile import __copyright__, __license__, __version__
 from .logger import getStatusLogger
-from .magic import AbsoluteOffset, FailedTest, MagicMatcher, MagicTest, TestResult, TEST_TYPES
+from .magic import (
+    AbsoluteOffset, FailedTest, InvalidOffsetError, MagicMatcher, MagicTest, Offset, TestResult, TEST_TYPES
+)
 from .wildcards import Wildcard
 
 
@@ -422,10 +424,13 @@ class Debugger:
             self.write_test(t)
         self.write("\n")
         if not isinstance(test.offset, AbsoluteOffset):
-            data_offset = test.offset.to_absolute(self.data, parent_match)
-            self.write(str(test.offset), color=ANSIColor.BLUE)
-            self.write(" = byte offset ", dim=True)
-            self.write(f"{data_offset!s}\n", bold=True)
+            try:
+                data_offset = test.offset.to_absolute(self.data, parent_match)
+                self.write(str(test.offset), color=ANSIColor.BLUE)
+                self.write(" = byte offset ", dim=True)
+                self.write(f"{data_offset!s}\n", bold=True)
+            except InvalidOffsetError as e:
+                self.write(f"{e!s}\n", color=ANSIColor.RED)
         self.print_context(self.data, offset)
         if result is not None:
             if not result:
@@ -466,6 +471,7 @@ class Debugger:
                     ("next", "continue execution until the next test that matches"),
                     ("where", "print the context of the current magic test"),
                     ("test", "test the following libmagic DSL test at the current position"),
+                    ("print", "print the computed absolute offset of the following libmagic DSL offset"),
                     ("breakpoint", "list the current breakpoints or add a new one"),
                     ("delete", "delete a breakpoint"),
                     ("quit", "exit the debugger"),
@@ -573,6 +579,31 @@ class Debugger:
                         for b_type in BREAKPOINT_TYPES:
                             self.write(b_type.usage())
                             self.write("\n")
+            elif "print".startswith(command):
+                if args:
+                    if self.last_test is None:
+                        self.write("The first test has not yet been run.\n", color=ANSIColor.RED)
+                        self.write("Use `step`, `next`, or `run` to start testing.\n")
+                        continue
+                    try:
+                        dsl_offset = Offset.parse(args)
+                    except ValueError as e:
+                        self.write(f"{e!s}\n", color=ANSIColor.RED)
+                        continue
+                    try:
+                        absolute = dsl_offset.to_absolute(self.data, self.last_result)
+                        self.write(f"{absolute}\n", bold=True)
+                        self.print_context(self.data, absolute)
+                    except InvalidOffsetError as e:
+                        self.write(f"{e!s}\n", color=ANSIColor.RED)
+                        continue
+                else:
+                    self.write("Usage: ", dim=True)
+                    self.write("print", bold=True, color=ANSIColor.BLUE)
+                    self.write(" LIBMAGIC DSL OFFSET\n", bold=True)
+                    self.write("Calculate the absolute offset for the given DSL offset.\n\nExample:\n")
+                    self.write("print", bold=True, color=ANSIColor.BLUE)
+                    self.write(" (&0x7c.l+0x26)\n", bold=True)
             elif "where".startswith(command) or "info stack".startswith(command) or "backtrace".startswith(command):
                 self.print_where()
             else:
