@@ -6,7 +6,7 @@ from typing import Any, Callable, List, Optional, Type, TypeVar, Union
 
 from .polyfile import __copyright__, __license__, __version__
 from .logger import getStatusLogger
-from .magic import FailedTest, MagicMatcher, MagicTest, TestResult, TEST_TYPES
+from .magic import AbsoluteOffset, FailedTest, MagicMatcher, MagicTest, TestResult, TEST_TYPES
 from .wildcards import Wildcard
 
 
@@ -421,6 +421,11 @@ class Debugger:
         for t in descendants:
             self.write_test(t)
         self.write("\n")
+        if not isinstance(test.offset, AbsoluteOffset):
+            data_offset = test.offset.to_absolute(self.data, parent_match)
+            self.write(str(test.offset), color=ANSIColor.BLUE)
+            self.write(" = byte offset ", dim=True)
+            self.write(f"{data_offset!s}\n", bold=True)
         self.print_context(self.data, offset)
         if result is not None:
             if not result:
