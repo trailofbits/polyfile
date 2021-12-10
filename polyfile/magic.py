@@ -340,6 +340,9 @@ class RelativeOffset(Offset):
             difference = -self.relative_to.magnitude
         else:
             difference = self.relative_to.to_absolute(data, last_match)
+        if not isinstance(last_match, MatchedTest):
+            raise InvalidOffsetError(f"The last test was expected to be a match, but instead got {last_match!s}",
+                                     offset=self)
         offset = last_match.offset + last_match.length + difference
         if len(data) < offset < 0:
             raise InvalidOffsetError(offset=self)
