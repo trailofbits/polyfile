@@ -2086,7 +2086,16 @@ class MagicMatcher:
 
     def add(self, test: Union[MagicTest, Path]):
         if not isinstance(test, MagicTest):
-            level_zero_tests = self._parse_file(test, self)[0]
+            level_zero_tests, _, tests_with_mime, indirect_tests = self._parse_file(test, self)
+            for test in tests_with_mime:
+                assert test.can_match_mime
+                for ancestor in test.ancestors():
+                    ancestor.can_match_mime = True
+            for test in indirect_tests:
+                assert test.can_be_indirect
+                assert test.can_match_mime
+                for ancestor in test.ancestors():
+                    ancestor.can_be_indirect = True
             for test in level_zero_tests:
                 self.add(test)
             return
@@ -2167,8 +2176,6 @@ class MagicMatcher:
     ) -> Optional[MagicTest]:
         m = TEST_PATTERN.match(line)
         if not m:
-            if not line.startswith("!"):
-                breakpoint()
             return None
         level = len(m.group("level"))
         while parent is not None and parent.level >= level:
