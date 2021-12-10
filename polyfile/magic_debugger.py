@@ -1,11 +1,12 @@
 from abc import ABC, abstractmethod
 from enum import Enum
+from pathlib import Path
 import sys
 from typing import Any, Callable, List, Optional, Type, TypeVar, Union
 
 from .polyfile import __copyright__, __license__, __version__
 from .logger import getStatusLogger
-from .magic import FailedTest, MagicTest, TestResult, TEST_TYPES
+from .magic import FailedTest, MagicMatcher, MagicTest, TestResult, TEST_TYPES
 from .wildcards import Wildcard
 
 
@@ -228,6 +229,22 @@ class Debugger:
         self.data: bytes = b""
         self.last_offset: int = 0
         self.last_result: Optional[TestResult] = None
+        self.repl_test: Optional[MagicTest] = None
+
+    def save_context(self):
+        class DebugContext:
+            def __init__(self, debugger: Debugger):
+                self.debugger: Debugger = debugger
+                self.__saved_state = {}
+
+            def __enter__(self) -> Debugger:
+                self.__saved_state = dict(self.debugger.__dict__)
+                return self.debugger
+
+            def __exit__(self, exc_type, exc_val, exc_tb):
+                self.debugger.__dict__ = self.__saved_state
+
+        return DebugContext(self)
 
     @property
     def enabled(self) -> bool:
@@ -343,32 +360,50 @@ class Debugger:
             absolute_offset: int,
             parent_match: Optional[TestResult]
     ) -> Optional[TestResult]:
+        if instrumented_test.original_test is None:
+            result = instrumented_test.test.test(test, data, absolute_offset, parent_match)
+        else:
+            result = instrumented_test.original_test(test, data, absolute_offset, parent_match)
+        if self.repl_test is test:
+            # this is a one-off test run from the REPL, so do not save its results
+            return result
+        self.last_result = result
         self.last_test = test
         self.data = data
         self.last_offset = absolute_offset
         self.last_parent_match = parent_match
-        if instrumented_test.original_test is None:
-            self.last_result = instrumented_test.test.test(test, data, absolute_offset, parent_match)
-        else:
-            self.last_result = instrumented_test.original_test(test, data, absolute_offset, parent_match)
         if self.should_break():
             self.repl()
         return self.last_result
 
-    def print_where(self):
-        if self.last_test is None:
+    def print_where(
+            self,
+            test: Optional[MagicTest] = None,
+            offset: Optional[int] = None,
+            parent_match: Optional[TestResult] = None,
+            result: Optional[TestResult] = None
+    ):
+        if test is None:
+            test = self.last_test
+        if test is None:
             self.write("The first test has not yet been run.\n", color=ANSIColor.RED)
             self.write("Use `step`, `next`, or `run` to start testing.\n")
             return
+        if offset is None:
+            offset = self.last_offset
+        if parent_match is None:
+            parent_match = self.last_parent_match
+        if result is None:
+            result = self.last_result
         wrote_breakpoints = False
         for b in self.breakpoints:
-            if b.should_break(self.last_test, self.data, self.last_offset, self.last_parent_match):
+            if b.should_break(test, self.data, offset, parent_match):
                 self.write(b, color=ANSIColor.MAGENTA)
                 self.write("\n")
                 wrote_breakpoints = True
         if wrote_breakpoints:
             self.write("\n")
-        test_stack = [self.last_test]
+        test_stack = [test]
         while test_stack[-1].parent is not None:
             test_stack.append(test_stack[-1].parent)
         for i, t in enumerate(reversed(test_stack)):
@@ -376,7 +411,7 @@ class Debugger:
                 self.write_test(t, is_current_test=True)
             else:
                 self.write_test(t)
-        test_stack = list(reversed(self.last_test.children))
+        test_stack = list(reversed(test.children))
         descendants = []
         while test_stack:
             descendant = test_stack.pop()
@@ -386,12 +421,12 @@ class Debugger:
         for t in descendants:
             self.write_test(t)
         self.write("\n")
-        self.print_context(self.data, self.last_offset)
-        if self.last_result is not None:
-            if not self.last_result:
+        self.print_context(self.data, offset)
+        if result is not None:
+            if not result:
                 self.write("Test failed.\n", color=ANSIColor.RED)
-                if isinstance(self.last_result, FailedTest):
-                    self.write(self.last_result.message)
+                if isinstance(result, FailedTest):
+                    self.write(result.message)
                     self.write("\n")
             else:
                 self.write("Test succeeded.\n", color=ANSIColor.GREEN)
@@ -425,6 +460,7 @@ class Debugger:
                     ("step", "step through a single magic test"),
                     ("next", "continue execution until the next test that matches"),
                     ("where", "print the context of the current magic test"),
+                    ("test", "test the following libmagic DSL test at the current position"),
                     ("breakpoint", "list the current breakpoints or add a new one"),
                     ("delete", "delete a breakpoint"),
                     ("quit", "exit the debugger"),
@@ -477,6 +513,39 @@ class Debugger:
                     b = self.breakpoints[breakpoint_num]
                     self.breakpoints = self.breakpoints[:breakpoint_num] + self.breakpoints[breakpoint_num + 1:]
                     self.write(f"Deleted {b!s}\n")
+            elif "test".startswith(command):
+                if args:
+                    if self.last_test is None:
+                        self.write("The first test has not yet been run.\n", color=ANSIColor.RED)
+                        self.write("Use `step`, `next`, or `run` to start testing.\n")
+                        continue
+                    try:
+                        test = MagicMatcher.parse_test(args, Path("STDIN"), 1, parent=self.last_test)
+                        if test is None:
+                            self.write("Error parsing test\n", color=ANSIColor.RED)
+                            continue
+                        try:
+                            with self.save_context():
+                                self.repl_test = test
+                                if test.parent is None:
+                                    self.last_result = None
+                                    self.last_offset = 0
+                                result = test.test(self.data, self.last_offset, parent_match=self.last_result)
+                        finally:
+                            if test.parent is not None:
+                                test.parent.children.remove(test)
+                        self.print_where(
+                           test=test, offset=self.last_offset, parent_match=self.last_result, result=result
+                        )
+                    except ValueError as e:
+                        self.write(f"{e!s}\n", color=ANSIColor.RED)
+                else:
+                    self.write("Usage: ", dim=True)
+                    self.write("test", bold=True, color=ANSIColor.BLUE)
+                    self.write(" LIBMAGIC DSL TEST\n", bold=True)
+                    self.write("Attempt to run the given test.\n\nExample:\n")
+                    self.write("test", bold=True, color=ANSIColor.BLUE)
+                    self.write(" 0 search \\x50\\x4b\\x05\\x06 ZIP EOCD record\n", bold=True)
             elif "breakpoint".startswith(command):
                 if args:
                     for b_type in BREAKPOINT_TYPES:
