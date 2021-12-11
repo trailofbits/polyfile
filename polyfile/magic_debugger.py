@@ -340,7 +340,7 @@ class Debugger:
 
     def print_context(self, data: bytes, offset: int, context_bytes: int = 32):
         bytes_before = min(offset, context_bytes)
-        context_before = string_escape(data[:bytes_before])
+        context_before = string_escape(data[offset - bytes_before:offset])
         if 0 <= offset < len(data):
             current_byte = string_escape(data[offset])
         else:
@@ -423,6 +423,7 @@ class Debugger:
         for t in descendants:
             self.write_test(t)
         self.write("\n")
+        data_offset = offset
         if not isinstance(test.offset, AbsoluteOffset):
             try:
                 data_offset = test.offset.to_absolute(self.data, parent_match)
@@ -431,7 +432,7 @@ class Debugger:
                 self.write(f"{data_offset!s}\n", bold=True)
             except InvalidOffsetError as e:
                 self.write(f"{e!s}\n", color=ANSIColor.RED)
-        self.print_context(self.data, offset)
+        self.print_context(self.data, data_offset)
         if result is not None:
             if not result:
                 self.write("Test failed.\n", color=ANSIColor.RED)

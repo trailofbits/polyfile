@@ -2,7 +2,7 @@ from pathlib import Path
 from typing import Iterator, Optional
 from zipfile import ZipFile as PythonZip
 
-from .fileutils import FileStream, Tempfile
+from .fileutils import ExactNamedTempfile, FileStream, Tempfile
 from .logger import StatusLogger
 from .magic import MagicMatcher
 from .polyfile import InvalidMatch, Match, submatcher
@@ -11,17 +11,19 @@ from .structs import ByteField, Constant, Endianness, UInt16, UInt32
 
 log = StatusLogger("polyfile")
 
-with Tempfile(b"""# The default libmagic tests for detecting ZIPs assumes they start at byte offset zero
+with ExactNamedTempfile(b"""# The default libmagic tests for detecting ZIPs assumes they start at byte offset zero
 0 search \\x50\\x4b\\x05\\x06 ZIP end of central directory record
 !:mime application/zip
 !:ext zip
->(&12.l)    string     \\x50\\x4b\\x01\\x02 First Central Directory
-# >>(&0)
-# Java Jar files
->(26.s+30)	leshort	0xcafe		Java archive data (JAR)
-!:mime	application/java-archive
+""", name="RelaxedZipMatcher") as t:
+    MagicMatcher.DEFAULT_INSTANCE.add(Path(t))
+
+with ExactNamedTempfile(b"""# The default libmagic tests for detecting JARs assumes they start at byte offset zero
+0 search PK\\x03\\x04 ZIP Local File Header
+>&(&22.s+30)	leshort	0xcafe		Java archive data (JAR)
+!:mime application/java-archive
 !:ext jar
-""", prefix="RelaxedZipMatcher") as t:
+""", name="RelaxedJarMatcher") as t:
     MagicMatcher.DEFAULT_INSTANCE.add(Path(t))
 
 

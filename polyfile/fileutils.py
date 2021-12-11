@@ -2,6 +2,7 @@ import mmap
 import os
 from pathlib import Path
 import tempfile as tf
+import shutil
 import sys
 from typing import IO, Optional, Union
 
@@ -14,23 +15,43 @@ def make_stream(path_or_stream, mode='rb', close_on_exit=None):
 
 
 class Tempfile:
-    def __init__(self, contents, prefix=None, suffix=None):
-        self._temp = None
-        self._data = contents
-        self._prefix = prefix
-        self._suffix = suffix
+    def __init__(self, contents: bytes, prefix: Optional[str] = None, suffix: Optional[str] = None):
+        self._path: Optional[str] = None
+        self._data: bytes = contents
+        self._prefix: Optional[str] = prefix
+        self._suffix: Optional[str] = suffix
 
     def __enter__(self) -> str:
-        self._temp = tf.NamedTemporaryFile(prefix=self._prefix, suffix=self._suffix, delete=False)
-        self._temp.write(self._data)
-        self._temp.flush()
-        self._temp.close()
-        return self._temp.name
+        tmp = tf.NamedTemporaryFile(prefix=self._prefix, suffix=self._suffix, delete=False)
+        tmp.write(self._data)
+        tmp.flush()
+        tmp.close()
+        self._path = tmp.name
+        return tmp.name
 
     def __exit__(self, type, value, traceback):
-        if self._temp is not None:
-            os.unlink(self._temp.name)
-            self._temp = None
+        if self._path is not None:
+            os.unlink(self._path)
+            self._path = None
+
+
+class ExactNamedTempfile(Tempfile):
+    def __init__(self, contents: bytes, name: str):
+        super().__init__(contents)
+        self._name: str = name
+
+    def __enter__(self):
+        tmpdir = Path(tf.mkdtemp())
+        file_path = tmpdir / self._name
+        with open(file_path, "wb") as f:
+            f.write(self._data)
+        self._path = str(tmpdir)
+        return str(file_path)
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self._path is not None:
+            shutil.rmtree(self._path)
+            self._path = None
 
 
 class PathOrStdin:
