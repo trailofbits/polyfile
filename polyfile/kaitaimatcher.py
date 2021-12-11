@@ -39,6 +39,7 @@ KAITAI_MIME_MAPPING: Dict[str, str] = {
     "application/dime": "network/dime_message.ksy",
     "application/bson": "serialization/bson.ksy",
     "application/x-ms-shortcut": "windows/windows_lnk_file.ksy",
+    "application/x-java-applet": "executable/java_class.ksy",
     # Uncomment this when/if Kaitai fixes its upstream compilation bug for ICC
 # (https://github.com/kaitai-io/kaitai_struct_formats/issues/347#ref-commit-fde2866)
 #    "application/vnd.iccprofile": "image/icc_4.ksy"
