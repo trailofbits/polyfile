@@ -1,13 +1,14 @@
+from io import BytesIO
 from pathlib import Path
 from typing import Iterator, Optional
 from zipfile import ZipFile as PythonZip
 
 from .fileutils import ExactNamedTempfile, FileStream, Tempfile
 from .logger import StatusLogger
-from .magic import MagicMatcher
+from .magic import AbsoluteOffset, FailedTest, MagicMatcher, MagicTest, MatchedTest, TestResult
 from .polyfile import InvalidMatch, Match, submatcher
 from .structmatcher import PolyFileStruct
-from .structs import ByteField, Constant, Endianness, UInt16, UInt32
+from .structs import ByteField, Constant, Endianness, StructError, UInt16, UInt32
 
 log = StatusLogger("polyfile")
 
@@ -16,15 +17,39 @@ with ExactNamedTempfile(b"""# The default libmagic tests for detecting ZIPs assu
 !:mime application/zip
 !:ext zip
 """, name="RelaxedZipMatcher") as t:
-    MagicMatcher.DEFAULT_INSTANCE.add(Path(t))
+    relaxed_zip_matcher = MagicMatcher.DEFAULT_INSTANCE.add(Path(t))[0]
 
-with ExactNamedTempfile(b"""# The default libmagic tests for detecting JARs assumes they start at byte offset zero
-0 search PK\\x03\\x04 ZIP Local File Header
->&(&22.s+30)	leshort	0xcafe		Java archive data (JAR)
-!:mime application/java-archive
-!:ext jar
-""", name="RelaxedJarMatcher") as t:
-    MagicMatcher.DEFAULT_INSTANCE.add(Path(t))
+
+# The default libmagic test for detecting JARs is too restrictive:
+class RelaxedJarMatcher(MagicTest):
+    def __init__(self):
+        super().__init__(
+            offset=AbsoluteOffset(0),
+            mime="application/java-archive",
+            extensions=("jar",),
+            message="Java JAR archive",
+            parent=relaxed_zip_matcher
+        )
+
+    def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
+        if parent_match is None:
+            return FailedTest(self, offset=absolute_offset, message="file is not a ZIP")
+        bstream = BytesIO(data)
+        setattr(bstream, "name", "RelaxedJarMatcherBytes")
+        stream = FileStream(bstream)
+        stream.seek(parent_match.offset)
+        try:
+            eocd = EndOfCentralDirectory.read(stream)
+            for cd in eocd.central_directories(stream):
+                header = cd.local_file_header(stream)
+                if header.extra_field == b"\xFE\xCA\x00\x00" or header.file_name == b"META-INF/MANIFEST.MF":
+                    return MatchedTest(self, value=data, offset=0, length=len(data))
+        except StructError as e:
+            return FailedTest(self, offset=absolute_offset, message=str(e))
+        return FailedTest(self, offset=0, message="ZIP file does not appear to be a JAR")
+
+
+MagicMatcher.DEFAULT_INSTANCE.add(RelaxedJarMatcher())
 
 
 class LocalFileHeader(PolyFileStruct):

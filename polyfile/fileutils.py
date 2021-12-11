@@ -1,3 +1,4 @@
+from io import BytesIO, SEEK_END
 import mmap
 import os
 from pathlib import Path
@@ -100,7 +101,15 @@ class FileStream:
             else:
                 self._length = min(length, len(path_or_stream))
         else:
-            filesize = os.path.getsize(self._stream.name)
+            if isinstance(path_or_stream, BytesIO):
+                orig_pos = path_or_stream.tell()
+                path_or_stream.seek(0, SEEK_END)
+                try:
+                    filesize = path_or_stream.tell()
+                finally:
+                    path_or_stream.seek(orig_pos)
+            else:
+                filesize = os.path.getsize(self._stream.name)
             if length is None:
                 self._length = filesize - start
             else:

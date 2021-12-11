@@ -2087,7 +2087,7 @@ class MagicMatcher:
         for test in tests:
             self.add(test)
 
-    def add(self, test: Union[MagicTest, Path]):
+    def add(self, test: Union[MagicTest, Path]) -> List[MagicTest]:
         if not isinstance(test, MagicTest):
             level_zero_tests, _, tests_with_mime, indirect_tests = self._parse_file(test, self)
             for test in tests_with_mime:
@@ -2101,7 +2101,7 @@ class MagicMatcher:
                     ancestor.can_be_indirect = True
             for test in level_zero_tests:
                 self.add(test)
-            return
+            return list(level_zero_tests)
 
         if isinstance(test, NamedTest):
             if test.name in self.named_tests:
@@ -2115,6 +2115,8 @@ class MagicMatcher:
                 self.tests_by_ext[ext].add(test)
             if test.can_be_indirect:
                 self.tests_that_can_be_indirect.add(test)
+
+        return [test]
 
     def only_match(
             self,
