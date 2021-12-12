@@ -34,34 +34,42 @@ This will automatically install the `polyfile` and `polymerge` executables in yo
 
 ```
 usage: polyfile [-h] [--filetype FILETYPE] [--list] [--html HTML]
-                [--try-all-offsets] [--only-match] [--debug] [--quiet]
-                [--version] [-dumpversion]
+                [--only-match-mime] [--only-match] [--require-match]
+                [--max-matches MAX_MATCHES] [--debug] [--trace] [--debugger]
+                [--quiet] [--version] [-dumpversion]
                 [FILE]
 
 A utility to recursively map the structure of a file.
 
 positional arguments:
-  FILE                  The file to analyze; pass '-' or omit to read from
+  FILE                  the file to analyze; pass '-' or omit to read from
                         STDIN
 
 optional arguments:
   -h, --help            show this help message and exit
   --filetype FILETYPE, -f FILETYPE
-                        Explicitly match against the given filetype (default
-                        is to match against all filetypes)
+                        explicitly match against the given filetype or
+                        filetype wildcard (default is to match against all
+                        filetypes)
   --list, -l            list the supported filetypes (for the `--filetype`
                         argument) and exit
-  --html HTML, -t HTML  Path to write an interactive HTML file for exploring
+  --html HTML, -t HTML  path to write an interactive HTML file for exploring
                         the PDF
-  --try-all-offsets, -a
-                        Search for a file match at every possible offset; this
-                        can be very slow for larger files
-  --only-match, -m      Do not attempt to parse known filetypes; only match
+  --only-match-mime, -I
+                        just print out the matching MIME types for the file,
+                        one on each line
+  --only-match, -m      do not attempt to parse known filetypes; only match
                         against file magic
-  --debug, -d           Print debug information
-  --quiet, -q           Suppress all log output (overrides --debug)
-  --version, -v         Print PolyFile's version information to STDERR
-  -dumpversion          Print PolyFile's raw version information to STDOUT and
+  --require-match       if no matches are found, exit with code 127
+  --max-matches MAX_MATCHES
+                        stop scanning after having found this many matches
+  --debug, -d           print debug information
+  --trace, -dd          print extra verbose debug information
+  --debugger, -db       drop into an interactive debugger for libmagic file
+                        definition matching
+  --quiet, -q           suppress all log output (overrides --debug)
+  --version, -v         print PolyFile's version information to STDERR
+  -dumpversion          print PolyFile's raw version information to STDOUT and
                         exit
 ```
 
@@ -125,6 +133,32 @@ with open("file_to_test", "rb") as f:
         ...
 ```
 
+### Debugging the libmagic DSL
+`libmagic` has an esoteric, poorly documented doman-specific language (DSL) for specifying its matching signatures.
+You can read the minimal and—as we have discovered in our cleanroom implementation—_incomplete_ documentation by running
+`man 5 magic`. PolyFile implements an interactive debugger for stepping through the DSL specifications, modeled after
+GDB. You can enter this debugger by passing the `--debugger` or `-db` argument to PolyFile. It is useful for both
+implementing new `libmagic` DSLs, as well as figuring out why an existing DSL fails to match against a given file.
+```console
+$ polyfile -db input_file
+PolyFile 0.3.5
+Copyright ©2021 Trail of Bits
+Apache License Version 2.0 https://www.apache.org/licenses/
+
+For help, type "help".
+(polyfile) help
+help ....... print this message
+continue ... continue execution until the next breakpoint is hit
+step ....... step through a single magic test
+next ....... continue execution until the next test that matches
+where ...... print the context of the current magic test (aliases: info stack and backtrace)
+test ....... test the following libmagic DSL test at the current position
+print ...... print the computed absolute offset of the following libmagic DSL offset
+breakpoint . list the current breakpoints or add a new one
+delete ..... delete a breakpoint
+quit ....... exit the debugger
+```
+
 ## Merging Output From PolyTracker
 
 [PolyTracker](https://github.com/trailofbits/polytracker) is PolyFile’s sister utility for automatically instrumenting
@@ -138,42 +172,41 @@ A separate utility called `polymerge` is installed with PolyFile specifically de
 tools.
 
 ```
-usage: polyfile [-h] [--filetype FILETYPE] [--list] [--html HTML]
-                [--only-match-mime] [--only-match] [--require-match]
-                [--max-matches MAX_MATCHES] [--debug] [--trace] [--quiet]
-                [--version] [-dumpversion]
-                [FILE]
+usage: polymerge [-h] [--cfg CFG] [--cfg-pdf CFG_PDF]
+                 [--dataflow [DATAFLOW ...]] [--no-intermediate-functions]
+                 [--demangle] [--type-hierarchy TYPE_HIERARCHY]
+                 [--type-hierarchy-pdf TYPE_HIERARCHY_PDF] [--diff [DIFF ...]]
+                 [--debug] [--quiet] [--version] [-dumpversion]
+                 FILES [FILES ...]
 
-A utility to recursively map the structure of a file.
+A utility to merge the JSON output of `polyfile`
+with a polytracker.json file from PolyTracker.
+
+https://github.com/trailofbits/polyfile/
+https://github.com/trailofbits/polytracker/
 
 positional arguments:
-  FILE                  the file to analyze; pass '-' or omit to read from
-                        STDIN
+  FILES                 Path to the PolyFile JSON output and/or the PolyTracker JSON output. Merging will only occur if both files are provided. The `--cfg` and `--type-hierarchy` options can be used if only a single file is provided, but no merging will occur.
 
 optional arguments:
   -h, --help            show this help message and exit
-  --filetype FILETYPE, -f FILETYPE
-                        explicitly match against the given filetype or
-                        filetype wildcard (default is to match against all
-                        filetypes)
-  --list, -l            list the supported filetypes (for the `--filetype`
-                        argument) and exit
-  --html HTML, -t HTML  path to write an interactive HTML file for exploring
-                        the PDF
-  --only-match-mime, -I
-                        just print out the matching MIME types for the file,
-                        one on each line
-  --only-match, -m      do not attempt to parse known filetypes; only match
-                        against file magic
-  --require-match       if no matches are found, exit with code 127
-  --max-matches MAX_MATCHES
-                        stop scanning after having found this many matches
-  --debug, -d           print debug information
-  --trace, -dd          print extra verbose debug information
-  --quiet, -q           suppress all log output (overrides --debug)
-  --version, -v         print PolyFile's version information to STDERR
-  -dumpversion          print PolyFile's raw version information to STDOUT and
-                        exit
+  --cfg CFG, -c CFG     Optional path to output a Graphviz .dot file representing the control flow graph of the program trace
+  --cfg-pdf CFG_PDF, -p CFG_PDF
+                        Similar to --cfg, but renders the graph to a PDF instead of outputting the .dot source
+  --dataflow [DATAFLOW ...]
+                        For the CFG generation options, only render functions that participated in dataflow. `--dataflow 10` means that only functions in the dataflow related to byte 10 should be included. `--dataflow 10:30` means that only functions operating on bytes 10 through 29 should be included. The beginning or end of a range can be omitted and will default to the beginning and end of the file, respectively. Multiple `--dataflow` ranges can be specified. `--dataflow :` will render the CFG only with functions that operated on tainted bytes. Omitting `--dataflow` will produce a CFG containing all functions.
+  --no-intermediate-functions
+                        To be used in conjunction with `--dataflow`. If enabled, only functions in the dataflow graph if they operated on the tainted bytes. This can result in a disjoint dataflow graph.
+  --demangle            Demangle C++ function names in the CFG (requires that PolyFile was installed with the `demangle` option, or that the `cxxfilt` Python module is installed.)
+  --type-hierarchy TYPE_HIERARCHY, -t TYPE_HIERARCHY
+                        Optional path to output a Graphviz .dot file representing the type hierarchy extracted from PolyFile
+  --type-hierarchy-pdf TYPE_HIERARCHY_PDF, -y TYPE_HIERARCHY_PDF
+                        Similar to --type-hierarchy, but renders the graph to a PDF instead of outputting the .dot source
+  --diff [DIFF ...]     Diff an arbitrary number of input polytracker.json files, all treated as the same class, against one or more polytracker.json provided after `--diff` arguments
+  --debug, -d           Print debug information
+  --quiet, -q           Suppress all log output (overrides --debug)
+  --version, -v         Print PolyMerge's version information and exit
+  -dumpversion          Print PolyMerge's raw version information and exit
 ```
 
 The output of `polymerge` is the same as [PolyFile’s output format](docs/json_format.md), augmented with the following:
