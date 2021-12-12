@@ -110,6 +110,12 @@ TrID matching code is still shipped with PolyFile and can be invoked programmati
 
 PolyFile outputs its mapping in an extension of the [SBuD](https://github.com/corkami/sbud) JSON format described [in the documentation](docs/json_format.md).
 
+PolyFile can also emit a standalone HTML document that contains an interactive hex viewer as well as syntax trees for
+the discovered file formats. Simply pass the `--html` argument to PolyFile with an output path:
+```console
+$ polyfile input_file --html output.html
+```
+
 ### libMagic Implementation
 
 PolyFile has a cleanroom implementation of [libmagic (used in the `file` command)](https://github.com/file/file).
