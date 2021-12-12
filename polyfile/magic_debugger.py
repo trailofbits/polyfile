@@ -432,14 +432,11 @@ class Debugger:
                 return
         sys.stdout.write(str(message))
 
-    def print_context(self, data: bytes, offset: int, context_bytes: int = 32):
+    def print_context(self, data: bytes, offset: int, context_bytes: int = 32, num_bytes: int = 1):
         bytes_before = min(offset, context_bytes)
         context_before = string_escape(data[offset - bytes_before:offset])
-        if 0 <= offset < len(data):
-            current_byte = string_escape(data[offset])
-        else:
-            current_byte = ""
-        context_after = string_escape(data[offset + 1:offset + context_bytes])
+        current_byte = string_escape(data[offset:offset+num_bytes])
+        context_after = string_escape(data[offset + num_bytes:offset + num_bytes + context_bytes])
         self.write(context_before)
         self.write(current_byte, bold=True)
         self.write(context_after)
@@ -526,7 +523,11 @@ class Debugger:
                 self.write(f"{data_offset!s}\n", bold=True)
             except InvalidOffsetError as e:
                 self.write(f"{e!s}\n", color=ANSIColor.RED)
-        self.print_context(self.data, data_offset)
+        if result is not None and hasattr(result, "length"):
+            context_bytes = result.length
+        else:
+            context_bytes = 1
+        self.print_context(self.data, data_offset, num_bytes=context_bytes)
         if result is not None:
             if not result:
                 self.write("Test failed.\n", color=ANSIColor.RED)
