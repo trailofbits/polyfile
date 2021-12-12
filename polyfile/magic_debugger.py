@@ -57,7 +57,7 @@ class Breakpoint(ABC):
 
     @classmethod
     @abstractmethod
-    def usage(cls) -> str:
+    def print_usage(cls, debugger: "Debugger"):
         raise NotImplementedError()
 
     @abstractmethod
@@ -86,10 +86,16 @@ class MimeBreakpoint(Breakpoint):
         return None
 
     @classmethod
-    def usage(cls) -> str:
-        return "`b MIME:MIMETYPE` to break when a test is capable of matching that mimetype. "\
-               "The MIMETYPE can include the '*' and '?' wildcards. For example, " \
-               "\"b MIME:application/pdf\" and \"b MIME:*pdf\"."
+    def print_usage(cls, debugger: "Debugger"):
+        debugger.write("b MIME:MIMETYPE", color=ANSIColor.MAGENTA)
+        debugger.write(" to break when a test is capable of matching that mimetype.\nThe ")
+        debugger.write("MIMETYPE", color=ANSIColor.MAGENTA)
+        debugger.write(" can include the ")
+        debugger.write("*", color=ANSIColor.MAGENTA)
+        debugger.write(" and ")
+        debugger.write("?", color=ANSIColor.MAGENTA)
+        debugger.write(" wildcards.\nFor example:\n")
+        debugger.write("    b MIME:application/pdf\n    b MIME:*pdf\n", color=ANSIColor.MAGENTA)
 
     def __str__(self):
         return f"Breakpoint: Matching for MIME {self.mimetype}"
@@ -115,9 +121,10 @@ class ExtensionBreakpoint(Breakpoint):
         return None
 
     @classmethod
-    def usage(cls) -> str:
-        return "`b EXT:EXTENSION` to break when a test is capable of matching that extension. For example, " \
-               "\"b EXT:pdf\"."
+    def print_usage(cls, debugger: "Debugger") -> str:
+        debugger.write("b EXT:EXTENSION", color=ANSIColor.MAGENTA)
+        debugger.write(" to break when a test is capable of matching that extension.\nFor example:\n")
+        debugger.write("    b EXT:pdf\n", color=ANSIColor.MAGENTA)
 
     def __str__(self):
         return f"Breakpoint: Matching for extension {self.ext}"
@@ -158,9 +165,11 @@ class FileBreakpoint(Breakpoint):
         return FileBreakpoint(filename, line)
 
     @classmethod
-    def usage(cls) -> str:
-        return "`b FILENAME:LINE_NO` to break when the line of the given magic file is reached. For example, " \
-               "\"b archive:525\"."
+    def print_usage(cls, debugger: "Debugger"):
+        debugger.write("b FILENAME:LINE_NO", color=ANSIColor.MAGENTA)
+        debugger.write(" to break when the line of the given magic file is reached.\nFor example:\n")
+        debugger.write("    b archive:525\n", color=ANSIColor.MAGENTA)
+        debugger.write("will break on the test at line 525 of the archive DSL file.\n")
 
     def __str__(self):
         return f"Breakpoint: {self.filename} line {self.line}"
@@ -578,8 +587,20 @@ class Debugger:
                     else:
                         self.write("No breakpoints set.\n", color=ANSIColor.RED)
                         for b_type in BREAKPOINT_TYPES:
-                            self.write(b_type.usage())
+                            b_type.print_usage(self)
                             self.write("\n")
+                        self.write("\nBy default, breakpoints will trigger whenever a matching test is run.\n\n"
+                                   "Prepend a breakpoint with ")
+                        self.write("!", bold=True)
+                        self.write(" to only trigger the breakpoint when the test fails.\nFor Example:\n")
+                        self.write("    b !MIME:application/zip\n", color=ANSIColor.MAGENTA)
+                        self.write("will only trigger if a test that could match a ZIP file failed.\n\n"
+                                   "Prepend a breakpoint with ")
+                        self.write("=", bold=True)
+                        self.write(" to only trigger the breakpoint when the test passes.\n For example:\n")
+                        self.write("    b =archive:1337\n", color=ANSIColor.MAGENTA)
+                        self.write("will only trigger if the test on line 1337 of the archive DSL matched.\n\n")
+
             elif "print".startswith(command):
                 if args:
                     if self.last_test is None:
