@@ -38,7 +38,8 @@ BREAKPOINT_TYPES: List[Type["Breakpoint"]] = []
 class Breakpoint(ABC):
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
-        BREAKPOINT_TYPES.append(cls)
+        if cls.__name__ not in ("FailedBreakpoint", "MatchedBreakpoint"):
+            BREAKPOINT_TYPES.append(cls)
 
     @abstractmethod
     def should_break(
@@ -46,7 +47,8 @@ class Breakpoint(ABC):
             test: MagicTest,
             data: bytes,
             absolute_offset: int,
-            parent_match: Optional[TestResult]
+            parent_match: Optional[TestResult],
+            result: Optional[TestResult]
     ) -> bool:
         raise NotImplementedError()
 
@@ -54,6 +56,18 @@ class Breakpoint(ABC):
     @abstractmethod
     def parse(cls: Type[B], command: str) -> Optional[B]:
         raise NotImplementedError()
+
+    @staticmethod
+    def from_str(command: str) -> Optional["Breakpoint"]:
+        if command.startswith("!"):
+            return FailedBreakpoint.parse(command)
+        elif command.startswith("="):
+            return MatchedBreakpoint.parse(command)
+        for b_type in BREAKPOINT_TYPES:
+            parsed = b_type.parse(command)
+            if parsed is not None:
+                return parsed
+        return None
 
     @classmethod
     @abstractmethod
@@ -63,6 +77,74 @@ class Breakpoint(ABC):
     @abstractmethod
     def __str__(self):
         raise NotImplementedError()
+
+
+class FailedBreakpoint(Breakpoint):
+    def __init__(self, parent: Breakpoint):
+        self.parent: Breakpoint = parent
+
+    def should_break(
+            self,
+            test: MagicTest,
+            data: bytes,
+            absolute_offset: int,
+            parent_match: Optional[TestResult],
+            result: Optional[TestResult]
+    ) -> bool:
+        return (result is None or isinstance(result, FailedTest)) and self.parent.should_break(
+            test, data, absolute_offset, parent_match, result
+        )
+
+    @classmethod
+    def parse(cls: B, command: str) -> Optional[B]:
+        if not command.startswith("!"):
+            return None
+        parent = Breakpoint.from_str(command[1:])
+        if parent is not None:
+            return FailedBreakpoint(parent)
+        else:
+            return None
+
+    @classmethod
+    def print_usage(cls, debugger: "Debugger"):
+        pass
+
+    def __str__(self):
+        return f"[FAILED] {self.parent!s}"
+
+
+class MatchedBreakpoint(Breakpoint):
+    def __init__(self, parent: Breakpoint):
+        self.parent: Breakpoint = parent
+
+    def should_break(
+            self,
+            test: MagicTest,
+            data: bytes,
+            absolute_offset: int,
+            parent_match: Optional[TestResult],
+            result: Optional[TestResult]
+    ) -> bool:
+        return result is not None and not isinstance(result, FailedTest) and self.parent.should_break(
+            test, data, absolute_offset, parent_match, result
+        )
+
+    @classmethod
+    def parse(cls: B, command: str) -> Optional[B]:
+        if not command.startswith("="):
+            return None
+        parent = Breakpoint.from_str(command[1:])
+        if parent is not None:
+            return MatchedBreakpoint(parent)
+        else:
+            return None
+
+    @classmethod
+    def print_usage(cls, debugger: "Debugger"):
+        pass
+
+    def __str__(self):
+        return f"[MATCHED] {self.parent!s}"
 
 
 class MimeBreakpoint(Breakpoint):
@@ -75,7 +157,8 @@ class MimeBreakpoint(Breakpoint):
             test: MagicTest,
             data: bytes,
             absolute_offset: int,
-            parent_match: Optional[TestResult]
+            parent_match: Optional[TestResult],
+            result: Optional[TestResult]
     ) -> bool:
         return self.pattern.is_contained_in(test.mimetypes())
 
@@ -110,7 +193,8 @@ class ExtensionBreakpoint(Breakpoint):
             test: MagicTest,
             data: bytes,
             absolute_offset: int,
-            parent_match: Optional[TestResult]
+            parent_match: Optional[TestResult],
+            result: Optional[TestResult]
     ) -> bool:
         return self.ext in test.all_extensions()
 
@@ -140,7 +224,8 @@ class FileBreakpoint(Breakpoint):
             test: MagicTest,
             data: bytes,
             absolute_offset: int,
-            parent_match: Optional[TestResult]
+            parent_match: Optional[TestResult],
+            result: TestResult
     ) -> bool:
         if test.source_info is None or test.source_info.line != self.line:
             return False
@@ -292,7 +377,7 @@ class Debugger:
         return self.step_mode == StepMode.SINGLE_STEPPING or (
             self.step_mode == StepMode.NEXT and self.last_result
         ) or any(
-            b.should_break(self.last_test, self.data, self.last_offset, self.last_parent_match)
+            b.should_break(self.last_test, self.data, self.last_offset, self.last_parent_match, self.last_result)
             for b in self.breakpoints
         )
 
@@ -408,7 +493,7 @@ class Debugger:
             result = self.last_result
         wrote_breakpoints = False
         for b in self.breakpoints:
-            if b.should_break(test, self.data, offset, parent_match):
+            if b.should_break(test, self.data, offset, parent_match, result):
                 self.write(b, color=ANSIColor.MAGENTA)
                 self.write("\n")
                 wrote_breakpoints = True
@@ -569,15 +654,13 @@ class Debugger:
                     self.write(" 0 search \\x50\\x4b\\x05\\x06 ZIP EOCD record\n", bold=True)
             elif "breakpoint".startswith(command):
                 if args:
-                    for b_type in BREAKPOINT_TYPES:
-                        parsed = b_type.parse(args)
-                        if parsed is not None:
-                            self.write(parsed, color=ANSIColor.MAGENTA)
-                            self.write("\n")
-                            self.breakpoints.append(parsed)
-                            break
-                    else:
+                    parsed = Breakpoint.from_str(args)
+                    if parsed is None:
                         self.write("Error: Invalid breakpoint pattern\n", color=ANSIColor.RED)
+                    else:
+                        self.write(parsed, color=ANSIColor.MAGENTA)
+                        self.write("\n")
+                        self.breakpoints.append(parsed)
                 else:
                     if self.breakpoints:
                         for i, b in enumerate(self.breakpoints):
