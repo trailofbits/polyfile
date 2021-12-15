@@ -476,12 +476,6 @@ class PSSequence(PSToken):
 
 
 class PSStr(PSSequence, str):
-    def __new__(cls, *args, **kwargs):
-        retval = super().__new__(cls, *args, **kwargs)
-        if retval == "Linearized":
-            breakpoint()
-        return retval
-
     def encode(self, encoding: str = ..., errors: str = ...) -> bytes:
         return PSBytes(super().encode(encoding, errors), pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes)
 
