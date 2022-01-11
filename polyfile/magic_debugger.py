@@ -1,9 +1,10 @@
 from abc import ABC, abstractmethod
 from enum import Enum
+from pdb import Pdb
 import sys
-from typing import Any, Callable, List, Optional, Type, TypeVar, Union
+from typing import Any, Callable, Iterator, List, Optional, Type, TypeVar, Union
 
-from .polyfile import __copyright__, __license__, __version__
+from .polyfile import __copyright__, __license__, __version__, CUSTOM_MATCHERS, Match, Submatch
 from .logger import getStatusLogger
 from .magic import FailedTest, MagicTest, TestResult, TEST_TYPES
 from .wildcards import Wildcard
@@ -185,10 +186,34 @@ class InstrumentedTest:
         return self.original_test is not None
 
     def uninstrument(self):
-        if self.original_test is not None and self.test.test is self:
+        if self.original_test is not None:
             # we are still assigned to the test function, so reset it
             self.test.test = self.original_test
         self.original_test = None
+
+
+class InstrumentedMatch:
+    def __init__(self, match: Type[Match], debugger: "Debugger"):
+        self.match: Type[Match] = match
+        self.debugger: Debugger = debugger
+        if hasattr(match, "submatch"):
+            self.original_submatch: Optional[Callable[...], Iterator[Submatch]] = match.submatch
+
+            def wrapper(match_instance, *args, **kwargs) -> Iterator[Submatch]:
+                yield from self.debugger.debug_submatch(self, match_instance, *args, **kwargs)
+
+            match.submatch = wrapper
+        else:
+            self.original_submatch = None
+
+    @property
+    def enalbed(self) -> bool:
+        return self.original_submatch is not None
+
+    def uninstrument(self):
+        if self.original_submatch is not None:
+            self.match.submatch = self.original_submatch
+        self.original_submatch = None
 
 
 def string_escape(data: Union[bytes, int]) -> str:
@@ -217,7 +242,7 @@ class StepMode(Enum):
 
 
 class Debugger:
-    def __init__(self):
+    def __init__(self, break_on_submatching: bool = True):
         self.instrumented_tests: List[InstrumentedTest] = []
         self.breakpoints: List[Breakpoint] = []
         self._entries: int = 0
@@ -228,6 +253,9 @@ class Debugger:
         self.data: bytes = b""
         self.last_offset: int = 0
         self.last_result: Optional[TestResult] = None
+        self.instrumented_matches: List[InstrumentedMatch] =[]
+        self.break_on_submatching: bool = break_on_submatching
+        self._pdb: Optional[Pdb] = None
 
     @property
     def enabled(self) -> bool:
@@ -239,12 +267,19 @@ class Debugger:
         for t in self.instrumented_tests:
             t.uninstrument()
         self.instrumented_tests = []
+        for m in self.instrumented_matches:
+            m.uninstrument()
+        self.instrumented_matches = []
         if is_enabled:
             # Instrument all of the MagicTest.test functions:
             for test in TEST_TYPES:
                 if "test" in test.__dict__:
                     # this class actually implements the test() function
                     self.instrumented_tests.append(InstrumentedTest(test, self))
+            if self.break_on_submatching:
+                for match in CUSTOM_MATCHERS.values():
+                    if hasattr(match, "submatch"):
+                        self.instrumented_matches.append(InstrumentedMatch(match, self))
             self.write(f"PolyFile {__version__}\n", color=ANSIColor.MAGENTA, bold=True)
             self.write(f"{__copyright__}\n{__license__}\n\nFor help, type \"help\".\n")
             self.repl()
@@ -319,6 +354,25 @@ class Debugger:
                 return
         sys.stdout.write(str(message))
 
+    def prompt(self, message: str, default: bool = True) -> bool:
+        while True:
+            self.write(f"{message} ", bold=True)
+            self.write("[", dim=True)
+            if default:
+                self.write("Y", bold=True, color=ANSIColor.GREEN)
+                self.write("n", dim=True, color=ANSIColor.RED)
+            else:
+                self.write("y", dim=True, color=ANSIColor.GREEN)
+                self.write("N", bold=True, color=ANSIColor.RED)
+            self.write("] ", dim=True)
+            answer = input().strip().lower()
+            if not answer:
+                return default
+            elif answer == "n":
+                return False
+            elif answer == "y":
+                return True
+
     def print_context(self, data: bytes, offset: int, context_bytes: int = 32):
         bytes_before = min(offset, context_bytes)
         context_before = string_escape(data[:bytes_before])
@@ -354,6 +408,73 @@ class Debugger:
         if self.should_break():
             self.repl()
         return self.last_result
+
+    def print_match(self, match: Match):
+        obj = match.to_obj()
+        self.write("{\n", bold=True)
+        for key, value in obj.items():
+            if isinstance(value, list):
+                # TODO: Maybe implement list printing later.
+                #       I don't think there will be lists here currently, thouh.
+                continue
+            self.write(f"  {key!r}", color=ANSIColor.BLUE)
+            self.write(": ", bold=True)
+            if isinstance(value, int) or isinstance(value, float):
+                self.write(str(value))
+            else:
+                self.write(repr(value), color=ANSIColor.GREEN)
+            self.write(",\n", bold=True)
+        self.write("}\n", bold=True)
+
+    def debug_submatch(self, instrumented_match: InstrumentedMatch, match: Match, file_stream) -> Iterator[Submatch]:
+        log.clear_status()
+
+        if instrumented_match.original_submatch is None:
+            submatch = instrumented_match.match.submatch
+        else:
+            submatch = instrumented_match.original_submatch
+
+        def print_location():
+            self.write(f"{file_stream.name}", dim=True, color=ANSIColor.CYAN)
+            self.write(":", dim=True)
+            self.write(f"{file_stream.tell()} ", dim=True, color=ANSIColor.CYAN)
+
+        if self._pdb is not None:
+            # We are already debugging!
+            print_location()
+            self.write(f"Parsing for submatches using {instrumented_match.match.__name__}.\n")
+            yield from submatch(match, file_stream)
+            return
+        self.print_match(match)
+        print_location()
+        self.write(f"About to parse for submatches using {instrumented_match.match.__name__}.\n")
+        if not self.prompt("Debug using PDB?", default=False):
+            yield from submatch(match, file_stream)
+            return
+        try:
+            self._pdb = Pdb(skip=["polyfile.magic_debugger", "polyfile.magic"])
+            self._pdb.prompt = "\u001b[1m(polyfile-Pdb)\u001b[0m "
+            generator = submatch(match, file_stream)
+            while True:
+                try:
+                    result = self._pdb.runcall(next, generator)
+                    self.write(f"Got a submatch:\n", dim=True)
+                    self.print_match(result)
+                    yield result
+                except StopIteration:
+                    self.write(f"Yielded all submatches from {match.__class__.__name__} at offset {match.offset}.\n")
+                    break
+                print_location()
+                if not self.prompt("Continue debugging the next submatch?", default=True):
+                    if self.prompt("Print the remaining submatches?", default=False):
+                        for result in generator:
+                            self.print_match(result)
+                            yield result
+                    else:
+                        yield from generator
+                    break
+        finally:
+            self._pdb = None
 
     def print_where(self):
         if self.last_test is None:
