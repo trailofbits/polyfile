@@ -2,6 +2,7 @@ import base64
 from json import dumps
 from pathlib import Path
 import pkg_resources
+from time import localtime
 from typing import Any, Dict, IO, Iterator, List, Optional, Set, Tuple, Type, Union
 
 from .fileutils import FileStream
@@ -9,6 +10,9 @@ from . import logger
 from .magic import MagicMatcher, MatchContext
 
 __version__: str = pkg_resources.require("polyfile")[0].version
+mod_year = localtime(Path(__file__).stat().st_mtime).tm_year
+__copyright__: str = f"Copyright ©{mod_year} Trail of Bits"
+__license__: str = "Apache License Version 2.0 https://www.apache.org/licenses/"
 
 CUSTOM_MATCHERS: Dict[str, Type["Match"]] = {}
 
