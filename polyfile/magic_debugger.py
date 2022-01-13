@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from enum import Enum
 from pdb import Pdb
 import sys
-from typing import Any, Callable, Iterator, List, Optional, Type, TypeVar, Union
+from typing import Any, Callable, ContextManager, Iterator, List, Optional, Type, TypeVar, Union
 
 from .polyfile import __copyright__, __license__, __version__, CUSTOM_MATCHERS, Match, Submatch
 from .logger import getStatusLogger
@@ -241,7 +241,7 @@ class StepMode(Enum):
     NEXT = 2
 
 
-class Debugger:
+class Debugger(ContextManager["Debugger"]):
     def __init__(self, break_on_submatching: bool = True):
         self.instrumented_tests: List[InstrumentedTest] = []
         self.breakpoints: List[Breakpoint] = []

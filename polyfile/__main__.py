@@ -58,6 +58,9 @@ def main(argv=None):
     parser.add_argument('--trace', '-dd', action='store_true', help='print extra verbose debug information')
     parser.add_argument('--debugger', '-db', action='store_true', help='drop into an interactive debugger for libmagic '
                                                                        'file definition matching')
+    parser.add_argument('--no-debug-python', action='store_true', help='by default, the `--debugger` option will break '
+                                                                       'on custom matchers and prompt to debug using '
+                                                                       'PDB. This option will suppress those prompts.')
     parser.add_argument('--quiet', '-q', action='store_true', help='suppress all log output (overrides --debug)')
     parser.add_argument('--version', '-v', action='store_true', help='print PolyFile\'s version information to STDERR')
     parser.add_argument('-dumpversion', action='store_true',
@@ -116,7 +119,9 @@ def main(argv=None):
 
     with path_or_stdin as file_path, ExitStack() as stack:
         if args.debugger:
-            stack.enter_context(Debugger())
+            stack.enter_context(Debugger(break_on_submatching=not args.no_debug_python))
+        elif args.no_debug_python:
+            log.warning("Ignoring `--no-debug-python`; it can only be used with the --debugger option.")
         matches = []
         try:
             if args.only_match_mime:
