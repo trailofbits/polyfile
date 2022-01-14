@@ -1001,7 +1001,7 @@ class RawPDFStream:
         return getattr(self._file_stream, item)
 
 
-def parse_object(obj, matcher: Matcher, parent=None):
+def parse_object(obj, matcher: Matcher, parent: Optional[Match] = None, pdf_header_offset: int = 0):
     if isinstance(obj, PDFObjectStream):
         log.status(f"Parsing PDF obj {obj.objid} {obj.genno}")
         if parent is None or isinstance(parent, PDF):
@@ -1018,14 +1018,14 @@ def parse_object(obj, matcher: Matcher, parent=None):
             parent=parent
         )
         yield match
-        yield from parse_object(obj.attrs, matcher=matcher, parent=match)
-        yield from parse_object(data, matcher=matcher, parent=match)
+        yield from parse_object(obj.attrs, matcher=matcher, parent=match, pdf_header_offset=pdf_header_offset)
+        yield from parse_object(data, matcher=matcher, parent=match, pdf_header_offset=pdf_header_offset)
         log.clear_status()
     elif isinstance(obj, PDFStreamFilter):
         filter_obj = Submatch(
             f"{obj.name!s}",
             bytes(obj.original_bytes),
-            relative_offset=obj.pdf_offset - parent.offset,
+            relative_offset=obj.pdf_offset - (parent.offset - pdf_header_offset),
             length=obj.pdf_bytes,
             parent=parent
         )
@@ -1034,7 +1034,7 @@ def parse_object(obj, matcher: Matcher, parent=None):
             yield Submatch(
                 "DecodedStream",
                 bytes(obj),
-                relative_offset=obj.pdf_offset - parent.offset,
+                relative_offset=obj.pdf_offset - (parent.offset - pdf_header_offset),
                 length=obj.pdf_bytes,
                 parent=filter_obj,
                 decoded=bytes(obj)
@@ -1043,27 +1043,28 @@ def parse_object(obj, matcher: Matcher, parent=None):
             yield Submatch(
                 "DecodingError",
                 obj.error.message,
-                relative_offset=obj.pdf_offset - parent.offset,
+                relative_offset=obj.pdf_offset - (parent.offset - pdf_header_offset),
                 length=obj.pdf_bytes,
                 parent=filter_obj
             )
-        yield from parse_object(obj.original_bytes, matcher=matcher, parent=filter_obj)
+        yield from parse_object(obj.original_bytes, matcher=matcher, parent=filter_obj,
+                                pdf_header_offset=pdf_header_offset)
     elif isinstance(obj, PDFList):
         list_obj = Submatch(
             "PDFList",
             '',
-            relative_offset=obj.pdf_offset - parent.offset,
+            relative_offset=obj.pdf_offset - (parent.offset - pdf_header_offset),
             length=obj.pdf_bytes,
             parent=parent
         )
         yield list_obj
         for item in obj:
-            yield from parse_object(item, matcher=matcher, parent=list_obj)
+            yield from parse_object(item, matcher=matcher, parent=list_obj, pdf_header_offset=pdf_header_offset)
     elif isinstance(obj, PDFDict):
         dict_obj = Submatch(
             "PDFDictionary",
             '',
-            relative_offset=obj.pdf_offset - parent.offset,
+            relative_offset=obj.pdf_offset - (parent.offset - pdf_header_offset),
             length=obj.pdf_bytes,
             parent=parent
         )
@@ -1077,7 +1078,7 @@ def parse_object(obj, matcher: Matcher, parent=None):
             pair = Submatch(
                 "KeyValuePair",
                 '',
-                relative_offset=key.pdf_offset - dict_obj.offset,
+                relative_offset=key.pdf_offset - (dict_obj.offset - pdf_header_offset),
                 length=value.pdf_offset + value.pdf_bytes - key.pdf_offset,
                 parent=dict_obj
             )
@@ -1097,13 +1098,13 @@ def parse_object(obj, matcher: Matcher, parent=None):
                 parent=pair
             )
             yield value_match
-            yield from parse_object(value, matcher=matcher, parent=value_match)
+            yield from parse_object(value, matcher=matcher, parent=value_match, pdf_header_offset=pdf_header_offset)
     elif isinstance(obj, PDFDeciphered):
         deciphered = Submatch(
             "PDFDeciphered",
             obj.original_bytes,
             decoded=obj,
-            relative_offset=obj.pdf_offset - parent.offset,
+            relative_offset=obj.pdf_offset - (parent.offset - pdf_header_offset),
             length=obj.pdf_bytes,
             parent=parent
         )
@@ -1116,22 +1117,24 @@ def parse_object(obj, matcher: Matcher, parent=None):
                 "PNGPredictor",
                 bytes(obj.original_bytes),
                 decoded=obj,
-                relative_offset=obj.pdf_offset - parent.offset,
+                relative_offset=obj.pdf_offset - (parent.offset - pdf_header_offset),
                 length=obj.pdf_bytes,
                 parent=parent
             )
-            yield from parse_object(obj.params, matcher=matcher, parent=match)
-            yield from parse_object(obj.original_bytes, matcher=matcher, parent=match)
+            yield from parse_object(obj.params, matcher=matcher, parent=match, pdf_header_offset=pdf_header_offset)
+            yield from parse_object(obj.original_bytes, matcher=matcher, parent=match,
+                                    pdf_header_offset=pdf_header_offset)
         else:
             match = Submatch(
                 obj.__class__.__name__,
                 bytes(obj),
-                relative_offset=obj.pdf_offset - parent.offset,
+                relative_offset=obj.pdf_offset - (parent.offset - pdf_header_offset),
                 length=obj.pdf_bytes,
                 parent=parent
             )
         if hasattr(obj, "original_bytes"):
-            yield from parse_object(obj.original_bytes, matcher=matcher, parent=match)
+            yield from parse_object(obj.original_bytes, matcher=matcher, parent=match,
+                                    pdf_header_offset=pdf_header_offset)
         # recursively match against the deflated contents
         with Tempfile(obj) as f:
             yield from matcher.match(f, parent=match)
@@ -1139,7 +1142,7 @@ def parse_object(obj, matcher: Matcher, parent=None):
         yield Submatch(
             obj.__class__.__name__,
             obj,
-            relative_offset=obj.pdf_offset - parent.offset,
+            relative_offset=obj.pdf_offset - (parent.offset - pdf_header_offset),
             length=obj.pdf_bytes,
             parent=parent
         )
@@ -1230,17 +1233,31 @@ MagicMatcher.DEFAULT_INSTANCE.add(RelaxedPDFMatcher())
 
 @submatcher("application/pdf")
 class PDF(Match):
-    def submatch(self, file_stream):
+    def submatch(self, file_stream, parent: Optional[Match] = None):
+        if parent is None:
+            parent = self
         # pdfminer expects %PDF to be at byte offset zero in the file
         pdf_header_index = file_stream.first_index_of(b"%PDF")
         if pdf_header_index > 0:
             # the PDF header does not start at byte offset zero!
+            yield Submatch(
+                "IgnoredPDFPreamble",
+                b"",
+                relative_offset=0,
+                length=pdf_header_index,
+                parent=parent
+            )
+            pdf_content = Submatch(
+                "OffsetPDFContent",
+                b"",
+                relative_offset=pdf_header_index,
+                parent=parent
+            )
+            yield pdf_content
             with FileStream(file_stream, start=pdf_header_index) as f:
-                for match in self.submatch(f):
-                    # account for the offset
-                    match._offset += pdf_header_index
-                    yield match
+                yield from self.submatch(f, parent=pdf_content)
             return
+        pdf_header_index = file_stream.start
         parser = PDFParser(RawPDFStream(file_stream))
         doc = InstrumentedPDFDocument(parser)
         yielded = set()
@@ -1254,7 +1271,7 @@ class PDF(Match):
                     if (obj.objid, obj.genno) in yielded:
                         continue
                     yielded.add((obj.objid, obj.genno))
-                    yield from parse_object(obj, self.matcher, self)
+                    yield from parse_object(obj, self.matcher, parent, pdf_header_offset=pdf_header_index)
                 else:
                     if objid in yielded or not hasattr(obj, "pdf_offset") or not hasattr(obj, "pdf_bytes"):
                         continue
@@ -1265,7 +1282,7 @@ class PDF(Match):
                         match_obj=objid,
                         relative_offset=obj.pdf_offset,
                         length=obj.pdf_bytes,
-                        parent=self
+                        parent=parent
                     )
-                    yield from parse_object(obj, self.matcher, match)
+                    yield from parse_object(obj, self.matcher, match, pdf_header_offset=pdf_header_index)
         #yield from parse_pdf(file_stream, matcher=self.matcher, parent=self)
