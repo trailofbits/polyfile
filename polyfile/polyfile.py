@@ -7,7 +7,7 @@ from typing import Any, Dict, IO, Iterator, List, Optional, Set, Tuple, Type, Un
 
 from .fileutils import FileStream
 from . import logger
-from .magic import MagicMatcher, MatchContext
+from .magic import MagicMatcher, MatchContext, MatchedTest
 
 __version__: str = pkg_resources.require("polyfile")[0].version
 mod_year = localtime(Path(__file__).stat().st_mtime).tm_year
@@ -112,6 +112,8 @@ class Match:
     @property
     def length(self) -> int:
         """The number of bytes in the match"""
+        if self._length is None:
+            return max(c.offset + c.length for c in self._children) - self.offset
         return self._length
 
     def to_obj(self):
@@ -153,21 +155,30 @@ class Matcher:
         self.try_all_offsets: bool = try_all_offsets
         self.submatch: bool = submatch
 
-    def handle_mimetype(self, mimetype: str, match_obj: Any, data: bytes, file_stream: Union[str, Path, IO, FileStream],
-                        parent: Optional[Match] = None) -> Iterator[Match]:
+    def handle_mimetype(
+            self, mimetype: str,
+            match_obj: Any,
+            data: bytes,
+            file_stream: Union[str, Path, IO, FileStream],
+            parent: Optional[Match] = None,
+            offset: int = 0,
+            length: Optional[int] = None
+    ) -> Iterator[Match]:
+        if length is None:
+            length = len(data) - offset
         if self.submatch and mimetype in CUSTOM_MATCHERS:
             m = CUSTOM_MATCHERS[mimetype](
                 mimetype,
                 match_obj,
-                0,
-                length=len(data),
+                offset,
+                length=length,
                 parent=parent,
                 matcher=self
             )
             # Don't yield this custom match until we've tried its submatch function
             # (which may throw an InvalidMatch, meaning that this match is invalid)
             try:
-                with FileStream(file_stream) as fs:
+                with FileStream(file_stream, start=offset, length=length) as fs:
                     submatch_iter = m.submatch(fs)
                     try:
                         first_submatch = next(submatch_iter)
@@ -184,8 +195,8 @@ class Matcher:
             yield Match(
                 mimetype,
                 match_obj,
-                0,
-                length=len(data),
+                offset,
+                length=length,
                 parent=parent,
                 matcher=self
             )
@@ -195,7 +206,10 @@ class Matcher:
             matched_mimetypes: Set[str] = set()
             context = MatchContext.load(f, only_match_mime=True)
             for magic_match in self.magic_matcher.match(context):
-                for mimetype in magic_match.mimetypes:
+                for result in magic_match:
+                    if result.test.mime is None:
+                        continue
+                    mimetype = result.test.mime.resolve(context)
                     if mimetype in matched_mimetypes:
                         continue
                     matched_mimetypes.add(mimetype)

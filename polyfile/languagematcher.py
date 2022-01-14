@@ -1,7 +1,11 @@
 from typing import Optional
 
+from .logger import StatusLogger
+from .polyfile import Match, Submatch, submatcher
 from .magic import AbsoluteOffset, FailedTest, MagicMatcher, MagicTest, MatchedTest, TestResult
 
+
+log = StatusLogger("polyfile")
 
 class BFMatcher(MagicTest):
     def __init__(self):
@@ -43,3 +47,56 @@ class BFMatcher(MagicTest):
 
 
 MagicMatcher.DEFAULT_INSTANCE.add(BFMatcher())
+
+
+@submatcher("application/x-brainfuck")
+class BFMatcher(Match):
+    def submatch(self, file_stream):
+        commands = {
+            ord('['): "LoopStart",
+            ord(']'): "LoopEnd",
+            ord('.'): "Print",
+            ord('+'): "Increment",
+            ord('-'): "Decrement",
+            ord('>'): "MoveRight",
+            ord('<'): "MoveLeft",
+            ord(','): "Input",
+        }
+        relative_offset = 0
+        loop_stack = []
+
+        while True:
+            b = file_stream.read(1)
+            if len(b) < 1:
+                break
+            if b[0] in commands:
+                if loop_stack:
+                    parent: Match = loop_stack[-1]
+                else:
+                    parent = self
+                if b == b"[":
+                    loop = Submatch(
+                        "Loop",
+                        match_obj="",
+                        relative_offset=relative_offset,
+                        parent=parent,
+                        matcher=self.matcher
+                    )
+                    yield loop
+                    loop_stack.append(loop)
+                    parent = loop
+                elif b == b"]":
+                    if not loop_stack:
+                        log.warning(f"Unexpected closing bracket at offset {relative_offset + self.offset}")
+                    else:
+                        loop_stack.pop()
+                s = Submatch(
+                    commands[b[0]],
+                    match_obj=b,
+                    relative_offset=relative_offset - (parent.offset - self.offset),
+                    length=1,
+                    parent=parent,
+                    matcher=self.matcher
+                )
+                yield s
+            relative_offset += 1
