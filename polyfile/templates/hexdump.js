@@ -7,13 +7,100 @@ var highlights = {};
 var linesByRow = [1];
 var LINE_DIGITS = 1;
 
-function downloadFile() {
-    download('data:{{ mime_type }};base64,'+ btoa(rawBytes), '{{ filename.replace("'", "\\'") }}', '{{ mime_type }}');
+const mime_types = {
+    "text/html": "html",
+    "text/css": "css",
+    "text/xml": "xml",
+    "image/gif": "gif",
+    "image/jpeg": "jpg",
+    "application/x-javascript": "js",
+    "application/atom+xml": "atom",
+    "application/rss+xml": "rss",
+    "text/mathml": "mml",
+    "text/plain": "txt",
+    "text/vnd.sun.j2me.app-descriptor": "jad",
+    "text/vnd.wap.wml": "wml",
+    "text/x-component": "htc",
+    "image/png": "png",
+    "image/tiff": "tif",
+    "image/vnd.wap.wbmp": "wbmp",
+    "image/x-icon": "ico",
+    "image/x-jng": "jng",
+    "image/x-ms-bmp": "bmp",
+    "image/svg+xml": "svg",
+    "image/webp": "webp",
+    "application/java-archive": "jar",
+    "application/mac-binhex40": "hqx",
+    "application/msword": "doc",
+    "application/pdf": "pdf",
+    "application/postscript": "ps",
+    "application/rtf": "rtf",
+    "application/vnd.ms-excel": "xls",
+    "application/vnd.ms-powerpoint": "ppt",
+    "application/vnd.wap.wmlc": "wmlc",
+    "application/vnd.google-earth.kml+xml": "kml",
+    "application/vnd.google-earth.kmz": "kmz",
+    "application/x-7z-compressed": "7z",
+    "application/x-cocoa": "cco",
+    "application/x-java-archive-diff": "jardiff",
+    "application/x-java-jnlp-file": "jnlp",
+    "application/x-makeself": "run",
+    "application/x-perl": "pl",
+    "application/x-pilot": "prc",
+    "application/x-rar-compressed": "rar",
+    "application/x-redhat-package-manager": "rpm",
+    "application/x-sea": "sea",
+    "application/x-shockwave-flash": "swf",
+    "application/x-stuffit": "sit",
+    "application/x-tcl": "tcl",
+    "application/x-x509-ca-cert": "pem",
+    "application/x-xpinstall": "xpi",
+    "application/xhtml+xml": "xhtml",
+    "application/zip": "zip",
+    "application/octet-stream": "bin",
+    "audio/midi": "mid",
+    "audio/mpeg": "mp3",
+    "audio/ogg": "ogg",
+    "audio/x-realaudio": "ra",
+    "video/3gpp": "3gpp",
+    "video/mpeg": "mpg",
+    "video/quicktime": "mov",
+    "video/x-flv": "flv",
+    "video/x-mng": "mng",
+    "video/x-ms-asf": "asx",
+    "video/x-ms-wmv": "wmv",
+    "video/x-msvideo": "avi",
+    "video/mp4": "mp4",
+};
+
+function downloadFile(offset, length, mime_type) {
+    if(typeof offset === 'undefined') {
+        offset = 0;
+    }
+    if(typeof length === 'undefined') {
+        length = rawBytes.length;
+    }
+    if(typeof mime_type === 'undefined' || !mime_type) {
+        if(offset === 0 && length === rawBytes.length) {
+            mime_type = '{{ mime_type }}';
+        } else {
+            mime_type = 'application/octet-stream';
+        }
+    }
+    let filename = '{{ filename.replace("'", "\\'") }}';
+    if(offset !== 0 || length !== rawBytes.length || mime_type !== '{{ mime_type }}') {
+        filename += "@" + offset + ":" + (offset + length);
+        if(mime_type in mime_types) {
+            filename += "." + mime_types[mime_type];
+        }
+    }
+    download('data:{{ mime_type }};base64,'+ btoa(rawBytes.slice(offset, offset + length)),
+        filename, mime_type);
 }
 
 function assignLines() {
-    var line = 1;
-    for(var i=0; i<rawBytes.length; ++i) {
+    let line = 1;
+    for(let i=0; i<rawBytes.length; ++i) {
         if(rawBytes.charCodeAt(i) == 10) {
             ++line;
         }
@@ -21,7 +108,7 @@ function assignLines() {
             linesByRow.push(line);
         }
     }
-    if(rawBytes % 16 != 15) {
+    if(rawBytes.length % 16 != 15) {
         linesByRow.push(line);
     }
     LINE_DIGITS = Math.ceil(Math.log(linesByRow[linesByRow.length-1]) / Math.log(10));

@@ -32,6 +32,7 @@
 <br />
 
 {% macro render_match_name(match, first) -%}
+<a href="#" class="download" title="download" onclick="downloadFile({{ match['offset'] }}, {{ match['size'] }}, '{{ match['type'] }}')">⇩</a>
 {{ match['name'] }}{% if not first %}<br />
 <small style="color: gray;">{{ match['size'] }} bytes @ {{ '0x%0X' % match['offset'] }}</small>
 {% endif %}{% if match['decoded'] %}<br />
