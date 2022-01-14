@@ -407,14 +407,27 @@ function pageSearch() {
     $('#searchinfo').text('');
     $('#searchbuttons').hide();
     removeHighlight('searchresult');
+    $('.tree_label').removeClass('searchresult');
     var query = $('#search').val();
     if(query === null || query == "") {
         return;
     }
 
+    const queryLower = query.toLowerCase();
+    searchMatches = new Set($.map($('.tree_label'), function(label) {
+        if($(label).text().toLowerCase().includes(queryLower)) {
+            const offset = $(label).attr('matchbyte');
+            const length = $(label).attr('matchlength');
+            highlight(offset, length, 'searchresult', false);
+            $(label).addClass('searchresult');
+            return offset;
+        }
+        return null;
+    }).filter(result => result != null));
+
     for(var index of kmp_search(rawBytes, query)) {
         highlight(index, query.length, 'searchresult', false);
-        searchMatches.push(index);
+        searchMatches.add(index);
     }
 
     if(hexMatcher.test(query)) {
@@ -432,7 +445,7 @@ function pageSearch() {
         }
         for(var index of kmp_search(rawBytes, str, true)) {
             highlight(index, str.length, 'searchresult', false);
-            searchMatches.push(index);
+            searchMatches.add(index);
         }
     }
 
@@ -440,6 +453,8 @@ function pageSearch() {
         $('#searchinfo').text('0/0');
         return;
     }
+
+    searchMatches = Array.from(searchMatches).sort();
 
     if(searchMatches.length > 1) {
         $('#searchbuttons').show();
