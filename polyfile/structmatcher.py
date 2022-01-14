@@ -31,7 +31,7 @@ class PolyFileStruct(Struct):
                 field_name,
                 match_obj=value,
                 relative_offset=value.start_offset - self.start_offset,
-                length=self.num_bytes,
+                length=value.num_bytes,
                 parent=m,
                 matcher=matcher
             )
