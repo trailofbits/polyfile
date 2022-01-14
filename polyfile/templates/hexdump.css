@@ -50,6 +50,8 @@ label.tree_label:hover > .download {
 .download {
   display: none;
   color: blue;
+  padding-left: 1em;
+  padding-right: 1em;
 }
 
 label.tree_label:before {
