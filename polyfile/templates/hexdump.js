@@ -89,7 +89,7 @@ function downloadFile(offset, length, mime_type) {
     }
     let filename = '{{ filename.replace("'", "\\'") }}';
     if(offset !== 0 || length !== rawBytes.length || mime_type !== '{{ mime_type }}') {
-        filename += "@" + offset + ":" + (offset + length);
+        filename += "@" + offset + "-" + (offset + length - 1);
         if(mime_type in mime_types) {
             filename += "." + mime_types[mime_type];
         }
