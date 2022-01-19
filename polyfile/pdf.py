@@ -8,7 +8,7 @@ from .kaitai.parser import KaitaiParser
 from .fileutils import Tempfile
 from .kaitaimatcher import ast_to_matches
 from .logger import getStatusLogger
-from .polyfile import Match, Matcher, Submatch, submatcher
+from .polyfile import Match, Matcher, Submatch, register_parser
 
 log = getStatusLogger("PDF")
 
@@ -178,7 +178,7 @@ def parse_object(file_stream, object, matcher: Matcher, parent=None):
     log.status('Parsing PDF obj %d %d' % (object.id, object.version))
     objtoken, objid, objversion, endobj = object.objtokens
     pdf_length=endobj.offset.offset - object.content[0].offset.offset + 1 + len(endobj.token)
-    if parent is None or isinstance(parent, PDF):
+    if parent is None:
         parent_offset = 0
     else:
         parent_offset = parent.offset
@@ -316,7 +316,7 @@ def parse_object(file_stream, object, matcher: Matcher, parent=None):
 
 
 def parse_pdf(file_stream, matcher: Matcher, parent=None):
-    if parent is None or isinstance(parent, PDF):
+    if parent is None:
         parent_offset = 0
     else:
         parent_offset = parent.offset
@@ -1004,7 +1004,7 @@ class RawPDFStream:
 def parse_object(obj, matcher: Matcher, parent: Optional[Match] = None, pdf_header_offset: int = 0):
     if isinstance(obj, PDFObjectStream):
         log.status(f"Parsing PDF obj {obj.objid} {obj.genno}")
-        if parent is None or isinstance(parent, PDF):
+        if parent is None:
             parent_offset = 0
         else:
             parent_offset = parent.offset
@@ -1231,58 +1231,54 @@ class RelaxedPDFMatcher(MagicTest):
 MagicMatcher.DEFAULT_INSTANCE.add(RelaxedPDFMatcher())
 
 
-@submatcher("application/pdf")
-class PDF(Match):
-    def submatch(self, file_stream, parent: Optional[Match] = None):
-        if parent is None:
-            parent = self
-        # pdfminer expects %PDF to be at byte offset zero in the file
-        pdf_header_index = file_stream.first_index_of(b"%PDF")
-        if pdf_header_index > 0:
-            # the PDF header does not start at byte offset zero!
-            yield Submatch(
-                "IgnoredPDFPreamble",
-                b"",
-                relative_offset=0,
-                length=pdf_header_index,
-                parent=parent
-            )
-            pdf_content = Submatch(
-                "OffsetPDFContent",
-                b"",
-                relative_offset=pdf_header_index,
-                parent=parent
-            )
-            yield pdf_content
-            with FileStream(file_stream, start=pdf_header_index) as f:
-                yield from self.submatch(f, parent=pdf_content)
-            return
-        pdf_header_index = file_stream.start
-        parser = PDFParser(RawPDFStream(file_stream))
-        doc = InstrumentedPDFDocument(parser)
-        yielded = set()
-        for xref in doc.xrefs:
-            for objid in xref.get_objids():
-                try:
-                    obj = doc.getobj(objid)
-                except PDFObjectNotFound:
+@register_parser("application/pdf")
+def parse_pdf(file_stream, parent: Match):
+    # pdfminer expects %PDF to be at byte offset zero in the file
+    pdf_header_index = file_stream.first_index_of(b"%PDF")
+    if pdf_header_index > 0:
+        # the PDF header does not start at byte offset zero!
+        yield Submatch(
+            "IgnoredPDFPreamble",
+            b"",
+            relative_offset=0,
+            length=pdf_header_index,
+            parent=parent
+        )
+        pdf_content = Submatch(
+            "OffsetPDFContent",
+            b"",
+            relative_offset=pdf_header_index,
+            parent=parent
+        )
+        yield pdf_content
+        with FileStream(file_stream, start=pdf_header_index) as f:
+            yield from parse_pdf(f, parent=pdf_content)
+        return
+    pdf_header_index = file_stream.start
+    parser = PDFParser(RawPDFStream(file_stream))
+    doc = InstrumentedPDFDocument(parser)
+    yielded = set()
+    for xref in doc.xrefs:
+        for objid in xref.get_objids():
+            try:
+                obj = doc.getobj(objid)
+            except PDFObjectNotFound:
+                continue
+            if isinstance(obj, PDFObjectStream):
+                if (obj.objid, obj.genno) in yielded:
                     continue
-                if isinstance(obj, PDFObjectStream):
-                    if (obj.objid, obj.genno) in yielded:
-                        continue
-                    yielded.add((obj.objid, obj.genno))
-                    yield from parse_object(obj, self.matcher, parent, pdf_header_offset=pdf_header_index)
-                else:
-                    if objid in yielded or not hasattr(obj, "pdf_offset") or not hasattr(obj, "pdf_bytes"):
-                        continue
-                    yielded.add(objid)
-                    match = Submatch(
-                        name="PDFObject",
-                        display_name=f"PDFObject{objid}",
-                        match_obj=objid,
-                        relative_offset=obj.pdf_offset,
-                        length=obj.pdf_bytes,
-                        parent=parent
-                    )
-                    yield from parse_object(obj, self.matcher, match, pdf_header_offset=pdf_header_index)
-        #yield from parse_pdf(file_stream, matcher=self.matcher, parent=self)
+                yielded.add((obj.objid, obj.genno))
+                yield from parse_object(obj, parent.matcher, parent, pdf_header_offset=pdf_header_index)
+            else:
+                if objid in yielded or not hasattr(obj, "pdf_offset") or not hasattr(obj, "pdf_bytes"):
+                    continue
+                yielded.add(objid)
+                match = Submatch(
+                    name="PDFObject",
+                    display_name=f"PDFObject{objid}",
+                    match_obj=objid,
+                    relative_offset=obj.pdf_offset,
+                    length=obj.pdf_bytes,
+                    parent=parent
+                )
+                yield from parse_object(obj, parent.matcher, match, pdf_header_offset=pdf_header_index)

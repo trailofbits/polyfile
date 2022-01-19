@@ -5,7 +5,7 @@ from pdb import Pdb
 import sys
 from typing import Any, Callable, ContextManager, Iterator, List, Optional, Type, TypeVar, Union
 
-from .polyfile import __copyright__, __license__, __version__, CUSTOM_MATCHERS, Match, Submatch
+from .polyfile import __copyright__, __license__, __version__, PARSERS, Match, Submatch
 from .logger import getStatusLogger
 from .magic import (
     AbsoluteOffset, FailedTest, InvalidOffsetError, MagicMatcher, MagicTest, Offset, TestResult, TEST_TYPES
@@ -390,7 +390,7 @@ class Debugger(ContextManager["Debugger"]):
                     # this class actually implements the test() function
                     self.instrumented_tests.append(InstrumentedTest(test, self))
             if self.break_on_submatching:
-                for match in CUSTOM_MATCHERS.values():
+                for match in PARSERS.values():
                     if hasattr(match, "submatch"):
                         self.instrumented_matches.append(InstrumentedMatch(match, self))
             self.write(f"PolyFile {__version__}\n", color=ANSIColor.MAGENTA, bold=True)

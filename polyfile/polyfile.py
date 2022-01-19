@@ -1,32 +1,25 @@
+from abc import ABC
+from collections import defaultdict
 import base64
 from json import dumps
 from pathlib import Path
 import pkg_resources
 from time import localtime
-from typing import Any, Dict, IO, Iterator, List, Optional, Set, Tuple, Type, Union
+from typing import Any, Callable, Dict, IO, Iterator, List, Optional, Set, Tuple, Union
 
 from .fileutils import FileStream
 from . import logger
-from .magic import MagicMatcher, MatchContext, MatchedTest
+from .magic import MagicMatcher, MatchContext
 
 __version__: str = pkg_resources.require("polyfile")[0].version
 mod_year = localtime(Path(__file__).stat().st_mtime).tm_year
 __copyright__: str = f"Copyright ©{mod_year} Trail of Bits"
 __license__: str = "Apache License Version 2.0 https://www.apache.org/licenses/"
 
-CUSTOM_MATCHERS: Dict[str, Type["Match"]] = {}
+Parser = Callable[[FileStream, "Match"], Iterator["Submatch"]]
+PARSERS: Dict[str, Set[Parser]] = defaultdict(set)
 
 log = logger.getStatusLogger("polyfile")
-
-
-def submatcher(*filetypes: str):
-    def wrapper(matcher_class: Type["Match"]):
-        if not hasattr(matcher_class, 'submatch'):
-            raise ValueError(f"Matcher class {matcher_class} must implement the `submatch` function")
-        for ft in filetypes:
-            CUSTOM_MATCHERS[ft] = matcher_class
-        return matcher_class
-    return wrapper
 
 
 class InvalidMatch(ValueError):
@@ -34,16 +27,17 @@ class InvalidMatch(ValueError):
 
 
 class Match:
-    def __init__(self,
-                 name: str,
-                 match_obj: Any,
-                 relative_offset: int = 0,
-                 length: Optional[int] = None,
-                 parent: Optional["Match"] = None,
-                 matcher: Optional["Matcher"] = None,
-                 display_name: Optional[str] = None,
-                 img_data: Optional[str] = None,
-                 decoded: Optional[bytes] = None
+    def __init__(
+            self,
+            name: str,
+            match_obj: Any,
+            relative_offset: int = 0,
+            length: Optional[int] = None,
+            parent: Optional["Match"] = None,
+            matcher: Optional["Matcher"] = None,
+            display_name: Optional[str] = None,
+            img_data: Optional[str] = None,
+            decoded: Optional[bytes] = None
     ):
         self._children: List[Match] = []
         self.name: str = name
@@ -146,14 +140,22 @@ class Submatch(Match):
     pass
 
 
+def register_parser(*filetypes: str):
+    def wrapper(parser: Parser):
+        for ft in filetypes:
+            PARSERS[ft].add(parser)
+        return parser
+    return wrapper
+
+
 class Matcher:
-    def __init__(self, try_all_offsets: bool = False, submatch: bool = True, matcher: Optional[MagicMatcher] = None):
+    def __init__(self, try_all_offsets: bool = False, parse: bool = True, matcher: Optional[MagicMatcher] = None):
         if matcher is None:
             self.magic_matcher: MagicMatcher = MagicMatcher.DEFAULT_INSTANCE
         else:
             self.magic_matcher = matcher
         self.try_all_offsets: bool = try_all_offsets
-        self.submatch: bool = submatch
+        self.parse: bool = parse
 
     def handle_mimetype(
             self, mimetype: str,
@@ -166,31 +168,32 @@ class Matcher:
     ) -> Iterator[Match]:
         if length is None:
             length = len(data) - offset
-        if self.submatch and mimetype in CUSTOM_MATCHERS:
-            m = CUSTOM_MATCHERS[mimetype](
-                mimetype,
-                match_obj,
-                offset,
-                length=length,
-                parent=parent,
-                matcher=self
-            )
-            # Don't yield this custom match until we've tried its submatch function
-            # (which may throw an InvalidMatch, meaning that this match is invalid)
-            try:
-                with FileStream(file_stream, start=offset, length=length) as fs:
-                    submatch_iter = m.submatch(fs)
-                    try:
-                        first_submatch = next(submatch_iter)
-                        has_first = True
-                    except StopIteration:
-                        has_first = False
-                    yield m
-                    if has_first:
-                        yield first_submatch
-                        yield from submatch_iter
-            except InvalidMatch:
-                pass
+        if self.parse:
+            for parser in PARSERS[mimetype]:
+                m = Match(
+                    mimetype,
+                    match_obj,
+                    offset,
+                    length=length,
+                    parent=parent,
+                    matcher=self
+                )
+                # Don't yield this custom match until we've tried its submatch function
+                # (which may throw an InvalidMatch, meaning that this match is invalid)
+                try:
+                    with FileStream(file_stream, start=offset, length=length) as fs:
+                        submatch_iter = parser(fs, m)
+                        try:
+                            first_submatch = next(submatch_iter)
+                            has_first = True
+                        except StopIteration:
+                            has_first = False
+                        yield m
+                        if has_first:
+                            yield first_submatch
+                            yield from submatch_iter
+                except InvalidMatch:
+                    pass
         else:
             yield Match(
                 mimetype,

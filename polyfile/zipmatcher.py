@@ -6,7 +6,7 @@ from zipfile import ZipFile as PythonZip
 from .fileutils import ExactNamedTempfile, FileStream, Tempfile
 from .logger import StatusLogger
 from .magic import AbsoluteOffset, FailedTest, MagicMatcher, MagicTest, MatchedTest, TestResult
-from .polyfile import InvalidMatch, Match, submatcher
+from .polyfile import InvalidMatch, Match, register_parser
 from .structmatcher import PolyFileStruct
 from .structs import ByteField, Constant, Endianness, StructError, UInt16, UInt32
 
@@ -147,34 +147,33 @@ class EndOfCentralDirectory(PolyFileStruct):
             return None
 
 
-@submatcher("application/zip")
-class ZipFile(Match):
-    def submatch(self, file_stream):
-        eocd = EndOfCentralDirectory.load(file_stream)
-        if eocd is None:
-            raise InvalidMatch()
-        cds = list(eocd.central_directories(file_stream))
-        fhs = list(cd.local_file_header(file_stream) for cd in cds)
-        zf: Optional[PythonZip] = None
-        for fh in fhs:
-            if zf is None:
-                with file_stream.save_pos():
-                    file_stream.seek(fh.start_offset)
-                    zip_data = file_stream.read(eocd.start_offset + eocd.num_bytes - fh.start_offset)
-                    with Tempfile(zip_data) as tmp:
-                        zf = PythonZip(tmp)
-            for match in fh.match(matcher=self.matcher, parent=self):
-                is_data = False
-                if match.name == "compressed_data" and match.parent.parent == self:
-                    try:
-                        match.decoded = zf.read(fh.file_name.decode("utf-8"))
-                        is_data = True
-                    except Exception as e:
-                        log.warning(f"Error decompressing file {fh.file_name!r} at byte offset {match.offset}")
-                yield match
-                if is_data:
-                    with Tempfile(match.decoded) as tmp:
-                        yield from self.matcher.match(tmp, parent=match)
-        for cd in cds:
-            yield from cd.match(matcher=self.matcher, parent=self)
-        yield from eocd.match(matcher=self.matcher, parent=self)
+@register_parser("application/zip")
+def parse_zip(file_stream, parent):
+    eocd = EndOfCentralDirectory.load(file_stream)
+    if eocd is None:
+        raise InvalidMatch()
+    cds = list(eocd.central_directories(file_stream))
+    fhs = list(cd.local_file_header(file_stream) for cd in cds)
+    zf: Optional[PythonZip] = None
+    for fh in fhs:
+        if zf is None:
+            with file_stream.save_pos():
+                file_stream.seek(fh.start_offset)
+                zip_data = file_stream.read(eocd.start_offset + eocd.num_bytes - fh.start_offset)
+                with Tempfile(zip_data) as tmp:
+                    zf = PythonZip(tmp)
+        for match in fh.match(matcher=parent.matcher, parent=parent):
+            is_data = False
+            if match.name == "compressed_data" and match.parent.parent == parent:
+                try:
+                    match.decoded = zf.read(fh.file_name.decode("utf-8"))
+                    is_data = True
+                except Exception as e:
+                    log.warning(f"Error decompressing file {fh.file_name!r} at byte offset {match.offset}")
+            yield match
+            if is_data:
+                with Tempfile(match.decoded) as tmp:
+                    yield from parent.matcher.match(tmp, parent=match)
+    for cd in cds:
+        yield from cd.match(matcher=parent.matcher, parent=parent)
+    yield from eocd.match(matcher=parent.matcher, parent=parent)
