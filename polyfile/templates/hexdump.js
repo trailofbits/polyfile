@@ -73,7 +73,7 @@ const mime_types = {
     "video/mp4": "mp4",
 };
 
-function downloadFile(offset, length, mime_type) {
+function downloadFile(offset, length, mime_type, extension) {
     if(typeof offset === 'undefined') {
         offset = 0;
     }
@@ -81,17 +81,32 @@ function downloadFile(offset, length, mime_type) {
         length = rawBytes.length;
     }
     if(typeof mime_type === 'undefined' || !mime_type) {
-        if(offset === 0 && length === rawBytes.length) {
-            mime_type = '{{ mime_type }}';
-        } else {
-            mime_type = 'application/octet-stream';
+        if(typeof extension !== 'undefined' && extension) {
+            for(const [mime, ext] of Object.entries(mime_types)) {
+                if(ext == extension) {
+                    mime_type = mime;
+                    break;
+                }
+            }
+        }
+        if(typeof mime_type === 'undefined' || !mime_type) {
+            if(offset === 0 && length === rawBytes.length) {
+                mime_type = '{{ mime_type }}';
+            } else {
+                mime_type = 'application/octet-stream';
+            }
+        }
+    }
+    if(typeof extension === 'undefined' || !extension) {
+        if(mime_type in mime_types) {
+            extension = mime_types[mime_type];
         }
     }
     let filename = '{{ filename.replace("'", "\\'") }}';
     if(offset !== 0 || length !== rawBytes.length || mime_type !== '{{ mime_type }}') {
         filename += "@" + offset + "-" + (offset + length - 1);
-        if(mime_type in mime_types) {
-            filename += "." + mime_types[mime_type];
+        if(typeof extension !== 'undefined' && extension) {
+            filename += "." + extension;
         }
     }
     download('data:{{ mime_type }};base64,'+ btoa(rawBytes.slice(offset, offset + length)),
