@@ -8,8 +8,11 @@ from .kaitai.parser import ASTNode, KaitaiParser, RootNode
 from .kaitai.parsers.gif import Gif
 from .kaitai.parsers.jpeg import Jpeg
 from .kaitai.parsers.png import Png
+from .logger import getStatusLogger
 from .polyfile import register_parser, InvalidMatch, Match, Parser, Submatch
 
+
+log = getStatusLogger(__name__)
 
 KAITAI_MIME_MAPPING: Dict[str, str] = {
     "image/gif": "image/gif.ksy",
@@ -80,25 +83,30 @@ def ast_to_matches(ast: RootNode, parent: Match) -> Iterator[Submatch]:
 
 
 for mimetype, kaitai_path in KAITAI_MIME_MAPPING.items():
+    class parse_:
+        kaitai_parser = KaitaiParser.load(kaitai_path)
+
+        def __call__(self, stream, match):
+            try:
+                ast = self.kaitai_parser.parse(stream).ast
+            except KaitaiStructError as e:
+                log.warning(f"Error parsing {stream.name} using {kaitai_parser}: {e!s}")
+                raise InvalidMatch()
+            except Exception as e:
+                log.error(f"Unexpected exception parsing {stream.name} using {kaitai_parser}: {e!s}")
+                raise InvalidMatch()
+            yield from ast_to_matches(ast, parent=match)
+
     func_name = mimetype.replace("/", "_").replace("-", "_")
-
-    kaitai_parser = KaitaiParser.load(kaitai_path)
-
-    @register_parser(mimetype)
-    def parse_(stream, match):
-        try:
-            ast = kaitai_parser.parse(stream).ast
-        except (Exception, KaitaiStructError):
-            raise InvalidMatch()
-        yield from ast_to_matches(ast, parent=match)
 
     parse_.__name__ = f"{parse_.__name__}{func_name}"
     parse_.__qualname__ = f"{parse_.__qualname__}{func_name}"
 
-    MIME_BY_PARSER[kaitai_parser.struct_type] = mimetype
+    register_parser(mimetype)(parse_())
+
+    MIME_BY_PARSER[parse_.kaitai_parser.struct_type] = mimetype
 
 del func_name
-del kaitai_parser
 del kaitai_path
 del mimetype
 del parse_
