@@ -3,7 +3,7 @@ from enum import Enum
 from pathlib import Path
 from pdb import Pdb
 import sys
-from typing import Any, Callable, ContextManager, Iterator, List, Optional, Type, TypeVar, Union
+from typing import Any, Callable, ContextManager, Generic, Iterable, Iterator, List, Optional, Type, TypeVar, Union
 
 from .polyfile import __copyright__, __license__, __version__, PARSERS, Match, Parser, ParserFunction, Submatch
 from .logger import getStatusLogger
@@ -31,6 +31,7 @@ class ANSIColor(Enum):
 
 
 B = TypeVar("B", bound="Breakpoint")
+T = TypeVar("T")
 
 
 BREAKPOINT_TYPES: List[Type["Breakpoint"]] = []
@@ -335,6 +336,68 @@ class StepMode(Enum):
     NEXT = 2
 
 
+class Variable(Generic[T]):
+    def __init__(self, possibilities: Iterable[T], value: T):
+        self.possibilities: List[T] = list(possibilities)
+        self._value: T = value
+        self.value = value
+
+    @property
+    def value(self) -> T:
+        return self._value
+
+    @value.setter
+    def value(self, new_value: T):
+        if new_value not in self.possibilities:
+            raise ValueError(f"invalid value {new_value!r}; must be one of {self.possibilities!r}")
+        self._value = new_value
+
+    def parse(self, value: str) -> T:
+        value = value.strip().lower()
+        for p in self.possibilities:
+            if str(p).lower() == value:
+                return p
+        raise ValueError(f"Invalid value {value!r}; must be one of {', '.join(map(str, self.possibilities))}")
+
+    def __str__(self):
+        return str(self.value)
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}()"
+
+
+class BooleanVariable(Variable[bool]):
+    def __init__(self, value: bool):
+        super().__init__((True, False), value)
+
+    def parse(self, value: str) -> T:
+        try:
+            return super().parse(value)
+        except ValueError:
+            pass
+        value = value.strip().lower()
+        if value == "0" or value == "f":
+            return False
+        return bool(value)
+
+    def __bool__(self):
+        return self.value
+
+
+class BreakOnSubmatching(BooleanVariable):
+    def __init__(self, value: bool, debugger: "Debugger"):
+        self.debugger: Debugger = debugger
+        super().__init__(value)
+
+    @Variable.value.setter
+    def value(self, new_value):
+        Variable.value.fset(self, new_value)
+        if self.debugger.enabled:
+            # disable and re-enable the debugger to update the instrumentation
+            self.debugger._uninstrument()
+            self.debugger._instrument()
+
+
 class Debugger(ContextManager["Debugger"]):
     def __init__(self, break_on_parsing: bool = True):
         self.instrumented_tests: List[InstrumentedTest] = []
@@ -349,7 +412,13 @@ class Debugger(ContextManager["Debugger"]):
         self.last_result: Optional[TestResult] = None
         self.repl_test: Optional[MagicTest] = None
         self.instrumented_parsers: List[InstrumentedParser] = []
-        self.break_on_submatching: bool = break_on_parsing
+        self.break_on_submatching: BreakOnSubmatching = BreakOnSubmatching(break_on_parsing, self)
+        self.variables_by_name: Dict[str, Variable] = {
+            "break_on_parsing": self.break_on_submatching
+        }
+        self.variable_descriptions: Dict[str, str] = {
+            "break_on_parsing": "Break when a PolyFile parser is about to be invoked and debug using PDB"
+        }
         self._pdb: Optional[Pdb] = None
 
     def save_context(self):
@@ -371,8 +440,7 @@ class Debugger(ContextManager["Debugger"]):
     def enabled(self) -> bool:
         return any(t.enabled for t in self.instrumented_tests)
 
-    @enabled.setter
-    def enabled(self, is_enabled: bool):
+    def _uninstrument(self):
         # Uninstrument any existing instrumentation:
         for t in self.instrumented_tests:
             t.uninstrument()
@@ -380,16 +448,23 @@ class Debugger(ContextManager["Debugger"]):
         for m in self.instrumented_parsers:
             m.uninstrument()
         self.instrumented_parsers = []
+
+    def _instrument(self):
+        # Instrument all of the MagicTest.test functions:
+        for test in TEST_TYPES:
+            if "test" in test.__dict__:
+                # this class actually implements the test() function
+                self.instrumented_tests.append(InstrumentedTest(test, self))
+        if self.break_on_submatching:
+            for parsers in PARSERS.values():
+                for parser in parsers:
+                    self.instrumented_parsers.append(InstrumentedParser(parser, self))
+
+    @enabled.setter
+    def enabled(self, is_enabled: bool):
+        self._uninstrument()
         if is_enabled:
-            # Instrument all of the MagicTest.test functions:
-            for test in TEST_TYPES:
-                if "test" in test.__dict__:
-                    # this class actually implements the test() function
-                    self.instrumented_tests.append(InstrumentedTest(test, self))
-            if self.break_on_submatching:
-                for parsers in PARSERS.values():
-                    for parser in parsers:
-                        self.instrumented_parsers.append(InstrumentedParser(parser, self))
+            self._instrument()
             self.write(f"PolyFile {__version__}\n", color=ANSIColor.MAGENTA, bold=True)
             self.write(f"{__copyright__}\n{__license__}\n\nFor help, type \"help\".\n")
             self.repl()
@@ -691,6 +766,8 @@ class Debugger(ContextManager["Debugger"]):
                     ("print", "print the computed absolute offset of the following libmagic DSL offset"),
                     ("breakpoint", "list the current breakpoints or add a new one"),
                     ("delete", "delete a breakpoint"),
+                    ("set", "modifies part of the debugger environment"),
+                    ("show", "prints part of the debugger environment"),
                     ("quit", "exit the debugger"),
                 ]
                 aliases = {
@@ -833,6 +910,67 @@ class Debugger(ContextManager["Debugger"]):
                     self.write(" (&0x7c.l+0x26)\n", bold=True)
             elif "where".startswith(command) or "info stack".startswith(command) or "backtrace".startswith(command):
                 self.print_where()
+            elif command == "set":
+                parsed = args.strip().split()
+                if len(parsed) == 3 and parsed[1].strip() == "=":
+                    parsed = [parsed[0], parsed[1]]
+                if len(parsed) != 2:
+                    self.write("Usage: ", dim=True)
+                    self.write("set", bold=True, color=ANSIColor.BLUE)
+                    self.write(" VARIABLE ", bold=True, color=ANSIColor.GREEN)
+                    self.write("VALUE\n\n", bold=True, color=ANSIColor.CYAN)
+                    self.write("Options:\n\n", bold=True)
+                    for name, var in self.variables_by_name.items():
+                        self.write(f"    {name} ", bold=True, color=ANSIColor.GREEN)
+                        self.write("[", dim=True)
+                        for i, value in enumerate(var.possibilities):
+                            if i > 0:
+                                self.write("|", dim=True)
+                            self.write(str(value), bold=True, color=ANSIColor.CYAN)
+                        self.write("]\n    ", dim=True)
+                        self.write(self.variable_descriptions[name])
+                        self.write("\n\n")
+                elif parsed[0] not in self.variables_by_name:
+                    self.write("Error: Unknown variable ", bold=True, color=ANSIColor.RED)
+                    self.write(parsed[0], bold=True)
+                    self.write("\n")
+                else:
+                    try:
+                        var = self.variables_by_name[parsed[0]]
+                        var.value = var.parse(parsed[1])
+                    except ValueError as e:
+                        self.write(f"{e!s}\n", bold=True, color=ANSIColor.RED)
+            elif command == "show":
+                parsed = args.strip().split()
+                if len(parsed) > 2:
+                    self.write("Usage: ", dim=True)
+                    self.write("show", bold=True, color=ANSIColor.BLUE)
+                    self.write(" VARIABLE\n\n", bold=True, color=ANSIColor.GREEN)
+                    self.write("Options:\n", bold=True)
+                    for name, var in self.variables_by_name.items():
+                        self.write(f"\n    {name}\n    ", bold=True, color=ANSIColor.GREEN)
+                        self.write(self.variable_descriptions[name])
+                        self.write("\n")
+                elif not parsed:
+                    for i, (name, var) in enumerate(self.variables_by_name.items()):
+                        if i > 0:
+                            self.write("\n")
+                        self.write(name, bold=True, color=ANSIColor.GREEN)
+                        self.write(" = ", dim=True)
+                        self.write(str(var.value), bold=True, color=ANSIColor.CYAN)
+                        self.write("\n")
+                        self.write(self.variable_descriptions[name])
+                        self.write("\n")
+                elif parsed[0] not in self.variables_by_name:
+                    self.write("Error: Unknown variable ", bold=True, color=ANSIColor.RED)
+                    self.write(parsed[0], bold=True)
+                    self.write("\n")
+                else:
+                    self.write(parsed[0], bold=True, color=ANSIColor.GREEN)
+                    self.write(" = ", dim=True)
+                    self.write(str(variables_by_name[parsed[0]].value), bold=True, color=ANSIColor.CYAN)
+                    self.write("\n")
+                    self.write(self.variable_descriptions[parsed[0]])
             else:
                 self.write(f"Undefined command: {command!r}. Try \"help\".\n", color=ANSIColor.RED)
                 self.last_command = None
