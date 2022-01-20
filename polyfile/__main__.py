@@ -15,7 +15,7 @@ from . import logger
 from . import polyfile
 from .fileutils import PathOrStdin
 from .magic import MagicMatcher, MatchContext
-from .magic_debugger import Debugger
+from .debugger import Debugger
 from .polyfile import __version__
 
 
@@ -57,7 +57,7 @@ def main(argv=None):
     parser.add_argument('--debug', '-d', action='store_true', help='print debug information')
     parser.add_argument('--trace', '-dd', action='store_true', help='print extra verbose debug information')
     parser.add_argument('--debugger', '-db', action='store_true', help='drop into an interactive debugger for libmagic '
-                                                                       'file definition matching')
+                                                                       'file definition matching and PolyFile parsing')
     parser.add_argument('--no-debug-python', action='store_true', help='by default, the `--debugger` option will break '
                                                                        'on custom matchers and prompt to debug using '
                                                                        'PDB. This option will suppress those prompts.')
