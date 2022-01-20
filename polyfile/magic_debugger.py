@@ -627,7 +627,10 @@ class Debugger(ContextManager["Debugger"]):
         self.print_match(match)
         print_location()
         self.write(f"About to parse for submatches using {instrumented_parser.parser!s}.\n")
-        if not self.prompt("Debug using PDB?", default=False):
+        if not self.prompt("Debug using PDB? "
+                           f"\u001b[2m(disable this prompt with {ANSIColor.BLUE.to_code()}`--no-debug-python`"
+                           "\u001b[0m\u001b[2m)\u001b[0m",
+                           default=False):
             yield from parse(file_stream, match)
             return
         try:
