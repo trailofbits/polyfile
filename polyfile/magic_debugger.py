@@ -417,7 +417,8 @@ class Debugger(ContextManager["Debugger"]):
             "break_on_parsing": self.break_on_submatching
         }
         self.variable_descriptions: Dict[str, str] = {
-            "break_on_parsing": "Break when a PolyFile parser is about to be invoked and debug using PDB"
+            "break_on_parsing": "Break when a PolyFile parser is about to be invoked and debug using PDB (default=True;"
+                                " disable from the command line with `--no-debug-python`)"
         }
         self._pdb: Optional[Pdb] = None
 
@@ -703,7 +704,7 @@ class Debugger(ContextManager["Debugger"]):
         print_location()
         self.write(f"About to parse for submatches using {instrumented_parser.parser!s}.\n")
         if not self.prompt("Debug using PDB? "
-                           f"\u001b[2m(disable this prompt with {ANSIColor.BLUE.to_code()}`--no-debug-python`"
+                           f"\u001b[2m(disable this prompt with {ANSIColor.BLUE.to_code()}set break_on_parsing False"
                            "\u001b[0m\u001b[2m)\u001b[0m",
                            default=False):
             yield from parse(file_stream, match)
