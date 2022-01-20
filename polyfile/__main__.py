@@ -119,7 +119,7 @@ def main(argv=None):
 
     with path_or_stdin as file_path, ExitStack() as stack:
         if args.debugger:
-            stack.enter_context(Debugger(break_on_submatching=not args.no_debug_python))
+            stack.enter_context(Debugger(break_on_parsing=not args.no_debug_python))
         elif args.no_debug_python:
             log.warning("Ignoring `--no-debug-python`; it can only be used with the --debugger option.")
         matches = []

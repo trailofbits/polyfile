@@ -1,4 +1,4 @@
-from abc import ABC
+from abc import ABC, abstractmethod
 from collections import defaultdict
 import base64
 from json import dumps
@@ -17,7 +17,42 @@ mod_year = localtime(Path(__file__).stat().st_mtime).tm_year
 __copyright__: str = f"Copyright ©{mod_year} Trail of Bits"
 __license__: str = "Apache License Version 2.0 https://www.apache.org/licenses/"
 
-Parser = Callable[[FileStream, "Match"], Iterator["Submatch"]]
+ParserFunction = Callable[[FileStream, "Match"], Iterator["Submatch"]]
+
+class Parser(ABC, ParserFunction):
+    @abstractmethod
+    def parse(self, stream: FileStream, match: "Match") -> Iterator["Submatch"]:
+        raise NotImplementedError()
+
+    def __call__(self, stream: FileStream, match: "Match") -> Iterator["Submatch"]:
+        yield from self.parse(stream, match)
+
+    def __hash__(self):
+        return id(self)
+
+    def __str__(self):
+        return self.__class__.__name__
+
+
+class ParserFunctionWrapper(Parser):
+    def __init__(self, parser: ParserFunction):
+        self.parser: ParserFunction = parser
+
+    def __hash__(self):
+        return hash(self.parser)
+
+    def parse(self, stream: FileStream, match: "Match") -> Iterator["Submatch"]:
+        yield from self.parser(stream, match)
+
+    def __str__(self):
+        if hasattr(self.parser, "__qualname__"):
+            return self.parser.__qualname__
+        elif hasattr(self.parser, "__name__"):
+            return self.parser.__name__
+        else:
+            return self.parser.__class__.__name__
+
+
 PARSERS: Dict[str, Set[Parser]] = defaultdict(set)
 
 log = logger.getStatusLogger("polyfile")
@@ -115,7 +150,10 @@ class Match:
     def length(self) -> int:
         """The number of bytes in the match"""
         if self._length is None:
-            return max(c.offset + c.length for c in self._children) - self.offset
+            if self._children:
+                return max(c.offset + c.length for c in self._children) - self.offset
+            else:
+                return 0
         return self._length
 
     def to_obj(self):
@@ -150,8 +188,10 @@ class Submatch(Match):
     pass
 
 
-def register_parser(*filetypes: str):
-    def wrapper(parser: Parser):
+def register_parser(*filetypes: str) -> Callable[[Union[Parser, ParserFunction]], Parser]:
+    def wrapper(parser: Union[Parser, ParserFunction]) -> Parser:
+        if not isinstance(parser, Parser):
+            parser = ParserFunctionWrapper(parser)
         for ft in filetypes:
             PARSERS[ft].add(parser)
         return parser

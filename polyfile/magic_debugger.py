@@ -5,7 +5,7 @@ from pdb import Pdb
 import sys
 from typing import Any, Callable, ContextManager, Iterator, List, Optional, Type, TypeVar, Union
 
-from .polyfile import __copyright__, __license__, __version__, PARSERS, Match, Submatch
+from .polyfile import __copyright__, __license__, __version__, PARSERS, Match, Parser, ParserFunction, Submatch
 from .logger import getStatusLogger
 from .magic import (
     AbsoluteOffset, FailedTest, InvalidOffsetError, MagicMatcher, MagicTest, Offset, TestResult, TEST_TYPES
@@ -289,28 +289,25 @@ class InstrumentedTest:
         self.original_test = None
 
 
-class InstrumentedMatch:
-    def __init__(self, match: Type[Match], debugger: "Debugger"):
-        self.match: Type[Match] = match
+class InstrumentedParser:
+    def __init__(self, parser: Parser, debugger: "Debugger"):
+        self.parser: Type[Parser] = parser
         self.debugger: Debugger = debugger
-        if hasattr(match, "submatch"):
-            self.original_submatch: Optional[Callable[..., Iterator[Submatch]]] = match.submatch
+        self.original_parser: Optional[ParserFunction] = parser.parse
 
-            def wrapper(match_instance, *args, **kwargs) -> Iterator[Submatch]:
-                yield from self.debugger.debug_submatch(self, match_instance, *args, **kwargs)
+        def wrapper(parser_instance, *args, **kwargs) -> Iterator[Submatch]:
+            yield from self.debugger.debug_parse(self, parser_instance, *args, **kwargs)
 
-            match.submatch = wrapper
-        else:
-            self.original_submatch = None
+        parser.parse = wrapper
 
     @property
     def enalbed(self) -> bool:
-        return self.original_submatch is not None
+        return self.original_parser is not None
 
     def uninstrument(self):
-        if self.original_submatch is not None:
-            self.match.submatch = self.original_submatch
-        self.original_submatch = None
+        if self.original_parser is not None:
+            self.parser.parse = self.original_parser
+        self.original_parser = None
 
 
 def string_escape(data: Union[bytes, int]) -> str:
@@ -339,7 +336,7 @@ class StepMode(Enum):
 
 
 class Debugger(ContextManager["Debugger"]):
-    def __init__(self, break_on_submatching: bool = True):
+    def __init__(self, break_on_parsing: bool = True):
         self.instrumented_tests: List[InstrumentedTest] = []
         self.breakpoints: List[Breakpoint] = []
         self._entries: int = 0
@@ -351,8 +348,8 @@ class Debugger(ContextManager["Debugger"]):
         self.last_offset: int = 0
         self.last_result: Optional[TestResult] = None
         self.repl_test: Optional[MagicTest] = None
-        self.instrumented_matches: List[InstrumentedMatch] = []
-        self.break_on_submatching: bool = break_on_submatching
+        self.instrumented_parsers: List[InstrumentedParser] = []
+        self.break_on_submatching: bool = break_on_parsing
         self._pdb: Optional[Pdb] = None
 
     def save_context(self):
@@ -380,9 +377,9 @@ class Debugger(ContextManager["Debugger"]):
         for t in self.instrumented_tests:
             t.uninstrument()
         self.instrumented_tests = []
-        for m in self.instrumented_matches:
+        for m in self.instrumented_parsers:
             m.uninstrument()
-        self.instrumented_matches = []
+        self.instrumented_parsers = []
         if is_enabled:
             # Instrument all of the MagicTest.test functions:
             for test in TEST_TYPES:
@@ -390,9 +387,9 @@ class Debugger(ContextManager["Debugger"]):
                     # this class actually implements the test() function
                     self.instrumented_tests.append(InstrumentedTest(test, self))
             if self.break_on_submatching:
-                for match in PARSERS.values():
-                    if hasattr(match, "submatch"):
-                        self.instrumented_matches.append(InstrumentedMatch(match, self))
+                for parsers in PARSERS.values():
+                    for parser in parsers:
+                        self.instrumented_parsers.append(InstrumentedParser(parser, self))
             self.write(f"PolyFile {__version__}\n", color=ANSIColor.MAGENTA, bold=True)
             self.write(f"{__copyright__}\n{__license__}\n\nFor help, type \"help\".\n")
             self.repl()
@@ -608,13 +605,13 @@ class Debugger(ContextManager["Debugger"]):
             self.write(",\n", bold=True)
         self.write("}\n", bold=True)
 
-    def debug_submatch(self, instrumented_match: InstrumentedMatch, match: Match, file_stream) -> Iterator[Submatch]:
+    def debug_parse(self, instrumented_parser: InstrumentedParser, file_stream, match: Match) -> Iterator[Submatch]:
         log.clear_status()
 
-        if instrumented_match.original_submatch is None:
-            submatch = instrumented_match.match.submatch
+        if instrumented_parser.original_parser is None:
+            parse = instrumented_parser.parser.parse
         else:
-            submatch = instrumented_match.original_submatch
+            parse = instrumented_parser.original_parser
 
         def print_location():
             self.write(f"{file_stream.name}", dim=True, color=ANSIColor.CYAN)
@@ -624,19 +621,19 @@ class Debugger(ContextManager["Debugger"]):
         if self._pdb is not None:
             # We are already debugging!
             print_location()
-            self.write(f"Parsing for submatches using {instrumented_match.match.__name__}.\n")
-            yield from submatch(match, file_stream)
+            self.write(f"Parsing for submatches using {instrumented_parser.parser!s}.\n")
+            yield from parse(file_stream, match)
             return
         self.print_match(match)
         print_location()
-        self.write(f"About to parse for submatches using {instrumented_match.match.__name__}.\n")
+        self.write(f"About to parse for submatches using {instrumented_parser.parser!s}.\n")
         if not self.prompt("Debug using PDB?", default=False):
-            yield from submatch(match, file_stream)
+            yield from parse(file_stream, match)
             return
         try:
             self._pdb = Pdb(skip=["polyfile.magic_debugger", "polyfile.magic"])
             self._pdb.prompt = "\u001b[1m(polyfile-Pdb)\u001b[0m "
-            generator = submatch(match, file_stream)
+            generator = parse(file_stream, match)
             while True:
                 try:
                     result = self._pdb.runcall(next, generator)

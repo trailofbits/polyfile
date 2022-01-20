@@ -1232,7 +1232,7 @@ MagicMatcher.DEFAULT_INSTANCE.add(RelaxedPDFMatcher())
 
 
 @register_parser("application/pdf")
-def parse_pdf(file_stream, parent: Match):
+def pdf_parser(file_stream, parent: Match):
     # pdfminer expects %PDF to be at byte offset zero in the file
     pdf_header_index = file_stream.first_index_of(b"%PDF")
     if pdf_header_index > 0:
@@ -1252,7 +1252,7 @@ def parse_pdf(file_stream, parent: Match):
         )
         yield pdf_content
         with FileStream(file_stream, start=pdf_header_index) as f:
-            yield from parse_pdf(f, parent=pdf_content)
+            yield from pdf_parser(f, pdf_content)
         return
     pdf_header_index = file_stream.start
     parser = PDFParser(RawPDFStream(file_stream))
