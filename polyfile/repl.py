@@ -1,11 +1,13 @@
 import atexit
 from abc import ABC, abstractmethod
 from enum import Enum
+from functools import partial, wraps
 from io import StringIO
 from pathlib import Path
 import readline
 import sys
-from typing import Any, Callable, Dict, Generic, Iterable, Iterator, List, Optional, Set, Tuple, Type, TypeVar
+import traceback
+from typing import Any, Callable, Dict, Generic, Iterable, Iterator, List, Optional, Set, Tuple, Type, TypeVar, Union
 
 from .logger import getStatusLogger
 
@@ -72,11 +74,13 @@ class ANSIWriter:
 
 
 class CommandInfo:
-    def __init__(self, name: str, help: str, aliases: Iterable[str], allows_abbreviation: bool = False):
+    def __init__(self, name: str, help: str, aliases: Iterable[str], allows_abbreviation: bool = False,
+                 completer: Optional[Callable[["Command", str, int, int], List[str]]] = None):
         self.name: str = name
         self.help: str = help
         self.aliases: List[str] = list(aliases)
         self.allows_abbreviation: bool = allows_abbreviation
+        self.completer: Optional[Callable[["Command", str, int, int], List[str]]] = completer
 
 
 class Command(ABC):
@@ -93,6 +97,9 @@ class Command(ABC):
     @abstractmethod
     def run(self, arguments: str):
         raise NotImplementedError()
+
+    def complete(self, args: str, begin_idx: int, end_idx: int) -> List[str]:
+        return []
 
     def __hash__(self):
         return hash(self.name)
@@ -114,6 +121,12 @@ class Command(ABC):
             def run(self, arguments: str):
                 return function(self.repl, arguments)
 
+            def complete(self, args: str, begin_idx: int, end_idx: int) -> List[str]:
+                if info.completer is None:
+                    return []
+                else:
+                    return info.completer(self, args, begin_idx, end_idx)
+
         return WrappedCommand
 
 
@@ -125,27 +138,81 @@ def _write_history(repl: "REPL"):
     repl.store_history()
 
 
-def command(help: str, name: str = "", aliases: Iterable[str] = (), allows_abbreviation: bool = False):
+def command(help: str, name: str = "", aliases: Iterable[str] = (), allows_abbreviation: bool = False,
+            completer: Optional[Callable[["Command", str, int, int], List[str]]] = None):
     def wrapper(func):
         if not name:
             func_name = func.__name__
         else:
             func_name = name
         setattr(func, "command_info", CommandInfo(
-            name=func_name, help=help, aliases=aliases, allows_abbreviation=allows_abbreviation
+            name=func_name, help=help, aliases=aliases, allows_abbreviation=allows_abbreviation, completer=completer
         ))
         return func
 
     return wrapper
 
 
+def completer(for_command: Union[str, "Command"]):
+    def wrapper(func: Callable[["REPL", str, int, int], List[str]]):
+        setattr(func, "completer_for", for_command)
+        return func
+
+    return wrapper
+
+
+def arg_completer(for_command: Union[str, "Command"]):
+    def transformer(func: Callable[["REPL", int, str, Tuple[str, ...]], List[str]]):
+        @completer(for_command=for_command)
+        @wraps(func)
+        def wrapper(repl: "REPL", *args, **kwargs):
+            if kwargs or args and isinstance(args[0], int):
+                # chances are the caller is trying to call using the original function signature
+                try:
+                    return func(repl, *args, **kwargs)
+                except TypeError:
+                    # we were wrong! (probably)
+                    pass
+            if kwargs:
+                raise TypeError(f"{func!r} cannot be called with keyword arguments")
+            try:
+                arguments, begin_idx, end_idx, *remainder = args
+            except ValueError:
+                raise TypeError(f"{func!r} was expected to have been called with exactly three arguments; got {args!r}")
+            if remainder:
+                raise TypeError(f"{func!r} received unexpected positional arguments {remainder!r}")
+            num_arguments = 0
+            last_token_start = 0
+            arg_indexes: List[int] = []
+            tokens: List[str] = []
+            for i, (prev, c) in enumerate(zip(f"\0{arguments[:begin_idx+1]}", arguments[:begin_idx+1])):
+                if prev == " " and c != " ":
+                    tokens.append(arguments[last_token_start:i].rstrip())
+                    num_arguments += 1
+                    last_token_start = i
+                arg_indexes.append(num_arguments)
+            if len(arg_indexes) <= begin_idx:
+                arg_indexes.extend([num_arguments] * (1 + begin_idx - len(arg_indexes)))
+            return func(repl, arg_indexes[begin_idx], arguments[begin_idx:end_idx], tuple(tokens))
+
+        return wrapper
+
+    return transformer
+
+
 class REPLMeta(type):
     _commands: Dict[str, Type[Command]]
+    _completers: Dict[str, Callable[["REPL", str, int, int], List[str]]]
 
     def add_command(cls, name: str, command: Type[Command]):
         if name in cls._commands:
             raise ValueError(f"A command named {name} is already registered to {cls}")
         cls._commands[name] = command
+
+    def add_completer(cls, for_command_name: str, completer: Callable[["REPL", str, int, int], List[str]]):
+        if for_command_name in cls._completers:
+            raise ValueError(f"A completer for command {for_command_name} is already registered to {cls}")
+        cls._completers[for_command_name] = completer
 
     @property
     def command_types(mcls) -> Iterator[Tuple[str, Type[Command]]]:
@@ -157,22 +224,62 @@ class REPLMeta(type):
                         yield name, cmd
                         yielded_names.add(name)
 
+    @property
+    def completers(mcls) -> Iterator[Tuple[str, Callable[["REPL", str, int, int], List[str]]]]:
+        yielded_names = set()
+        for cls in mcls.mro():
+            if isinstance(cls, REPLMeta):
+                for name, completer in cls._completers.items():
+                    if name not in yielded_names:
+                        yield name, completer
+                        yielded_names.add(name)
+
     def __new__(mcls, name, bases, namespace, **kwargs):
         cls = super().__new__(mcls, name, bases, namespace, **kwargs)
         cls._commands = {}
+        cls._completers = {}
         for func_name, func in namespace.items():
             if hasattr(func, "command_info") and isinstance(func.command_info, CommandInfo):
                 try:
                     cls.add_command(func.command_info.name, Command.wrap(func, func.command_info))
                 except ValueError as e:
                     raise TypeError(str(e))
+            elif hasattr(func, "completer_for"):
+                if isinstance(func.completer_for, Command):
+                    command_name = func.completer_for.name
+                elif isinstance(func.completer_for, str):
+                    command_name = func.completer_for
+                else:
+                    raise TypeError(f"Unknown command specifier {func.completer_for!r} on function {func.__qualname__}")
+                cls.add_completer(command_name, func)
         return cls
 
 
+class SetCompleter:
+    def __init__(self, possibilities: Callable[[], Iterable[str]]):
+        self.possibilities: Callable[[], Iterable[str]] = possibilities
+
+    def __call__(self, args: str, begin_idx: Optional[int] = None, end_idx: Optional[int] = None) -> List[str]:
+        if begin_idx is None:
+            begin_idx = 0
+        if end_idx is None:
+            end_idx = len(args)
+        to_complete = args[begin_idx:end_idx]
+        possibilities = sorted(set(self.possibilities()))
+        return [
+            p for p in possibilities if p.startswith(to_complete)
+        ]
+
+
 class REPL(metaclass=REPLMeta):
-    def __init__(self, name: str, prompt: Optional[str] = None):
+    def __init__(self, name: str, prompt: Optional[str] = None,
+                 completer: Optional[Callable[[str, int], Iterable[str]]] = None):
         self.name: str = name
         self._prev_history_length: int = 0
+        if completer is None:
+            self.completer: Callable[[str, int], Iterable[str]] = REPLCompleter(self).complete
+        else:
+            self.completer = completer
         self.commands: Dict[str, Command] = {
             name: command_type(self) for name, command_type in self.__class__.command_types
         }
@@ -185,6 +292,24 @@ class REPL(metaclass=REPLMeta):
         else:
             self.repl_prompt = prompt
         self._bound_tab_completion: bool = False
+
+    def command_names(self) -> Iterator[str]:
+        yield from self.commands.keys()
+        for cmd in self.commands.values():
+            yield from cmd.aliases
+
+    def get_completer(self, for_command: Command) -> Callable[[str, int, int], List[str]]:
+        for cmd_name, completer in self.__class__.completers:
+            if cmd_name == for_command.name:
+                return partial(completer, self)
+        return for_command.complete
+
+    @arg_completer(for_command="help")
+    def help_completer(self, index: int, arg: str, prev_arguments: Iterable[str]):
+        if index == 0:
+            return SetCompleter(self.command_names)(arg)
+        else:
+            return []
 
     @command(help="print this message", allows_abbreviation=True)
     def help(self, arguments: str):
@@ -258,10 +383,6 @@ class REPL(metaclass=REPLMeta):
             elif answer == "y":
                 return True
 
-    def _complete(self, text, state):
-        print(f"text={text!r}, state={state!r}")
-        return []
-
     def load_history(self):
         try:
             readline.read_history_file(HISTORY_PATH)
@@ -281,13 +402,13 @@ class REPL(metaclass=REPLMeta):
             log.warning(f"Unable to save history to {HISTORY_PATH!s}: {e!s}")
 
     def input(self, prompt: str = "") -> str:
-        prev_completer = readline.get_completer()
         if not self._bound_tab_completion:
             self._bound_tab_completion = True
             readline.parse_and_bind("tab: complete")
             self.load_history()
             atexit.register(_write_history, self)
-        readline.set_completer(self._complete)
+        prev_completer = readline.get_completer()
+        readline.set_completer(self.completer)
         try:
             return input(self.repl_prompt)
         except EOFError:
@@ -308,11 +429,32 @@ class REPL(metaclass=REPLMeta):
     def before_prompt(self):
         pass
 
+    def get_command(self, command_name: str) -> Command:
+        if command_name in self.commands:
+            return self.commands[command_name]
+        for command in self.commands.values():
+            if command.allows_abbreviation and command.name.startswith(command_name):
+                return command
+        # is it an alias?
+        for command in self.commands.values():
+            if not command.allows_abbreviation:
+                if command_name in command.aliases:
+                    return command
+                else:
+                    continue
+            for alias in command.aliases:
+                if alias.startswith(command_name):
+                    return command
+        raise KeyError(command_name)
+
     def repl(self):
         log.clear_status()
         self.before_prompt()
         while True:
-            command_name = self.input(self.repl_prompt)
+            try:
+                command_name = self.input(self.repl_prompt)
+            except KeyboardInterrupt:
+                continue
             if not command_name:
                 if self.last_command is None:
                     continue
@@ -324,30 +466,14 @@ class REPL(metaclass=REPLMeta):
                 command_name, args = command_name[:space_index], command_name[space_index+1:].strip()
             else:
                 args = ""
-            if command_name in self.commands:
-                command = self.commands[command_name]
-            else:
-                for command in self.commands.values():
-                    if command.allows_abbreviation and command.name.startswith(command_name):
-                        break
-                else:
-                    # is it an alias?
-                    for command in self.commands.values():
-                        if not command.allows_abbreviation:
-                            if command_name in command.aliases:
-                                break
-                            else:
-                                continue
-                        for alias in command.aliases:
-                            if alias.startswith(command_name):
-                                break
-                        else:
-                            continue
-                        break
-                    else:
-                        self.write(f"Undefined command: {command_name!r}. Try \"help\".\n", color=ANSIColor.RED)
-                        self.last_command = None
-                        continue
+
+            try:
+                command = self.get_command(command_name)
+            except KeyError:
+                self.write(f"Undefined command: {command_name!r}. Try \"help\".\n", color=ANSIColor.RED)
+                self.last_command = None
+                continue
+
             try:
                 command.run(args)
             except ExitREPL:
@@ -370,11 +496,11 @@ class Quit(Command):
 REPL.add_command("quit", Quit)
 
 
-class ARLCompleter:
-    def __init__(self,logic):
-        self.logic = logic
+class REPLCompleter:
+    def __init__(self, repl: REPL):
+        self.repl: REPL = repl
 
-    def traverse(self,tokens,tree):
+    def traverse(self, tokens, tree):
         if tree is None:
             return []
         elif len(tokens) == 0:
@@ -388,34 +514,53 @@ class ARLCompleter:
                 return []
         return []
 
-    def complete(self,text,state):
+    def complete(self, text: str, state: int):
+        commandline = readline.get_line_buffer()
+        space_index = commandline.find(" ")
+        if space_index < 0 or (space_index > 0 and readline.get_endidx() < space_index):
+            # we are completing the command name
+            possible_names = sorted({
+                cmd_name for cmd_name in self.repl.commands.keys()
+                if cmd_name.startswith(text)
+            } | {
+                alias
+                for cmd in self.repl.commands.values()
+                for alias in cmd.aliases
+                if alias.startswith(text)
+            }) + [None]
+            if state < len(possible_names):
+                if state == 0 and len(possible_names) == 2:
+                    # there is only one possibility, so append it with a space since it is the only choice
+                    return f"{possible_names[0]} "
+                return possible_names[state]
+            else:
+                return None
+        if space_index > 0:
+            command_name, args = commandline[:space_index], commandline[space_index + 1:]
+        else:
+            args = ""
         try:
-            tokens = readline.get_line_buffer().split()
-            if not tokens or readline.get_line_buffer()[-1] == ' ':
-                tokens.append()
-            results = self.traverse(tokens,self.logic) + [None]
-            return results[state]
+            command = self.repl.get_command(command_name)
+        except KeyError:
+            return None
+        completer = self.repl.get_completer(for_command=command)
+        try:
+            possibilities = completer(
+                args, readline.get_begidx() - space_index - 1, readline.get_endidx() - space_index - 1
+            ) + [None]
         except Exception as e:
-            print(e)
+            traceback.print_tb(e.__traceback__)
+            log.warning(f"Command {completer!r}({args!r}, "
+                        f"{readline.get_begidx() - space_index - 1}, {readline.get_endidx() - space_index - 1}) "
+                        f"raised an exception: {e!r}")
 
-logic = {
-    'build':
-            {
-            'barracks':None,
-            'bar':None,
-            'generator':None,
-            'lab':None
-            },
-    'train':
-            {
-            'riflemen':None,
-            'rpg':None,
-            'mortar':None
-            },
-    'research':
-            {
-            'armor':None,
-            'weapons':None,
-            'food':None
-            }
-    }
+        if state < len(possibilities):
+            if state == 0 and len(possibilities) == 2:
+                # there is only one possibility, so append it with a space since it is the only choice
+                return f"{possibilities[0]} "
+            return possibilities[state]
+        else:
+            log.warning(f"Command {command.__class__.__name__}.complete({args!r}, "
+                        f"{readline.get_begidx() - space_index - 1}, {readline.get_endidx() - space_index - 1}) "
+                        f"returned an invalid result: {possibilities[:-1]!r}")
+            return None
