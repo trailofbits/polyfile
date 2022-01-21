@@ -11,7 +11,7 @@ from .polyfile import __copyright__, __license__, __version__, PARSERS, Match, P
 from .magic import (
     AbsoluteOffset, FailedTest, InvalidOffsetError, MagicMatcher, MagicTest, Offset, TestResult, TEST_TYPES
 )
-from .repl import ANSIColor, ANSIWriter, command, ExitREPL, log, REPL
+from .repl import ANSIColor, ANSIWriter, arg_completer, command, ExitREPL, log, REPL, SetCompleter
 from .wildcards import Wildcard
 
 
@@ -828,6 +828,13 @@ class Debugger(REPL):
                 self.write("    b =archive:1337\n", color=ANSIColor.MAGENTA)
                 self.write("will only trigger if the test on line 1337 of the archive DSL matched.\n\n")
 
+    @arg_completer(for_command="delete")
+    def delete_completer(self, index: int, arg: str, prev_arguments: Iterable[str]):
+        if index == 0:
+            return SetCompleter(lambda: map(str, range(len(self.breakpoints))))(arg)
+        else:
+            return []
+
     @command(allows_abbreviation=True, help="delete a breakpoint")
     def delete(self, args: str):
         if args:
@@ -841,6 +848,16 @@ class Debugger(REPL):
                 b = self.breakpoints[breakpoint_num]
                 self.breakpoints = self.breakpoints[:breakpoint_num] + self.breakpoints[breakpoint_num + 1:]
                 self.write(f"Deleted {b!s}\n")
+
+    @arg_completer(for_command="set")
+    def set_completer(self, index: int, arg: str, prev_arguments: Iterable[str]):
+        if index == 0:
+            return SetCompleter(lambda: self.variables_by_name.keys())(arg)
+        elif index == 1:
+            if prev_arguments[-1] in self.variables_by_name:
+                var = self.variables_by_name[prev_arguments[-1]]
+                return SetCompleter(lambda: map(str, var.possibilities))(arg)
+        return []
 
     @command(help="modifies part of the debugger environment")
     def set(self, arguments: str):
@@ -873,6 +890,13 @@ class Debugger(REPL):
                 var.value = var.parse(parsed[1])
             except ValueError as e:
                 self.write(f"{e!s}\n", bold=True, color=ANSIColor.RED)
+
+    @arg_completer(for_command="show")
+    def show_completer(self, index: int, arg: str, prev_arguments: Iterable[str]):
+        if index == 0:
+            return SetCompleter(lambda: self.variables_by_name.keys())(arg)
+        else:
+            return []
 
     @command(help="prints part of the debugger environment")
     def show(self, arguments: str):
