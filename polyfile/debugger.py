@@ -1,43 +1,21 @@
 from abc import ABC, abstractmethod
-import atexit
 from enum import Enum
 from io import StringIO
 from pathlib import Path
 from pdb import Pdb
 import readline
 import sys
-from typing import Any, Callable, ContextManager, Generic, Iterable, Iterator, List, Optional, Type, TypeVar, Union
+from typing import Any, Callable, Generic, Iterable, Iterator, List, Optional, Type, TypeVar, Union
 
 from .polyfile import __copyright__, __license__, __version__, PARSERS, Match, Parser, ParserFunction, Submatch
-from .logger import getStatusLogger
 from .magic import (
     AbsoluteOffset, FailedTest, InvalidOffsetError, MagicMatcher, MagicTest, Offset, TestResult, TEST_TYPES
 )
+from .repl import ANSIColor, ANSIWriter, command, ExitREPL, log, REPL
 from .wildcards import Wildcard
 
 
-log = getStatusLogger("polyfile")
-
-
-HISTORY_PATH = Path.home() / ".polyfile_history"
-
-
-class ANSIColor(Enum):
-    BLACK = 30
-    RED = 31
-    GREEN = 32
-    YELLOW = 33
-    BLUE = 34
-    MAGENTA = 35
-    CYAN = 36
-    WHITE = 37
-
-    def to_code(self) -> str:
-        return f"\u001b[{self.value}m"
-
-
 B = TypeVar("B", bound="Breakpoint")
-T = TypeVar("T")
 
 
 BREAKPOINT_TYPES: List[Type["Breakpoint"]] = []
@@ -342,6 +320,9 @@ class StepMode(Enum):
     NEXT = 2
 
 
+T = TypeVar("T")
+
+
 class Variable(Generic[T]):
     def __init__(self, possibilities: Iterable[T], value: T):
         self.possibilities: List[T] = list(possibilities)
@@ -404,53 +385,9 @@ class BreakOnSubmatching(BooleanVariable):
             self.debugger._instrument()
 
 
-class ANSIWriter:
-    def __init__(self, use_ansi: bool = True, escape_for_readline: bool = False):
-        self.use_ansi: bool = use_ansi
-        self.escape_for_readline: bool = escape_for_readline
-        self.data = StringIO()
-
-    @staticmethod
-    def format(
-            message: Any, bold: bool = False, dim: bool = False, color: Optional[ANSIColor] = None,
-            escape_for_readline: bool = False
-    ) -> str:
-        prefixes: List[str] = []
-        if bold and not dim:
-            prefixes.append("\u001b[1m")
-        elif dim and not bold:
-            prefixes.append("\u001b[2m")
-        if color is not None:
-            prefixes.append(color.to_code())
-        if prefixes:
-            if escape_for_readline:
-                message = f"\001{''.join(prefixes)}\002{message!s}\001\u001b[0m\002"
-            else:
-                message = f"{''.join(prefixes)}{message!s}\u001b[0m"
-        else:
-            message = str(message)
-        return message
-
-    def write(self, message: Any, bold: bool = False, dim: bool = False, color: Optional[ANSIColor] = None,
-              escape_for_readline: Optional[bool] = None) -> str:
-        if self.use_ansi:
-            if escape_for_readline is None:
-                escape_for_readline = self.escape_for_readline
-            self.data.write(self.format(message=message, bold=bold, dim=dim, color=color,
-                                        escape_for_readline=escape_for_readline))
-        else:
-            self.data.write(str(message))
-
-    def __str__(self):
-        return self.data.getvalue()
-
-
-def _disable(debugger: "Debugger"):
-    debugger.enabled = False
-
-
-class Debugger(ContextManager["Debugger"]):
+class Debugger(REPL):
     def __init__(self, break_on_parsing: bool = True):
+        super().__init__(name="the debugger")
         self.instrumented_tests: List[InstrumentedTest] = []
         self.breakpoints: List[Breakpoint] = []
         self._entries: int = 0
@@ -462,10 +399,6 @@ class Debugger(ContextManager["Debugger"]):
         self.last_offset: int = 0
         self.last_result: Optional[TestResult] = None
         self.repl_test: Optional[MagicTest] = None
-        if sys.stderr.isatty():
-            self.repl_prompt: str = ANSIWriter.format("(polyfile) ", bold=True, escape_for_readline=True)
-        else:
-            self.repl_prompt = "(polyfile) "
         self.instrumented_parsers: List[InstrumentedParser] = []
         self.break_on_submatching: BreakOnSubmatching = BreakOnSubmatching(break_on_parsing, self)
         self.variables_by_name: Dict[str, Variable] = {
@@ -476,8 +409,6 @@ class Debugger(ContextManager["Debugger"]):
                                 " disable from the command line with `--no-debug-python`)"
         }
         self._pdb: Optional[Pdb] = None
-        self._prev_history_length: int = 0
-        atexit.register(_disable, self)
 
     def save_context(self):
         class DebugContext:
@@ -524,25 +455,13 @@ class Debugger(ContextManager["Debugger"]):
         self._uninstrument()
         if is_enabled:
             self._instrument()
-            try:
-                readline.read_history_file(HISTORY_PATH)
-                self._prev_history_length = readline.get_current_history_length()
-            except FileNotFoundError:
-                open(HISTORY_PATH, 'wb').close()
-                self._prev_history_length = 0
-            # default history len is -1 (infinite), which may grow unruly
-            readline.set_history_length(2048)
+            self.load_history()
             self.write(f"PolyFile {__version__}\n", color=ANSIColor.MAGENTA, bold=True)
             self.write(f"{__copyright__}\n{__license__}\n\nFor help, type \"help\".\n")
             self.repl()
         elif was_enabled:
             # we are now disabled, so store our history
-            new_length = readline.get_current_history_length()
-            try:
-                readline.append_history_file(max(new_length - self._prev_history_length, 0), HISTORY_PATH)
-                self._prev_history_length = readline.get_current_history_length()
-            except IOError as e:
-                log.warning(f"Unable to save history to {HISTORY_PATH!s}: {e!s}")
+            self.store_history()
 
     def __enter__(self) -> "Debugger":
         self._entries += 1
@@ -598,35 +517,10 @@ class Debugger(ContextManager["Debugger"]):
         self.write("\n")
 
     def write(self, message: Any, bold: bool = False, dim: bool = False, color: Optional[ANSIColor] = None):
-        if sys.stdout.isatty():
-            if isinstance(message, MagicTest):
-                self.write_test(message)
-                return
-            message = ANSIWriter.format(message=message, bold=bold, dim=dim, color=color)
-        sys.stdout.write(str(message))
-
-    def prompt(self, message: str, default: bool = True) -> bool:
-        while True:
-            buffer = ANSIWriter(use_ansi=sys.stderr.isatty(), escape_for_readline=True)
-            buffer.write(f"{message} ", bold=True)
-            buffer.write("[", dim=True)
-            if default:
-                buffer.write("Y", bold=True, color=ANSIColor.GREEN)
-                buffer.write("n", dim=True, color=ANSIColor.RED)
-            else:
-                buffer.write("y", dim=True, color=ANSIColor.GREEN)
-                buffer.write("N", bold=True, color=ANSIColor.RED)
-            buffer.write("] ", dim=True)
-            try:
-                answer = input(str(buffer)).strip().lower()
-            except EOFError:
-                raise KeyboardInterrupt()
-            if not answer:
-                return default
-            elif answer == "n":
-                return False
-            elif answer == "y":
-                return True
+        if sys.stdout.isatty() and isinstance(message, MagicTest):
+            self.write_test(message)
+        else:
+            super().write(message=message, bold=bold, dim=dim, color=color)
 
     def print_context(self, data: bytes, offset: int, context_bytes: int = 32, num_bytes: int = 1):
         bytes_before = min(offset, context_bytes)
@@ -810,244 +704,205 @@ class Debugger(ContextManager["Debugger"]):
         finally:
             self._pdb = None
 
-    def repl(self):
-        log.clear_status()
+    def before_prompt(self):
         if self.last_test is not None:
             self.print_where()
-        while True:
+
+    @command(name="continue", allows_abbreviation=True, help="continue execution until the next breakpoint is hit",
+             aliases=("run",))
+    def cont(self, arguments: str):
+        self.step_mode = StepMode.RUNNING
+        self.last_command = command
+        raise ExitREPL()
+
+    @command(allows_abbreviation=True, help="step through a single magic test")
+    def step(self, arguments: str):
+        self.step_mode = StepMode.SINGLE_STEPPING
+        self.last_command = command
+        raise ExitREPL()
+
+    @command(allows_abbreviation=True, help="continue execution until the next test that matches")
+    def next(self, arguments: str):
+        self.step_mode = StepMode.NEXT
+        self.last_command = command
+        raise ExitREPL()
+
+    @command(allows_abbreviation=True,
+             help="print the context of the current magic test",
+             aliases=("info stack", "backtrace"))
+    def where(self, arguments: str):
+        self.print_where()
+
+    @command(allows_abbreviation=True, help="test the following libmagic DSL test at the current position")
+    def test(self, args: str):
+        if args:
+            if self.last_test is None:
+                self.write("The first test has not yet been run.\n", color=ANSIColor.RED)
+                self.write("Use `step`, `next`, or `run` to start testing.\n")
+                return
             try:
-                command = input(self.repl_prompt)
-            except EOFError:
-                # the user pressed ^D to quit
-                exit(0)
-            if not command:
-                if self.last_command is None:
-                    continue
-                command = self.last_command
-            command = command.lstrip()
-            space_index = command.find(" ")
-            if space_index > 0:
-                command, args = command[:space_index], command[space_index+1:].strip()
-            else:
-                args = ""
-            if "help".startswith(command):
-                usage = [
-                    ("help", "print this message"),
-                    ("continue", "continue execution until the next breakpoint is hit"),
-                    ("step", "step through a single magic test"),
-                    ("next", "continue execution until the next test that matches"),
-                    ("where", "print the context of the current magic test"),
-                    ("test", "test the following libmagic DSL test at the current position"),
-                    ("print", "print the computed absolute offset of the following libmagic DSL offset"),
-                    ("breakpoint", "list the current breakpoints or add a new one"),
-                    ("delete", "delete a breakpoint"),
-                    ("set", "modifies part of the debugger environment"),
-                    ("show", "prints part of the debugger environment"),
-                    ("quit", "exit the debugger"),
-                ]
-                aliases = {
-                    "where": ("info stack", "backtrace")
-                }
-                left_col_width = max(len(u[0]) for u in usage)
-                left_col_width = max(left_col_width, max(len(c) for a in aliases.values() for c in a))
-                left_col_width += 3
-                for command, msg in usage:
-                    self.write(command, bold=True, color=ANSIColor.BLUE)
-                    self.write(f" {'.' * (left_col_width - len(command) - 2)} ")
-                    self.write(msg)
-                    if command in aliases:
-                        self.write(" (aliases: ", dim=True)
-                        alternatives = aliases[command]
-                        for i, alt in enumerate(alternatives):
-                            if i > 0 and len(alternatives) > 2:
-                                self.write(", ", dim=True)
-                            if i == len(alternatives) - 1 and len(alternatives) > 1:
-                                self.write(" and ", dim=True)
-                            self.write(alt, bold=True, color=ANSIColor.BLUE)
-                        self.write(")", dim=True)
-                    self.write("\n")
+                test = MagicMatcher.parse_test(args, Path("STDIN"), 1, parent=self.last_test)
+                if test is None:
+                    self.write("Error parsing test\n", color=ANSIColor.RED)
+                    return
+                try:
+                    with self.save_context():
+                        self.repl_test = test
+                        if test.parent is None:
+                            self.last_result = None
+                            self.last_offset = 0
+                        result = test.test(self.data, self.last_offset, parent_match=self.last_result)
+                finally:
+                    if test.parent is not None:
+                        test.parent.children.remove(test)
+                self.print_where(
+                    test=test, offset=self.last_offset, parent_match=self.last_result, result=result
+                )
+            except ValueError as e:
+                self.write(f"{e!s}\n", color=ANSIColor.RED)
+        else:
+            self.write("Usage: ", dim=True)
+            self.write("test", bold=True, color=ANSIColor.BLUE)
+            self.write(" LIBMAGIC DSL TEST\n", bold=True)
+            self.write("Attempt to run the given test.\n\nExample:\n")
+            self.write("test", bold=True, color=ANSIColor.BLUE)
+            self.write(" 0 search \\x50\\x4b\\x05\\x06 ZIP EOCD record\n", bold=True)
 
-            elif "continue".startswith(command) or "run".startswith(command):
-                self.step_mode = StepMode.RUNNING
-                self.last_command = command
+    @command(allows_abbreviation=True, help="print the computed absolute offset of the following libmagic DSL offset")
+    def print(self, args: str):
+        if args:
+            if self.last_test is None:
+                self.write("The first test has not yet been run.\n", color=ANSIColor.RED)
+                self.write("Use `step`, `next`, or `run` to start testing.\n")
                 return
-            elif "step".startswith(command):
-                self.step_mode = StepMode.SINGLE_STEPPING
-                self.last_command = command
+            try:
+                dsl_offset = Offset.parse(args)
+            except ValueError as e:
+                self.write(f"{e!s}\n", color=ANSIColor.RED)
                 return
-            elif "next".startswith(command):
-                self.step_mode = StepMode.NEXT
-                self.last_command = command
+            try:
+                absolute = dsl_offset.to_absolute(self.data, self.last_result)
+                self.write(f"{absolute}\n", bold=True)
+                self.print_context(self.data, absolute)
+            except InvalidOffsetError as e:
+                self.write(f"{e!s}\n", color=ANSIColor.RED)
                 return
-            elif "quit".startswith(command):
-                exit(0)
-            elif "delete".startswith(command):
-                if args:
-                    try:
-                        breakpoint_num = int(args)
-                    except ValueError:
-                        breakpoint_num = -1
-                    if not (0 <= breakpoint_num < len(self.breakpoints)):
-                        print(f"Error: Invalid breakpoint \"{args}\"")
-                        continue
-                    b = self.breakpoints[breakpoint_num]
-                    self.breakpoints = self.breakpoints[:breakpoint_num] + self.breakpoints[breakpoint_num + 1:]
-                    self.write(f"Deleted {b!s}\n")
-            elif "test".startswith(command):
-                if args:
-                    if self.last_test is None:
-                        self.write("The first test has not yet been run.\n", color=ANSIColor.RED)
-                        self.write("Use `step`, `next`, or `run` to start testing.\n")
-                        continue
-                    try:
-                        test = MagicMatcher.parse_test(args, Path("STDIN"), 1, parent=self.last_test)
-                        if test is None:
-                            self.write("Error parsing test\n", color=ANSIColor.RED)
-                            continue
-                        try:
-                            with self.save_context():
-                                self.repl_test = test
-                                if test.parent is None:
-                                    self.last_result = None
-                                    self.last_offset = 0
-                                result = test.test(self.data, self.last_offset, parent_match=self.last_result)
-                        finally:
-                            if test.parent is not None:
-                                test.parent.children.remove(test)
-                        self.print_where(
-                           test=test, offset=self.last_offset, parent_match=self.last_result, result=result
-                        )
-                    except ValueError as e:
-                        self.write(f"{e!s}\n", color=ANSIColor.RED)
-                else:
-                    self.write("Usage: ", dim=True)
-                    self.write("test", bold=True, color=ANSIColor.BLUE)
-                    self.write(" LIBMAGIC DSL TEST\n", bold=True)
-                    self.write("Attempt to run the given test.\n\nExample:\n")
-                    self.write("test", bold=True, color=ANSIColor.BLUE)
-                    self.write(" 0 search \\x50\\x4b\\x05\\x06 ZIP EOCD record\n", bold=True)
-            elif "breakpoint".startswith(command):
-                if args:
-                    parsed = Breakpoint.from_str(args)
-                    if parsed is None:
-                        self.write("Error: Invalid breakpoint pattern\n", color=ANSIColor.RED)
-                    else:
-                        self.write(parsed, color=ANSIColor.MAGENTA)
-                        self.write("\n")
-                        self.breakpoints.append(parsed)
-                else:
-                    if self.breakpoints:
-                        for i, b in enumerate(self.breakpoints):
-                            self.write(f"{i}:\t", dim=True)
-                            self.write(b, color=ANSIColor.MAGENTA)
-                            self.write("\n")
-                    else:
-                        self.write("No breakpoints set.\n", color=ANSIColor.RED)
-                        for b_type in BREAKPOINT_TYPES:
-                            b_type.print_usage(self)
-                            self.write("\n")
-                        self.write("\nBy default, breakpoints will trigger whenever a matching test is run.\n\n"
-                                   "Prepend a breakpoint with ")
-                        self.write("!", bold=True)
-                        self.write(" to only trigger the breakpoint when the test fails.\nFor Example:\n")
-                        self.write("    b !MIME:application/zip\n", color=ANSIColor.MAGENTA)
-                        self.write("will only trigger if a test that could match a ZIP file failed.\n\n"
-                                   "Prepend a breakpoint with ")
-                        self.write("=", bold=True)
-                        self.write(" to only trigger the breakpoint when the test passes.\n For example:\n")
-                        self.write("    b =archive:1337\n", color=ANSIColor.MAGENTA)
-                        self.write("will only trigger if the test on line 1337 of the archive DSL matched.\n\n")
+        else:
+            self.write("Usage: ", dim=True)
+            self.write("print", bold=True, color=ANSIColor.BLUE)
+            self.write(" LIBMAGIC DSL OFFSET\n", bold=True)
+            self.write("Calculate the absolute offset for the given DSL offset.\n\nExample:\n")
+            self.write("print", bold=True, color=ANSIColor.BLUE)
+            self.write(" (&0x7c.l+0x26)\n", bold=True)
 
-            elif "print".startswith(command):
-                if args:
-                    if self.last_test is None:
-                        self.write("The first test has not yet been run.\n", color=ANSIColor.RED)
-                        self.write("Use `step`, `next`, or `run` to start testing.\n")
-                        continue
-                    try:
-                        dsl_offset = Offset.parse(args)
-                    except ValueError as e:
-                        self.write(f"{e!s}\n", color=ANSIColor.RED)
-                        continue
-                    try:
-                        absolute = dsl_offset.to_absolute(self.data, self.last_result)
-                        self.write(f"{absolute}\n", bold=True)
-                        self.print_context(self.data, absolute)
-                    except InvalidOffsetError as e:
-                        self.write(f"{e!s}\n", color=ANSIColor.RED)
-                        continue
-                else:
-                    self.write("Usage: ", dim=True)
-                    self.write("print", bold=True, color=ANSIColor.BLUE)
-                    self.write(" LIBMAGIC DSL OFFSET\n", bold=True)
-                    self.write("Calculate the absolute offset for the given DSL offset.\n\nExample:\n")
-                    self.write("print", bold=True, color=ANSIColor.BLUE)
-                    self.write(" (&0x7c.l+0x26)\n", bold=True)
-            elif "where".startswith(command) or "info stack".startswith(command) or "backtrace".startswith(command):
-                self.print_where()
-            elif command == "set":
-                parsed = args.strip().split()
-                if len(parsed) == 3 and parsed[1].strip() == "=":
-                    parsed = [parsed[0], parsed[1]]
-                if len(parsed) != 2:
-                    self.write("Usage: ", dim=True)
-                    self.write("set", bold=True, color=ANSIColor.BLUE)
-                    self.write(" VARIABLE ", bold=True, color=ANSIColor.GREEN)
-                    self.write("VALUE\n\n", bold=True, color=ANSIColor.CYAN)
-                    self.write("Options:\n\n", bold=True)
-                    for name, var in self.variables_by_name.items():
-                        self.write(f"    {name} ", bold=True, color=ANSIColor.GREEN)
-                        self.write("[", dim=True)
-                        for i, value in enumerate(var.possibilities):
-                            if i > 0:
-                                self.write("|", dim=True)
-                            self.write(str(value), bold=True, color=ANSIColor.CYAN)
-                        self.write("]\n    ", dim=True)
-                        self.write(self.variable_descriptions[name])
-                        self.write("\n\n")
-                elif parsed[0] not in self.variables_by_name:
-                    self.write("Error: Unknown variable ", bold=True, color=ANSIColor.RED)
-                    self.write(parsed[0], bold=True)
-                    self.write("\n")
-                else:
-                    try:
-                        var = self.variables_by_name[parsed[0]]
-                        var.value = var.parse(parsed[1])
-                    except ValueError as e:
-                        self.write(f"{e!s}\n", bold=True, color=ANSIColor.RED)
-            elif command == "show":
-                parsed = args.strip().split()
-                if len(parsed) > 2:
-                    self.write("Usage: ", dim=True)
-                    self.write("show", bold=True, color=ANSIColor.BLUE)
-                    self.write(" VARIABLE\n\n", bold=True, color=ANSIColor.GREEN)
-                    self.write("Options:\n", bold=True)
-                    for name, var in self.variables_by_name.items():
-                        self.write(f"\n    {name}\n    ", bold=True, color=ANSIColor.GREEN)
-                        self.write(self.variable_descriptions[name])
-                        self.write("\n")
-                elif not parsed:
-                    for i, (name, var) in enumerate(self.variables_by_name.items()):
-                        if i > 0:
-                            self.write("\n")
-                        self.write(name, bold=True, color=ANSIColor.GREEN)
-                        self.write(" = ", dim=True)
-                        self.write(str(var.value), bold=True, color=ANSIColor.CYAN)
-                        self.write("\n")
-                        self.write(self.variable_descriptions[name])
-                        self.write("\n")
-                elif parsed[0] not in self.variables_by_name:
-                    self.write("Error: Unknown variable ", bold=True, color=ANSIColor.RED)
-                    self.write(parsed[0], bold=True)
-                    self.write("\n")
-                else:
-                    self.write(parsed[0], bold=True, color=ANSIColor.GREEN)
-                    self.write(" = ", dim=True)
-                    self.write(str(variables_by_name[parsed[0]].value), bold=True, color=ANSIColor.CYAN)
-                    self.write("\n")
-                    self.write(self.variable_descriptions[parsed[0]])
+    @command(allows_abbreviation=True, help="list the current breakpoints or add a new one")
+    def breakpoint(self, args: str):
+        if args:
+            parsed = Breakpoint.from_str(args)
+            if parsed is None:
+                self.write("Error: Invalid breakpoint pattern\n", color=ANSIColor.RED)
             else:
-                self.write(f"Undefined command: {command!r}. Try \"help\".\n", color=ANSIColor.RED)
-                self.last_command = None
-                continue
-            self.last_command = command
+                self.write(parsed, color=ANSIColor.MAGENTA)
+                self.write("\n")
+                self.breakpoints.append(parsed)
+        else:
+            if self.breakpoints:
+                for i, b in enumerate(self.breakpoints):
+                    self.write(f"{i}:\t", dim=True)
+                    self.write(b, color=ANSIColor.MAGENTA)
+                    self.write("\n")
+            else:
+                self.write("No breakpoints set.\n", color=ANSIColor.RED)
+                for b_type in BREAKPOINT_TYPES:
+                    b_type.print_usage(self)
+                    self.write("\n")
+                self.write("\nBy default, breakpoints will trigger whenever a matching test is run.\n\n"
+                           "Prepend a breakpoint with ")
+                self.write("!", bold=True)
+                self.write(" to only trigger the breakpoint when the test fails.\nFor Example:\n")
+                self.write("    b !MIME:application/zip\n", color=ANSIColor.MAGENTA)
+                self.write("will only trigger if a test that could match a ZIP file failed.\n\n"
+                           "Prepend a breakpoint with ")
+                self.write("=", bold=True)
+                self.write(" to only trigger the breakpoint when the test passes.\n For example:\n")
+                self.write("    b =archive:1337\n", color=ANSIColor.MAGENTA)
+                self.write("will only trigger if the test on line 1337 of the archive DSL matched.\n\n")
+
+    @command(allows_abbreviation=True, help="delete a breakpoint")
+    def delete(self, args: str):
+        if args:
+            try:
+                breakpoint_num = int(args)
+            except ValueError:
+                breakpoint_num = -1
+            if not (0 <= breakpoint_num < len(self.breakpoints)):
+                print(f"Error: Invalid breakpoint \"{args}\"")
+            else:
+                b = self.breakpoints[breakpoint_num]
+                self.breakpoints = self.breakpoints[:breakpoint_num] + self.breakpoints[breakpoint_num + 1:]
+                self.write(f"Deleted {b!s}\n")
+
+    @command(help="modifies part of the debugger environment")
+    def set(self, arguments: str):
+        parsed = arguments.strip().split()
+        if len(parsed) == 3 and parsed[1].strip() == "=":
+            parsed = [parsed[0], parsed[1]]
+        if len(parsed) != 2:
+            self.write("Usage: ", dim=True)
+            self.write("set", bold=True, color=ANSIColor.BLUE)
+            self.write(" VARIABLE ", bold=True, color=ANSIColor.GREEN)
+            self.write("VALUE\n\n", bold=True, color=ANSIColor.CYAN)
+            self.write("Options:\n\n", bold=True)
+            for name, var in self.variables_by_name.items():
+                self.write(f"    {name} ", bold=True, color=ANSIColor.GREEN)
+                self.write("[", dim=True)
+                for i, value in enumerate(var.possibilities):
+                    if i > 0:
+                        self.write("|", dim=True)
+                    self.write(str(value), bold=True, color=ANSIColor.CYAN)
+                self.write("]\n    ", dim=True)
+                self.write(self.variable_descriptions[name])
+                self.write("\n\n")
+        elif parsed[0] not in self.variables_by_name:
+            self.write("Error: Unknown variable ", bold=True, color=ANSIColor.RED)
+            self.write(parsed[0], bold=True)
+            self.write("\n")
+        else:
+            try:
+                var = self.variables_by_name[parsed[0]]
+                var.value = var.parse(parsed[1])
+            except ValueError as e:
+                self.write(f"{e!s}\n", bold=True, color=ANSIColor.RED)
+
+    @command(help="prints part of the debugger environment")
+    def show(self, arguments: str):
+        parsed = arguments.strip().split()
+        if len(parsed) > 2:
+            self.write("Usage: ", dim=True)
+            self.write("show", bold=True, color=ANSIColor.BLUE)
+            self.write(" VARIABLE\n\n", bold=True, color=ANSIColor.GREEN)
+            self.write("Options:\n", bold=True)
+            for name, var in self.variables_by_name.items():
+                self.write(f"\n    {name}\n    ", bold=True, color=ANSIColor.GREEN)
+                self.write(self.variable_descriptions[name])
+                self.write("\n")
+        elif not parsed:
+            for i, (name, var) in enumerate(self.variables_by_name.items()):
+                if i > 0:
+                    self.write("\n")
+                self.write(name, bold=True, color=ANSIColor.GREEN)
+                self.write(" = ", dim=True)
+                self.write(str(var.value), bold=True, color=ANSIColor.CYAN)
+                self.write("\n")
+                self.write(self.variable_descriptions[name])
+                self.write("\n")
+        elif parsed[0] not in self.variables_by_name:
+            self.write("Error: Unknown variable ", bold=True, color=ANSIColor.RED)
+            self.write(parsed[0], bold=True)
+            self.write("\n")
+        else:
+            self.write(parsed[0], bold=True, color=ANSIColor.GREEN)
+            self.write(" = ", dim=True)
+            self.write(str(variables_by_name[parsed[0]].value), bold=True, color=ANSIColor.CYAN)
+            self.write("\n")
+            self.write(self.variable_descriptions[parsed[0]])
