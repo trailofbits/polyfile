@@ -1,11 +1,11 @@
-var rawBytes = atob("{{ encoded }}");
-var ROWS = Math.max(Math.ceil(rawBytes.length / 16), 1);
-var BYTE_HEIGHT;
-var ROW_OFFSET = 0;
-var VISIBLE_ROWS = 0;
-var highlights = {};
-var linesByRow = [1];
-var LINE_DIGITS = 1;
+const rawBytes = atob("{{ encoded }}");
+const ROWS = Math.max(Math.ceil(rawBytes.length / 16), 1);
+let BYTE_HEIGHT;
+let ROW_OFFSET = 0;
+let VISIBLE_ROWS = 0;
+let highlights = {};
+let linesByRow = [1];
+let LINE_DIGITS = 1;
 
 const mime_types = {
     "text/html": "html",
@@ -83,7 +83,7 @@ function downloadFile(offset, length, mime_type, extension) {
     if(typeof mime_type === 'undefined' || !mime_type) {
         if(typeof extension !== 'undefined' && extension) {
             for(const [mime, ext] of Object.entries(mime_types)) {
-                if(ext == extension) {
+                if(ext === extension) {
                     mime_type = mime;
                     break;
                 }
@@ -116,14 +116,14 @@ function downloadFile(offset, length, mime_type, extension) {
 function assignLines() {
     let line = 1;
     for(let i=0; i<rawBytes.length; ++i) {
-        if(rawBytes.charCodeAt(i) == 10) {
+        if(rawBytes.charCodeAt(i) === 10) {
             ++line;
         }
-        if(i % 16 == 15) {
+        if(i % 16 === 15) {
             linesByRow.push(line);
         }
     }
-    if(rawBytes.length % 16 != 15) {
+    if(rawBytes.length % 16 !== 15) {
         linesByRow.push(line);
     }
     LINE_DIGITS = Math.ceil(Math.log(linesByRow[linesByRow.length-1]) / Math.log(10));
@@ -154,9 +154,9 @@ function highlight(byte_id, length, css_class, remove_existing) {
 }
 
 function mouseOverByte(byte_id) {
-    $('.tree_label').removeClass("highlighted");
+    $labels.removeClass("highlighted");
     cursor(byte_id);
-    $('.tree_label').filter(function() {
+    $labels.filter(function() {
         var start = parseInt($(this).attr('matchbyte'));
         if(start > byte_id) {
             return false;
@@ -170,9 +170,9 @@ function removeHighlight(css_class) {
     if(!(css_class in highlights)) {
         return;
     }
-    for(var i=0; i<highlights[css_class].length; ++i) {
-        var cell_id = highlights[css_class][i][0];
-        var byte_id = highlights[css_class][i][1];
+    for(let i=0; i<highlights[css_class].length; ++i) {
+        const cell_id = highlights[css_class][i][0];
+        const byte_id = highlights[css_class][i][1];
         $('#byte' + cell_id).removeClass(css_class);
         $('#ascii' + cell_id).removeClass(css_class);
         $('#rbyte' + cell_id).removeClass(css_class);
@@ -183,21 +183,21 @@ function removeHighlight(css_class) {
 function updateHighlights(css_class) {
     if(typeof css_class === 'undefined') {
         /* update all types */
-        for(var css_class in highlights) {
+        for(let css_class in highlights) {
             updateHighlights(css_class);
         }
         return;
     } else if(!(css_class in highlights)) {
         return;
     }
-    var offset = ROW_OFFSET * 16;
-    for(var i=0; i<highlights[css_class].length; ++i) {
-        var cell_id = highlights[css_class][i][0];
-        var byte_id = highlights[css_class][i][1];
+    const offset = ROW_OFFSET * 16;
+    for(let i=0; i<highlights[css_class].length; ++i) {
+        const cell_id = highlights[css_class][i][0];
+        const byte_id = highlights[css_class][i][1];
 
-        var current_cell_id = byte_id - offset;
+        const current_cell_id = byte_id - offset;
 
-        if(current_cell_id != cell_id) {
+        if(current_cell_id !== cell_id) {
             if(cell_id >= 0) {
                 $('#byte' + cell_id).removeClass(css_class);
                 $('#ascii' + cell_id).removeClass(css_class);
@@ -227,15 +227,15 @@ function formatChar(c, monospace) {
     if (typeof monospace === 'undefined') {
         monospace = true;
     }
-    if (typeof c === 'undefined' || c.length == 0 || c == ' ') {
+    if (typeof c === 'undefined' || c.length === 0 || c === ' ') {
         return '&nbsp;';
-    } else if (c == '\n') {
+    } else if (c === '\n') {
         if (monospace) {
             return '\u24A0';
         } else {
-            '\u24A0</span><br /><span>';
+            return '\u24A0</span><br /><span>';
         }
-    } else if (c == '\t') {
+    } else if (c === '\t') {
         if (monospace) {
             return '\u2b7e';
         } else {
@@ -258,12 +258,12 @@ function updateRendering() {
             + ':&nbsp;</span>';
     }
 
-    var startOffset = ROW_OFFSET * 16;
-    var line = linesByRow[ROW_OFFSET];
-    var html = newline(line);
+    const startOffset = ROW_OFFSET * 16;
+    let line = linesByRow[ROW_OFFSET];
+    let html = newline(line);
 
-    for(var i=startOffset; i < startOffset + VISIBLE_ROWS * 16; ++i) {
-        if(rawBytes.charCodeAt(i) == 10) {
+    for(let i=startOffset; i < startOffset + VISIBLE_ROWS * 16; ++i) {
+        if(rawBytes.charCodeAt(i) === 10) {
             html += '<br />' + newline(++line);
         } else {
             html += '<span id="rbyte'
@@ -286,10 +286,10 @@ function scrollToRow(row) {
         row = ROWS - VISIBLE_ROWS;
     }
     ROW_OFFSET = row;
-    var startOffset = ROW_OFFSET * 16;
-    for(var i=startOffset; i < startOffset + VISIBLE_ROWS * 16; ++i) {
-        var bytecode;
-        var bytestring;
+    const startOffset = ROW_OFFSET * 16;
+    for(let i=startOffset; i < startOffset + VISIBLE_ROWS * 16; ++i) {
+        let bytecode;
+        let bytestring;
         if(i >= rawBytes.length) {
             bytecode = '';
             bytestring = '';
@@ -301,8 +301,8 @@ function scrollToRow(row) {
         $("#ascii" + (i - startOffset)).html(bytestring);
     }
     /* update the row labels */
-    var requiredDigits = Math.ceil(Math.log(rawBytes.length) / Math.log(16));
-    for(var i=0; i<VISIBLE_ROWS; ++i) {
+    const requiredDigits = Math.ceil(Math.log(rawBytes.length) / Math.log(16));
+    for(let i=0; i<VISIBLE_ROWS; ++i) {
         $("#byterow" + i).text(((i + ROW_OFFSET) * 16).toString(16).padStart(requiredDigits, '0'));
     }
     updateRendering();
@@ -311,26 +311,26 @@ function scrollToRow(row) {
 }
 
 function resizeWindow() {
-    var newVisible = Math.max(1, Math.floor($('.hexeditor .scrollcontainer').first().innerHeight() / BYTE_HEIGHT) - 2);
+    const newVisible = Math.max(1, Math.floor($('.hexeditor .scrollcontainer').first().innerHeight() / BYTE_HEIGHT) - 2);
     while(VISIBLE_ROWS < newVisible) {
         /* add a new row */
-        var rowHtml = '<div class="byteline"><span class="byterow" id="byterow' + VISIBLE_ROWS + '"></span>';
-        var offset = VISIBLE_ROWS * 16;
-        for(var i=0; i<16; ++i) {
+        let rowHtml = '<div class="byteline"><span class="byterow" id="byterow' + VISIBLE_ROWS + '"></span>';
+        const offset = VISIBLE_ROWS * 16;
+        for(let i=0; i<16; ++i) {
             rowHtml += '<span class="byte" id="byte' + (offset + i) + '"></span>';
         }
         rowHtml += "</div>";
         $('.hexdump').append(rowHtml);
         /* now make the ASCII rows: */
         rowHtml = '<div class="byteline">';
-        for(var i=0; i<16; ++i) {
+        for(let i=0; i<16; ++i) {
            rowHtml += '<span class="byte" id="ascii' + (offset + i) + '"></span>';
         }
         rowHtml += "</div>";
         $('.bytes').append(rowHtml);
         /* add the event listeners: */
-        for(var i=0; i<16; ++i) {
-            var byte_id = offset + i;
+        for(let i=0; i<16; ++i) {
+            const byte_id = offset + i;
             $("#byte" + byte_id).css("cursor", "none").hover(function() {
                 mouseOverByte(parseInt($(this)[0].id.substring(4)) + ROW_OFFSET * 16);
             });
@@ -347,7 +347,7 @@ function clearSelection() {
     if(document.selection && document.selection.empty) {
         document.selection.empty();
     } else if(window.getSelection) {
-        var sel = window.getSelection();
+        const sel = window.getSelection();
         sel.removeAllRanges();
     }
 }
@@ -361,12 +361,12 @@ function kmp_table(source) {
     var t = [-1];
 
     while(++pos < source.length) {
-        if(source.charCodeAt(pos) == source.charCodeAt(cnd)) {
+        if(source.charCodeAt(pos) === source.charCodeAt(cnd)) {
             t.push(t[cnd]);
         } else {
             t.push(cnd);
             cnd = t[cnd];
-            while(cnd >= 0 && source.charCodeAt(pos) != source.charCodeAt(cnd)) {
+            while(cnd >= 0 && source.charCodeAt(pos) !== source.charCodeAt(cnd)) {
                 cnd = t[cnd];
             }
         }
@@ -392,14 +392,14 @@ function kmp_search(source, find, caseSensitive) {
         source = source.toLowerCase();
         find = find.toLowerCase();
     }
-    var t = kmp_table(find);
-    var j = 0;
-    var k = 0;
+    const t = kmp_table(find);
+    let j = 0;
+    let k = 0;
     var result = [];
     while(j < source.length) {
-        if(find.charCodeAt(k) == source.charCodeAt(j)) {
+        if(find.charCodeAt(k) === source.charCodeAt(j)) {
             ++j;
-            if(++k == find.length) {
+            if(++k === find.length) {
                 result.push(j - k);
                 k = t[k];
             }
@@ -414,7 +414,9 @@ function kmp_search(source, find, caseSensitive) {
     return result;
 }
 
-var hexMatcher = new RegExp('^(0[xX])?([0-9a-fA-F]+)$');
+const hexMatcher = new RegExp('^(0[xX])?([0-9a-fA-F]+)$');
+
+let $labels;
 
 function pageSearch() {
     searchMatches = [];
@@ -422,14 +424,14 @@ function pageSearch() {
     $('#searchinfo').text('');
     $('#searchbuttons').hide();
     removeHighlight('searchresult');
-    $('.tree_label').removeClass('searchresult');
-    var query = $('#search').val();
-    if(query === null || query == "") {
+    $labels.removeClass('searchresult');
+    const query = $('#search').val();
+    if(query === null || query === "") {
         return;
     }
 
     const queryLower = query.toLowerCase();
-    searchMatches = new Set($.map($('.tree_label'), function(label) {
+    searchMatches = new Set($.map($labels, function(label) {
         if($(label).text().toLowerCase().includes(queryLower)) {
             const offset = $(label).attr('matchbyte');
             const length = $(label).attr('matchlength');
@@ -440,31 +442,31 @@ function pageSearch() {
         return null;
     }).filter(result => result != null));
 
-    for(var index of kmp_search(rawBytes, query)) {
+    for(let index of kmp_search(rawBytes, query)) {
         highlight(index, query.length, 'searchresult', false);
         searchMatches.add(index);
     }
 
     if(hexMatcher.test(query)) {
         /* also test for the byte sequence */
-        var match = query;
-        if(match.substring(0, 2).toLowerCase() == "0x") {
+        let match = query;
+        if(match.substring(0, 2).toLowerCase() === "0x") {
             match = match.substring(2);
         }
-        var str = '';
-        if(match.length % 2 == 1) {
+        let str = '';
+        if(match.length % 2 === 1) {
             match = '0' + match;
         }
-        for(var i=0; i<match.length; i+=2) {
+        for(let i=0; i<match.length; i+=2) {
             str += String.fromCharCode(parseInt(match[i] + match[i+1], 16))
         }
-        for(var index of kmp_search(rawBytes, str, true)) {
+        for(let index of kmp_search(rawBytes, str, true)) {
             highlight(index, str.length, 'searchresult', false);
             searchMatches.add(index);
         }
     }
 
-    if(searchMatches.length == 0) {
+    if(searchMatches.size === 0) {
         $('#searchinfo').text('0/0');
         return;
     }
@@ -497,12 +499,13 @@ function searchDown() {
     updateSearch();
 }
 
-var doubleClicked = false;
+let doubleClicked = false;
 
 $(document).ready(function() {
     BYTE_HEIGHT = $('.hexeditor .byte').first().outerHeight();
     $(".scrollheightproxy").height(BYTE_HEIGHT * (ROWS + 2));
     $(window).resize(resizeWindow());
+    $labels = $('.tree_label');
     resizeWindow();
     $('#loading').remove();
     $(".hexeditor .scrollcontainer").scroll(function() {
@@ -522,17 +525,17 @@ $(document).ready(function() {
         scrollToRow();
     }).on("mouseleave", function() {
         /* have the cursor disappear when our mouse leaves the hex dump */
-        $('.tree_label').removeClass('highlighted');
+        $labels.removeClass('highlighted');
         removeHighlight('cursor');
         updateHighlights('cursor');
-    });;
+    });
 //    $(".bytes .byte").css("cursor", "none").hover(function() {
 //        cursor($(this).attr('byteid'));
 //    })
 //    $(".hexdump .byte").css("cursor", "none").hover(function() {
 //        cursor($(this).attr('byteid'));
 //    })
-    $(".tree_label").hover(function() {
+    $labels.hover(function() {
         highlight($(this).attr('matchbyte'), $(this).attr('matchlength'));
     });
     $(".tree_label:not([for])").css("cursor", "zoom-in").click(function() {
@@ -542,22 +545,22 @@ $(document).ready(function() {
             return;
         }
         $(".manually-focused").removeClass("manually-focused");
-        var offset = parseInt($(this).attr('matchbyte'));
-        var length = parseInt($(this).attr('matchlength'));
+        const offset = parseInt($(this).attr('matchbyte'));
+        const length = parseInt($(this).attr('matchlength'));
         highlight(offset, length, "manually-focused");
         $(this).addClass("manually-focused");
         scrollToByte(offset);
     });
-    $(".tree_label").mouseout(function() {
+    $labels.mouseout(function() {
         $(".highlighted").removeClass("highlighted");
     });
 
     $(window).keydown(function(e) {
-        if ( ( e.keyCode == 70 && ( e.ctrlKey || e.metaKey ) ) ||
-            ( e.keyCode == 191 ) ) {
+        if ( ( e.keyCode === 70 && ( e.ctrlKey || e.metaKey ) ) ||
+            ( e.keyCode === 191 ) ) {
             e.preventDefault();
             $('#search').focus().select();
-        } else if ( e.keyCode == 71 && ( e.ctrlKey || e.metaKey ) ) {
+        } else if ( e.keyCode === 71 && ( e.ctrlKey || e.metaKey ) ) {
             e.preventDefault();
             searchDown();
         }
