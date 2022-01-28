@@ -148,6 +148,7 @@ class EndOfCentralDirectory(PolyFileStruct):
 
 
 @register_parser("application/zip")
+@register_parser("application/java-archive")
 def parse_zip(file_stream, parent):
     eocd = EndOfCentralDirectory.load(file_stream)
     if eocd is None:

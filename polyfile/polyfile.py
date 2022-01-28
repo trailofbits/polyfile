@@ -10,7 +10,7 @@ from typing import Any, Callable, Dict, IO, Iterator, List, Optional, Set, Tuple
 
 from .fileutils import FileStream
 from . import logger
-from .magic import MagicMatcher, Match as MagicMatch, MatchContext
+from .magic import MagicMatcher, MatchContext, TestResult
 
 __version__: str = pkg_resources.require("polyfile")[0].version
 mod_year = localtime(Path(__file__).stat().st_mtime).tm_year
@@ -209,7 +209,7 @@ class Matcher:
 
     def handle_mimetype(
             self, mimetype: str,
-            match_obj: MagicMatch,
+            match_obj: TestResult,
             data: bytes,
             file_stream: Union[str, Path, IO, FileStream],
             parent: Optional[Match] = None,
@@ -220,7 +220,7 @@ class Matcher:
             length = len(data) - offset
         extension: Optional[str] = None
         try:
-            extension = next(iter(match_obj.extensions))
+            extension = next(iter(match_obj.test.all_extensions()))
         except StopIteration:
             pass
         if self.parse:
@@ -273,4 +273,4 @@ class Matcher:
                     if mimetype in matched_mimetypes:
                         continue
                     matched_mimetypes.add(mimetype)
-                    yield from self.handle_mimetype(mimetype, magic_match, context.data, file_stream, parent)
+                    yield from self.handle_mimetype(mimetype, result, context.data, file_stream, parent)
