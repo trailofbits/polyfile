@@ -6,6 +6,25 @@ let VISIBLE_ROWS = 0;
 let highlights = {};
 let linesByRow = [1];
 let LINE_DIGITS = 1;
+let $bytes = [];
+let $ascii = [];
+let $rbytes = [];
+
+function getByte(index) {
+    if(index < $bytes.length && index >= 0) {
+        return $bytes[index];
+    } else {
+        return $("#byte" + index)
+    }
+}
+
+function getAscii(index) {
+    if(index < $ascii.length) {
+        return $ascii[index];
+    } else {
+        return $("#ascii" + index);
+    }
+}
 
 const mime_types = {
     "text/html": "html",
@@ -172,9 +191,12 @@ function removeHighlight(css_class) {
     }
     for(let i=0; i<highlights[css_class].length; ++i) {
         const cell_id = highlights[css_class][i][0];
-        const byte_id = highlights[css_class][i][1];
-        $('#byte' + cell_id).removeClass(css_class);
-        $('#ascii' + cell_id).removeClass(css_class);
+        if(cell_id < 0) {
+            continue;
+        }
+        // const byte_id = highlights[css_class][i][1];
+        getByte(cell_id).removeClass(css_class);
+        getAscii(cell_id).removeClass(css_class);
         $('#rbyte' + cell_id).removeClass(css_class);
     }
     highlights[css_class] = [];
@@ -199,16 +221,16 @@ function updateHighlights(css_class) {
 
         if(current_cell_id !== cell_id) {
             if(cell_id >= 0) {
-                $('#byte' + cell_id).removeClass(css_class);
-                $('#ascii' + cell_id).removeClass(css_class);
+                getByte(cell_id).removeClass(css_class);
+                getAscii(cell_id).removeClass(css_class);
                 $('#rbyte' + cell_id).removeClass(css_class);
                 highlights[css_class][i][0] = -1;
             }
         }
 
         if(current_cell_id >= 0 && current_cell_id < VISIBLE_ROWS * 16) {
-            $("#byte" + current_cell_id).addClass(css_class);
-            $("#ascii" + current_cell_id).addClass(css_class);
+            getByte(current_cell_id).addClass(css_class);
+            getAscii(current_cell_id).addClass(css_class);
             $("#rbyte" + current_cell_id).addClass(css_class);
             highlights[css_class][i][0] = current_cell_id;
         }
@@ -297,8 +319,8 @@ function scrollToRow(row) {
             bytecode = rawBytes.charCodeAt(i).toString(16).padStart(2, '0');
             bytestring = formatChar(rawBytes[i]);
         }
-        $("#byte" + (i - startOffset)).text(bytecode);
-        $("#ascii" + (i - startOffset)).html(bytestring);
+        getByte(i - startOffset).text(bytecode);
+        getAscii(i - startOffset).html(bytestring);
     }
     /* update the row labels */
     const requiredDigits = Math.ceil(Math.log(rawBytes.length) / Math.log(16));
@@ -340,6 +362,19 @@ function resizeWindow() {
         }
         ++VISIBLE_ROWS;
     }
+    $ascii = new Array(VISIBLE_ROWS * 16);
+    $bytes = new Array(VISIBLE_ROWS * 16);
+    $(".byte").each(function(b) {
+        const result = $(this);
+        const id = result[0].id;
+        if(id.startsWith("byte")) {
+            const idNumber = parseInt(id.substring(4), 10);
+            $bytes[idNumber] = result;
+        } else if(id.startsWith("ascii")) {
+            const idNumber = parseInt(id.substring(5), 10);
+            $ascii[idNumber] = result;
+        }
+    });
     scrollToRow();
 }
 
@@ -580,12 +615,12 @@ $(document).ready(function() {
                 addr = parseInt(addr, 16);
                 scrollToByte(addr);
                 setTimeout(function() {
-                    $('#byte' + (addr - ROW_OFFSET * 16))
+                    getByte(addr - ROW_OFFSET * 16)
                         .fadeOut("fast")
                         .css('font-weight', 'bold')
                         .fadeIn(3000);
                     setTimeout(function() {
-                        $('#byte' + (addr - ROW_OFFSET * 16)).css('font-weight', 'normal');
+                        getByte(addr - ROW_OFFSET * 16).css('font-weight', 'normal');
                     }, 5000);
                 }, 1000);
             } else {
