@@ -172,17 +172,97 @@ function highlight(byte_id, length, css_class, remove_existing) {
     updateHighlights(css_class);
 }
 
+class CacheNode {
+    constructor(key, value, prev = null, next = null) {
+        this.key = key;
+        this.value = value;
+        this.next = next;
+        this.prev = prev;
+    }
+}
+
+class LRUCache {
+    constructor(limit = 1024, default_value = undefined) {
+        this.size = 0;
+        this.limit = limit;
+        this.head = null;
+        this.tail = null;
+        this.cache = {};
+        this.default_value = default_value;
+    }
+
+    detach(node) {
+        if(node.prev !== null) {
+            node.prev.next = node.next;
+        } else {
+            this.head = node.next;
+        }
+        if(node.next !== null) {
+            node.next.prev = node.prev;
+        } else {
+            this.tail = node.prev;
+        }
+    }
+
+    write(key, value) {
+        const existing = this.cache[key];
+        if(existing) {
+          this.detach(existing);
+          --this.size;
+        } else {
+            while(this.size >= this.limit) {
+                delete this.cache[this.tail.key];
+                this.detach(this.tail);
+                --this.size;
+            }
+        }
+
+        if(!this.head) {
+            this.head = this.tail = new CacheNode(key, value);
+        } else {
+            const node = new CacheNode(key, value, this.head);
+            this.head.prev = node;
+            this.head = node;
+        }
+        this.cache[key] = this.head;
+        ++this.size;
+        return value;
+    }
+
+    contains(key) {
+        return this.cache[key];
+    }
+
+    read(key) {
+        const existing = this.cache[key];
+        if(existing) {
+            const value = existing.value;
+            if(this.head !== existing) {
+                this.write(key, value);
+            }
+            return value;
+        }
+        return this.default_value;
+    }
+}
+
+let $byteLabelCache = new LRUCache(1024, $());
+
 function mouseOverByte(byte_id) {
     $labels.removeClass("highlighted");
     cursor(byte_id);
-    $labels.filter(function() {
-        const start = parseInt($(this).attr('matchbyte'));
-        if(start > byte_id) {
-            return false;
-        }
-        const length = parseInt($(this).attr('matchlength'));
-        return byte_id < start + length;
-    }).addClass('highlighted');
+    if($byteLabelCache.contains(byte_id)) {
+        $byteLabelCache.read(byte_id).addClass("highlighted")
+    } else {
+        $byteLabelCache.write(byte_id, $labels.filter(function() {
+            const start = parseInt($(this).attr('matchbyte'));
+            if(start > byte_id) {
+                return false;
+            }
+            const length = parseInt($(this).attr('matchlength'));
+            return byte_id < start + length;
+        })).addClass("highlighted");
+    }
 }
 
 function removeHighlight(css_class) {
