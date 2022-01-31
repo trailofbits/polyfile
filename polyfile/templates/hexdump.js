@@ -176,11 +176,11 @@ function mouseOverByte(byte_id) {
     $labels.removeClass("highlighted");
     cursor(byte_id);
     $labels.filter(function() {
-        var start = parseInt($(this).attr('matchbyte'));
+        const start = parseInt($(this).attr('matchbyte'));
         if(start > byte_id) {
             return false;
         }
-        var length = parseInt($(this).attr('matchlength'));
+        const length = parseInt($(this).attr('matchlength'));
         return byte_id < start + length;
     }).addClass('highlighted');
 }
