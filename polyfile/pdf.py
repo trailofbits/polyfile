@@ -1,7 +1,10 @@
 import zlib
 from typing import Dict, Iterator, List, Optional, Type
 
-from pdfminer.ascii85 import ascii85decode
+from pdfminer.ascii85 import ascii85decode, asciihexdecode
+from pdfminer.ccitt import ccittfaxdecode
+from pdfminer.lzw import lzwdecode
+from pdfminer.runlength import rldecode
 
 from . import pdfparser
 from .kaitai.parser import KaitaiParser
