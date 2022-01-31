@@ -709,6 +709,9 @@ $(document).ready(function() {
         } else if ( e.keyCode === 71 && ( e.ctrlKey || e.metaKey ) ) {
             e.preventDefault();
             searchDown();
+        } else if (("key" in e && (e.key === "Escape" || e.key === "Esc")) || e.keyCode === 27) {
+            $(".manually-focused").removeClass("manually-focused");
+            removeHighlight("manually-focused");
         }
         return true;
     });
