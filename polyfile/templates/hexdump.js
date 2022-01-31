@@ -191,6 +191,13 @@ class LRUCache {
         this.default_value = default_value;
     }
 
+    clear() {
+        this.size = 0;
+        this.head = null;
+        this.tail = null;
+        this.cache = {};
+    }
+
     detach(node) {
         if(node.prev !== null) {
             node.prev.next = node.next;
@@ -248,20 +255,41 @@ class LRUCache {
 
 let $byteLabelCache = new LRUCache(1024, $());
 
-function mouseOverByte(byte_id) {
-    $labels.removeClass("highlighted");
-    cursor(byte_id);
+function labelsForByte(byte_id) {
     if($byteLabelCache.contains(byte_id)) {
-        $byteLabelCache.read(byte_id).addClass("highlighted")
+        return $byteLabelCache.read(byte_id)
     } else {
-        $byteLabelCache.write(byte_id, $labels.filter(function() {
+        return $byteLabelCache.write(byte_id, $labels.filter(function() {
             const start = parseInt($(this).attr('matchbyte'));
             if(start > byte_id) {
                 return false;
             }
             const length = parseInt($(this).attr('matchlength'));
             return byte_id < start + length;
-        })).addClass("highlighted");
+        }));
+    }
+}
+
+function mouseOverByte(byte_id) {
+    $labels.removeClass("highlighted");
+    cursor(byte_id);
+    labelsForByte(byte_id).addClass("highlighted");
+}
+
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+let lastScrollTime;
+
+async function fillByteLabelCache() {
+    const startScrollTime = lastScrollTime;
+    for(let byte_id = 0; byte_id < VISIBLE_ROWS * 16; ++byte_id) {
+        if(startScrollTime !== lastScrollTime) {
+            break;
+        }
+        labelsForByte(byte_id); // cache the labels for this byte_id
+        await sleep(1);
     }
 }
 
@@ -379,6 +407,7 @@ function updateRendering() {
 }
 
 function scrollToRow(row) {
+    lastScrollTime = Date.now();
     if(typeof row === 'undefined') {
         row = ROW_OFFSET;
     }
@@ -387,6 +416,7 @@ function scrollToRow(row) {
     } else if(row > ROWS - VISIBLE_ROWS) {
         row = ROWS - VISIBLE_ROWS;
     }
+    $byteLabelCache.clear();
     ROW_OFFSET = row;
     const startOffset = ROW_OFFSET * 16;
     for(let i=startOffset; i < startOffset + VISIBLE_ROWS * 16; ++i) {
@@ -410,6 +440,7 @@ function scrollToRow(row) {
     updateRendering();
     updateHighlights();
     $(".hexeditor .scrollcontainer").scrollTop(BYTE_HEIGHT * ROW_OFFSET);
+    fillByteLabelCache().then(() => {});
 }
 
 function resizeWindow() {
@@ -619,7 +650,7 @@ let doubleClicked = false;
 $(document).ready(function() {
     BYTE_HEIGHT = $('.hexeditor .byte').first().outerHeight();
     $(".scrollheightproxy").height(BYTE_HEIGHT * (ROWS + 2));
-    $(window).resize(resizeWindow());
+    $(window).resize(resizeWindow);
     $labels = $('.tree_label');
     resizeWindow();
     $('#loading').remove();
