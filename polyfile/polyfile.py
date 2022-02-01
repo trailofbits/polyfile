@@ -223,18 +223,18 @@ class Matcher:
             extension = next(iter(match_obj.test.all_extensions()))
         except StopIteration:
             pass
-        had_match = False
+        m = Match(
+            mimetype,
+            match_obj,
+            offset,
+            length=length,
+            parent=parent,
+            matcher=self,
+            extension=extension
+        )
+        yield m
         if self.parse:
             for parser in PARSERS[mimetype]:
-                m = Match(
-                    mimetype,
-                    match_obj,
-                    offset,
-                    length=length,
-                    parent=parent,
-                    matcher=self,
-                    extension=extension
-                )
                 # Don't yield this custom match until we've tried its submatch function
                 # (which may throw an InvalidMatch, meaning that this match is invalid)
                 try:
@@ -249,23 +249,12 @@ class Matcher:
                         had_match = True
                         if has_first:
                             yield first_submatch
-                            #try:
                             yield from submatch_iter
-                            #except Exception as e:
-                            #    log.warning(f"Parser {parser!r} for MIME type {mimetype} raised an exception while "
-                            #                f"parsing {match_obj!s} in {file_stream!s}: {e!s}")
                 except InvalidMatch:
                     pass
-        if not had_match:
-            yield Match(
-                mimetype,
-                match_obj,
-                offset,
-                length=length,
-                parent=parent,
-                matcher=self,
-                extension=extension
-            )
+                except Exception as e:
+                    log.warning(f"Parser {parser!r} for MIME type {mimetype} raised an exception while "
+                                f"parsing {match_obj!s} in {file_stream!s}: {e!s}")
 
     def match(self, file_stream: Union[str, Path, IO, FileStream], parent: Optional[Match] = None) -> Iterator[Match]:
         with FileStream(file_stream) as f:
