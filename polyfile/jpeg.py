@@ -9,7 +9,6 @@ from PIL import Image
 
 @register_parser("image/jp2")
 def parse_jpeg2000(file_stream: FileStream, parent: Match):
-    # stream = FileStream(file_stream, start=0, length=parent.length)
     with Tempfile(file_stream.read(parent.length)) as input_bytes:
         img = Image.open(input_bytes)
         with BytesIO() as img_data:
