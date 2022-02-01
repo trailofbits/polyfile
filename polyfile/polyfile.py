@@ -245,8 +245,6 @@ class Matcher:
                             has_first = True
                         except StopIteration:
                             has_first = False
-                        yield m
-                        had_match = True
                         if has_first:
                             yield first_submatch
                             yield from submatch_iter
