@@ -247,7 +247,11 @@ class Matcher:
                         yield m
                         if has_first:
                             yield first_submatch
-                            yield from submatch_iter
+                            try:
+                                yield from submatch_iter
+                            except Exception as e:
+                                log.warning(f"Parser {parser!r} for MIME type {mimetype} raised an exception while "
+                                            f"parsing {match_obj!s} in {file_stream!s}: {e!s}")
                 except InvalidMatch:
                     pass
         else:
