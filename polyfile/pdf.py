@@ -4,6 +4,7 @@ from typing import Dict, Iterator, List, Optional, Type
 from pdfminer.ascii85 import ascii85decode, asciihexdecode
 from pdfminer.ccitt import ccittfaxdecode
 from pdfminer.lzw import lzwdecode
+from pdfminer.pdftypes import PDFNotImplementedError
 from pdfminer.runlength import rldecode
 
 from . import pdfparser
@@ -93,8 +94,8 @@ class StreamFilter:
             yield submatch
             if submatch.decoded is None:
                 if self.next_decoder is not None:
-                    log.warning(f"Expected submatch submatch {submatch!r} from decoded by {self.__class__.__name__} "
-                                "to have a `decoded` member, but it was `None`")
+                    log.error(f"Expected submatch submatch {submatch!r} from decoded by {self.__class__.__name__} "
+                              "to have a `decoded` member, but it was `None`")
                 continue
             if self.next_decoder is None:
                 # recursively match against the deflated contents
@@ -375,7 +376,7 @@ from pdfminer.pdfdocument import (
     DecipherCallable, PDFObjectNotFound
 )
 from pdfminer.pdftypes import (
-    LITERALS_FLATE_DECODE, LITERALS_ASCIIHEX_DECODE, LITERALS_CCITTFAX_DECODE, LITERALS_RUNLENGTH_DECODE,
+    LIT, LITERALS_FLATE_DECODE, LITERALS_ASCIIHEX_DECODE, LITERALS_CCITTFAX_DECODE, LITERALS_RUNLENGTH_DECODE,
     LITERAL_CRYPT, LITERALS_LZW_DECODE, LITERALS_DCT_DECODE, LITERALS_JBIG2_DECODE, LITERALS_ASCII85_DECODE,
     int_value, apply_png_predictor
 )
@@ -814,7 +815,7 @@ class PDFObjectStream(PDFStream):
                 decoded = rldecode(data)
             elif f in LITERALS_CCITTFAX_DECODE:
                 decoded = ccittfaxdecode(data, params)
-            elif f in LITERALS_DCT_DECODE:
+            elif f in LITERALS_DCT_DECODE or f == LIT("JPXDecode"):
                 # This is probably a JPG stream
                 # it does not need to be decoded twice.
                 # Just return the stream to the user.
@@ -1011,7 +1012,11 @@ def parse_object(obj, matcher: Matcher, parent: Optional[Match] = None, pdf_head
             parent_offset = 0
         else:
             parent_offset = parent.offset
-        data = obj.get_data()
+        try:
+            data: Optional[bytes] = obj.get_data()
+        except PDFNotImplementedError as e:
+            log.error(f"Unsupported PDF stream filter in object {obj.objid} {obj.genno}: {e!s}")
+            data = None
         match = Submatch(
             name="PDFObject",
             display_name=f"PDFObject{obj.objid}.{obj.genno}",
@@ -1022,7 +1027,8 @@ def parse_object(obj, matcher: Matcher, parent: Optional[Match] = None, pdf_head
         )
         yield match
         yield from parse_object(obj.attrs, matcher=matcher, parent=match, pdf_header_offset=pdf_header_offset)
-        yield from parse_object(data, matcher=matcher, parent=match, pdf_header_offset=pdf_header_offset)
+        if data is not None:
+            yield from parse_object(data, matcher=matcher, parent=match, pdf_header_offset=pdf_header_offset)
         log.clear_status()
     elif isinstance(obj, PDFStreamFilter):
         filter_obj = Submatch(

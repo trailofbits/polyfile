@@ -223,6 +223,7 @@ class Matcher:
             extension = next(iter(match_obj.test.all_extensions()))
         except StopIteration:
             pass
+        had_match = False
         if self.parse:
             for parser in PARSERS[mimetype]:
                 m = Match(
@@ -245,16 +246,17 @@ class Matcher:
                         except StopIteration:
                             has_first = False
                         yield m
+                        had_match = True
                         if has_first:
                             yield first_submatch
-                            try:
-                                yield from submatch_iter
-                            except Exception as e:
-                                log.warning(f"Parser {parser!r} for MIME type {mimetype} raised an exception while "
-                                            f"parsing {match_obj!s} in {file_stream!s}: {e!s}")
+                            #try:
+                            yield from submatch_iter
+                            #except Exception as e:
+                            #    log.warning(f"Parser {parser!r} for MIME type {mimetype} raised an exception while "
+                            #                f"parsing {match_obj!s} in {file_stream!s}: {e!s}")
                 except InvalidMatch:
                     pass
-        else:
+        if not had_match:
             yield Match(
                 mimetype,
                 match_obj,
