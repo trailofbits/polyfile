@@ -251,7 +251,7 @@ class Matcher:
                 except InvalidMatch:
                     pass
                 except Exception as e:
-                    log.warning(f"Parser {parser!r} for MIME type {mimetype} raised an exception while "
+                    log.warning(f"Parser {parser!s} for MIME type {mimetype} raised an exception while "
                                 f"parsing {match_obj!s} in {file_stream!s}: {e!s}")
 
     def match(self, file_stream: Union[str, Path, IO, FileStream], parent: Optional[Match] = None) -> Iterator[Match]:

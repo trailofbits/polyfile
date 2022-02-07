@@ -4,6 +4,7 @@ from typing import Dict, Iterator, List, Optional, Type
 from pdfminer.ascii85 import ascii85decode, asciihexdecode
 from pdfminer.ccitt import ccittfaxdecode
 from pdfminer.lzw import lzwdecode
+from pdfminer.pdfparser import PDFSyntaxError
 from pdfminer.pdftypes import PDFNotImplementedError
 from pdfminer.runlength import rldecode
 
@@ -1180,8 +1181,23 @@ class InstrumentedPDFDocument(PDFDocument):
     def __init__(self, *args, **kwargs):
         self._xrefs = []
         self._decipher: Optional[DecipherCallable] = None
-        super().__init__(*args, **kwargs)
+        try:
+            super().__init__(*args, **kwargs)
+        except PDFSyntaxError as pse:
+            if "No /Root object" not in str(pse):
+                raise pse
+            # this is a malformed PDF without a trailer root object
+            old_get_trailer = PDFXRef.get_trailer
 
+            def get_trailer(_):
+                return {"Root": {}}
+
+            try:
+                PDFXRef.get_trailer = get_trailer
+                # try it again with our patched trailer loading:
+                super().__init__(*args, **kwargs)
+            finally:
+                PDFXRef.get_trailer = old_get_trailer
     # @property
     # def xrefs(self):
     #     if not self._xrefs:
