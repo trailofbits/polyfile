@@ -1041,7 +1041,7 @@ def parse_object(obj, matcher: Matcher, parent: Optional[Match] = None, pdf_head
         )
         yield filter_obj
         if obj.error is None:
-            yield Submatch(
+            stream = Submatch(
                 "DecodedStream",
                 bytes(obj),
                 relative_offset=obj.pdf_offset - (parent.offset - pdf_header_offset),
@@ -1050,14 +1050,15 @@ def parse_object(obj, matcher: Matcher, parent: Optional[Match] = None, pdf_head
                 decoded=bytes(obj)
             )
         else:
-            yield Submatch(
+            stream = Submatch(
                 "DecodingError",
                 obj.error.message,
                 relative_offset=obj.pdf_offset - (parent.offset - pdf_header_offset),
                 length=obj.pdf_bytes,
                 parent=filter_obj
             )
-        yield from parse_object(obj.original_bytes, matcher=matcher, parent=filter_obj,
+        yield stream
+        yield from parse_object(obj.original_bytes, matcher=matcher, parent=stream,
                                 pdf_header_offset=pdf_header_offset)
     elif isinstance(obj, PDFList):
         list_obj = Submatch(
