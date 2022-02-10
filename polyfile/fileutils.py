@@ -5,7 +5,7 @@ from pathlib import Path
 import tempfile as tf
 import shutil
 import sys
-from typing import IO, Optional, Union, Iterator, AnyStr, Iterable
+from typing import AnyStr, IO, Iterator, Iterable, List, Optional, Union
 
 
 def make_stream(path_or_stream, mode='rb', close_on_exit=None):
@@ -287,7 +287,7 @@ class FileStream(IO):
     def readline(self, limit: int = ...) -> AnyStr:
         raise UnsupportedOperation()
 
-    def readlines(self, hint: int = ...) -> list[AnyStr]:
+    def readlines(self, hint: int = ...) -> List[AnyStr]:
         raise UnsupportedOperation()
 
     def truncate(self, size: int = ...) -> int:
