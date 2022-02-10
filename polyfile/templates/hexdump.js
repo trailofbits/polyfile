@@ -361,9 +361,9 @@ function formatChar(c, monospace) {
         return '&nbsp;';
     } else if (c === '\n') {
         if (monospace) {
-            return '\u24A0';
+            return '\u240A';
         } else {
-            return '\u24A0</span><br /><span>';
+            return '\u240A</span><br /><span>';
         }
     } else if (c === '\t') {
         if (monospace) {
