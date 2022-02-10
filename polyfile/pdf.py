@@ -1,4 +1,4 @@
-from typing import Dict, Iterator, Optional, Union
+from typing import Callable, Dict, Iterator, Optional, Union
 import zlib
 
 from pdfminer.ascii85 import ascii85decode, asciihexdecode
@@ -777,21 +777,6 @@ def parse_object(obj, matcher: Matcher, parent: Optional[Match] = None, pdf_head
             parent=parent
         )
 
-    # yield Submatch(
-    #     "PDFObjectID",
-    #     object.id,
-    #     relative_offset=0,
-    #     length=len(objid.token),
-    #     parent=obj
-    # )
-    # yield Submatch(
-    #     "PDFObjectVersion",
-    #     object.version,
-    #     relative_offset=objversion.offset.offset - objid.offset.offset,
-    #     length=len(objversion.token),
-    #     parent=obj
-    # )
-
 
 class InstrumentedPDFDocument(PDFDocument):
     def __init__(self, *args, **kwargs):
@@ -869,20 +854,101 @@ class RelaxedPDFMatcher(MagicTest):
 MagicMatcher.DEFAULT_INSTANCE.add(RelaxedPDFMatcher())
 
 
-def pdf_obj_parser(file_stream, obj, objid: int, parent: Match, pdf_header_index: int = 0) -> Iterator[Submatch]:
+def reverse_skip_whitespace(file_stream) -> bool:
+    found_whitespace = False
+    while True:
+        try:
+            file_stream.seek(-1, from_what=1)
+        except IndexError:
+            break
+        b = file_stream.read(1)
+        if b not in (b' ', b'\t', b'\n'):
+            break
+        found_whitespace = True
+        file_stream.seek(-1, from_what=1)
+    return found_whitespace
+
+
+def skip_whitespace(file_stream) -> bool:
+    found_whitespace = False
+    while True:
+        b = file_stream.read(1)
+        if b not in (b' ', b'\t', b'\n'):
+            try:
+                file_stream.seek(-1, from_what=1)
+            except IndexError:
+                pass
+            break
+        found_whitespace = True
+    return found_whitespace
+
+
+def reverse_expect(file_stream, expected: Union[bytes, Callable[[int, bytes], bool]]) -> bytes:
+    skipped_bytes = 0
+    start_pos = file_stream.tell()
+    with file_stream.save_pos():
+        if isinstance(expected, bytes):
+            try:
+                file_stream.seek(-len(expected), from_what=1)
+            except IndexError:
+                return b""
+            if file_stream.read(len(expected)) != expected:
+                return b""
+            skipped_bytes = len(expected)
+        else:
+            while True:
+                try:
+                    file_stream.seek(start_pos - skipped_bytes - 1)
+                except IndexError:
+                    return b""
+                b = file_stream.read(1)
+                if not expected(skipped_bytes, b):
+                    break
+                skipped_bytes += 1
+    file_stream.seek(start_pos - skipped_bytes)
+    try:
+        return file_stream.read(skipped_bytes)
+    finally:
+        file_stream.seek(start_pos - skipped_bytes)
+
+
+def pdf_obj_parser(file_stream, obj, objid: int, parent: Match, pdf_header_offset: int = 0) -> Iterator[Submatch]:
+    data: Optional[bytes] = None
     if isinstance(obj, PDFObjectStream):
         log.status(f"Parsing PDF obj {obj.objid} {obj.genno}")
         try:
-            data: Optional[bytes] = obj.get_data()
+            data = obj.get_data()
         except PDFNotImplementedError as e:
             log.error(f"Unsupported PDF stream filter in object {obj.objid} {obj.genno}: {e!s}")
-            data = None
+        relative_offset = obj.attrs.pdf_offset
+        obj_length = obj.data_value.pdf_offset - obj.attrs.pdf_offset + obj.data_value.pdf_bytes - 1
+    else:
+        log.status(f"Parsing PDF obj {objid}")
+        relative_offset = obj.pdf_offset
+        obj_length = obj.pdf_bytes - 1
+    with file_stream.save_pos():
+        file_stream.seek(parent.offset + relative_offset - pdf_header_offset)
+        reverse_skip_whitespace(file_stream)
+        if reverse_expect(file_stream, b"obj") and reverse_skip_whitespace(file_stream):
+            version = reverse_expect(file_stream, lambda _, b: ord('0') <= b[0] <= ord('9'))
+            if version and reverse_skip_whitespace(file_stream):
+                obj_id = reverse_expect(file_stream, lambda _, b: ord('0') <= b[0] <= ord('9'))
+                if obj_id:
+                    obj_offset = parent.offset + relative_offset - pdf_header_offset - file_stream.tell()
+                    relative_offset -= obj_offset
+                    obj_length += obj_offset
+        file_stream.seek(parent.offset + relative_offset - pdf_header_offset + obj_length)
+        skip_whitespace(file_stream)
+        if file_stream.read(6) == b"endobj":
+            skip_whitespace(file_stream)
+            obj_length = file_stream.tell() - (parent.offset + relative_offset - pdf_header_offset)
+    if isinstance(obj, PDFObjectStream):
         match = Submatch(
             name="PDFObject",
             display_name=f"PDFObject{obj.objid}.{obj.genno}",
             match_obj=(obj.objid, obj.genno),
-            relative_offset=obj.attrs.pdf_offset,
-            length=obj.data_value.pdf_offset - obj.attrs.pdf_offset + obj.data_value.pdf_bytes - 1,
+            relative_offset=relative_offset,
+            length=obj_length,
             parent=parent
         )
         yield match
@@ -890,44 +956,43 @@ def pdf_obj_parser(file_stream, obj, objid: int, parent: Match, pdf_header_index
         if data is not None:
             yield from parse_object(data, matcher=parent.matcher, parent=match, pdf_header_offset=pdf_header_offset)
     else:
-        log.status(f"Parsing PDF obj {objid}")
         match = Submatch(
             name="PDFObject",
             display_name=f"PDFObject{objid}",
             match_obj=objid,
-            relative_offset=obj.pdf_offset,
-            length=obj.pdf_bytes - 1,
+            relative_offset=relative_offset,
+            length=obj_length,
             parent=parent
         )
         yield match
-        yield from parse_object(obj, parent.matcher, match, pdf_header_offset=pdf_header_index)
+        yield from parse_object(obj, parent.matcher, match, pdf_header_offset=pdf_header_offset)
     log.clear_status()
 
 
 @register_parser("application/pdf")
 def pdf_parser(file_stream, parent: Match):
     # pdfminer expects %PDF to be at byte offset zero in the file
-    pdf_header_index = file_stream.first_index_of(b"%PDF")
-    if pdf_header_index > 0:
+    pdf_header_offset = file_stream.first_index_of(b"%PDF")
+    if pdf_header_offset > 0:
         # the PDF header does not start at byte offset zero!
         yield Submatch(
             "IgnoredPDFPreamble",
             b"",
             relative_offset=0,
-            length=pdf_header_index,
+            length=pdf_header_offset,
             parent=parent
         )
         pdf_content = Submatch(
             "OffsetPDFContent",
             b"",
-            relative_offset=pdf_header_index,
+            relative_offset=pdf_header_offset,
             parent=parent
         )
         yield pdf_content
-        with FileStream(file_stream, start=pdf_header_index) as f:
+        with FileStream(file_stream, start=pdf_header_offset) as f:
             yield from pdf_parser(f, pdf_content)
         return
-    pdf_header_index = file_stream.start
+    pdf_header_offset = file_stream.start
     parser = PDFParser(RawPDFStream(file_stream))
     doc = InstrumentedPDFDocument(parser)
     yielded = set()
@@ -945,4 +1010,4 @@ def pdf_parser(file_stream, parent: Match):
                 if objid in yielded or not hasattr(obj, "pdf_offset") or not hasattr(obj, "pdf_bytes"):
                     continue
                 yielded.add(objid)
-            yield from pdf_obj_parser(file_stream, obj, objid, parent, pdf_header_index=pdf_header_index)
+            yield from pdf_obj_parser(file_stream, obj, objid, parent, pdf_header_offset=pdf_header_offset)
