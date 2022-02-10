@@ -241,5 +241,4 @@ This research was developed by [Trail of
 Bits](https://www.trailofbits.com/) with funding from the Defense
 Advanced Research Projects Agency (DARPA) under the SafeDocs program
 as a subcontractor to [Galois](https://galois.com). It is licensed under the [Apache 2.0 license](LICENSE).
-The [PDF parser](polyfile/pdfparser.py) is modified from the parser developed by Didier Stevens and released into the
- public domain. © 2019, Trail of Bits.
+© 2019, Trail of Bits.
