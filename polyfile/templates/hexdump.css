@@ -42,7 +42,7 @@ label.tree_label { cursor: pointer; }
 
 label.tree_label:hover { color: #666; }
 
-label.tree_label:hover > .download {
+.tree_label:hover > .download {
   display: block;
   float: right;
 }
