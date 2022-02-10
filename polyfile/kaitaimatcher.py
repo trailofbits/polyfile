@@ -90,10 +90,10 @@ for mimetype, kaitai_path in KAITAI_MIME_MAPPING.items():
             try:
                 ast = self.kaitai_parser.parse(stream).ast
             except KaitaiStructError as e:
-                log.warning(f"Error parsing {stream.name} using {kaitai_parser}: {e!s}")
+                log.warning(f"Error parsing {stream.name} using {self.kaitai_parser}: {e!s}")
                 raise InvalidMatch()
             except Exception as e:
-                log.error(f"Unexpected exception parsing {stream.name} using {kaitai_parser}: {e!s}")
+                log.error(f"Unexpected exception parsing {stream.name} using {self.kaitai_parser}: {e!s}")
                 raise InvalidMatch()
             yield from ast_to_matches(ast, parent=match)
 
