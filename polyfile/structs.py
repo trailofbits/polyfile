@@ -36,8 +36,8 @@ T = TypeVar("T")
 class AnnotatedType(ABCMeta):
     endianness: Optional[Endianness] = None
 
-    def __class_getitem__(cls, endianness: Optional[Endianness]) -> "AnnotatedType":
-        name = cls.__name__
+    def __class_getitem__(mcs, endianness: Optional[Endianness]) -> "AnnotatedType":
+        name = mcs.__name__
         if endianness is not None:
             name = f"{name}{endianness.name}"
         else:
@@ -67,11 +67,11 @@ def struct_fmt_int(size: int, signed: bool) -> str:
 class AnnotatedSizeType(AnnotatedType):
     size: Union[int, SizeReference]
 
-    def __class_getitem__(cls: T, size: Union[int, str, SizeReference]) -> T:
+    def __class_getitem__(mcs: T, size: Union[int, str, SizeReference]) -> T:
         if isinstance(size, str):
             size = SizeReference(size)
-        name = f"{cls.__name__}{size!s}"
-        return type(name, (cls,), {
+        name = f"{mcs.__name__}{size!s}"
+        return type(name, (mcs,), {
             "endianness": None,
             "size": size
         })
@@ -87,14 +87,14 @@ class AnnotatedIntType(AnnotatedType):
     size: Union[int, SizeReference]
     signed: bool
 
-    def __class_getitem__(cls: T, args: IntTypeArgs) -> T:
+    def __class_getitem__(mcs: T, args: IntTypeArgs) -> T:
         if len(args) == 3:
             size, signed, endianness = args
         elif len(args) == 2:
             size, signed = args
             endianness = None
         else:
-            raise TypeError(f"{cls.__name__}[{','.join(map(repr, args))}] must have either two or three arguments")
+            raise TypeError(f"{mcs.__name__}[{','.join(map(repr, args))}] must have either two or three arguments")
         if isinstance(size, str):
             size = SizeReference(size)
         if endianness is None:
@@ -105,9 +105,9 @@ class AnnotatedIntType(AnnotatedType):
             signed_name = "Signed"
         else:
             signed_name = "Unsigned"
-        name = f"{signed_name}{cls.__name__}{endianness_name}{size!s}"
+        name = f"{signed_name}{mcs.__name__}{endianness_name}{size!s}"
         endianness_type = super().__class_getitem__(endianness)
-        return type(name, (cls, endianness_type), {
+        return type(name, (mcs, endianness_type), {
             "size": size,
             "signed": signed
         })
@@ -138,8 +138,10 @@ class IntField(int, Field, metaclass=AnnotatedIntType):
     def __class_getitem__(cls: T, args: IntTypeArgs) -> T:
         if not isinstance(args[0], int):
             raise TypeError("An int field must have a constant integer size")
+
         class BoundIntField(cls, metaclass=AnnotatedIntType[args]):
             pass
+
         return BoundIntField
 
     @classmethod
