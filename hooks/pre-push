@@ -52,13 +52,13 @@
 
 # We could do the following as a `pre-commit` hook, but it's expensive, so only do it pre-push:
 echo Linting Python code...
-flake8 polyfile tests --select=E9,F63,F7,F82 1>/dev/null 2>/dev/null
+flake8 polyfile tests --exclude polyfile/kaitai/parsers/ --select=E9,F63,F7,F82 1>/dev/null 2>/dev/null
 RESULT=$?
 if [ $RESULT -ne 0 ]; then
   cat <<\EOF
 Failed Python lint:
 
-    flake8 polyfile tests --count --select=E9,F63,F7,F82 --show-source --statistics
+    flake8 polyfile tests --exclude polyfile/kaitai/parsers/ --count --select=E9,F63,F7,F82 --show-source --statistics
 EOF
   exit 1
 fi
@@ -75,7 +75,7 @@ fi
 #fi
 
 echo Running Tests...
-pytest .
+pytest tests
 
 # echo Type-checking Python code...
 # mypy --ignore-missing-imports polyfile tests
