@@ -1,9 +1,18 @@
-from abc import ABC, ABCMeta, abstractmethod
+import sys
+from abc import ABCMeta, abstractmethod
 from collections import OrderedDict
 from enum import Enum
-from functools import partial
 import struct as python_struct
-from typing import Any, BinaryIO, Dict, Optional, OrderedDict as OrderedDictType, Tuple, Type, TypeVar, Union
+from typing import BinaryIO, Optional, Tuple, Type, TypeVar, Union
+
+if sys.version_info < (3, 7):
+    from typing import Dict as OrderedDictType
+elif sys.version_info < (3, 9):
+    # typing.OrderedDict was added in Python 3.7
+    from typing import OrderedDict as OrderedDictType
+else:
+    # In Python 3.9 and newer, collections.OrderedDict is subscriptable
+    OrderedDictType = OrderedDict
 
 
 class Endianness(Enum):
