@@ -36,7 +36,7 @@ This will automatically install the `polyfile` and `polymerge` executables in yo
 usage: polyfile [-h] [--filetype FILETYPE] [--list] [--html HTML]
                 [--only-match-mime] [--only-match] [--require-match]
                 [--max-matches MAX_MATCHES] [--debug] [--trace] [--debugger]
-                [--quiet] [--version] [-dumpversion]
+                [--no-debug-python] [--quiet] [--version] [-dumpversion]
                 [FILE]
 
 A utility to recursively map the structure of a file.
@@ -66,7 +66,10 @@ optional arguments:
   --debug, -d           print debug information
   --trace, -dd          print extra verbose debug information
   --debugger, -db       drop into an interactive debugger for libmagic file
-                        definition matching
+                        definition matching and PolyFile parsing
+  --no-debug-python     by default, the `--debugger` option will break on
+                        custom matchers and prompt to debug using PDB. This
+                        option will suppress those prompts.
   --quiet, -q           suppress all log output (overrides --debug)
   --version, -v         print PolyFile's version information to STDERR
   -dumpversion          print PolyFile's raw version information to STDOUT and
@@ -83,6 +86,12 @@ You can optionally have PolyFile output an interactive HTML page containing a la
 ```
 polyfile INPUT_FILE --html output.html > output.json
 ```
+
+### Interactive Debugger
+
+PolyFile has an interactive debugger both for its file matching and parsing. It can be used to debug a libmagic pattern 
+definition, determine why a specific file fails to be classified as the expected MIME type, or step through a parser.
+You can run PolyFile with the debugger enabled using the `-db` option.
 
 ### File Support
 
