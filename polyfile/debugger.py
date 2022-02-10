@@ -925,6 +925,6 @@ class Debugger(REPL):
         else:
             self.write(parsed[0], bold=True, color=ANSIColor.GREEN)
             self.write(" = ", dim=True)
-            self.write(str(variables_by_name[parsed[0]].value), bold=True, color=ANSIColor.CYAN)
+            self.write(str(self.variables_by_name[parsed[0]].value), bold=True, color=ANSIColor.CYAN)
             self.write("\n")
             self.write(self.variable_descriptions[parsed[0]])
