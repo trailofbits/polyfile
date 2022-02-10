@@ -1,3 +1,4 @@
+import sys
 from typing import Callable, Dict, Iterator, Optional, Union
 import zlib
 
@@ -246,7 +247,15 @@ PROTECTED_LITERALS: Dict[str, PSLiteral] = {
     LITERAL_CATALOG.name: LITERAL_CATALOG
 }
 
-class PDFDict(dict, Dict[PSStr, Union[PDFBaseParserToken, PSStr, "PDFDict", "PDFList"]]):
+
+if sys.version_info < (3, 7):
+    # Before Python 3.7, we'll get an MRO error if we extend from both dict and Dict
+    PDFDict_Type = object
+else:
+    PDFDict_Type = Dict[PSStr, Union[PDFBaseParserToken, PSStr, "PDFDict", "PDFList"]]
+
+
+class PDFDict(dict, PDFDict_Type):
     pdf_offset: int
     pdf_bytes: int
 
