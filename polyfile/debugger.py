@@ -1,11 +1,9 @@
 from abc import ABC, abstractmethod
 from enum import Enum
-from io import StringIO
 from pathlib import Path
 from pdb import Pdb
-import readline
 import sys
-from typing import Any, Callable, Generic, Iterable, Iterator, List, Optional, Type, TypeVar, Union
+from typing import Any, Callable, Dict, Generic, Iterable, Iterator, List, Optional, Type, TypeVar, Union
 
 from .polyfile import __copyright__, __license__, __version__, PARSERS, Match, Parser, ParserFunction, Submatch
 from .magic import (
