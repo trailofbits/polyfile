@@ -117,11 +117,10 @@ setup(
     long_description_content_type="text/markdown",
     url='https://github.com/trailofbits/polyfile',
     author='Trail of Bits',
-    version="0.3.5",
+    version="0.4.0",
     packages=find_packages(exclude=("tests",)),
-    python_requires='>=3.6',
+    python_requires='>=3.7',
     install_requires=[
-        "dataclasses;python_version<'3.7'",  # dataclasses were only added in Python 3.7
         'cint',
         'graphviz',
         'intervaltree',

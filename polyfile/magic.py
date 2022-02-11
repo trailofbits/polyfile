@@ -340,6 +340,9 @@ class RelativeOffset(Offset):
             difference = -self.relative_to.magnitude
         else:
             difference = self.relative_to.to_absolute(data, last_match)
+        if not isinstance(last_match, MatchedTest):
+            raise InvalidOffsetError(f"The last test was expected to be a match, but instead got {last_match!s}",
+                                     offset=self)
         offset = last_match.offset + last_match.length + difference
         if len(data) < offset < 0:
             raise InvalidOffsetError(offset=self)
@@ -1824,11 +1827,13 @@ class UseTest(MagicTest):
             extensions: Iterable[str] = (),
             message: str = "",
             parent: Optional["MagicTest"] = None,
-            flip_endianness: bool = False
+            flip_endianness: bool = False,
+            late_binding: bool = False
     ):
         super().__init__(offset=offset, mime=mime, extensions=extensions, message=message, parent=parent)
         self.referenced_test: NamedTest = referenced_test
         self.flip_endianness: bool = flip_endianness
+        self.late_binding: bool = late_binding
         referenced_test.used_by.add(self)
 
     def referenced_tests(self) -> Set[NamedTest]:
@@ -2082,7 +2087,22 @@ class MagicMatcher:
         for test in tests:
             self.add(test)
 
-    def add(self, test: MagicTest):
+    def add(self, test: Union[MagicTest, Path]) -> List[MagicTest]:
+        if not isinstance(test, MagicTest):
+            level_zero_tests, _, tests_with_mime, indirect_tests = self._parse_file(test, self)
+            for test in tests_with_mime:
+                assert test.can_match_mime
+                for ancestor in test.ancestors():
+                    ancestor.can_match_mime = True
+            for test in indirect_tests:
+                assert test.can_be_indirect
+                assert test.can_match_mime
+                for ancestor in test.ancestors():
+                    ancestor.can_be_indirect = True
+            for test in level_zero_tests:
+                self.add(test)
+            return list(level_zero_tests)
+
         if isinstance(test, NamedTest):
             if test.name in self.named_tests:
                 raise ValueError(f"A test named {test.name} already exists in this matcher!")
@@ -2095,6 +2115,8 @@ class MagicMatcher:
                 self.tests_by_ext[ext].add(test)
             if test.can_be_indirect:
                 self.tests_that_can_be_indirect.add(test)
+
+        return [test]
 
     def only_match(
             self,
@@ -2150,6 +2172,114 @@ class MagicMatcher:
                 yield m
 
     @staticmethod
+    def parse_test(
+            line: str,
+            def_file: Path,
+            line_number: int,
+            parent: Optional[MagicTest] = None,
+            matcher: Optional["MagicMatcher"] = None
+    ) -> Optional[MagicTest]:
+        m = TEST_PATTERN.match(line)
+        if not m:
+            return None
+        level = len(m.group("level"))
+        while parent is not None and parent.level >= level:
+            parent = parent.parent
+        if parent is None and level != 0:
+            raise ValueError(f"{def_file!s} line {line_number}: Invalid level for test {line!r}")
+        test_str, message = _split_with_escapes(m.group("remainder"))
+        message = unescape(message).decode("utf-8")
+        try:
+            offset = Offset.parse(m.group("offset"))
+        except ValueError as e:
+            raise ValueError(f"{def_file!s} line {line_number}: {e!s}")
+        data_type = m.group("data_type")
+        if data_type == "name":
+            if parent is not None:
+                raise ValueError(f"{def_file!s} line {line_number}: A named test must be at level 0")
+            elif test_str in matcher.named_tests:
+                raise ValueError(f"{def_file!s} line {line_number}: Duplicate test named {test_str!r}")
+            test = NamedTest(name=test_str, offset=offset, message=message)
+            matcher.named_tests[test_str] = test
+            test.source_info = SourceInfo(def_file, line_number, line)
+        else:
+            if data_type == "default":
+                if parent is None:
+                    raise NotImplementedError("TODO: Add support for default tests at level 0")
+                test = DefaultTest(offset=offset, message=message, parent=parent)
+            elif data_type == "clear":
+                if parent is None:
+                    raise NotImplementedError("TODO: Add support for clear tests at level 0")
+                test = ClearTest(offset=offset, message=message, parent=parent)
+            elif data_type == "offset":
+                expected_value = IntegerValue.parse(test_str, num_bytes=8)
+                test = OffsetMatchTest(offset=offset, value=expected_value, message=message,
+                                       parent=parent)
+            elif data_type == "json":
+                test = JSONTest(offset=offset, message=message, parent=parent)
+            elif data_type == "csv":
+                test = CSVTest(offset=offset, message=message, parent=parent)
+            elif data_type == "indirect" or data_type == "indirect/r":
+                test = IndirectTest(matcher=matcher, offset=offset,
+                                    relative=m.group("data_type").endswith("r"),
+                                    message=message, parent=parent)
+            elif data_type == "use":
+                if test_str.startswith("^"):
+                    flip_endianness = True
+                    test_str = test_str[1:]
+                elif test_str.startswith("\\^"):
+                    flip_endianness = True
+                    test_str = test_str[2:]
+                else:
+                    flip_endianness = False
+                if test_str not in matcher.named_tests:
+                    late_binding = True
+
+                    class LateBindingNamedTest(NamedTest):
+                        def __init__(self):
+                            super().__init__(test_str, offset=AbsoluteOffset(0))
+
+                    named_test: NamedTest = LateBindingNamedTest()
+                else:
+                    late_binding = False
+                    named_test = matcher.named_tests[test_str]
+                # named_test might be a string here (the test name) rather than an actual NamedTest object.
+                # This will happen if the named test is defined after the use (late binding).
+                # We will resolve this after the entire file is parsed.
+                test = UseTest(  # type: ignore
+                    named_test,
+                    offset=offset,
+                    message=message,
+                    parent=parent,
+                    flip_endianness=flip_endianness,
+                    late_binding=late_binding
+                )
+            elif data_type == "der":
+                # TODO: Update this as necessary once we fully implement the DERTest
+                test = DERTest(offset=offset, message=message, parent=parent)
+            else:
+                try:
+                    data_type = DataType.parse(data_type)
+                    # in some definitions a space is put after the "&" in a numeric datatype:
+                    if test_str in ("<", ">", "=", "!", "&", "^", "~"):
+                        # Some files will erroneously add whitespace between the operator and the
+                        # subsequent value:
+                        actual_operand, message = _split_with_escapes(message)
+                        test_str = f"{test_str}{actual_operand}"
+                    constant = data_type.parse_expected(test_str)
+                except ValueError as e:
+                    raise ValueError(f"{def_file!s} line {line_number}: {e!s}")
+                test = ConstantMatchTest(
+                    offset=offset,
+                    data_type=data_type,
+                    constant=constant,
+                    message=message,
+                    parent=parent
+                )
+        test.source_info = SourceInfo(def_file, line_number, line)
+        return test
+
+    @staticmethod
     def _parse_file(
             def_file: Union[str, Path], matcher: "MagicMatcher"
     ) -> Tuple[Iterable[MagicTest], Iterable[UseTest], Set[MagicTest], Set[IndirectTest]]:
@@ -2184,106 +2314,18 @@ class MagicMatcher:
                     line = raw_line.decode("utf-8")
                 except UnicodeDecodeError:
                     continue
-                m = TEST_PATTERN.match(line)
-                if m:
-                    level = len(m.group("level"))
-                    while current_test is not None and current_test.level >= level:
-                        current_test = current_test.parent
-                    if current_test is None and level != 0:
-                        raise ValueError(f"{def_file!s} line {line_number}: Invalid level for test {line!r}")
-                    test_str, message = _split_with_escapes(m.group("remainder"))
-                    message = unescape(message).decode("utf-8")
-                    try:
-                        offset = Offset.parse(m.group("offset"))
-                    except ValueError as e:
-                        raise ValueError(f"{def_file!s} line {line_number}: {e!s}")
-                    data_type = m.group("data_type")
-                    if data_type == "name":
-                        if current_test is not None:
-                            raise ValueError(f"{def_file!s} line {line_number}: A named test must be at level 0")
-                        elif test_str in matcher.named_tests:
-                            raise ValueError(f"{def_file!s} line {line_number}: Duplicate test named {test_str!r}")
-                        test = NamedTest(name=test_str, offset=offset, message=message)
-                        matcher.named_tests[test_str] = test
-                        test.source_info = SourceInfo(def_file, line_number, line)
+                test = MagicMatcher.parse_test(line, def_file, line_number, current_test, matcher)
+                if test is not None:
+                    if isinstance(test, NamedTest):
+                        matcher.named_tests[test.name] = test
                     else:
-                        if data_type == "default":
-                            if current_test is None:
-                                raise NotImplementedError("TODO: Add support for default tests at level 0")
-                            test = DefaultTest(offset=offset, message=message, parent=current_test)
-                        elif data_type == "clear":
-                            if current_test is None:
-                                raise NotImplementedError("TODO: Add support for clear tests at level 0")
-                            test = ClearTest(offset=offset, message=message, parent=current_test)
-                        elif data_type == "offset":
-                            expected_value = IntegerValue.parse(test_str, num_bytes=8)
-                            test = OffsetMatchTest(offset=offset, value=expected_value, message=message,
-                                                   parent=current_test)
-                        elif data_type == "json":
-                            test = JSONTest(offset=offset, message=message, parent=current_test)
-                        elif data_type == "csv":
-                            test = CSVTest(offset=offset, message=message, parent=current_test)
-                        elif data_type == "indirect" or data_type == "indirect/r":
-                            test = IndirectTest(matcher=matcher, offset=offset,
-                                                relative=m.group("data_type").endswith("r"),
-                                                message=message, parent=current_test)
+                        if isinstance(test, IndirectTest):
                             indirect_tests.add(test)
-                        elif data_type == "use":
-                            if test_str.startswith("^"):
-                                flip_endianness = True
-                                test_str = test_str[1:]
-                            elif test_str.startswith("\\^"):
-                                flip_endianness = True
-                                test_str = test_str[2:]
-                            else:
-                                flip_endianness = False
-                            if test_str not in matcher.named_tests:
-                                late_binding = True
-
-                                class LateBindingNamedTest(NamedTest):
-                                    def __init__(self):
-                                        super().__init__(test_str, offset=AbsoluteOffset(0))
-                                named_test: NamedTest = LateBindingNamedTest()
-                            else:
-                                late_binding = False
-                                named_test = matcher.named_tests[test_str]
-                            # named_test might be a string here (the test name) rather than an actual NamedTest object.
-                            # This will happen if the named test is defined after the use (late binding).
-                            # We will resolve this after the entire file is parsed.
-                            test = UseTest(  # type: ignore
-                                named_test,
-                                offset=offset,
-                                message=message,
-                                parent=current_test,
-                                flip_endianness=flip_endianness
-                            )
-                            if late_binding:
-                                late_bindings.append(test)
-                        elif data_type == "der":
-                            # TODO: Update this as necessary once we fully implement the DERTest
-                            test = DERTest(offset=offset, message=message, parent=current_test)
-                        else:
-                            try:
-                                data_type = DataType.parse(data_type)
-                                # in some definitions a space is put after the "&" in a numeric datatype:
-                                if test_str in ("<", ">", "=", "!", "&", "^", "~"):
-                                    # Some files will erroneously add whitespace between the operator and the
-                                    # subsequent value:
-                                    actual_operand, message = _split_with_escapes(message)
-                                    test_str = f"{test_str}{actual_operand}"
-                                constant = data_type.parse_expected(test_str)
-                            except ValueError as e:
-                                raise ValueError(f"{def_file!s} line {line_number}: {e!s}")
-                            test = ConstantMatchTest(
-                                offset=offset,
-                                data_type=data_type,
-                                constant=constant,
-                                message=message,
-                                parent=current_test
-                            )
+                        elif isinstance(test, UseTest) and test.late_binding:
+                            late_bindings.append(test)
                         if test.level == 0:
                             level_zero_tests.append(test)
-                    test.source_info = SourceInfo(def_file, line_number, line)
+                        test.source_info = SourceInfo(def_file, line_number, line)
                     test.comments = tuple(comments)
                     comments = []
                     current_test = test

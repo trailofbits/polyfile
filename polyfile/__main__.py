@@ -15,7 +15,7 @@ from . import logger
 from . import polyfile
 from .fileutils import PathOrStdin
 from .magic import MagicMatcher, MatchContext
-from .magic_debugger import Debugger
+from .debugger import Debugger
 from .polyfile import __version__
 
 
@@ -38,7 +38,7 @@ def main(argv=None):
     parser.add_argument('FILE', nargs='?', default='-',
                         help='the file to analyze; pass \'-\' or omit to read from STDIN')
     parser.add_argument('--filetype', '-f', action='append',
-                        help='explicitly match against the given filetype or filetype wildcard (default is to match'
+                        help='explicitly match against the given filetype or filetype wildcard (default is to match '
                              'against all filetypes)')
     parser.add_argument('--list', '-l', action='store_true',
                         help='list the supported filetypes (for the `--filetype` argument) and exit')
@@ -57,7 +57,7 @@ def main(argv=None):
     parser.add_argument('--debug', '-d', action='store_true', help='print debug information')
     parser.add_argument('--trace', '-dd', action='store_true', help='print extra verbose debug information')
     parser.add_argument('--debugger', '-db', action='store_true', help='drop into an interactive debugger for libmagic '
-                                                                       'file definition matching')
+                                                                       'file definition matching and PolyFile parsing')
     parser.add_argument('--no-debug-python', action='store_true', help='by default, the `--debugger` option will break '
                                                                        'on custom matchers and prompt to debug using '
                                                                        'PDB. This option will suppress those prompts.')
@@ -119,7 +119,7 @@ def main(argv=None):
 
     with path_or_stdin as file_path, ExitStack() as stack:
         if args.debugger:
-            stack.enter_context(Debugger(break_on_submatching=not args.no_debug_python))
+            stack.enter_context(Debugger(break_on_parsing=not args.no_debug_python))
         elif args.no_debug_python:
             log.warning("Ignoring `--no-debug-python`; it can only be used with the --debugger option.")
         matches = []
@@ -152,7 +152,7 @@ def main(argv=None):
                     if omm:
                         log.clear_status()
             elif args.max_matches is None or args.max_matches > 0:
-                matcher = polyfile.Matcher(submatch=not args.only_match, matcher=magic_matcher)
+                matcher = polyfile.Matcher(parse=not args.only_match, matcher=magic_matcher)
                 for match in matcher.match(file_path):
                     if sigterm_handler.terminated:
                         break
@@ -176,6 +176,8 @@ def main(argv=None):
                 sys.stdout.flush()
                 sys.stderr.flush()
                 sys.stderr.write("\n\nCaught keyboard interrupt.\n")
+                if not sys.stderr.isatty() or not sys.stdin.isatty():
+                    sys.exit(128 + 15)
                 while True:
                     sys.stderr.write("Would you like PolyFile to output its current progress? [Yn] ")
                     result = input()
