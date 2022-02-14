@@ -15,7 +15,19 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: [3.7, 3.8, 3.9, "3.10"]
+        os: [ubuntu-latest, windows-latest]  # macos-latest,
+        python-version: ["3.7", "3.8", "3.9", "3.10"]
+        include:
+          - os: ubuntu-latest
+            kaitai-install: curl -LO https://github.com/kaitai-io/kaitai_struct_compiler/releases/download/0.9/kaitai-struct-compiler_0.9_all.deb && sudo apt-get install ./kaitai-struct-compiler_0.9_all.deb
+#          - os: macos-latest
+#            kaitai-install: |
+#              curl -LO https://github.com/kaitai-io/kaitai_struct_compiler/releases/download/0.9/kaitai-struct-compiler-0.9.zip
+          - os: windows-latest
+            kaitai-install: |
+              (New-Object System.Net.WebClient).DownloadFile("https://github.com/kaitai-io/kaitai_struct_compiler/releases/download/0.9/kaitai-struct-compiler-0.9.zip","kaitai-struct-compiler-0.9.zip");
+              Expand-Archive .\kaitai-struct-compiler-0.9.zip .;
+              echo "$((Get-Item .).FullName)/kaitai-struct-compiler-0.9/bin/kaitai-struct-compiler" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
     steps:
     - uses: actions/checkout@v2
@@ -25,10 +37,12 @@ jobs:
       uses: actions/setup-python@v1
       with:
         python-version: ${{ matrix.python-version }}
-    - name: Install dependencies
+    - name: Install Kaitai Struct
+      env:
+        INSTALL_COMMAND: ${{ matrix.kaitai-install }}
+      run: $KAITAI_INSTALL
+    - name: Install Python Dependencies
       run: |
-        curl -LO https://github.com/kaitai-io/kaitai_struct_compiler/releases/download/0.9/kaitai-struct-compiler_0.9_all.deb
-        sudo apt-get install ./kaitai-struct-compiler_0.9_all.deb
         python -m pip install --upgrade pip
         pip install setuptools
         pip install .[dev]
