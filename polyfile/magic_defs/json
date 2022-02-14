@@ -3,6 +3,6 @@
 # The original implementation of libmagic/file tests for certain filetypes like
 # JSON by using a parser written in C rather than the DSL.
 # Instead, PolyFile adds a new test type called `json`:
-0   json    x   JSON data
+0   json    x   JSON text data
 !:mime  application/json
 !:ext   json
