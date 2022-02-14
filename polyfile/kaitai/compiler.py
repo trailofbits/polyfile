@@ -96,7 +96,7 @@ def compile(ksy_path: Union[str, Path], output_directory: Union[str, Path], auto
 
     cmd = [
         str(compiler), "--target", "python", "--outdir", str(output_directory), str(ksy_path),
-        "--debug", "--ksc-json-output", "-I", Path.cwd(), "--python-package", "polyfile.kaitai.parsers"
+        "--debug", "--ksc-json-output", "-I", str(Path.cwd()), "--python-package", "polyfile.kaitai.parsers"
     ]
 
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
