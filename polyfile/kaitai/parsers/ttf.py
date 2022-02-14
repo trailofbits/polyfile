@@ -121,7 +121,7 @@ class Ttf(KaitaiStruct):
                     _ = _t_glyph_names
                     self.glyph_names.append(_)
                     self._debug['glyph_names']['arr'][len(self.glyph_names) - 1]['end'] = self._io.pos()
-                    if _.length == 0:
+                    if  ((_.length == 0) or (self._io.is_eof())) :
                         break
                     i += 1
                 self._debug['glyph_names']['end'] = self._io.pos()
@@ -1471,7 +1471,7 @@ class Ttf(KaitaiStruct):
 
 
     class Maxp(KaitaiStruct):
-        SEQ_FIELDS = ["table_version_number", "num_glyphs", "max_points", "max_contours", "max_composite_points", "max_composite_contours", "max_zones", "max_twilight_points", "max_storage", "max_function_defs", "max_instruction_defs", "max_stack_elements", "max_size_of_instructions", "max_component_elements", "max_component_depth"]
+        SEQ_FIELDS = ["table_version_number", "num_glyphs", "version10_body"]
         def __init__(self, _io, _parent=None, _root=None):
             self._io = _io
             self._parent = _parent
@@ -1486,6 +1486,31 @@ class Ttf(KaitaiStruct):
             self._debug['num_glyphs']['start'] = self._io.pos()
             self.num_glyphs = self._io.read_u2be()
             self._debug['num_glyphs']['end'] = self._io.pos()
+            if self.is_version10:
+                self._debug['version10_body']['start'] = self._io.pos()
+                self.version10_body = Ttf.MaxpVersion10Body(self._io, self, self._root)
+                self.version10_body._read()
+                self._debug['version10_body']['end'] = self._io.pos()
+
+
+        @property
+        def is_version10(self):
+            if hasattr(self, '_m_is_version10'):
+                return self._m_is_version10 if hasattr(self, '_m_is_version10') else None
+
+            self._m_is_version10 =  ((self.table_version_number.major == 1) and (self.table_version_number.minor == 0)) 
+            return self._m_is_version10 if hasattr(self, '_m_is_version10') else None
+
+
+    class MaxpVersion10Body(KaitaiStruct):
+        SEQ_FIELDS = ["max_points", "max_contours", "max_composite_points", "max_composite_contours", "max_zones", "max_twilight_points", "max_storage", "max_function_defs", "max_instruction_defs", "max_stack_elements", "max_size_of_instructions", "max_component_elements", "max_component_depth"]
+        def __init__(self, _io, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root if _root else self
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
             self._debug['max_points']['start'] = self._io.pos()
             self.max_points = self._io.read_u2be()
             self._debug['max_points']['end'] = self._io.pos()

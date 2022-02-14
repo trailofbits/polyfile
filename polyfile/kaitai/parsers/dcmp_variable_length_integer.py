@@ -30,7 +30,7 @@ class DcmpVariableLengthInteger(KaitaiStruct):
     but technically any of the larger formats could be used as well.
     
     .. seealso::
-       Source - https://github.com/dgelessus/python-rsrcfork/tree/master/rsrcfork/compress/common.py
+       Source - https://github.com/dgelessus/python-rsrcfork/blob/f891a6e/src/rsrcfork/compress/common.py
     """
     SEQ_FIELDS = ["first", "more"]
     def __init__(self, _io, _parent=None, _root=None):

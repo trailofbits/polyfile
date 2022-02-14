@@ -40,7 +40,7 @@ class Dcmp0(KaitaiStruct):
     with the main difference that it operates mostly on single bytes rather than two-byte units.
     
     .. seealso::
-       Source - https://github.com/dgelessus/python-rsrcfork/tree/master/rsrcfork/compress/dcmp0.py
+       Source - https://github.com/dgelessus/python-rsrcfork/blob/f891a6e/src/rsrcfork/compress/dcmp0.py
     """
     SEQ_FIELDS = ["chunks"]
     def __init__(self, _io, _parent=None, _root=None):
