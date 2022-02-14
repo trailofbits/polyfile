@@ -121,16 +121,17 @@ setup(
     packages=find_packages(exclude=("tests",)),
     python_requires='>=3.7',
     install_requires=[
-        'cint',
-        'graphviz',
-        'intervaltree',
-        'jinja2',
-        'kaitaistruct>=0.7',
-        'networkx',
-        'pdfminer.six',  # currently just for ascii85decode
-        'Pillow>=5.0.0',
-        'pyyaml>=3.13',
-        'setuptools'
+        "cint",
+        "graphviz",
+        "intervaltree",
+        "jinja2",
+        "kaitaistruct>=0.7",
+        "networkx",
+        "pdfminer.six",
+        "Pillow>=5.0.0",
+        "pyreadline3;platform_system=='Windows'",
+        "pyyaml>=3.13",
+        "setuptools"
     ],
     extras_require={
         'demangle': ['cxxfilt'],

@@ -3,11 +3,16 @@ from abc import ABC, abstractmethod
 from enum import Enum
 from functools import partial, wraps
 from io import StringIO
+import os
 from pathlib import Path
-import readline
 import sys
 import traceback
 from typing import Any, Callable, Dict, Iterable, Iterator, List, Optional, Set, Tuple, Type, TypeVar, Union
+
+if os.name == "posix":
+    import readline
+else:
+    import pyreadline3 as readline
 
 from .logger import getStatusLogger
 
