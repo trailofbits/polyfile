@@ -109,7 +109,7 @@ if not MANIFEST_PATH.exists() or newest_definition > MANIFEST_PATH.stat().st_mti
         json.dump(ksy_manifest, f)
 
 
-with open(README_PATH, "r") as readme:
+with open(README_PATH, "r", encoding="utf8") as readme:
     README = readme.read()
 
 setup(
