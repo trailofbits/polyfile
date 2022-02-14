@@ -46,8 +46,10 @@ for definition in KAITAI_FORMAT_LIBRARY.glob("**/*.ksy"):
 if not MANIFEST_PATH.exists() or newest_definition > MANIFEST_PATH.stat().st_mtime:
     # the definitions have been updated, so we need to recompile everything
 
-    if shutil.which("kaitai-struct-compiler") is None:
-        sys.stderr.write("Error: You must have kaitai-struct-compiler installed")
+    if subprocess.call(
+        [sys.executable, str(COMPILE_SCRIPT), "--install"]
+    ) != 0:
+        sys.stderr.write("Error: You must have kaitai-struct-compiler installed\nSee https://kaitai.io/#download\n")
         sys.exit(1)
 
     num_files = sum(1 for _ in KAITAI_FORMAT_LIBRARY.glob("**/*.ksy"))

@@ -27,20 +27,6 @@ jobs:
       uses: actions/setup-python@v1
       with:
         python-version: ${{ matrix.python-version }}
-    - name: Install Kaitai Struct for Windows
-      if: runner.os == 'Windows'
-      run: |
-        (New-Object System.Net.WebClient).DownloadFile("https://github.com/kaitai-io/kaitai_struct_compiler/releases/download/0.9/kaitai-struct-compiler.msi","kaitai-struct-compiler.msi");
-        msiexec /i "kaitai-struct-compiler.msi";
-        echo "C:\Program Files\kaitai-struct-compiler\bin\" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-#        (New-Object System.Net.WebClient).DownloadFile("https://github.com/kaitai-io/kaitai_struct_compiler/releases/download/0.9/kaitai-struct-compiler-0.9.zip","kaitai-struct-compiler-0.9.zip");
-#        Expand-Archive .\kaitai-struct-compiler-0.9.zip .;
-#        echo "$((Get-Item .).FullName)/kaitai-struct-compiler-0.9/bin/" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-    - name: Install Kaitai Struct for Linux
-      if: runner.os == 'Linux'
-      run: |
-        curl -LO https://github.com/kaitai-io/kaitai_struct_compiler/releases/download/0.9/kaitai-struct-compiler_0.9_all.deb
-        sudo apt-get install ./kaitai-struct-compiler_0.9_all.deb
     - name: Install Python Dependencies
       run: |
         python -m pip install --upgrade pip
