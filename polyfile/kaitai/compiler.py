@@ -15,6 +15,7 @@ from pathlib import Path
 import shutil
 import stat
 import subprocess
+import sys
 from typing import Iterable, List, Optional, Union
 from urllib.request import urlopen
 from zipfile import ZipFile
@@ -65,7 +66,7 @@ def install_compiler():
     zipfile.extractall(COMPILER_DIR.parent)
     if COMPILER_BIN.exists():
         COMPILER_BIN.chmod(COMPILER_BIN.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
-        print(f"Installed the Kaitai Struct Compiler to {COMPILER_BIN}")
+        sys.stderr.write(f"Installed the Kaitai Struct Compiler to {COMPILER_BIN}\n")
 
 
 def compiler_path(auto_install: bool = True) -> Optional[Path]:
@@ -87,7 +88,7 @@ def compile(ksy_path: Union[str, Path], output_directory: Union[str, Path], auto
         raise KaitaiError(f"{KAITAI_COMPILER_NAME} not found! Please make sure it is in your PATH. "
                           f"See https://kaitai.io/#download")
 
-    print(f"Using Kaitai Struct Compiler: {compiler!s}")
+    # sys.stderr.write(f"Using Kaitai Struct Compiler: {compiler!s}\n")
 
     if not isinstance(output_directory, Path):
         output_directory = Path(output_directory)
@@ -132,7 +133,6 @@ def compile(ksy_path: Union[str, Path], output_directory: Union[str, Path], auto
 
 if __name__ == "__main__":
     import argparse
-    import sys
 
     if len(sys.argv) == 2 and sys.argv[1] == "--install":
         if compiler_path() is None:
