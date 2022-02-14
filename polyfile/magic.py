@@ -1607,7 +1607,7 @@ class NumericDataType(DataType[NumericValue]):
             raise ValueError(f"PDP endianness can only be used with four byte base types, not {self.base_type}")
 
     def parse_expected(self, specification: str) -> NumericValue:
-        if specification == "x":
+        if specification.strip() == "x":
             return NumericWildcard()
         else:
             return NumericValue.parse(specification, self.base_type.num_bytes)
