@@ -30,9 +30,11 @@ jobs:
     - name: Install Kaitai Struct for Windows
       if: runner.os == 'Windows'
       run: |
-        (New-Object System.Net.WebClient).DownloadFile("https://github.com/kaitai-io/kaitai_struct_compiler/releases/download/0.9/kaitai-struct-compiler-0.9.zip","kaitai-struct-compiler-0.9.zip");
-        Expand-Archive .\kaitai-struct-compiler-0.9.zip .;
-        echo "$((Get-Item .).FullName)/kaitai-struct-compiler-0.9/bin/kaitai-struct-compiler" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+        (New-Object System.Net.WebClient).DownloadFile("https://github.com/kaitai-io/kaitai_struct_compiler/releases/download/0.9/kaitai-struct-compiler.msi","kaitai-struct-compiler.msi");
+        msiexec /i "kaitai-struct-compiler.msi"
+#        (New-Object System.Net.WebClient).DownloadFile("https://github.com/kaitai-io/kaitai_struct_compiler/releases/download/0.9/kaitai-struct-compiler-0.9.zip","kaitai-struct-compiler-0.9.zip");
+#        Expand-Archive .\kaitai-struct-compiler-0.9.zip .;
+#        echo "$((Get-Item .).FullName)/kaitai-struct-compiler-0.9/bin/kaitai-struct-compiler" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
     - name: Install Kaitai Struct for Linux
       if: runner.os == 'Linux'
       run: |
