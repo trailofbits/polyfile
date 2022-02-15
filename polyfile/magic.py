@@ -891,7 +891,7 @@ class GUIDType(DataType[Union[UUID, UUIDWildcard]]):
         # there is a bug in the `asf` definition where a guid is missing its last two characters:
         if specification.strip().upper() == "B61BE100-5B4E-11CF-A8FD-00805F5C44":
             specification = "B61BE100-5B4E-11CF-A8FD-00805F5C442B"
-        return UUID(specification)
+        return UUID(str(specification.strip()))
 
     def match(self, data: bytes, expected: Union[UUID, UUIDWildcard]) -> DataTypeMatch:
         if len(data) < 16:
