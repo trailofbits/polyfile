@@ -1959,15 +1959,22 @@ EXTENSION_PATTERN: Pattern[str] = re.compile(r"^!:ext\s+([^\s]+)\s*(#.*)?$")
 def _split_with_escapes(text: str) -> Tuple[str, str]:
     first_length = 0
     escaped = False
+    delimiter_length = 1
     for c in text:
         if escaped:
             escaped = False
         elif c == "\\":
             escaped = True
-        elif c == " " or c == "\t" or c == "\n":
+        elif c == "\n":
+            if first_length > 0 and text[first_length - 1] == "\r":
+                # strip the \r from trailing \r\n
+                first_length -= 1
+                delimiter_length = 2
+            break
+        elif c == " " or c == "\t":
             break
         first_length += 1
-    return text[:first_length], text[first_length + 1:]
+    return text[:first_length], text[first_length + delimiter_length:]
 
 
 class Match:
@@ -2195,7 +2202,6 @@ class MagicMatcher:
             raise ValueError(f"{def_file!s} line {line_number}: {e!s}")
         data_type = m.group("data_type")
         if data_type == "name":
-            test_str = test_str.rstrip()
             if parent is not None:
                 raise ValueError(f"{def_file!s} line {line_number}: A named test must be at level 0")
             elif test_str in matcher.named_tests:
