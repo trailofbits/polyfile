@@ -2195,6 +2195,7 @@ class MagicMatcher:
             raise ValueError(f"{def_file!s} line {line_number}: {e!s}")
         data_type = m.group("data_type")
         if data_type == "name":
+            test_str = test_str.rstrip()
             if parent is not None:
                 raise ValueError(f"{def_file!s} line {line_number}: A named test must be at level 0")
             elif test_str in matcher.named_tests:
