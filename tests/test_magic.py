@@ -53,7 +53,7 @@ class MagicTest(TestCase):
                                                 "root of this repository.")
 
         # skip the DER definition because we don't yet support it (and none of the tests actually require it)
-        matcher = MagicMatcher.parse(*(d for d in MAGIC_DEFS if d.name != "der"))
+        default_matcher = MagicMatcher.parse(*(d for d in MAGIC_DEFS if d.name != "der"))
 
         tests = sorted([
             f.stem for f in FILE_TEST_DIR.glob("*.testfile")
@@ -66,7 +66,16 @@ class MagicTest(TestCase):
             if not testfile.exists() or not result.exists():
                 continue
 
+            magicfile = FILE_TEST_DIR / f"{test}.magic"
+
             print(f"Testing: {test}")
+
+            if magicfile.exists():
+                print(f"\tParsing custom match script: {magicfile.stem}")
+                matcher = MagicMatcher.parse(magicfile)
+            else:
+                matcher = default_matcher
+
             with open(result, "r") as f:
                 expected = f.read()
                 print(f"\tExpected: {expected!r}")
@@ -77,7 +86,7 @@ class MagicTest(TestCase):
                     actual = str(match)
                     matches.add(actual)
                     print(f"\tActual:   {actual!r}")
-                if testfile.stem not in ("JW07022A.mp3", "gedcom", "regex-eol", "uf2"):
+                if testfile.stem not in ("JW07022A.mp3", "gedcom", "uf2"):
                     # The files we skip fail because:
                     #   1. a mismatch between the database we have and the one used to generate the results in
                     #      the test corpus;
