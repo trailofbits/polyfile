@@ -67,7 +67,7 @@ def ast_to_matches(ast: RootNode, parent: Match) -> Iterator[Submatch]:
         new_node = Submatch(
             name=node.name,
             match_obj=node.raw_value,
-            relative_offset=node.start,
+            relative_offset=node.start - parent.offset,
             length=len(node.segment),
             parent=parent
         )
