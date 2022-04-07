@@ -3,11 +3,16 @@ from abc import ABC, abstractmethod
 from enum import Enum
 from functools import partial, wraps
 from io import StringIO
+import os
 from pathlib import Path
-import readline
 import sys
 import traceback
-from typing import Any, Callable, Dict, Generic, Iterable, Iterator, List, Optional, Set, Tuple, Type, TypeVar, Union
+from typing import Any, Callable, Dict, Iterable, Iterator, List, Optional, Set, Tuple, Type, TypeVar, Union
+
+if os.name == "posix":
+    import readline
+else:
+    import pyreadline3 as readline
 
 from .logger import getStatusLogger
 
@@ -215,9 +220,9 @@ class REPLMeta(type):
         cls._completers[for_command_name] = completer
 
     @property
-    def command_types(mcls) -> Iterator[Tuple[str, Type[Command]]]:
+    def command_types(self) -> Iterator[Tuple[str, Type[Command]]]:
         yielded_names = set()
-        for cls in mcls.mro():
+        for cls in self.mro():
             if isinstance(cls, REPLMeta):
                 for name, cmd in cls._commands.items():
                     if name not in yielded_names:
@@ -225,17 +230,17 @@ class REPLMeta(type):
                         yielded_names.add(name)
 
     @property
-    def completers(mcls) -> Iterator[Tuple[str, Callable[["REPL", str, int, int], List[str]]]]:
+    def completers(self) -> Iterator[Tuple[str, Callable[["REPL", str, int, int], List[str]]]]:
         yielded_names = set()
-        for cls in mcls.mro():
+        for cls in self.mro():
             if isinstance(cls, REPLMeta):
-                for name, completer in cls._completers.items():
+                for name, cmd_completer in cls._completers.items():
                     if name not in yielded_names:
-                        yield name, completer
+                        yield name, cmd_completer
                         yielded_names.add(name)
 
-    def __new__(mcls, name, bases, namespace, **kwargs):
-        cls = super().__new__(mcls, name, bases, namespace, **kwargs)
+    def __new__(mcs, name, bases, namespace, **kwargs):
+        cls = super().__new__(mcs, name, bases, namespace, **kwargs)
         cls._commands = {}
         cls._completers = {}
         for func_name, func in namespace.items():
@@ -273,11 +278,11 @@ class SetCompleter:
 
 class REPL(metaclass=REPLMeta):
     def __init__(self, name: str, prompt: Optional[str] = None,
-                 completer: Optional[Callable[[str, int], Iterable[str]]] = None):
+                 completer: Optional[Callable[[str, int], Optional[str]]] = None):
         self.name: str = name
         self._prev_history_length: int = 0
         if completer is None:
-            self.completer: Callable[[str, int], Iterable[str]] = REPLCompleter(self).complete
+            self.completer: Callable[[str, int], Optional[str]] = REPLCompleter(self).complete
         else:
             self.completer = completer
         self.commands: Dict[str, Command] = {
@@ -299,9 +304,9 @@ class REPL(metaclass=REPLMeta):
             yield from cmd.aliases
 
     def get_completer(self, for_command: Command) -> Callable[[str, int, int], List[str]]:
-        for cmd_name, completer in self.__class__.completers:
+        for cmd_name, cmd_completer in self.__class__.completers:
             if cmd_name == for_command.name:
-                return partial(completer, self)
+                return partial(cmd_completer, self)  # type: ignore
         return for_command.complete
 
     @arg_completer(for_command="help")
@@ -410,7 +415,7 @@ class REPL(metaclass=REPLMeta):
         prev_completer = readline.get_completer()
         readline.set_completer(self.completer)
         try:
-            return input(self.repl_prompt)
+            return input(prompt)
         except EOFError:
             # the user pressed ^D to quit
             return self.handle_eof()
@@ -425,6 +430,7 @@ class REPL(metaclass=REPLMeta):
     def handle_eof(self) -> str:
         # called when the user presses ^D on input()
         exit(0)
+        return ""
 
     def before_prompt(self):
         pass
@@ -507,14 +513,11 @@ class REPLCompleter:
             return []
         if len(tokens) == 1:
             return [x+' ' for x in tree if x.startswith(tokens[0])]
-        else:
-            if tokens[0] in tree.keys():
-                return self.traverse(tokens[1:],tree[tokens[0]])
-            else:
-                return []
+        elif tokens[0] in tree.keys():
+            return self.traverse(tokens[1:],tree[tokens[0]])
         return []
 
-    def complete(self, text: str, state: int):
+    def complete(self, text: str, state: int) -> Optional[str]:
         commandline = readline.get_line_buffer()
         space_index = commandline.find(" ")
         if space_index < 0 or (space_index > 0 and readline.get_endidx() < space_index):
@@ -538,6 +541,7 @@ class REPLCompleter:
         if space_index > 0:
             command_name, args = commandline[:space_index], commandline[space_index + 1:]
         else:
+            command_name = ""
             args = ""
         try:
             command = self.repl.get_command(command_name)
@@ -547,12 +551,13 @@ class REPLCompleter:
         try:
             possibilities = completer(
                 args, readline.get_begidx() - space_index - 1, readline.get_endidx() - space_index - 1
-            ) + [None]
+            ) + [None]  # type: ignore
         except Exception as e:
             traceback.print_tb(e.__traceback__)
             log.warning(f"Command {completer!r}({args!r}, "
                         f"{readline.get_begidx() - space_index - 1}, {readline.get_endidx() - space_index - 1}) "
                         f"raised an exception: {e!r}")
+            return None
 
         if state < len(possibilities):
             if state == 0 and len(possibilities) == 2:

@@ -47,7 +47,7 @@ class WindowsMinidump(KaitaiStruct):
         token = 19
         java_script_data = 20
         system_memory_info = 21
-        process_vm_vounters = 22
+        process_vm_counters = 22
         ipt_trace = 23
         thread_names = 24
         ce_null = 32768

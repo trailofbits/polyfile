@@ -43,7 +43,7 @@ class MicrosoftPe(KaitaiStruct):
             revision_1_0 = 256
             revision_2_0 = 512
 
-        class CertificateType(Enum):
+        class CertificateTypeEnum(Enum):
             x509 = 1
             pkcs_signed_data = 2
             reserved_1 = 3
@@ -63,7 +63,7 @@ class MicrosoftPe(KaitaiStruct):
             self.revision = KaitaiStream.resolve_enum(MicrosoftPe.CertificateEntry.CertificateRevision, self._io.read_u2le())
             self._debug['revision']['end'] = self._io.pos()
             self._debug['certificate_type']['start'] = self._io.pos()
-            self.certificate_type = KaitaiStream.resolve_enum(MicrosoftPe.CertificateEntry.CertificateType, self._io.read_u2le())
+            self.certificate_type = KaitaiStream.resolve_enum(MicrosoftPe.CertificateEntry.CertificateTypeEnum, self._io.read_u2le())
             self._debug['certificate_type']['end'] = self._io.pos()
             self._debug['certificate_bytes']['start'] = self._io.pos()
             self.certificate_bytes = self._io.read_bytes((self.length - 8))

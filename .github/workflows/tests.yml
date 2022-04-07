@@ -12,10 +12,12 @@ on:
 jobs:
   build:
 
-    runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: [3.7, 3.8, 3.9, "3.10"]
+        os: [ubuntu-latest] # windows-latest, macos-latest,
+        python-version: ["3.7", "3.8", "3.9", "3.10"]
+
+    runs-on: ${{ matrix.os }}
 
     steps:
     - uses: actions/checkout@v2
@@ -25,10 +27,8 @@ jobs:
       uses: actions/setup-python@v1
       with:
         python-version: ${{ matrix.python-version }}
-    - name: Install dependencies
+    - name: Install Python Dependencies
       run: |
-        curl -LO https://github.com/kaitai-io/kaitai_struct_compiler/releases/download/0.9/kaitai-struct-compiler_0.9_all.deb
-        sudo apt-get install ./kaitai-struct-compiler_0.9_all.deb
         python -m pip install --upgrade pip
         pip install setuptools
         pip install .[dev]

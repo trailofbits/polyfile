@@ -31,7 +31,7 @@ class Dcmp2(KaitaiStruct):
     to differentiate literals and table references.
     
     .. seealso::
-       Source - https://github.com/dgelessus/python-rsrcfork/tree/master/rsrcfork/compress/dcmp2.py
+       Source - https://github.com/dgelessus/python-rsrcfork/blob/f891a6e/src/rsrcfork/compress/dcmp2.py
     """
     SEQ_FIELDS = ["custom_lookup_table", "data", "last_byte"]
     def __init__(self, len_decompressed, header_parameters_with_io, _io, _parent=None, _root=None):

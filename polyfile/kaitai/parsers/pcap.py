@@ -77,10 +77,11 @@ class Pcap(KaitaiStruct):
         gpf_t = 170
         gpf_f = 171
         linux_lapd = 177
+        mfr = 182
         bluetooth_hci_h4 = 187
         usb_linux = 189
         ppi = 192
-        ieee802_15_4 = 195
+        ieee802_15_4_withfcs = 195
         sita = 196
         erf = 197
         bluetooth_hci_h4_with_phdr = 201
@@ -89,7 +90,10 @@ class Pcap(KaitaiStruct):
         ppp_with_dir = 204
         c_hdlc_with_dir = 205
         frelay_with_dir = 206
+        lapb_with_dir = 207
         ipmb_linux = 209
+        flexray = 210
+        lin = 212
         ieee802_15_4_nonask_phy = 215
         usb_linux_mmapped = 220
         fc_2 = 224
@@ -127,6 +131,30 @@ class Pcap(KaitaiStruct):
         zwave_r3 = 262
         wattstopper_dlm = 263
         iso_14443 = 264
+        rds = 265
+        usb_darwin = 266
+        sdlc = 268
+        loratap = 270
+        vsock = 271
+        nordic_ble = 272
+        docsis31_xra31 = 273
+        ethernet_mpacket = 274
+        displayport_aux = 275
+        linux_sll2 = 276
+        openvizsla = 278
+        ebhscr = 279
+        vpp_dispatch = 280
+        dsa_tag_brcm = 281
+        dsa_tag_brcm_prepend = 282
+        ieee802_15_4_tap = 283
+        dsa_tag_dsa = 284
+        dsa_tag_edsa = 285
+        elee = 286
+        zwave_serial = 287
+        usb_2_0 = 288
+        atsc_alp = 289
+        etw = 290
+        zboss_ncp = 292
     SEQ_FIELDS = ["hdr", "packets"]
     def __init__(self, _io, _parent=None, _root=None):
         self._io = _io
@@ -175,6 +203,8 @@ class Pcap(KaitaiStruct):
             self._debug['version_major']['start'] = self._io.pos()
             self.version_major = self._io.read_u2le()
             self._debug['version_major']['end'] = self._io.pos()
+            if not self.version_major == 2:
+                raise kaitaistruct.ValidationNotEqualError(2, self.version_major, self._io, u"/types/header/seq/1")
             self._debug['version_minor']['start'] = self._io.pos()
             self.version_minor = self._io.read_u2le()
             self._debug['version_minor']['end'] = self._io.pos()

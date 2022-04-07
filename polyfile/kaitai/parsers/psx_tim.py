@@ -11,6 +11,18 @@ if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class PsxTim(KaitaiStruct):
+    """
+    .. seealso::
+       Source - http://fileformats.archiveteam.org/wiki/TIM_(PlayStation_graphics)
+    
+    
+    .. seealso::
+       Source - http://mrclick.zophar.net/TilEd/download/timgfx.txt
+    
+    
+    .. seealso::
+       Source - https://www.romhacking.net/documents/31/
+    """
 
     class BppType(Enum):
         bpp_4 = 0

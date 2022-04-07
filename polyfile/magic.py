@@ -891,7 +891,7 @@ class GUIDType(DataType[Union[UUID, UUIDWildcard]]):
         # there is a bug in the `asf` definition where a guid is missing its last two characters:
         if specification.strip().upper() == "B61BE100-5B4E-11CF-A8FD-00805F5C44":
             specification = "B61BE100-5B4E-11CF-A8FD-00805F5C442B"
-        return UUID(specification)
+        return UUID(str(specification.strip()))
 
     def match(self, data: bytes, expected: Union[UUID, UUIDWildcard]) -> DataTypeMatch:
         if len(data) < 16:
@@ -1607,7 +1607,7 @@ class NumericDataType(DataType[NumericValue]):
             raise ValueError(f"PDP endianness can only be used with four byte base types, not {self.base_type}")
 
     def parse_expected(self, specification: str) -> NumericValue:
-        if specification == "x":
+        if specification.strip() == "x":
             return NumericWildcard()
         else:
             return NumericValue.parse(specification, self.base_type.num_bytes)
@@ -1959,15 +1959,22 @@ EXTENSION_PATTERN: Pattern[str] = re.compile(r"^!:ext\s+([^\s]+)\s*(#.*)?$")
 def _split_with_escapes(text: str) -> Tuple[str, str]:
     first_length = 0
     escaped = False
+    delimiter_length = 1
     for c in text:
         if escaped:
             escaped = False
         elif c == "\\":
             escaped = True
-        elif c == " " or c == "\t" or c == "\n":
+        elif c == "\n":
+            if first_length > 0 and text[first_length - 1] == "\r":
+                # strip the \r from trailing \r\n
+                first_length -= 1
+                delimiter_length = 2
+            break
+        elif c == " " or c == "\t":
             break
         first_length += 1
-    return text[:first_length], text[first_length + 1:]
+    return text[:first_length], text[first_length + delimiter_length:]
 
 
 class Match:

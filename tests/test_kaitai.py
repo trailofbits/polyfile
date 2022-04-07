@@ -26,7 +26,11 @@ class TestKaitai(TestCase):
         finally:
             path = Path(f.name)
             if path.exists():
-                path.unlink()
+                try:
+                    path.unlink()
+                except PermissionError:
+                    # This can sometimes happen on Windows due to a race condition
+                    pass
 
     def test_segments(self):
         s = Segment(0, 10)

@@ -393,6 +393,7 @@ class Rpm(KaitaiStruct):
         mips_r6 = 20
         mips64_r6 = 21
         riscv = 22
+        loongarch64 = 23
         no_arch = 255
     SEQ_FIELDS = ["lead", "signature", "signature_padding", "_unnamed3", "header", "_unnamed5", "signature_tags_steps"]
     def __init__(self, _io, _parent=None, _root=None):
