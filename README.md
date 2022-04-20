@@ -28,6 +28,9 @@ To install PolyFile from source, in the same directory as this README, run:
 pip3 install -e .
 ```
 
+Important: Before installing from source, make sure Java is installed. Java is used to
+run the Kaitai Struct compiler, which compiles the file format definitions.
+
 This will automatically install the `polyfile` and `polymerge` executables in your path.
 
 ## Usage
