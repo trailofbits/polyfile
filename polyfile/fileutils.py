@@ -5,7 +5,7 @@ from pathlib import Path
 import tempfile as tf
 import shutil
 import sys
-from typing import AnyStr, IO, Iterator, Iterable, List, Optional, Union
+from typing import AnyStr, IO, Iterator, Iterable, List, Optional, TextIO, Union
 
 
 def make_stream(path_or_stream, mode='rb', close_on_exit=None):
@@ -41,7 +41,7 @@ class ExactNamedTempfile(Tempfile):
         super().__init__(contents)
         self._name: str = name
 
-    def __enter__(self):
+    def __enter__(self) -> str:
         tmpdir = Path(tf.mkdtemp())
         file_path = tmpdir / self._name
         with open(file_path, "wb") as f:
@@ -56,22 +56,42 @@ class ExactNamedTempfile(Tempfile):
 
 
 class PathOrStdin:
-    def __init__(self, path):
-        self._path = path
-        if self._path == '-':
-            self._tempfile = Tempfile(sys.stdin.buffer.read())
+    def __init__(self, path: str):
+        self.path: str = path
+        if self.path == '-':
+            self._tempfile: Optional[ExactNamedTempfile] = ExactNamedTempfile(sys.stdin.buffer.read(), "STDIN")
         else:
             self._tempfile = None
 
-    def __enter__(self):
+    def __enter__(self) -> str:
         if self._tempfile is None:
-            return self._path
+            return self.path
         else:
             return self._tempfile.__enter__()
 
     def __exit__(self, *args, **kwargs):
         if self._tempfile is not None:
             return self._tempfile.__exit__(*args, **kwargs)
+
+
+class PathOrStdout:
+    def __init__(self, path: str):
+        self.path: str = path
+        if self.path == '-':
+            self._tempfile: Optional[TextIO] = sys.stdout
+        else:
+            self._tempfile = None
+
+    def __enter__(self) -> TextIO:
+        if self._tempfile is None:
+            self._tempfile = open(self.path, "w")
+        return self._tempfile
+
+    def __exit__(self, *args, **kwargs):
+        if self._tempfile is not None:
+            if self._tempfile is not sys.stdout:
+                self._tempfile.close()
+                self._tempfile = None
 
 
 class FileStream(IO):
