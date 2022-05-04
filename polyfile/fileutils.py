@@ -5,7 +5,7 @@ from pathlib import Path
 import tempfile as tf
 import shutil
 import sys
-from typing import AnyStr, IO, Iterator, Iterable, List, Optional, TextIO, Union
+from typing import AnyStr, ContextManager, IO, Iterator, Iterable, List, Optional, TextIO, Union
 
 
 def make_stream(path_or_stream, mode='rb', close_on_exit=None):
@@ -74,7 +74,7 @@ class PathOrStdin:
             return self._tempfile.__exit__(*args, **kwargs)
 
 
-class PathOrStdout:
+class PathOrStdout(ContextManager[TextIO]):
     def __init__(self, path: str):
         self.path: str = path
         if self.path == '-':
@@ -87,11 +87,12 @@ class PathOrStdout:
             self._tempfile = open(self.path, "w")
         return self._tempfile
 
-    def __exit__(self, *args, **kwargs):
+    def __exit__(self, *args, **kwargs) -> None:  # type: ignore
         if self._tempfile is not None:
             if self._tempfile is not sys.stdout:
                 self._tempfile.close()
                 self._tempfile = None
+        return None
 
 
 class FileStream(IO):
