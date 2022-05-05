@@ -230,7 +230,8 @@ equivalent to `--format mime`"""))
             args.format.append(FormatOutput(output_format="html"))
             ValidateOutput.add_output(args, html_path)
 
-    # TODO: Re-add support for the --only-match-mime option
+    if args.only_match_mime:
+        args.format.append(FormatOutput(output_format="mime"))
 
     if not args.format:
         args.format.append(FormatOutput())
