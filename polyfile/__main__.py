@@ -90,20 +90,20 @@ class FormatOutput:
 class ValidateOutput(argparse.Action):
     @staticmethod
     def add_output(args: argparse.Namespace, path: str):
-        if not hasattr(args, "format") or args.output_format is None:
+        if not hasattr(args, "format") or args.format is None:
             setattr(args, "format", [])
-        if len(args.output_format) == 0:
-            args.output_format.append(FormatOutput(output_path=path))
+        if len(args.format) == 0:
+            args.format.append(FormatOutput(output_path=path))
             return
-        existing_format: FormatOutput = args.output_format[-1]
+        existing_format: FormatOutput = args.format[-1]
         if path != "-":
             # make sure this path isn't already used
-            for output_format in args.output_format[:-1]:
+            for output_format in args.format[:-1]:
                 if output_format.output_path == path:
-                    raise ValueError(f"output path {path!r} cannot be used for both --format {output_format.output_format} and "
-                                     f"--format {existing_format.output_format}")
+                    raise ValueError(f"output path {path!r} cannot be used for both --format "
+                                     f"{output_format.output_format} and --format {existing_format.output_format}")
         if existing_format.output_path is not None and existing_format.output_path != path:
-            args.output_format.append(FormatOutput(output_format=existing_format.output_format, output_path=path))
+            args.format.append(FormatOutput(output_format=existing_format.output_format, output_path=path))
         else:
             existing_format.output_path = path
 
