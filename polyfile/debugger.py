@@ -1,8 +1,10 @@
 from abc import ABC, abstractmethod
+import atexit
 from enum import Enum
 from pathlib import Path
 from pdb import Pdb
 import sys
+import time
 from typing import Any, Callable, Dict, Generic, Iterable, Iterator, List, Optional, Type, TypeVar, Union
 
 from .polyfile import __copyright__, __license__, __version__, PARSERS, Match, Parser, ParserFunction, Submatch
@@ -383,6 +385,20 @@ class BreakOnSubmatching(BooleanVariable):
             self.debugger._instrument()
 
 
+class Profile(BooleanVariable):
+    def __init__(self, value: bool, debugger: "Debugger"):
+        self.debugger: Debugger = debugger
+        self._registered_callback = False
+        super().__init__(value)
+
+    @Variable.value.setter
+    def value(self, new_value):
+        Variable.value.fset(self, new_value)
+        if new_value and not self._registered_callback:
+            self._registered_callback = True
+            atexit.register(Debugger.profile_command, self.debugger, "")
+
+
 class Debugger(REPL):
     def __init__(self, break_on_parsing: bool = True):
         super().__init__(name="the debugger")
@@ -399,13 +415,17 @@ class Debugger(REPL):
         self.repl_test: Optional[MagicTest] = None
         self.instrumented_parsers: List[InstrumentedParser] = []
         self.break_on_submatching: BreakOnSubmatching = BreakOnSubmatching(break_on_parsing, self)
+        self.profile: Profile = Profile(False, self)
         self.variables_by_name: Dict[str, Variable] = {
-            "break_on_parsing": self.break_on_submatching
+            "break_on_parsing": self.break_on_submatching,
+            "profile": self.profile
         }
         self.variable_descriptions: Dict[str, str] = {
             "break_on_parsing": "Break when a PolyFile parser is about to be invoked and debug using PDB (default=True;"
-                                " disable from the command line with `--no-debug-python`)"
+                                " disable from the command line with `--no-debug-python`)",
+            "profile": "Profile the performance of each magic test that is run (default=False)"
         }
+        self.profile_results: Dict[MagicTest, float] = {}
         self._pdb: Optional[Pdb] = None
 
     def save_context(self):
@@ -506,6 +526,8 @@ class Debugger(REPL):
             indent = ""
             self.write(f"{'>' * test.level}{test.offset!s}\t")
             self.write(test.message, color=ANSIColor.BLUE, bold=True)
+        if self.profile.value and test in self.profile_results:
+            self.write(f"\t⏱  {self.profile_results[test]}ms")
         if test.mime is not None:
             self.write(f"\n  {indent}!:mime ", dim=True)
             self.write(test.mime, color=ANSIColor.BLUE)
@@ -541,10 +563,17 @@ class Debugger(REPL):
             absolute_offset: int,
             parent_match: Optional[TestResult]
     ) -> Optional[TestResult]:
+        start_time_ms = 0.0
+        if self.profile.value:
+            start_time_ms = time.process_time_ns() / 1000000.0
         if instrumented_test.original_test is None:
             result = instrumented_test.test.test(test, data, absolute_offset, parent_match)
         else:
             result = instrumented_test.original_test(test, data, absolute_offset, parent_match)
+        if self.profile.value:
+            end_time_ms = time.process_time_ns() / 1000000.0
+            exec_time_ms = int(end_time_ms - start_time_ms + 0.5)
+            self.profile_results[test] = exec_time_ms
         if self.repl_test is test:
             # this is a one-off test run from the REPL, so do not save its results
             return result
@@ -730,6 +759,28 @@ class Debugger(REPL):
              aliases=("info stack", "backtrace"))
     def where(self, arguments: str):
         self.print_where()
+
+    @command(allows_abbreviation=False, name="profile", help="print current profiling results", )
+    def profile_command(self, arguments: str):
+        if not self.profile_results:
+            if not self.profile.value:
+                self.write("Profiling is disabled.\n", color=ANSIColor.RED)
+                self.write("Enable it by running `set profile True`.\n")
+            else:
+                self.write("No profiling data yet.\n")
+            return
+        self.write("Profile Results:\n", bold=True)
+        tests = sorted([(runtime, test) for test, runtime in self.profile_results.items()], reverse=True,
+                       key=lambda x: x[0])
+        for runtime, test in tests:
+            if test.source_info is not None and test.source_info.original_line is not None:
+                self.write(test.source_info.path.name, dim=True, color=ANSIColor.CYAN)
+                self.write(":", dim=True)
+                self.write(test.source_info.line, dim=True, color=ANSIColor.CYAN)
+                self.write("\t")
+            else:
+                self.write(f"{'>' * test.level}{test.offset!s}\t", color=ANSIColor.BLUE)
+            self.write(f"⏱  {runtime}ms\n")
 
     @command(allows_abbreviation=True, help="test the following libmagic DSL test at the current position")
     def test(self, args: str):
