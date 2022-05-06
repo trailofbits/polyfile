@@ -1,3 +1,4 @@
+from functools import wraps
 import time
 from typing import Optional
 from . import logger
@@ -104,3 +105,11 @@ class Unprofiled:
             self.profiler.unpause()
             if not self._had_profiler:
                 self.profiler = None
+
+
+def unprofiled(func):
+    @wraps(func)
+    def wrapped(*args, **kwargs):
+        with Unprofiled():
+            return func(*args, **kwargs)
+    return wrapped

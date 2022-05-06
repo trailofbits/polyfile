@@ -10,7 +10,7 @@ from .polyfile import __copyright__, __license__, __version__, PARSERS, Match, P
 from .magic import (
     AbsoluteOffset, FailedTest, InvalidOffsetError, MagicMatcher, MagicTest, Offset, TestResult, TEST_TYPES
 )
-from .profiling import Profiler, Unprofiled
+from .profiling import Profiler, Unprofiled, unprofiled
 from .repl import ANSIColor, ANSIWriter, arg_completer, command, ExitREPL, log, REPL, SetCompleter
 from .wildcards import Wildcard
 
@@ -583,6 +583,7 @@ class Debugger(REPL):
             self.repl()
         return self.last_result
 
+    @unprofiled
     def print_where(
             self,
             test: Optional[MagicTest] = None,
