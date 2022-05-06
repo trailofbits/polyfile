@@ -86,6 +86,8 @@ class FormatOutput:
     def __str__(self):
         return self.output_format
 
+    __repr__ = __str__
+
 
 class ValidateOutput(argparse.Action):
     @staticmethod
