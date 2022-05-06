@@ -795,6 +795,7 @@ class Debugger(REPL):
                 max_text_width = max(max_text_width, len(str(test)))
         for runtime, test in tests:
             if isinstance(test, MagicTest):
+                self.write("🪄 ")
                 if test.source_info is not None and test.source_info.original_line is not None:
                     self.write(test.source_info.path.name, dim=True, color=ANSIColor.CYAN)
                     self.write(":", dim=True)
@@ -804,6 +805,7 @@ class Debugger(REPL):
                     self.write(f"{'>' * test.level}{test.offset!s}", color=ANSIColor.BLUE)
                     padding = max_text_width - test.level - len(str(test.offset))
             else:
+                self.write("🖥 ")
                 self.write(str(test), color=ANSIColor.BLUE)
                 padding = max_text_width - len(str(test))
             self.write(" " * padding)
