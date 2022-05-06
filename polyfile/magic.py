@@ -25,6 +25,8 @@ from typing import (
 )
 from uuid import UUID
 
+import regex
+
 from .arithmetic import CStyleInt, make_c_style_int
 from .iterators import LazyIterableSet
 from .logger import getStatusLogger, TRACE
@@ -1189,6 +1191,14 @@ class SearchType(StringType):
                 assert m
                 m.initial_offset = first_match
                 return m
+            else:
+                return DataTypeMatch.INVALID
+        elif not self.case_insensitive_upper and not self.case_insensitive_lower and isinstance(expected, StringMatch):
+            # use a regex for more efficiency
+            pattern = re.compile(re.escape(expected.string).replace(b"\\ ", b"\\ ?"))
+            m = pattern.search(data)
+            if m:
+                return DataTypeMatch(m.group(0), initial_offset=m.start())
             else:
                 return DataTypeMatch.INVALID
         for i in range(rep):
