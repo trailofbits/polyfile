@@ -91,10 +91,7 @@ class BFMatcher(MagicTest):
     the detection of simpler BrainFu programs.
     """
 
-    reject_infinite_loops: bool = False
-    """If True, then reject any BF program that contains an infinite loop"""
-
-    reject_arithmetical_noops: bool = True
+    reject_arithmetical_noops: bool = False
     """If True, then reject any BF program that contains arithmetic that cancels itself
 
     For example: `-+` or `+-`
@@ -130,27 +127,16 @@ class BFMatcher(MagicTest):
         elif self.min_bf_commands > len(program.commands):
             return FailedTest(self, offset=first_command, message=f"expected at least {self.min_bf_commands} BrainFu "
                                                                   f"commands but only found {len(program.commands)}")
+        elif self.reject_arithmetical_noops:
+            for c1, c2 in zip(program.commands, program.commands[1:]):
+                if c2.offset == c1.offset + 1 and \
+                        {c1.command_type, c2.command_type} == {BFCommandType.INCREMENT, BFCommandType.DECREMENT}:
+                    return FailedTest(self, offset=c1.offset, message="BrainFu program contains arithmetic that "
+                                                                      "cancels itself out")
         else:
             assert 0 <= first_command <= last_command
             return MatchedTest(self, value=bytes(program), offset=first_command,
                                length=last_command - first_command)
-
-            # if self.reject_arithmetical_noops and len(commands) > 1:
-            #     if (c == ord('+') and commands[-2] == ord('-')) or \
-            #             (c == ord('-') and commands[-2] == ord('+')):
-            #         return FailedTest(self, offset=offset, message="BrainFu program contains arithmetic that cancels "
-            #                                                        "itself out")
-
-                # TODO: Complete inifnite loop detection
-                # elif len(commands) >= 2 and commands[-2] == ord('['):
-                #     # there is an infinite loop
-                #     if self.reject_infinite_loops:
-                #         return FailedTest(self, offset=offset, message="BrainFu program contains an infinite loop, "
-                #                                                        "which is not permitted")
-                #     else:
-                #         # no sense in analyzing any code after an infinite loop
-                #         # break
-                #         pass
 
 
 MagicMatcher.DEFAULT_INSTANCE.add(BFMatcher())
