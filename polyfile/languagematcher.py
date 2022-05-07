@@ -7,7 +7,31 @@ from .magic import AbsoluteOffset, FailedTest, MagicMatcher, MagicTest, MatchedT
 
 log = StatusLogger("polyfile")
 
+
 class BFMatcher(MagicTest):
+    min_bf_commands: int = 24
+    """The minimum number of BF commands that must appear for the file to be classified as a BF program
+
+    This is an arbitrary value; the default is high enough to eliminate most false-positives, at the expense of missing
+    the detection of shorter BrainFu programs.
+    """
+
+    min_bf_loops: int = 2
+    """The minimum number of BF loops that must appear for the file to be classified as a BF program
+
+    This is an arbitrary value that we have set high enough to eliminate most false-positives, at the expense of missing
+    the detection of simpler BrainFu programs.
+    """
+
+    reject_infinite_loops: bool = False
+    """If True, then reject any BF program that contains an infinite loop"""
+
+    reject_arithmetical_noops: bool = True
+    """If True, then reject any BF program that contains arithmetic that cancels itself
+
+    For example: `-+` or `+-`
+    """
+
     def __init__(self):
         super().__init__(
             offset=AbsoluteOffset(0),
@@ -20,30 +44,55 @@ class BFMatcher(MagicTest):
         # It is a valid brain-fu program if all of the [ and ] are balanced
         opened = 0
         offset = 0
-        commands = set()
+        commands = bytearray()
+        num_loops = 0
         important_commands = frozenset((ord('['), ord(']'), ord('.'), ord('+'), ord('-'), ord('>'), ord('<')))
         first_command = -1
         last_command = -1
+        has_infinite_loop = False
         for offset, c in enumerate(data):
             if c in important_commands:
-                commands.add(c)
+                commands.append(c)
                 if first_command < 0:
                     first_command = offset
                 last_command = offset
+            # if self.reject_arithmetical_noops and len(commands) > 1:
+            #     if (c == ord('+') and commands[-2] == ord('-')) or \
+            #             (c == ord('-') and commands[-2] == ord('+')):
+            #         return FailedTest(self, offset=offset, message="BrainFu program contains arithmetic that cancels "
+            #                                                        "itself out")
             if c == ord('['):
                 opened += 1
+                num_loops += 1
             elif c == ord(']'):
                 opened -= 1
                 if opened < 0:
                     break
+                # TODO: Complete inifnite loop detection
+                # elif len(commands) >= 2 and commands[-2] == ord('['):
+                #     # there is an infinite loop
+                #     if self.reject_infinite_loops:
+                #         return FailedTest(self, offset=offset, message="BrainFu program contains an infinite loop, "
+                #                                                        "which is not permitted")
+                #     else:
+                #         # no sense in analyzing any code after an infinite loop
+                #         # break
+                #         pass
         if opened != 0:
             return FailedTest(self, offset=offset, message="unbalanced square brackets")
-        elif len(commands) != len(important_commands):
-            return FailedTest(self, offset=offset, message="missing commands "
-                                                           f"{', '.join(map(chr, important_commands - commands))}")
+        unique_commands = frozenset(commands)
+        if len(unique_commands) != len(important_commands):
+            return FailedTest(self, offset=offset,
+                              message=f"missing commands {', '.join(map(chr, important_commands - unique_commands))}")
+        elif self.min_bf_loops > num_loops:
+            return FailedTest(self, offset=offset, message=f"expected at least {self.min_bf_loops} BrainFu loops but "
+                                                           f"only found {num_loops}")
+        elif self.min_bf_commands > len(commands):
+            return FailedTest(self, offset=offset, message=f"expected at least {self.min_bf_commands} BrainFu "
+                                                           f"commands but only found {len(commands)}")
         else:
             assert 0 <= first_command <= last_command
-            return MatchedTest(self, value=data, offset=first_command, length=last_command - first_command)
+            return MatchedTest(self, value=bytes(commands), offset=first_command, length=last_command - first_command)
 
 
 MagicMatcher.DEFAULT_INSTANCE.add(BFMatcher())
