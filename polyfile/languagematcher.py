@@ -54,6 +54,23 @@ class BFProgram:
             [ord(c.command_type.value) for c in self.commands]
         ))
 
+    def __str__(self):
+        ret = []
+        indent = 0
+        for c in self.commands:
+            command_type = c.command_type
+            if command_type == BFCommandType.LOOP_START:
+                indent_str = "    " * indent
+                ret.append(f"\n{indent_str}[\n{indent_str}{indent_str}")
+                indent += 1
+            elif command_type == BFCommandType.LOOP_END:
+                indent -= 1
+                indent_str = "    " * indent
+                ret.append(f"\n{indent_str}]\n{indent_str}")
+            else:
+                ret.append(command_type.value)
+        return "".join(ret)
+
     @classmethod
     def parse(cls, data: bytes) -> "BFProgram":
         opened = 0
@@ -68,9 +85,9 @@ class BFProgram:
             if command.command_type == BFCommandType.LOOP_START:
                 opened += 1
             elif command.command_type == BFCommandType.LOOP_END:
-                if opened == 0:
-                    break
                 opened -= 1
+                if opened < 0:
+                    break
         if opened != 0:
             raise BFParseError("unbalanced square brackets", offset=offset)
         return BFProgram(tuple(commands))
