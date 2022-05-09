@@ -25,8 +25,6 @@ from typing import (
 )
 from uuid import UUID
 
-import regex
-
 from .arithmetic import CStyleInt, make_c_style_int
 from .iterators import LazyIterableSet
 from .logger import getStatusLogger, TRACE
