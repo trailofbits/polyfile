@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Optional, Sequence
+from typing import List, Optional, Sequence
 
 from .logger import StatusLogger
 from .polyfile import Match, Submatch, register_parser
