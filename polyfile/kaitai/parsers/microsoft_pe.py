@@ -93,12 +93,12 @@ class MicrosoftPe(KaitaiStruct):
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
-            if self._parent.std.format == MicrosoftPe.PeFormat.pe32:
+            if self._parent.std.output_format == MicrosoftPe.PeFormat.pe32:
                 self._debug['image_base_32']['start'] = self._io.pos()
                 self.image_base_32 = self._io.read_u4le()
                 self._debug['image_base_32']['end'] = self._io.pos()
 
-            if self._parent.std.format == MicrosoftPe.PeFormat.pe32_plus:
+            if self._parent.std.output_format == MicrosoftPe.PeFormat.pe32_plus:
                 self._debug['image_base_64']['start'] = self._io.pos()
                 self.image_base_64 = self._io.read_u8le()
                 self._debug['image_base_64']['end'] = self._io.pos()
@@ -145,42 +145,42 @@ class MicrosoftPe(KaitaiStruct):
             self._debug['dll_characteristics']['start'] = self._io.pos()
             self.dll_characteristics = self._io.read_u2le()
             self._debug['dll_characteristics']['end'] = self._io.pos()
-            if self._parent.std.format == MicrosoftPe.PeFormat.pe32:
+            if self._parent.std.output_format == MicrosoftPe.PeFormat.pe32:
                 self._debug['size_of_stack_reserve_32']['start'] = self._io.pos()
                 self.size_of_stack_reserve_32 = self._io.read_u4le()
                 self._debug['size_of_stack_reserve_32']['end'] = self._io.pos()
 
-            if self._parent.std.format == MicrosoftPe.PeFormat.pe32_plus:
+            if self._parent.std.output_format == MicrosoftPe.PeFormat.pe32_plus:
                 self._debug['size_of_stack_reserve_64']['start'] = self._io.pos()
                 self.size_of_stack_reserve_64 = self._io.read_u8le()
                 self._debug['size_of_stack_reserve_64']['end'] = self._io.pos()
 
-            if self._parent.std.format == MicrosoftPe.PeFormat.pe32:
+            if self._parent.std.output_format == MicrosoftPe.PeFormat.pe32:
                 self._debug['size_of_stack_commit_32']['start'] = self._io.pos()
                 self.size_of_stack_commit_32 = self._io.read_u4le()
                 self._debug['size_of_stack_commit_32']['end'] = self._io.pos()
 
-            if self._parent.std.format == MicrosoftPe.PeFormat.pe32_plus:
+            if self._parent.std.output_format == MicrosoftPe.PeFormat.pe32_plus:
                 self._debug['size_of_stack_commit_64']['start'] = self._io.pos()
                 self.size_of_stack_commit_64 = self._io.read_u8le()
                 self._debug['size_of_stack_commit_64']['end'] = self._io.pos()
 
-            if self._parent.std.format == MicrosoftPe.PeFormat.pe32:
+            if self._parent.std.output_format == MicrosoftPe.PeFormat.pe32:
                 self._debug['size_of_heap_reserve_32']['start'] = self._io.pos()
                 self.size_of_heap_reserve_32 = self._io.read_u4le()
                 self._debug['size_of_heap_reserve_32']['end'] = self._io.pos()
 
-            if self._parent.std.format == MicrosoftPe.PeFormat.pe32_plus:
+            if self._parent.std.output_format == MicrosoftPe.PeFormat.pe32_plus:
                 self._debug['size_of_heap_reserve_64']['start'] = self._io.pos()
                 self.size_of_heap_reserve_64 = self._io.read_u8le()
                 self._debug['size_of_heap_reserve_64']['end'] = self._io.pos()
 
-            if self._parent.std.format == MicrosoftPe.PeFormat.pe32:
+            if self._parent.std.output_format == MicrosoftPe.PeFormat.pe32:
                 self._debug['size_of_heap_commit_32']['start'] = self._io.pos()
                 self.size_of_heap_commit_32 = self._io.read_u4le()
                 self._debug['size_of_heap_commit_32']['end'] = self._io.pos()
 
-            if self._parent.std.format == MicrosoftPe.PeFormat.pe32_plus:
+            if self._parent.std.output_format == MicrosoftPe.PeFormat.pe32_plus:
                 self._debug['size_of_heap_commit_64']['start'] = self._io.pos()
                 self.size_of_heap_commit_64 = self._io.read_u8le()
                 self._debug['size_of_heap_commit_64']['end'] = self._io.pos()

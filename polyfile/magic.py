@@ -938,20 +938,24 @@ class StringTest(ABC):
         self.trim: bool = trim
         self.compact_whitespace: bool = compact_whitespace
 
-    def post_process(self, data: bytes) -> DataTypeMatch:
+    def post_process(self, data: bytes, initial_offset: int = 0) -> DataTypeMatch:
         value = data
-        if self.compact_whitespace:
-            value = b"".join(c for prev, c in zip(b"\0" + data, data) if c not in WHITESPACE or prev not in WHITESPACE)
+        # if self.compact_whitespace:
+        #     value = b"".join(c for prev, c in zip(b"\0" + data, data) if c not in WHITESPACE or prev not in WHITESPACE)
         if self.trim:
             value = value.strip()
         try:
             value = value.decode("utf-8")
         except UnicodeDecodeError:
             pass
-        return DataTypeMatch(data, value)
+        return DataTypeMatch(data, value, initial_offset=initial_offset)
 
     @abstractmethod
     def matches(self, data: bytes) -> DataTypeMatch:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def search(self, data: bytes) -> DataTypeMatch:
         raise NotImplementedError()
 
     @staticmethod
@@ -1000,6 +1004,9 @@ class StringWildcard(StringTest):
         else:
             return self.post_process(data)
 
+    def search(self, data: bytes) -> DataTypeMatch:
+        return self.matches(data)
+
     def __str__(self):
         return "null-terminated string"
 
@@ -1016,6 +1023,13 @@ class NegatedStringTest(StringWildcard):
         else:
             return DataTypeMatch.INVALID
 
+    def search(self, data: bytes) -> DataTypeMatch:
+        result = self.parent.search(data)
+        if result == DataTypeMatch.INVALID:
+            return super().search(data)
+        else:
+            return DataTypeMatch.INVALID
+
     def __str__(self):
         return f"something other than {self.parent!s}"
 
@@ -1028,6 +1042,15 @@ class StringLengthTest(StringWildcard):
 
     def matches(self, data: bytes) -> DataTypeMatch:
         match = super().matches(data)
+        if self.test_smaller and match.raw_match < self.to_match:
+            return match
+        elif not self.test_smaller and match.raw_match > self.to_match:
+            return match
+        else:
+            return DataTypeMatch.INVALID
+
+    def search(self, data: bytes) -> DataTypeMatch:
+        match = super().search(data)
         if self.test_smaller and match.raw_match < self.to_match:
             return match
         elif not self.test_smaller and match.raw_match > self.to_match:
@@ -1053,40 +1076,44 @@ class StringMatch(StringTest):
         self.case_insensitive_lower: bool = case_insensitive_lower
         self.case_insensitive_upper: bool = case_insensitive_upper
         self.optional_blanks: bool = optional_blanks
+        self._pattern: Optional[re.Pattern] = None
+        _ = self.pattern
+
+    def pattern_string(self) -> bytes:
+        pattern = re.escape(self.string)
+        if self.optional_blanks:
+            pattern = pattern.replace(b"\\ ", b"\\ ?")
+        return pattern
+
+    def pattern_flags(self) -> int:
+        flags: int = 0
+        if self.case_insensitive_upper and self.case_insensitive_lower:
+            flags |= re.IGNORECASE
+        elif self.case_insensitive_lower:
+            raise NotImplementedError("TODO: Implement support for the `c` flag by itself")
+        elif self.case_insensitive_upper:
+            raise NotImplementedError("TODO: Implement support for the `C` flag by itself")
+        if self.compact_whitespace:
+            raise NotImplementedError("TODO: Implement support for the `W` flag")
+        return flags
+
+    @property
+    def pattern(self) -> re.Pattern:
+        if self._pattern is None:
+            self._pattern = re.compile(self.pattern_string(), flags=self.pattern_flags())
+        return self._pattern
 
     def matches(self, data: bytes) -> DataTypeMatch:
-        expected = self.string
-        matched = bytearray()
-        had_whitespace = False
-        last_char: Optional[int] = None
-        for b in data:
-            if not expected:
-                break
-            matched.append(b)
-            is_whitespace = bytes([b]) in WHITESPACE
-            if self.trim and last_char is None and is_whitespace:
-                # skip leading whitespace
-                continue
-            elif self.compact_whitespace and is_whitespace:
-                if last_char is not None and bytes([last_char]) in WHITESPACE:  # type: ignore
-                    # compact consecutive whitespace
-                    continue
-                else:
-                    had_whitespace = True
-            if not (
-                    b == expected[0] or
-                    (self.case_insensitive_lower and b == expected[0:1].lower()[0]) or
-                    (self.case_insensitive_upper and b == expected[0:1].upper()[0])
-            ):
-                if not (self.optional_blanks and expected[0:1] in WHITESPACE):
-                    return DataTypeMatch.INVALID
-            expected = expected[1:]
-        if expected:
-            # we did not fully match the expected sequence (e.g., there were not enough bytes in the data)
-            return DataTypeMatch.INVALID
-        elif self.compact_whitespace and not had_whitespace:
-            return DataTypeMatch.INVALID
-        return self.post_process(bytes(matched))
+        m = self.pattern.match(data)
+        if m:
+            return self.post_process(bytes(m.group(0)))
+        return DataTypeMatch.INVALID
+
+    def search(self, data: bytes) -> DataTypeMatch:
+        m = self.pattern.search(data)
+        if m:
+            return self.post_process(bytes(m.group(0)), initial_offset=m.start())
+        return DataTypeMatch.INVALID
 
     def __str__(self):
         return repr(self.string)
@@ -1131,11 +1158,14 @@ class StringType(DataType[StringTest]):
             options: Iterable[str] = ()
         else:
             options = m.group(1)
+        unsupported_options = {opt for opt in options if opt not in "/WwcCtbT"}
+        if unsupported_options:
+            log.warning(f"{format_str!r} has invalid option(s) that will be ignored: {', '.join(unsupported_options)}")
         return StringType(
             case_insensitive_lower="c" in options,
             case_insensitive_upper="C" in options,
-            compact_whitespace="B" in options or "W" in options,
-            optional_blanks="b" in options or "w" in options,
+            compact_whitespace="W" in options,
+            optional_blanks="w" in options,
             trim="T" in options
         )
 
@@ -1175,31 +1205,7 @@ class SearchType(StringType):
                 self.name = f"{self.name}s"
 
     def match(self, data: bytes, expected: StringTest) -> DataTypeMatch:
-        if self.repetitions is None:
-            rep = len(data)
-        else:
-            rep = self.repetitions
-        if not self.optional_blanks and not self.case_insensitive_upper and not self.case_insensitive_lower and \
-                isinstance(expected, StringMatch):
-            # we can use built-in search for more efficiency
-            # TODO: Add support for this optimization when the case insensitivity options are enabled
-            first_match = data.find(expected.string)
-            if 0 <= first_match <= rep:
-                m = expected.matches(data[first_match:])
-                assert m
-                m.initial_offset = first_match
-                return m
-            else:
-                return DataTypeMatch.INVALID
-        for i in range(rep):
-            match = super().match(data[i:], expected)
-            if match:
-                match.initial_offset = i
-                return match
-            elif isinstance(expected, (StringWildcard, StringLengthTest)):
-                # TODO: Confirm that this short circuit is correct
-                break
-        return DataTypeMatch.INVALID
+        return expected.search(data)
 
     SEARCH_TYPE_FORMAT: Pattern[str] = re.compile(
         r"^search"

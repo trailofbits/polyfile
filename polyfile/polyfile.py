@@ -1,12 +1,13 @@
 from abc import ABC, abstractmethod
 from collections import defaultdict
 import base64
+import hashlib
 from json import dumps
 from mimetypes import guess_extension
 from pathlib import Path
 import pkg_resources
 from time import localtime
-from typing import Any, Callable, Dict, IO, Iterator, List, Optional, Set, Tuple, Union
+from typing import Any, Callable, Dict, IO, Iterable, Iterator, List, Optional, Set, Tuple, Union
 
 from .fileutils import FileStream
 from . import logger
@@ -18,6 +19,7 @@ __copyright__: str = f"Copyright ©{mod_year} Trail of Bits"
 __license__: str = "Apache License Version 2.0 https://www.apache.org/licenses/"
 
 ParserFunction = Callable[[FileStream, "Match"], Iterator["Submatch"]]
+
 
 class Parser(ABC, ParserFunction):
     @abstractmethod
@@ -267,3 +269,101 @@ class Matcher:
                         continue
                     matched_mimetypes.add(mimetype)
                     yield from self.handle_mimetype(mimetype, result, context.data, file_stream, parent)
+
+
+class Analyzer:
+    def __init__(self, path: Union[str, Path], try_all_offsets: bool = False, parse: bool = True,
+                 magic_matcher: Optional[MagicMatcher] = None):
+        self.path: Union[str, Path] = path
+        self.try_all_offsets: bool = try_all_offsets
+        self.parse: bool = parse
+        self._magic_matcher: Optional[MagicMatcher] = magic_matcher
+        self._matcher: Optional[Matcher] = None
+        self._matches: Optional[List[Match]] = None
+        self._match_iterator: Optional[Iterator[Match]] = None
+
+    @property
+    def magic_matcher(self) -> MagicMatcher:
+        if self._magic_matcher is None:
+            return MagicMatcher.DEFAULT_INSTANCE
+        else:
+            return self._magic_matcher
+
+    def mime_types(self) -> Iterator[Tuple[str, Match]]:
+        mimetypes: Dict[str, Set[str]] = {}
+        with open(self.path, "rb") as f:
+            for match in self.magic_matcher.match(MatchContext.load(f, only_match_mime=True)):
+                for mimetype in match.mimetypes:
+                    match_text = str(match)
+                    if mimetype not in mimetypes:
+                        mimetypes[mimetype] = set()
+                    if match_text not in mimetypes[mimetype]:
+                        yield mimetype, match
+                        mimetypes[mimetype].add(match_text)
+
+    @property
+    def matcher(self) -> Matcher:
+        if self._matcher is None:
+            self._matcher = Matcher(parse=self.parse, matcher=self.magic_matcher)
+        return self._matcher
+
+    @property
+    def matches_so_far(self) -> List[Match]:
+        return self._matches
+
+    def matches(self) -> Iterator[Match]:
+        if self._matches is None or self._match_iterator is not None:
+            if self._matches is None:
+                self._matches = []
+                self._match_iterator = iter(self.matcher.match(self.path))
+            else:
+                yield from self._matches
+            while True:
+                try:
+                    match = next(self._match_iterator)
+                except StopIteration:
+                    self._match_iterator = None
+                    break
+                if hasattr(match.match, "filetype"):
+                    filetype = match.match.filetype
+                else:
+                    filetype = match.name
+                if match.parent is None:
+                    log.info(f"Found a file of type {filetype} at byte offset {match.offset}")
+                    self._matches.append(match)
+                    yield match
+                elif isinstance(match, Submatch):
+                    log.debug(f"Found a subregion of type {filetype} at byte offset {match.offset}")
+                else:
+                    log.info(f"Found an embedded file of type {filetype} at byte offset {match.offset}")
+        else:
+            yield from self._matches
+
+    def sbud(self, matches: Optional[Iterable[Match]] = None) -> Dict[str, Any]:
+        if matches is None:
+            matches = self.matches()
+        md5 = hashlib.md5()
+        sha1 = hashlib.sha1()
+        sha256 = hashlib.sha256()
+        with open(self.path, 'rb') as hash_file:
+            data = hash_file.read()
+            md5.update(data)
+            sha1.update(data)
+            sha256.update(data)
+            b64contents = base64.b64encode(data)
+            file_length = len(data)
+            del data
+        return {
+            'MD5': md5.hexdigest(),
+            'SHA1': sha1.hexdigest(),
+            'SHA256': sha256.hexdigest(),
+            'b64contents': b64contents.decode('utf-8'),
+            'fileName': self.path,
+            'length': file_length,
+            'versions': {
+                'polyfile': __version__
+            },
+            'struc': [
+                match.to_obj() for match in matches
+            ]
+        }

@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+import atexit
 from enum import Enum
 from pathlib import Path
 from pdb import Pdb
@@ -9,6 +10,7 @@ from .polyfile import __copyright__, __license__, __version__, PARSERS, Match, P
 from .magic import (
     AbsoluteOffset, FailedTest, InvalidOffsetError, MagicMatcher, MagicTest, Offset, TestResult, TEST_TYPES
 )
+from .profiling import Profiler, Unprofiled, unprofiled
 from .repl import ANSIColor, ANSIWriter, arg_completer, command, ExitREPL, log, REPL, SetCompleter
 from .wildcards import Wildcard
 
@@ -383,6 +385,20 @@ class BreakOnSubmatching(BooleanVariable):
             self.debugger._instrument()
 
 
+class Profile(BooleanVariable):
+    def __init__(self, value: bool, debugger: "Debugger"):
+        self.debugger: Debugger = debugger
+        self._registered_callback = False
+        super().__init__(value)
+
+    @Variable.value.setter
+    def value(self, new_value):
+        Variable.value.fset(self, new_value)
+        if new_value and not self._registered_callback:
+            self._registered_callback = True
+            atexit.register(Debugger.profile_command, self.debugger, "")
+
+
 class Debugger(REPL):
     def __init__(self, break_on_parsing: bool = True):
         super().__init__(name="the debugger")
@@ -399,13 +415,17 @@ class Debugger(REPL):
         self.repl_test: Optional[MagicTest] = None
         self.instrumented_parsers: List[InstrumentedParser] = []
         self.break_on_submatching: BreakOnSubmatching = BreakOnSubmatching(break_on_parsing, self)
+        self.profile: Profile = Profile(False, self)
         self.variables_by_name: Dict[str, Variable] = {
-            "break_on_parsing": self.break_on_submatching
+            "break_on_parsing": self.break_on_submatching,
+            "profile": self.profile
         }
         self.variable_descriptions: Dict[str, str] = {
             "break_on_parsing": "Break when a PolyFile parser is about to be invoked and debug using PDB (default=True;"
-                                " disable from the command line with `--no-debug-python`)"
+                                " disable from the command line with `--no-debug-python`)",
+            "profile": "Profile the performance of each magic test that is run (default=False)"
         }
+        self.profile_results: Dict[Union[MagicTest, Type[Parser]], float] = {}
         self._pdb: Optional[Pdb] = None
 
     def save_context(self):
@@ -442,7 +462,7 @@ class Debugger(REPL):
             if "test" in test.__dict__:
                 # this class actually implements the test() function
                 self.instrumented_tests.append(InstrumentedTest(test, self))
-        if self.break_on_submatching:
+        if self.break_on_submatching.value:
             for parsers in PARSERS.values():
                 for parser in parsers:
                     self.instrumented_parsers.append(InstrumentedParser(parser, self))
@@ -506,6 +526,8 @@ class Debugger(REPL):
             indent = ""
             self.write(f"{'>' * test.level}{test.offset!s}\t")
             self.write(test.message, color=ANSIColor.BLUE, bold=True)
+        if self.profile.value and test in self.profile_results:
+            self.write(f"\t⏱  {int(self.profile_results[test] + 0.5)}ms")
         if test.mime is not None:
             self.write(f"\n  {indent}!:mime ", dim=True)
             self.write(test.mime, color=ANSIColor.BLUE)
@@ -541,10 +563,14 @@ class Debugger(REPL):
             absolute_offset: int,
             parent_match: Optional[TestResult]
     ) -> Optional[TestResult]:
-        if instrumented_test.original_test is None:
-            result = instrumented_test.test.test(test, data, absolute_offset, parent_match)
-        else:
-            result = instrumented_test.original_test(test, data, absolute_offset, parent_match)
+        profiler = Profiler()
+        with profiler:
+            if instrumented_test.original_test is None:
+                result = instrumented_test.test.test(test, data, absolute_offset, parent_match)
+            else:
+                result = instrumented_test.original_test(test, data, absolute_offset, parent_match)
+        if self.profile.value:
+            self.profile_results[test] = profiler.elapsed_ms
         if self.repl_test is test:
             # this is a one-off test run from the REPL, so do not save its results
             return result
@@ -557,6 +583,7 @@ class Debugger(REPL):
             self.repl()
         return self.last_result
 
+    @unprofiled
     def print_where(
             self,
             test: Optional[MagicTest] = None,
@@ -659,46 +686,59 @@ class Debugger(REPL):
             # We are already debugging!
             print_location()
             self.write(f"Parsing for submatches using {instrumented_parser.parser!s}.\n")
-            yield from parse(file_stream, match)
+            profiler = Profiler()
+            with profiler:
+                yield from parse(file_stream, match)
+            if self.profile.value:
+                self.profile_results[instrumented_parser.parser] = profiler.elapsed_ms
             return
-        self.print_match(match)
-        print_location()
-        self.write(f"About to parse for submatches using {instrumented_parser.parser!s}.\n")
-        buffer = ANSIWriter(use_ansi=sys.stderr.isatty(), escape_for_readline=True)
-        buffer.write("Debug using PDB? ")
-        buffer.write("(disable this prompt with `", dim=True)
-        buffer.write("set ", color=ANSIColor.BLUE)
-        buffer.write("break_on_parsing ", color=ANSIColor.GREEN)
-        buffer.write("False", color=ANSIColor.CYAN)
-        buffer.write("`)", dim=True)
+        with Unprofiled():
+            self.print_match(match)
+            print_location()
+            self.write(f"About to parse for submatches using {instrumented_parser.parser!s}.\n")
+            buffer = ANSIWriter(use_ansi=sys.stderr.isatty(), escape_for_readline=True)
+            buffer.write("Debug using PDB? ")
+            buffer.write("(disable this prompt with `", dim=True)
+            buffer.write("set ", color=ANSIColor.BLUE)
+            buffer.write("break_on_parsing ", color=ANSIColor.GREEN)
+            buffer.write("False", color=ANSIColor.CYAN)
+            buffer.write("`)", dim=True)
         if not self.prompt(str(buffer), default=False):
-            yield from parse(file_stream, match)
+            with Profiler() as p:
+                yield from parse(file_stream, match)
+                if self.profile.value:
+                    self.profile_results[instrumented_parser.parser] = p.elapsed_ms
             return
         try:
-            self._pdb = Pdb(skip=["polyfile.magic_debugger", "polyfile.magic"])
-            if sys.stderr.isatty():
-                self._pdb.prompt = "\001\u001b[1m\002(polyfile-Pdb)\001\u001b[0m\002 "
-            else:
-                self._pdb.prompt = "(polyfile-Pdb) "
-            generator = parse(file_stream, match)
-            while True:
-                try:
-                    result = self._pdb.runcall(next, generator)
-                    self.write(f"Got a submatch:\n", dim=True)
-                    self.print_match(result)
-                    yield result
-                except StopIteration:
-                    self.write(f"Yielded all submatches from {match.__class__.__name__} at offset {match.offset}.\n")
-                    break
-                print_location()
-                if not self.prompt("Continue debugging the next submatch?", default=True):
-                    if self.prompt("Print the remaining submatches?", default=False):
-                        for result in generator:
-                            self.print_match(result)
-                            yield result
-                    else:
-                        yield from generator
-                    break
+            if self.profile.value:
+                self.write("Warning:", bold=True, color=ANSIColor.RED)
+                self.write(" Profiling will be disabled for this parser while debugging!\n")
+            with Unprofiled():
+                self._pdb = Pdb(skip=["polyfile.magic_debugger", "polyfile.magic"])
+                if sys.stderr.isatty():
+                    self._pdb.prompt = "\001\u001b[1m\002(polyfile-Pdb)\001\u001b[0m\002 "
+                else:
+                    self._pdb.prompt = "(polyfile-Pdb) "
+                generator = parse(file_stream, match)
+                while True:
+                    try:
+                        result = self._pdb.runcall(next, generator)
+                        self.write(f"Got a submatch:\n", dim=True)
+                        self.print_match(result)
+                        yield result
+                    except StopIteration:
+                        self.write(f"Yielded all submatches from {match.__class__.__name__} at offset {match.offset}."
+                                   f"\n")
+                        break
+                    print_location()
+                    if not self.prompt("Continue debugging the next submatch?", default=True):
+                        if self.prompt("Print the remaining submatches?", default=False):
+                            for result in generator:
+                                self.print_match(result)
+                                yield result
+                        else:
+                            yield from generator
+                        break
         finally:
             self._pdb = None
 
@@ -730,6 +770,50 @@ class Debugger(REPL):
              aliases=("info stack", "backtrace"))
     def where(self, arguments: str):
         self.print_where()
+
+    @command(allows_abbreviation=False, name="profile", help="print current profiling results (to enable profiling, "
+                                                             "use `set profile True`)", )
+    def profile_command(self, arguments: str):
+        if not self.profile_results:
+            if not self.profile.value:
+                self.write("Profiling is disabled.\n", color=ANSIColor.RED)
+                self.write("Enable it by running `set profile True`.\n")
+            else:
+                self.write("No profiling data yet.\n")
+            return
+        self.write("Profile Results:\n", bold=True)
+        tests = sorted([(runtime, test) for test, runtime in self.profile_results.items()], reverse=True,
+                       key=lambda x: x[0])
+        max_text_width = 0
+        for runtime, test in tests:
+            if isinstance(test, MagicTest):
+                if test.source_info is not None and test.source_info.original_line is not None:
+                    max_text_width = max(max_text_width,
+                                         len(test.source_info.path.name) + 1 + len(str(test.source_info.line)))
+                else:
+                    max_text_width = max(max_text_width, test.level + len(str(test.offset)))
+            else:
+                max_text_width = max(max_text_width, len(str(test)))
+        for runtime, test in tests:
+            if isinstance(test, MagicTest):
+                self.write("🪄 ")
+                if test.source_info is not None and test.source_info.original_line is not None:
+                    self.write(test.source_info.path.name, dim=True, color=ANSIColor.CYAN)
+                    self.write(":", dim=True)
+                    self.write(test.source_info.line, dim=True, color=ANSIColor.CYAN)
+                    padding = max_text_width - (len(test.source_info.path.name) + 1 + len(str(test.source_info.line)))
+                else:
+                    self.write(f"{'>' * test.level}{test.offset!s}", color=ANSIColor.BLUE)
+                    padding = max_text_width - test.level - len(str(test.offset))
+            else:
+                self.write("🖥 ")
+                self.write(str(test), color=ANSIColor.BLUE)
+                padding = max_text_width - len(str(test))
+            self.write(" " * padding)
+            if runtime >= 1.0:
+                self.write(f" ⏱  {int(runtime + 0.5)}ms\n")
+            else:
+                self.write(f" ⏱  {runtime:.2f}ms\n")
 
     @command(allows_abbreviation=True, help="test the following libmagic DSL test at the current position")
     def test(self, args: str):

@@ -9,6 +9,8 @@ import sys
 import traceback
 from typing import Any, Callable, Dict, Iterable, Iterator, List, Optional, Set, Tuple, Type, TypeVar, Union
 
+from .profiling import Unprofiled
+
 if os.name == "posix":
     import readline
 else:
@@ -366,27 +368,28 @@ class REPL(metaclass=REPLMeta):
                 self.write("\n")
 
     def prompt(self, message: str, default: bool = True) -> bool:
-        while True:
-            buffer = ANSIWriter(use_ansi=sys.stderr.isatty(), escape_for_readline=True)
-            buffer.write(f"{message} ", bold=True)
-            buffer.write("[", dim=True)
-            if default:
-                buffer.write("Y", bold=True, color=ANSIColor.GREEN)
-                buffer.write("n", dim=True, color=ANSIColor.RED)
-            else:
-                buffer.write("y", dim=True, color=ANSIColor.GREEN)
-                buffer.write("N", bold=True, color=ANSIColor.RED)
-            buffer.write("] ", dim=True)
-            try:
-                answer = input(str(buffer)).strip().lower()
-            except EOFError:
-                raise KeyboardInterrupt()
-            if not answer:
-                return default
-            elif answer == "n":
-                return False
-            elif answer == "y":
-                return True
+        with Unprofiled():
+            while True:
+                buffer = ANSIWriter(use_ansi=sys.stderr.isatty(), escape_for_readline=True)
+                buffer.write(f"{message} ", bold=True)
+                buffer.write("[", dim=True)
+                if default:
+                    buffer.write("Y", bold=True, color=ANSIColor.GREEN)
+                    buffer.write("n", dim=True, color=ANSIColor.RED)
+                else:
+                    buffer.write("y", dim=True, color=ANSIColor.GREEN)
+                    buffer.write("N", bold=True, color=ANSIColor.RED)
+                buffer.write("] ", dim=True)
+                try:
+                    answer = input(str(buffer)).strip().lower()
+                except EOFError:
+                    raise KeyboardInterrupt()
+                if not answer:
+                    return default
+                elif answer == "n":
+                    return False
+                elif answer == "y":
+                    return True
 
     def load_history(self):
         try:
