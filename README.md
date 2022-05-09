@@ -36,47 +36,77 @@ This will automatically install the `polyfile` and `polymerge` executables in yo
 ## Usage
 
 ```
-usage: polyfile [-h] [--filetype FILETYPE] [--list] [--html HTML]
+usage: polyfile [-h] [--format {mime,html,json,sbud}] [--output OUTPUT]
+                [--filetype FILETYPE] [--list] [--html HTML]
                 [--only-match-mime] [--only-match] [--require-match]
-                [--max-matches MAX_MATCHES] [--debug] [--trace] [--debugger]
-                [--no-debug-python] [--quiet] [--version] [-dumpversion]
+                [--max-matches MAX_MATCHES] [--debugger] [--no-debug-python]
+                [--quiet | --debug | --trace] [--version] [-dumpversion]
                 [FILE]
 
 A utility to recursively map the structure of a file.
 
 positional arguments:
-  FILE                  the file to analyze; pass '-' or omit to read from
-                        STDIN
+  FILE                  the file to analyze; pass '-' or omit to read from STDIN
 
 optional arguments:
   -h, --help            show this help message and exit
+  --format {mime,html,json,sbud}, -r {mime,html,json,sbud}
+                        PolyFile's output format
+
+                        Output formats are:
+                        mime ... the detected MIME types associated with the file,
+                                 like the output of the `file` command
+                        html ... an interactive HTML-based hex viewer
+                        json ... a modified version of the SBUD format in JSON syntax
+                        sbud ... equivalent to 'json'
+
+                        Multiple formats can be output at once:
+
+                            polyfile INPUT_FILE -f mime -f json
+
+                        Their output will be concatenated to STDOUT in the order that
+                        they occur in the arguments.
+
+                        To save each format to a separate file, see the `--output` argument.
+
+                        If no format is specified, PolyFile defaults to `--format sbud`,
+                        but this will change to `--format mime` in v0.5.0
+  --output OUTPUT, -o OUTPUT
+                        an optional output path for `--format`
+
+                        Each instance of `--output` applies to the previous instance
+                        of the `--format` option.
+
+                        For example:
+
+                            polyfile INPUT_FILE --format html --output output.html \
+                                                --format sbud --output output.json
+
+                        will save HTML to to `output.html` and SBUD to `output.json`.
+                        No two outputs can be directed at the same file path.
+
+                        The path can be '-' for STDOUT.
+                        If an `--output` is omitted for a format,
+                        then it will implicitly be printed to STDOUT.
   --filetype FILETYPE, -f FILETYPE
-                        explicitly match against the given filetype or
-                        filetype wildcard (default is to match against all
-                        filetypes)
-  --list, -l            list the supported filetypes (for the `--filetype`
-                        argument) and exit
-  --html HTML, -t HTML  path to write an interactive HTML file for exploring
-                        the PDF
+                        explicitly match against the given filetype or filetype wildcard (default is to match against all filetypes)
+  --list, -l            list the supported filetypes for the `--filetype` argument and exit
+  --html HTML, -t HTML  path to write an interactive HTML file for exploring the PDF;
+                        equivalent to `--format html --output HTML`
   --only-match-mime, -I
-                        just print out the matching MIME types for the file,
-                        one on each line
-  --only-match, -m      do not attempt to parse known filetypes; only match
-                        against file magic
+                        "just print out the matching MIME types for the file, one on each line;
+                        equivalent to `--format mime`
+  --only-match, -m      do not attempt to parse known filetypes; only match against file magic
   --require-match       if no matches are found, exit with code 127
   --max-matches MAX_MATCHES
                         stop scanning after having found this many matches
+  --debugger, -db       drop into an interactive debugger for libmagic file definition matching and PolyFile parsing
+  --no-debug-python     by default, the `--debugger` option will break on custom matchers and prompt to debug using PDB. This option will suppress those prompts.
+  --quiet, -q           suppress all log output
   --debug, -d           print debug information
   --trace, -dd          print extra verbose debug information
-  --debugger, -db       drop into an interactive debugger for libmagic file
-                        definition matching and PolyFile parsing
-  --no-debug-python     by default, the `--debugger` option will break on
-                        custom matchers and prompt to debug using PDB. This
-                        option will suppress those prompts.
-  --quiet, -q           suppress all log output (overrides --debug)
   --version, -v         print PolyFile's version information to STDERR
-  -dumpversion          print PolyFile's raw version information to STDOUT and
-                        exit
+  -dumpversion          print PolyFile's raw version information to STDOUT and exit
 ```
 
 To generate a JSON mapping of a file, run:
