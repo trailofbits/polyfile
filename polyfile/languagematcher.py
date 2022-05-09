@@ -120,10 +120,11 @@ class BFMatcher(MagicTest):
             last_command = 0
         if important_commands - unique_commands:
             return FailedTest(self, offset=first_command,
-                              message=f"missing commands {', '.join(map(chr, important_commands - unique_commands))}")
+                              message=f"missing commands "
+                                      f"{', '.join((cmd.value for cmd in important_commands - unique_commands))}")
         elif self.min_bf_loops > program.num_loops:
             return FailedTest(self, offset=first_command, message=f"expected at least {self.min_bf_loops} BrainFu loops "
-                                                                  f"but only found {num_loops}")
+                                                                  f"but only found {program.num_loops}")
         elif self.min_bf_commands > len(program.commands):
             return FailedTest(self, offset=first_command, message=f"expected at least {self.min_bf_commands} BrainFu "
                                                                   f"commands but only found {len(program.commands)}")
