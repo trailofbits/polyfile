@@ -11,7 +11,7 @@ from typing import Any, Callable, Dict, IO, Iterable, Iterator, List, Optional, 
 
 from .fileutils import FileStream
 from . import logger
-from .magic import MagicMatcher, MatchContext, TestResult
+from .magic import MagicMatcher, Match as MagicMatch, MatchContext, TestResult
 
 __version__: str = pkg_resources.require("polyfile")[0].version
 mod_year = localtime(Path(__file__).stat().st_mtime).tm_year
@@ -289,7 +289,7 @@ class Analyzer:
         else:
             return self._magic_matcher
 
-    def mime_types(self) -> Iterator[Tuple[str, Match]]:
+    def mime_types(self) -> Iterator[Tuple[str, MagicMatch]]:
         mimetypes: Dict[str, Set[str]] = {}
         with open(self.path, "rb") as f:
             for match in self.magic_matcher.match(MatchContext.load(f, only_match_mime=True)):
