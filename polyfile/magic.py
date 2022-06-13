@@ -25,6 +25,8 @@ from typing import (
 )
 from uuid import UUID
 
+from chardet.universaldetector import UniversalDetector
+
 from .arithmetic import CStyleInt, make_c_style_int
 from .iterators import LazyIterableSet
 from .logger import getStatusLogger, TRACE
@@ -1968,18 +1970,31 @@ class PlainTextTest(MagicTest):
             extensions: Iterable[str] = ("txt",),
             message: Union[str, Message] = "",
             parent: Optional["MagicTest"] = None,
-            comments: Iterable[Comment] = ()
+            comments: Iterable[Comment] = (),
+            minimum_encoding_confidence: float = 0.5
     ):
         super().__init__(offset, mime, extensions, message, parent, comments)
+        self.minimum_encoding_confidence: float = minimum_encoding_confidence
 
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
-        try:
-            value = data[absolute_offset:].decode("utf-8")
+        detector = UniversalDetector()
+        offset = absolute_offset
+        while not detector.done and offset < len(data):
+            # feed 1kB at a time until we have high confidence in the classification
+            detector.feed(data[offset:offset+1024])
+            offset += 1024
+        detector.close()
+        if detector.result["confidence"] >= self.minimum_encoding_confidence:
+            encoding = detector.result["encoding"]
+            try:
+                value = data[absolute_offset:].decode(encoding)
+            except UnicodeDecodeError:
+                value = data[absolute_offset:]
             return MatchedTest(self, offset=absolute_offset, length=len(data) - absolute_offset, parent=parent_match,
                                value=value)
-        except UnicodeDecodeError:
-            return FailedTest(self, offset=absolute_offset, parent=parent_match, message="the data are not decodable "
-                                                                                         "in UTF-8")
+        else:
+            return FailedTest(self, offset=absolute_offset, parent=parent_match, message="the data do not appear to "
+                                                                                         "be encoded in a text format")
 
 
 TEST_PATTERN: Pattern[str] = re.compile(
