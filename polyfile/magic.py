@@ -600,6 +600,8 @@ class Comment:
 
 
 class MagicTest(ABC):
+    AUTO_REGISTER_TEST: bool = True
+
     def __init__(
             self,
             offset: Offset,
@@ -648,7 +650,8 @@ class MagicTest(ABC):
         self.comments: Tuple[Comment, ...] = tuple(comments)
 
     def __init_subclass__(cls, **kwargs):
-        TEST_TYPES.add(cls)
+        if cls.AUTO_REGISTER_TEST:
+            TEST_TYPES.add(cls)
         return super().__init_subclass__(**kwargs)
 
     @property
@@ -1955,6 +1958,30 @@ class DERTest(MagicTest):
         )
 
 
+class PlainTextTest(MagicTest):
+    AUTO_REGISTER_TEST = False
+
+    def __init__(
+            self,
+            offset: Offset = AbsoluteOffset(0),
+            mime: Union[str, TernaryExecutableMessage] = "text/plain",
+            extensions: Iterable[str] = ("txt",),
+            message: Union[str, Message] = "",
+            parent: Optional["MagicTest"] = None,
+            comments: Iterable[Comment] = ()
+    ):
+        super().__init__(offset, mime, extensions, message, parent, comments)
+
+    def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
+        try:
+            value = data[absolute_offset:].decode("utf-8")
+            return MatchedTest(self, offset=absolute_offset, length=len(data) - absolute_offset, parent=parent_match,
+                               value=value)
+        except UnicodeDecodeError:
+            return FailedTest(self, offset=absolute_offset, parent=parent_match, message="the data are not decodable "
+                                                                                         "in UTF-8")
+
+
 TEST_PATTERN: Pattern[str] = re.compile(
     r"^(?P<level>[>]*)(?P<offset>[^\s!][^\s]*)\s+(?P<data_type>[^\s]+)\s+(?P<remainder>.+)$"
 )
@@ -2179,10 +2206,18 @@ class MagicMatcher:
             to_match = MatchContext(to_match)
         elif not isinstance(to_match, MatchContext):
             to_match = MatchContext.load(to_match)
+        yielded = False
         for test in log.range(self._tests, desc="matching", unit=" tests", delay=1.0):
             m = Match(matcher=self, context=to_match, results=test.match(to_match))
             if m and (not to_match.only_match_mime or any(t is not None for t in m.mimetypes)):
                 yield m
+                yielded = True
+        if not yielded:
+            # is this a plain text file?
+            m = Match(matcher=self, context=to_match, results=PlainTextTest().match(to_match))
+            if m and (not to_match.only_match_mime or any(t is not None for t in m.mimetypes)):
+                yield m
+
 
     @staticmethod
     def parse_test(
