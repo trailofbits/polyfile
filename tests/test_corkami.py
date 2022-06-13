@@ -10,9 +10,10 @@ from unittest import TestCase
 import urllib.request
 from zipfile import ZipFile
 
-from polyfile.magic import MAGIC_DEFS, MagicMatcher
+from polyfile.magic import MAGIC_DEFS, MagicMatcher, MatchContext
 
 CORKAMI_CORPUS_ZIP = Path(__file__).absolute().parent / "corkami.zip"
+FAILED_FILE_DIR = Path(__file__).absolute().parent / "failed_corkami_files"
 CORKAMI_URL = "https://github.com/corkami/pocs/archive/refs/heads/master.zip"
 
 
@@ -21,6 +22,8 @@ class CorkamiCorpusTest(TestCase):
 
     @classmethod
     def setUpClass(cls):
+        if FAILED_FILE_DIR.exists():
+            shutil.rmtree(FAILED_FILE_DIR)
         # skip the DER definition because we don't yet support it (and none of the tests actually require it)
         cls.default_matcher = MagicMatcher.parse(*(d for d in MAGIC_DEFS if d.name != "der"))
 
@@ -50,7 +53,7 @@ def test_file(self: CorkamiCorpusTest, info: zipfile.ZipInfo):
             file_output = m.group("remainder")
         polyfile_mimetypes = {
             mimetype
-            for match in self.default_matcher.match(file_path)
+            for match in self.default_matcher.match(MatchContext.load(file_path, only_match_mime=True))
             for mimetype in match.mimetypes
         }
         if len(file_mimetypes & polyfile_mimetypes) != len(file_mimetypes):
@@ -66,6 +69,15 @@ def test_file(self: CorkamiCorpusTest, info: zipfile.ZipInfo):
                     # PolyFile just detected a PDF that `file` misclassified as text/plain!
                     pass
                 else:
+                    if not FAILED_FILE_DIR.exists():
+                        FAILED_FILE_DIR.mkdir()
+                    suffix = 1
+                    file_path = Path(file_path)
+                    out_file = FAILED_FILE_DIR / file_path.name
+                    while out_file.exists():
+                        suffix += 1
+                        out_file = FAILED_FILE_DIR / f"{file_path.stem}{suffix}{file_path.suffix}"
+                    shutil.move(file_path, out_file)
                     self.fail(f"`file` matched {file_mimetypes - polyfile_mimetypes!r} but PolyFile matched "
                               f"{polyfile_mimetypes - file_mimetypes}.\nOriginal `file` output was: "
                               f"{orig_file_output!r}")

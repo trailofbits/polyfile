@@ -1968,15 +1968,16 @@ class PlainTextTest(MagicTest):
             offset: Offset = AbsoluteOffset(0),
             mime: Union[str, TernaryExecutableMessage] = "text/plain",
             extensions: Iterable[str] = ("txt",),
-            message: Union[str, Message] = "",
             parent: Optional["MagicTest"] = None,
             comments: Iterable[Comment] = (),
             minimum_encoding_confidence: float = 0.5
     ):
-        super().__init__(offset, mime, extensions, message, parent, comments)
+        super().__init__(offset, mime, extensions, "", parent, comments)
         self.minimum_encoding_confidence: float = minimum_encoding_confidence
 
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
+        if not isinstance(self.message, ConstantMessage) or self.message.message:
+            raise ValueError(f"A new PlainTextTest must be constructed for each call to .test")
         detector = UniversalDetector()
         offset = absolute_offset
         while not detector.done and offset < len(data):
@@ -1990,6 +1991,7 @@ class PlainTextTest(MagicTest):
                 value = data[absolute_offset:].decode(encoding)
             except UnicodeDecodeError:
                 value = data[absolute_offset:]
+            self.message = ConstantMessage(f"{encoding} text")
             return MatchedTest(self, offset=absolute_offset, length=len(data) - absolute_offset, parent=parent_match,
                                value=value)
         else:
