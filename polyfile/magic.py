@@ -11,6 +11,7 @@ details about the file.
 from abc import ABC, abstractmethod
 from collections import defaultdict
 import csv
+from datetime import datetime
 from enum import Enum
 from io import StringIO
 import json
@@ -1459,15 +1460,35 @@ class RegexType(DataType[Pattern[bytes]]):
 BASE_NUMERIC_TYPES_BY_NAME: Dict[str, "BaseNumericDataType"] = {}
 
 
-DATE_FORMAT: str = "%a %b %e %H:%M:%S %Y"
+DATETIME_FORMAT: str = "%a %b %e %H:%M:%S %Y"
+DATE_FORMAT: str = "%a %b %e %Y"
+TIME_FORMAT: str = "%H:%M:%S"
 
 
 def local_date(ms_since_epoch: int) -> str:
-    return strftime(DATE_FORMAT, localtime(ms_since_epoch / 1000.0))
+    return strftime(DATETIME_FORMAT, localtime(ms_since_epoch / 1000.0))
 
 
 def utc_date(ms_since_epoch: int) -> str:
-    return strftime(DATE_FORMAT, gmtime(ms_since_epoch / 1000.0))
+    return strftime(DATETIME_FORMAT, gmtime(ms_since_epoch / 1000.0))
+
+
+def msdos_date(value: int) -> str:
+    day = (value & 0b11111) + 1
+    value >>= 5
+    month = (value & 0b1111) + 1
+    value >>= 4
+    year = 1980 + (value & 0b1111111)
+    return strftime(DATE_FORMAT, datetime(year, month, day).timetuple())
+
+
+def msdos_time(value: int) -> str:
+    seconds = (value & 0b11111) * 2
+    value >>= 5
+    minutes = value & 0b111111
+    value >>= 6
+    hour = value & 0b11111
+    return strftime(TIME_FORMAT, datetime(1, 1, 1, hour, minutes, seconds).timetuple())
 
 
 class BaseNumericDataType(Enum):
@@ -1477,11 +1498,13 @@ class BaseNumericDataType(Enum):
     QUAD = ("quad", "q", 8)
     FLOAT = ("float", "f", 4)
     DOUBLE = ("double", "d", 8)
-    DATE = ("date", "L", 4, lambda n : utc_date(n * 1000))
+    DATE = ("date", "L", 4, lambda n: utc_date(n * 1000))
     QDATE = ("qdate", "Q", 8, utc_date)
     LDATE = ("ldate", "L", 4, lambda n: local_date(n * 1000))
     QLDATE = ("qldate", "Q", 8, local_date)
     QWDATE = ("qwdate", "Q", 8)
+    MSDOSDATE = ("msdosdate", "h", 2, msdos_date)
+    MSDOSTIME = ("msdostime", "h", 2, msdos_time)
 
     def __init__(
             self, name: str,
