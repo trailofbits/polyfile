@@ -93,7 +93,7 @@ def _init_tests():
                 continue
 
             suffix = ""
-            func_name = f"test_{path.stem}"
+            func_name = f"test_{path.name.replace('.', '_')}"
             while hasattr(CorkamiCorpusTest, f"{func_name}{suffix}"):
                 if not suffix:
                     suffix = 2
