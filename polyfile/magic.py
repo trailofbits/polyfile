@@ -970,7 +970,8 @@ class StringTest(ABC):
               compact_whitespace: bool = False,
               case_insensitive_lower: bool = False,
               case_insensitive_upper: bool = False,
-              optional_blanks: bool = False) -> "StringTest":
+              optional_blanks: bool = False,
+              full_word_match: bool = False) -> "StringTest":
         if specification.strip() == "x":
             return StringWildcard(trim=trim, compact_whitespace=compact_whitespace)
         if specification.startswith("!"):
@@ -994,7 +995,8 @@ class StringTest(ABC):
                 compact_whitespace=compact_whitespace,
                 case_insensitive_lower=case_insensitive_lower,
                 case_insensitive_upper=case_insensitive_upper,
-                optional_blanks=optional_blanks
+                optional_blanks=optional_blanks,
+                full_word_match=full_word_match
             )
         if negate:
             return NegatedStringTest(test)
@@ -1076,19 +1078,23 @@ class StringMatch(StringTest):
                  case_insensitive_lower: bool = False,
                  case_insensitive_upper: bool = False,
                  optional_blanks: bool = False,
+                 full_word_match: bool = False
     ):
         super().__init__(trim=trim, compact_whitespace=compact_whitespace)
         self.string: bytes = to_match
         self.case_insensitive_lower: bool = case_insensitive_lower
         self.case_insensitive_upper: bool = case_insensitive_upper
         self.optional_blanks: bool = optional_blanks
+        self.full_word_match: bool = full_word_match
         self._pattern: Optional[re.Pattern] = None
         _ = self.pattern
 
     def pattern_string(self) -> bytes:
         pattern = re.escape(self.string)
         if self.optional_blanks:
-            pattern = pattern.replace(b"\\ ", b"\\ ?")
+            pattern = pattern.replace(rb"\ ", rb"\ ?")
+        if self.full_word_match:
+            pattern = rb"\b" + pattern + rb"\b"
         return pattern
 
     def pattern_flags(self) -> int:
@@ -1132,6 +1138,7 @@ class StringType(DataType[StringTest]):
             case_insensitive_upper: bool = False,
             compact_whitespace: bool = False,
             optional_blanks: bool = False,
+            full_word_match: bool = False,
             trim: bool = False
     ):
         if not all((case_insensitive_lower, case_insensitive_upper, compact_whitespace, optional_blanks, trim)):
@@ -1139,21 +1146,29 @@ class StringType(DataType[StringTest]):
         else:
             name = f"string/{['', 'W'][compact_whitespace]}{['', 'w'][optional_blanks]}"\
                    f"{['', 'C'][case_insensitive_upper]}{['', 'c'][case_insensitive_lower]}"\
-                   f"{['', 'T'][trim]}"
+                   f"{['', 'T'][trim]}{['', 'f'][full_word_match]}"
         super().__init__(name)
         self.case_insensitive_lower: bool = case_insensitive_lower
         self.case_insensitive_upper: bool = case_insensitive_upper
         self.compact_whitespace: bool = compact_whitespace
         self.optional_blanks: bool = optional_blanks
+        self.full_word_match: bool = full_word_match
         self.trim: bool = trim
 
     def parse_expected(self, specification: str) -> StringTest:
-        return StringTest.parse(specification)
+        return StringTest.parse(
+            specification,
+            trim=self.trim,
+            case_insensitive_lower=self.case_insensitive_lower,
+            case_insensitive_upper=self.case_insensitive_upper,
+            compact_whitespace=self.compact_whitespace,
+            full_word_match=self.full_word_match
+        )
 
     def match(self, data: bytes, expected: StringTest) -> DataTypeMatch:
         return expected.matches(data)
 
-    STRING_TYPE_FORMAT: Pattern[str] = re.compile(r"^u?string(/[BbCctTWw]*)?$")
+    STRING_TYPE_FORMAT: Pattern[str] = re.compile(r"^u?string(/[BbCctTWwf]*)?$")
 
     @classmethod
     def parse(cls, format_str: str) -> "StringType":
@@ -1164,7 +1179,7 @@ class StringType(DataType[StringTest]):
             options: Iterable[str] = ()
         else:
             options = m.group(1)
-        unsupported_options = {opt for opt in options if opt not in "/WwcCtbT"}
+        unsupported_options = {opt for opt in options if opt not in "/WwcCtbTf"}
         if unsupported_options:
             log.warning(f"{format_str!r} has invalid option(s) that will be ignored: {', '.join(unsupported_options)}")
         return StringType(
@@ -1172,6 +1187,7 @@ class StringType(DataType[StringTest]):
             case_insensitive_upper="C" in options,
             compact_whitespace="W" in options,
             optional_blanks="w" in options,
+            full_word_match="f" in options,
             trim="T" in options
         )
 
@@ -1185,6 +1201,7 @@ class SearchType(StringType):
             compact_whitespace: bool = False,
             optional_blanks: bool = False,
             match_to_start: bool = False,
+            full_word_match: bool = False,
             trim: bool = False
     ):
         if repetitions is not None and repetitions <= 0:
@@ -1194,6 +1211,7 @@ class SearchType(StringType):
             case_insensitive_upper=case_insensitive_upper,
             compact_whitespace=compact_whitespace,
             optional_blanks=optional_blanks,
+            full_word_match=full_word_match,
             trim=trim
         )
         self.repetitions: Optional[int] = repetitions
@@ -1215,8 +1233,8 @@ class SearchType(StringType):
 
     SEARCH_TYPE_FORMAT: Pattern[str] = re.compile(
         r"^search"
-        r"((/(?P<repetitions1>(0[xX][\dA-Fa-f]+|\d+)))(/(?P<flags1>[BbCctTWws]*)?)?|"
-        r"/((?P<flags2>[BbCctTWws]*)/?)?(?P<repetitions2>(0[xX][\dA-Fa-f]+|\d+)))$"
+        r"((/(?P<repetitions1>(0[xX][\dA-Fa-f]+|\d+)))(/(?P<flags1>[BbCctTWwsf]*)?)?|"
+        r"/((?P<flags2>[BbCctTWwsf]*)/?)?(?P<repetitions2>(0[xX][\dA-Fa-f]+|\d+)))$"
     )
     # NOTE: some specification files like `ber` use `search/b64`, which is undocumented. We treat that equivalent to
     #       the compliant `search/b/64`.
@@ -1248,6 +1266,7 @@ class SearchType(StringType):
             case_insensitive_upper="C" in options,
             compact_whitespace="B" in options or "W" in options,
             optional_blanks="b" in options or "w" in options,
+            full_word_match="f" in options,
             trim="T" in options,
             match_to_start="s" in options
         )
