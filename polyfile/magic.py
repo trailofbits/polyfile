@@ -1095,16 +1095,22 @@ class StringMatch(StringTest):
             pattern = pattern.replace(rb"\ ", rb"\ ?")
         if self.full_word_match:
             pattern = rb"\b" + pattern + rb"\b"
+        if self.case_insensitive_lower and not self.case_insensitive_upper:
+            # treat lower case letters as either lower or upper case
+            delta = ord('A') - ord('a')
+            for ordinal in range(ord('a'), ord('z') + 1):
+                pattern = pattern.replace(bytes([ordinal]), f"[{chr(ordinal)}{chr(ordinal+delta)}]".encode("utf-8"))
+        elif not self.case_insensitive_lower and self.case_insensitive_upper:
+            # treat upper case letters as either lower or upper case
+            delta = ord('a') - ord('A')
+            for ordinal in range(ord('A'), ord('Z') + 1):
+                pattern = pattern.replace(bytes([ordinal]), f"[{chr(ordinal)}{chr(ordinal+delta)}]".encode("utf-8"))
         return pattern
 
     def pattern_flags(self) -> int:
         flags: int = 0
         if self.case_insensitive_upper and self.case_insensitive_lower:
             flags |= re.IGNORECASE
-        elif self.case_insensitive_lower:
-            raise NotImplementedError("TODO: Implement support for the `c` flag by itself")
-        elif self.case_insensitive_upper:
-            raise NotImplementedError("TODO: Implement support for the `C` flag by itself")
         if self.compact_whitespace:
             raise NotImplementedError("TODO: Implement support for the `W` flag")
         return flags
