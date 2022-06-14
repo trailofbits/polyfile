@@ -249,7 +249,7 @@ def parse_numeric(text: Union[str, bytes]) -> int:
 
 class Offset(ABC):
     @abstractmethod
-    def to_absolute(self, data: bytes, last_match: Optional[TestResult]) -> int:
+    def to_absolute(self, data: bytes, last_match: Optional[TestResult], allow_invalid: bool = False) -> int:
         raise NotImplementedError()
 
     @staticmethod
@@ -279,8 +279,8 @@ class AbsoluteOffset(Offset):
     def __init__(self, offset: int):
         self.offset: int = offset
 
-    def to_absolute(self, data: bytes, last_match: Optional[TestResult]) -> int:
-        if self.offset >= len(data):
+    def to_absolute(self, data: bytes, last_match: Optional[TestResult], allow_invalid: bool = False) -> int:
+        if not allow_invalid and self.offset >= len(data):
             raise InvalidOffsetError(offset=self)
         return self.offset
 
@@ -296,7 +296,7 @@ class NamedAbsoluteOffset(AbsoluteOffset):
         super().__init__(offset)
         self.test: NamedTest = test
 
-    def to_absolute(self, data: bytes, last_match: Optional[TestResult]) -> int:
+    def to_absolute(self, data: bytes, last_match: Optional[TestResult], allow_invalid: bool = False) -> int:
         while last_match is not None and not last_match.test is self.test:
             last_match = last_match.parent
 
@@ -310,7 +310,7 @@ class NamedAbsoluteOffset(AbsoluteOffset):
 
         assert isinstance(last_match.test, UseTest)
 
-        if last_match.offset + self.offset >= len(data):
+        if not allow_invalid and last_match.offset + self.offset >= len(data):
             raise InvalidOffsetError(offset=self)
         return last_match.offset + self.offset
 
@@ -322,8 +322,8 @@ class NegativeOffset(Offset):
     def __init__(self, magnitude: int):
         self.magnitude: int = magnitude
 
-    def to_absolute(self, data: bytes, last_match: Optional[TestResult]) -> int:
-        if self.magnitude > len(data):
+    def to_absolute(self, data: bytes, last_match: Optional[TestResult], allow_invalid: bool = False) -> int:
+        if not allow_invalid and self.magnitude > len(data):
             raise InvalidOffsetError(offset=self)
         return len(data) - self.magnitude
 
@@ -338,7 +338,7 @@ class RelativeOffset(Offset):
     def __init__(self, relative_to: Offset):
         self.relative_to: Offset = relative_to
 
-    def to_absolute(self, data: bytes, last_match: Optional[TestResult]) -> int:
+    def to_absolute(self, data: bytes, last_match: Optional[TestResult], allow_invalid: bool = False) -> int:
         if isinstance(self.relative_to, NegativeOffset):
             difference = -self.relative_to.magnitude
         else:
@@ -347,7 +347,7 @@ class RelativeOffset(Offset):
             raise InvalidOffsetError(f"The last test was expected to be a match, but instead got {last_match!s}",
                                      offset=self)
         offset = last_match.offset + last_match.length + difference
-        if len(data) < offset < 0:
+        if not allow_invalid and len(data) < offset < 0:
             raise InvalidOffsetError(offset=self)
         return offset
 
@@ -371,7 +371,7 @@ class IndirectOffset(Offset):
         elif num_bytes not in (1, 2, 4, 8):
             raise ValueError(f"Invalid number of bytes: {num_bytes}")
 
-    def to_absolute(self, data: bytes, last_match: Optional[TestResult]) -> int:
+    def to_absolute(self, data: bytes, last_match: Optional[TestResult], allow_invalid: bool = False) -> int:
         if self.num_bytes == 1:
             fmt = "B"
         elif self.num_bytes == 2:
@@ -389,7 +389,10 @@ class IndirectOffset(Offset):
         offset = self.offset.to_absolute(data, last_match)
         to_unpack = data[offset:offset + self.num_bytes]
         if len(to_unpack) < self.num_bytes:
-            raise InvalidOffsetError(offset=self)
+            if allow_invalid:
+                return len(data)
+            else:
+                raise InvalidOffsetError(offset=self)
         return self.post_process(struct.unpack(fmt, to_unpack)[0])
 
     NUMBER_PATTERN: str = r"(0[xX][\dA-Fa-f]+|\d+)L?"
@@ -756,11 +759,14 @@ class MagicTest(ABC):
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
         raise NotImplementedError()
 
+    def calculate_absolute_offset(self, data: bytes, parent_match: Optional[TestResult] = None) -> int:
+        return self.offset.to_absolute(data, parent_match)
+
     def _match(self, context: MatchContext, parent_match: Optional[TestResult] = None) -> Iterator[MatchedTest]:
         if context.only_match_mime and not self.can_match_mime:
             return
         try:
-            absolute_offset = self.offset.to_absolute(context.data, parent_match)
+            absolute_offset = self.calculate_absolute_offset(context.data, parent_match)
         except InvalidOffsetError:
             return
         m = self.test(context.data, absolute_offset, parent_match)
@@ -838,6 +844,9 @@ DataTypeMatch.INVALID = DataTypeMatch()
 class DataType(ABC, Generic[T]):
     def __init__(self, name: str):
         self.name: str = name
+
+    def allows_invalid_offsets(self, expected: T) -> bool:
+        return False
 
     @abstractmethod
     def parse_expected(self, specification: str) -> T:
@@ -1188,6 +1197,9 @@ class StringType(DataType[StringTest]):
         self.optional_blanks: bool = optional_blanks
         self.full_word_match: bool = full_word_match
         self.trim: bool = trim
+
+    def allows_invalid_offsets(self, expected: StringTest) -> bool:
+        return isinstance(expected, NegatedStringTest)
 
     def parse_expected(self, specification: str) -> StringTest:
         return StringTest.parse(
@@ -1790,6 +1802,9 @@ class ConstantMatchTest(MagicTest, Generic[T]):
         self.data_type: DataType[T] = data_type
         self.constant: T = constant
 
+    def calculate_absolute_offset(self, data: bytes, parent_match: Optional[TestResult] = None) -> int:
+        return self.offset.to_absolute(data, parent_match, self.data_type.allows_invalid_offsets(self.constant))
+
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
         match = self.data_type.match(data[absolute_offset:], self.constant)
         if match:
@@ -1885,7 +1900,7 @@ class NamedTest(MagicTest):
         assert isinstance(offset, AbsoluteOffset) and offset.offset == 0
 
         class NamedTestOffset(Offset):
-            def to_absolute(self, data: bytes, last_match: Optional[TestResult]) -> int:
+            def to_absolute(self, data: bytes, last_match: Optional[TestResult], allow_invalid: bool = False) -> int:
                 assert last_match is not None
                 return last_match.offset
         offset = NamedTestOffset()
