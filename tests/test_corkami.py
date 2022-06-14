@@ -33,7 +33,7 @@ if not CORKAMI_CORPUS_ZIP.exists():
         shutil.copyfileobj(response, out_file)
 
 
-FILE_MIMETYPE_PATTERN = re.compile(rb"^(.*?:|-)\s*(?P<mime>[^\/\s]+\/[^\/;\s]+)\s*(;.*?$|$)(?P<remainder>.*)",
+FILE_MIMETYPE_PATTERN = re.compile(rb"^(.*?:|-)\s*(?P<mime>[^/\s]+/[^/;\s]+)\s*(;.*?$|$)(?P<remainder>.*)",
                                    re.MULTILINE)
 
 
