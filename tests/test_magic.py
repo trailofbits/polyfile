@@ -86,11 +86,12 @@ class MagicTest(TestCase):
                     actual = str(match)
                     matches.add(actual)
                     print(f"\tActual:   {actual!r}")
-                if testfile.stem not in ("JW07022A.mp3", "gedcom", "uf2"):
-                    # The files we skip fail because:
-                    #   1. a mismatch between the database we have and the one used to generate the results in
-                    #      the test corpus;
-                    #   2. there is a bug in our implementation that we have not yet fixed; and/or
-                    #   3. our output is technically correct but we output it slightly differently (e.g., we output
-                    #      "0x000000" instead of "00000000"
-                    self.assertIn(expected, matches)
+                if testfile.stem not in ("JW07022A.mp3", "gedcom"):
+                    # The files we skip fail because there is a bug in our implementation that we have not yet fixed
+                    if expected == "ASCII text" and expected not in matches:
+                        self.assertIn(expected.lower(), matches)
+                    elif "00000000" in expected and expected not in matches:
+                        # our output is technically correct but we output "0x000000" instead of "00000000"
+                        self.assertIn(expected.replace("00000000", "0x000000"), matches)
+                    else:
+                        self.assertIn(expected, matches)
