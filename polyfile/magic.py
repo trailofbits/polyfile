@@ -1086,15 +1086,13 @@ class StringMatch(StringTest):
         self.case_insensitive_upper: bool = case_insensitive_upper
         self.optional_blanks: bool = optional_blanks
         self.full_word_match: bool = full_word_match
+        if optional_blanks and compact_whitespace:
+            raise ValueError("Optional blanks `w` and compacting whitespace `W` cannot be selected at the same time")
         self._pattern: Optional[re.Pattern] = None
         _ = self.pattern
 
     def pattern_string(self) -> bytes:
         pattern = re.escape(self.string)
-        if self.optional_blanks:
-            pattern = pattern.replace(rb"\ ", rb"\ ?")
-        if self.full_word_match:
-            pattern = rb"\b" + pattern + rb"\b"
         if self.case_insensitive_lower and not self.case_insensitive_upper:
             # treat lower case letters as either lower or upper case
             delta = ord('A') - ord('a')
@@ -1105,14 +1103,44 @@ class StringMatch(StringTest):
             delta = ord('a') - ord('A')
             for ordinal in range(ord('A'), ord('Z') + 1):
                 pattern = pattern.replace(bytes([ordinal]), f"[{chr(ordinal)}{chr(ordinal+delta)}]".encode("utf-8"))
+        if self.compact_whitespace:
+            new_pattern_bytes: List[Tuple[bytes, int]] = []
+            escaped = False
+            for c in (bytes([b]) for b in pattern):
+                if escaped:
+                    c = b"\\" + c
+                    escaped = False
+                elif c == b"\\":
+                    escaped = True
+                    continue
+                if new_pattern_bytes and new_pattern_bytes[-1][0] == c:
+                    new_pattern_bytes[-1] = (c, new_pattern_bytes[-1][1] + 1)
+                else:
+                    new_pattern_bytes.append((c, 1))
+            if escaped:
+                raise ValueError(f"Error parsing search pattern {self.string!r}")
+            pattern_bytes = bytearray()
+            for c, count in new_pattern_bytes:
+                pattern_bytes.extend(c)
+                if c in (b'\\ ', b'\\s', b'\\t', b'\\r', b'\\v', b'\\f'):
+                    # this is whitespace
+                    if count == 1:
+                        pattern_bytes.extend(b"+")
+                    else:
+                        pattern_bytes.extend(f"{{{count},}}".encode("utf-8"))
+                elif count > 1:
+                    pattern_bytes.extend(f"{{{count}}}".encode("utf-8"))
+            pattern = bytes(pattern_bytes)
+        elif self.optional_blanks:
+            pattern = pattern.replace(rb"\ ", rb"\ ?")
+        if self.full_word_match:
+            pattern = rb"\b" + pattern + rb"\b"
         return pattern
 
     def pattern_flags(self) -> int:
         flags: int = 0
         if self.case_insensitive_upper and self.case_insensitive_lower:
             flags |= re.IGNORECASE
-        if self.compact_whitespace:
-            raise NotImplementedError("TODO: Implement support for the `W` flag")
         return flags
 
     @property
