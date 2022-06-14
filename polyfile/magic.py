@@ -2075,6 +2075,26 @@ class PlainTextTest(MagicTest):
                                                                                          "be encoded in a text format")
 
 
+class OctetStreamTest(MagicTest):
+    AUTO_REGISTER_TEST = False
+
+    def __init__(
+            self,
+            offset: Offset = AbsoluteOffset(0),
+            mime: Union[str, TernaryExecutableMessage] = "application/octet-stream",
+            extensions: Iterable[str] = (),
+            message: Union[str, Message] = "data",
+            parent: Optional["MagicTest"] = None,
+            comments: Iterable[Comment] = ()
+    ):
+        super().__init__(offset, mime, extensions, message, parent, comments)
+
+    def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
+        # Everything is an octet stream!
+        return MatchedTest(self, offset=absolute_offset, length=len(data) - absolute_offset, parent=parent_match,
+                           value=data)
+
+
 TEST_PATTERN: Pattern[str] = re.compile(
     r"^(?P<level>[>]*)(?P<offset>[^\s!][^\s]*)\s+(?P<data_type>[^\s]+)\s+(?P<remainder>.+)$"
 )
@@ -2310,6 +2330,8 @@ class MagicMatcher:
             m = Match(matcher=self, context=to_match, results=PlainTextTest().match(to_match))
             if m and (not to_match.only_match_mime or any(t is not None for t in m.mimetypes)):
                 yield m
+            else:
+                yield Match(matcher=self, context=to_match, results=OctetStreamTest().match(to_match))
 
 
     @staticmethod
