@@ -64,7 +64,7 @@ def test_file(self: CorkamiCorpusTest, info: zipfile.ZipInfo):
                 # PolyFile is more accurate than `file` at detecting PDFs:
                 missed_mimetypes = file_mimetypes - polyfile_mimetypes
                 if len(missed_mimetypes) == 1 and "text/plain" in missed_mimetypes and "application/pdf" in \
-                    polyfile_mimetypes:
+                        polyfile_mimetypes:
                     # PolyFile just detected a PDF that `file` misclassified as text/plain!
                     pass
                 else:
