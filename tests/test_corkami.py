@@ -28,7 +28,6 @@ class CorkamiCorpusTest(TestCase):
         cls.default_matcher = MagicMatcher.parse(*(d for d in MAGIC_DEFS if d.name != "der"))
 
 
-
 if not CORKAMI_CORPUS_ZIP.exists():
     with urllib.request.urlopen(CORKAMI_URL) as response, open(CORKAMI_CORPUS_ZIP, "wb") as out_file:
         shutil.copyfileobj(response, out_file)
