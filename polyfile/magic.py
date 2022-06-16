@@ -1454,9 +1454,9 @@ class RegexType(DataType[Pattern[bytes]]):
         unescaped_spec = posix_to_python_re(unescape(specification))
         try:
             if self.case_insensitive:
-                return re.compile(unescaped_spec, re.IGNORECASE)
+                return re.compile(unescaped_spec, re.IGNORECASE | re.MULTILINE)
             else:
-                return re.compile(unescaped_spec)
+                return re.compile(unescaped_spec, re.MULTILINE)
         except re.error as e:
             raise ValueError(str(e))
 
