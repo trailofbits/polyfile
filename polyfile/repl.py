@@ -456,6 +456,20 @@ class REPL(metaclass=REPLMeta):
                     return command
         raise KeyError(command_name)
 
+    def run_command(self, command_str: str):
+        command_name = command_str.lstrip()
+        space_index = command_name.find(" ")
+        if space_index > 0:
+            command_name, args = command_name[:space_index], command_name[space_index + 1:].strip()
+        else:
+            args = ""
+
+        try:
+            return self.get_command(command_name).run(args)
+        except KeyError:
+            self.write(f"Undefined command: {command_name!r}. Try \"help\".\n", color=ANSIColor.RED)
+            raise
+
     def repl(self):
         log.clear_status()
         self.before_prompt()
@@ -470,21 +484,12 @@ class REPL(metaclass=REPLMeta):
                 command_name = self.last_command
             command_name = command_name.lstrip()
             original_command = command_name
-            space_index = command_name.find(" ")
-            if space_index > 0:
-                command_name, args = command_name[:space_index], command_name[space_index+1:].strip()
-            else:
-                args = ""
 
             try:
-                command = self.get_command(command_name)
+                self.run_command(command_name)
             except KeyError:
-                self.write(f"Undefined command: {command_name!r}. Try \"help\".\n", color=ANSIColor.RED)
                 self.last_command = None
                 continue
-
-            try:
-                command.run(args)
             except ExitREPL:
                 break
             finally:

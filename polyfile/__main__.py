@@ -14,6 +14,7 @@ from .fileutils import PathOrStdin, PathOrStdout
 from .magic import MagicMatcher
 from .debugger import Debugger
 from .polyfile import __version__, Analyzer
+from .repl import ExitREPL
 
 
 log = logger.getStatusLogger("polyfile")
@@ -185,6 +186,7 @@ equivalent to `--format mime`"""))
                         help='stop scanning after having found this many matches')
     parser.add_argument('--debugger', '-db', action='store_true', help='drop into an interactive debugger for libmagic '
                                                                        'file definition matching and PolyFile parsing')
+    parser.add_argument('--eval-command', '-ex', type=str, action='append', help='execute the given debugger command')
     parser.add_argument('--no-debug-python', action='store_true', help='by default, the `--debugger` option will break '
                                                                        'on custom matchers and prompt to debug using '
                                                                        'PDB. This option will suppress those prompts.')
@@ -211,6 +213,12 @@ equivalent to `--format mime`"""))
     if args.dumpversion:
         print(__version__)
         exit(0)
+
+    if args.eval_command and not args.debugger:
+        parser.print_usage()
+        sys.stderr.write("polyfile: error: the `--eval-command` argument can only be used in conjunction with "
+                         "`--debugger`\n")
+        exit(1)
 
     if args.list:
         for mimetype in sorted(MagicMatcher.DEFAULT_INSTANCE.mimetypes):
@@ -270,7 +278,19 @@ equivalent to `--format mime`"""))
 
     with path_or_stdin as file_path, ExitStack() as stack:
         if args.debugger:
-            stack.enter_context(Debugger(break_on_parsing=not args.no_debug_python))
+            debugger = Debugger(break_on_parsing=not args.no_debug_python)
+            for ex in args.eval_command:
+                try:
+                    debugger.before_prompt()
+                    debugger.write(f"{debugger.repl_prompt}{ex}\n")
+                    debugger.run_command(ex)
+                except KeyError:
+                    exit(1)
+                except ExitREPL:
+                    exit(0)
+            if args.eval_command:
+                debugger.write("\n")
+            stack.enter_context(debugger)
         elif args.no_debug_python:
             log.warning("Ignoring `--no-debug-python`; it can only be used with the --debugger option.")
         if not sys.stdout.isatty() or not sys.stdin.isatty():
