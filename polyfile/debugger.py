@@ -714,15 +714,23 @@ class Debugger(REPL):
                 self.write("Warning:", bold=True, color=ANSIColor.RED)
                 self.write(" Profiling will be disabled for this parser while debugging!\n")
             with Unprofiled():
-                self._pdb = Pdb(skip=["polyfile.magic_debugger", "polyfile.magic"])
-                if sys.stderr.isatty():
-                    self._pdb.prompt = "\001\u001b[1m\002(polyfile-Pdb)\001\u001b[0m\002 "
-                else:
-                    self._pdb.prompt = "(polyfile-Pdb) "
+                # check if there is already a debugger attached, most likely an IDE like PyCharm;
+                # if so, use that debugger instead of creating our own instance of pdb
+                external_debugger = sys.gettrace() is not None
+                if not external_debugger:
+                    self._pdb = Pdb(skip=["polyfile.magic_debugger", "polyfile.magic"])
+                    if sys.stderr.isatty():
+                        self._pdb.prompt = "\001\u001b[1m\002(polyfile-Pdb)\001\u001b[0m\002 "
+                    else:
+                        self._pdb.prompt = "(polyfile-Pdb) "
                 generator = parse(file_stream, match)
                 while True:
                     try:
-                        result = self._pdb.runcall(next, generator)
+                        if external_debugger:
+                            breakpoint()
+                            result = next(generator)
+                        else:
+                            result = self._pdb.runcall(next, generator)
                         self.write(f"Got a submatch:\n", dim=True)
                         self.print_match(result)
                         yield result

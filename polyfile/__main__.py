@@ -279,16 +279,16 @@ equivalent to `--format mime`"""))
     with path_or_stdin as file_path, ExitStack() as stack:
         if args.debugger:
             debugger = Debugger(break_on_parsing=not args.no_debug_python)
-            for ex in args.eval_command:
-                try:
-                    debugger.before_prompt()
-                    debugger.write(f"{debugger.repl_prompt}{ex}\n")
-                    debugger.run_command(ex)
-                except KeyError:
-                    exit(1)
-                except ExitREPL:
-                    exit(0)
             if args.eval_command:
+                for ex in args.eval_command:
+                    try:
+                        debugger.before_prompt()
+                        debugger.write(f"{debugger.repl_prompt}{ex}\n")
+                        debugger.run_command(ex)
+                    except KeyError:
+                        exit(1)
+                    except ExitREPL:
+                        exit(0)
                 debugger.write("\n")
             stack.enter_context(debugger)
         elif args.no_debug_python:
