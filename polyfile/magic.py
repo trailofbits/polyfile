@@ -1455,7 +1455,7 @@ class RegexType(DataType[Pattern[bytes]]):
         # handle POSIX-style character classes:
         unescaped_spec = posix_to_python_re(unescape(specification))
         # convert '$' to '[\r$]'
-        unescaped_spec = self.__class__.DOLLAR_PATTERN.sub(rb"[\r$]", unescaped_spec)
+        # unescaped_spec = self.__class__.DOLLAR_PATTERN.sub(rb"[\r$]", unescaped_spec)
         try:
             if self.case_insensitive:
                 return re.compile(unescaped_spec, re.IGNORECASE | re.MULTILINE)
@@ -1475,7 +1475,7 @@ class RegexType(DataType[Pattern[bytes]]):
                 if line_offset < 0:
                     return DataTypeMatch.INVALID
                 line = data[offset:line_offset]
-                m = expected.search(line)
+                m = expected.match(line)
                 if m:
                     match = data[:offset + m.end()]
                     try:
