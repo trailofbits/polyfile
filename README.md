@@ -182,7 +182,7 @@ with open("file_to_test", "rb") as f:
 ```
 
 ### Debugging the libmagic DSL
-`libmagic` has an esoteric, poorly documented doman-specific language (DSL) for specifying its matching signatures.
+`libmagic` has an esoteric, poorly documented domain-specific language (DSL) for specifying its matching signatures.
 You can read the minimal and—as we have discovered in our cleanroom implementation—_incomplete_ documentation by running
 `man 5 magic`. PolyFile implements an interactive debugger for stepping through the DSL specifications, modeled after
 GDB. You can enter this debugger by passing the `--debugger` or `-db` argument to PolyFile. It is useful for both
