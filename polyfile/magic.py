@@ -1449,9 +1449,13 @@ class RegexType(DataType[Pattern[bytes]]):
         super().__init__(f"regex/{self.length}{['', 'c'][case_insensitive]}{['', 's'][match_to_start]}"
                          f"{['', 'l'][self.limit_lines]}{['', 'T'][self.trim]}")
 
+    DOLLAR_PATTERN = re.compile(rb"(^|[^\\])\$", re.MULTILINE)
+
     def parse_expected(self, specification: str) -> Pattern[bytes]:
         # handle POSIX-style character classes:
         unescaped_spec = posix_to_python_re(unescape(specification))
+        # convert '$' to '[\r$]'
+        unescaped_spec = self.__class__.DOLLAR_PATTERN.sub(rb"[\r$]", unescaped_spec)
         try:
             if self.case_insensitive:
                 return re.compile(unescaped_spec, re.IGNORECASE | re.MULTILINE)
