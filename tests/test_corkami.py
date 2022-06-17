@@ -28,6 +28,7 @@ KNOWN_BAD_FILES = {
                                          # while PolyFile incorrectly classifies this as `text/plain` (investigating)
 }
 
+
 class CorkamiCorpusTest(TestCase):
     default_matcher: MagicMatcher
 
