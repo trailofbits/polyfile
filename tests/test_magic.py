@@ -60,38 +60,39 @@ class MagicTest(TestCase):
         ])
 
         for test in tests:
-            testfile = FILE_TEST_DIR / f"{test}.testfile"
-            result = FILE_TEST_DIR / f"{test}.result"
+            with self.subTest(test=test):
+                testfile = FILE_TEST_DIR / f"{test}.testfile"
+                result = FILE_TEST_DIR / f"{test}.result"
 
-            if not testfile.exists() or not result.exists():
-                continue
+                if not testfile.exists() or not result.exists():
+                    continue
 
-            magicfile = FILE_TEST_DIR / f"{test}.magic"
+                magicfile = FILE_TEST_DIR / f"{test}.magic"
 
-            print(f"Testing: {test}")
+                print(f"Testing: {test}")
 
-            if magicfile.exists():
-                print(f"\tParsing custom match script: {magicfile.stem}")
-                matcher = MagicMatcher.parse(magicfile)
-            else:
-                matcher = default_matcher
+                if magicfile.exists():
+                    print(f"\tParsing custom match script: {magicfile.stem}")
+                    matcher = MagicMatcher.parse(magicfile)
+                else:
+                    matcher = default_matcher
 
-            with open(result, "r") as f:
-                expected = f.read()
-                print(f"\tExpected: {expected!r}")
+                with open(result, "r") as f:
+                    expected = f.read()
+                    print(f"\tExpected: {expected!r}")
 
-            with open(testfile, "rb") as f:
-                matches = set()
-                for match in matcher.match(f.read()):
-                    actual = str(match)
-                    matches.add(actual)
-                    print(f"\tActual:   {actual!r}")
-                if testfile.stem not in ("JW07022A.mp3", "gedcom"):
-                    # The files we skip fail because there is a bug in our implementation that we have not yet fixed
-                    if expected == "ASCII text" and expected not in matches:
-                        self.assertIn(expected.lower(), matches)
-                    elif "00000000" in expected and expected not in matches:
-                        # our output is technically correct but we output "0x000000" instead of "00000000"
-                        self.assertIn(expected.replace("00000000", "0x000000"), matches)
-                    else:
-                        self.assertIn(expected, matches)
+                with open(testfile, "rb") as f:
+                    matches = set()
+                    for match in matcher.match(f.read()):
+                        actual = str(match)
+                        matches.add(actual)
+                        print(f"\tActual:   {actual!r}")
+                    if testfile.stem not in ("JW07022A.mp3", "gedcom"):
+                        # The files we skip fail because there is a bug in our implementation that we have not yet fixed
+                        if expected == "ASCII text" and expected not in matches:
+                            self.assertIn(expected.lower(), matches)
+                        elif "00000000" in expected and expected not in matches:
+                            # our output is technically correct but we output "0x000000" instead of "00000000"
+                            self.assertIn(expected.replace("00000000", "0x000000"), matches)
+                        else:
+                            self.assertIn(expected, matches)
