@@ -4,8 +4,9 @@ import re
 import shutil
 import subprocess
 from tempfile import TemporaryDirectory
-from typing import Set
-from unittest import TestCase
+from typing import Iterator, List, Set
+import unittest
+from unittest import TestSuite, TestCase
 import urllib.request
 from zipfile import ZipFile, ZipInfo
 
@@ -28,8 +29,46 @@ KNOWN_BAD_FILES = {
                                          # while PolyFile incorrectly classifies this as `text/plain` (investigating)
 }
 
+FILE_MIMETYPE_PATTERN = re.compile(rb"^(.*?:|-)\s*(?P<mime>[^/\s]+/[^/;\s]+)\s*(;.*?$|$)(?P<remainder>.*)",
+                                   re.MULTILINE)
 
-class CorkamiCorpusTest(TestCase):
+
+class CorkamiFile:
+    def __init__(self, path_in_zip: Path, info: ZipInfo):
+        self.path_in_zip: Path = path_in_zip
+        self.info: ZipInfo = info
+        self._tmpdir: TemporaryDirectory = None  # type: ignore
+
+    def __enter__(self) -> Path:
+        self._tmpdir = TemporaryDirectory()
+        self._tmpdir.__enter__()
+        with ZipFile(CORKAMI_CORPUS_ZIP, "r") as z:
+            return Path(z.extract(self.info, self._tmpdir.name))
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self._tmpdir.__exit__(exc_type, exc_val, exc_tb)
+
+
+class CorkamiCorpus:
+    @classmethod
+    def download(cls):
+        with urllib.request.urlopen(CORKAMI_URL) as response, open(CORKAMI_CORPUS_ZIP, "wb") as out_file:
+            shutil.copyfileobj(response, out_file)
+
+    @classmethod
+    def files(cls) -> Iterator[CorkamiFile]:
+        if not CORKAMI_CORPUS_ZIP.exists():
+            cls.download()
+        with ZipFile(CORKAMI_CORPUS_ZIP, "r") as z:
+            for info in z.infolist():
+                if info.is_dir() or info.file_size <= 0:
+                    continue
+                path = Path(info.filename)
+                if not path.name.startswith("."):
+                    yield CorkamiFile(path_in_zip=path, info=info)
+
+
+class CorkamiDifferentialTests(TestCase):
     default_matcher: MagicMatcher
 
     @classmethod
@@ -39,90 +78,146 @@ class CorkamiCorpusTest(TestCase):
         # skip the DER definition because we don't yet support it (and none of the tests actually require it)
         cls.default_matcher = MagicMatcher.parse(*(d for d in MAGIC_DEFS if d.name != "der"))
 
+        build_local_file()
 
-if not CORKAMI_CORPUS_ZIP.exists():
-    with urllib.request.urlopen(CORKAMI_URL) as response, open(CORKAMI_CORPUS_ZIP, "wb") as out_file:
-        shutil.copyfileobj(response, out_file)
+    def test_against_file(self):
+        for file in CorkamiCorpus.files():
+            with self.subTest(corkami_file=str(file.path_in_zip)), file as local_path:
+                # see if this is a known bad file
+                with open(local_path, "rb") as f:
+                    md5_hash = md5(f.read()).hexdigest().lower()
+                    if md5_hash in KNOWN_BAD_FILES:
+                        print(f"Skipping known bad file {file.path_in_zip}")
+                        continue
 
-
-FILE_MIMETYPE_PATTERN = re.compile(rb"^(.*?:|-)\s*(?P<mime>[^/\s]+/[^/;\s]+)\s*(;.*?$|$)(?P<remainder>.*)",
-                                   re.MULTILINE)
-
-
-def test_file(self: CorkamiCorpusTest, info: ZipInfo):
-    with TemporaryDirectory() as tmpdir:
-        with ZipFile(CORKAMI_CORPUS_ZIP, "r") as z:
-            file_path = z.extract(info, tmpdir)
-            # see if this is a known bad file
-            with open(file_path, "rb") as f:
-                md5_hash = md5(f.read()).hexdigest().lower()
-                if md5_hash in KNOWN_BAD_FILES:
-                    print(f"Skipping known bad file {info.filename}")
-                    return
-        orig_file_output = subprocess.check_output([
-            str(FILE_PATH), "-m", str(MAGIC_FILE_PATH), "-i", "--keep-going", str(file_path)
-        ])
-        file_output = orig_file_output
-        file_mimetypes: Set[str] = set()
-        while file_output:
-            m = FILE_MIMETYPE_PATTERN.match(file_output)
-            if not m:
-                break
-            file_mimetypes.add(m.group("mime").decode("utf-8"))
-            file_output = m.group("remainder")
-        polyfile_mimetypes = {
-            mimetype
-            for match in self.default_matcher.match(MatchContext.load(file_path, only_match_mime=True))
-            for mimetype in match.mimetypes
-        }
-        if len(file_mimetypes & polyfile_mimetypes) != len(file_mimetypes):
-            # there are some mimetypes that `file` matched by PolyFile missed
-            if "application/octet-stream" in file_mimetypes and "application/octet-stream" not in polyfile_mimetypes:
-                # this is just `file`'s default mime type, so take it out
-                file_mimetypes -= {"application/octet-stream"}
-            if len(file_mimetypes) != len(file_mimetypes & polyfile_mimetypes):
-                # PolyFile is more accurate than `file` at detecting PDFs:
-                missed_mimetypes = file_mimetypes - polyfile_mimetypes
-                if len(missed_mimetypes) == 1 and "text/plain" in missed_mimetypes and "application/pdf" in \
-                        polyfile_mimetypes:
-                    # PolyFile just detected a PDF that `file` misclassified as text/plain!
-                    pass
-                else:
-                    if not FAILED_FILE_DIR.exists():
-                        FAILED_FILE_DIR.mkdir()
-                    suffix = 1
-                    file_path = Path(file_path)
-                    out_file = FAILED_FILE_DIR / file_path.name
-                    while out_file.exists():
-                        suffix += 1
-                        out_file = FAILED_FILE_DIR / f"{file_path.stem}{suffix}{file_path.suffix}"
-                    shutil.move(file_path, out_file)
-                    self.fail(f"`file` matched {file_mimetypes - polyfile_mimetypes!r} but PolyFile matched "
-                              f"{polyfile_mimetypes - file_mimetypes}.\nOriginal `file` output was: "
-                              f"{orig_file_output!r}")
+                orig_file_output = subprocess.check_output([
+                    str(FILE_PATH), "-m", str(MAGIC_FILE_PATH), "-i", "--keep-going", str(local_path)
+                ])
+                file_output = orig_file_output
+                file_mimetypes: Set[str] = set()
+                while file_output:
+                    m = FILE_MIMETYPE_PATTERN.match(file_output)
+                    if not m:
+                        break
+                    file_mimetypes.add(m.group("mime").decode("utf-8"))
+                    file_output = m.group("remainder")
+                polyfile_mimetypes = {
+                    mimetype
+                    for match in self.default_matcher.match(MatchContext.load(local_path, only_match_mime=True))
+                    for mimetype in match.mimetypes
+                }
+                if len(file_mimetypes & polyfile_mimetypes) != len(file_mimetypes):
+                    # there are some mimetypes that `file` matched by PolyFile missed
+                    if "application/octet-stream" in file_mimetypes \
+                            and "application/octet-stream" not in polyfile_mimetypes:
+                        # this is just `file`'s default mime type, so take it out
+                        file_mimetypes -= {"application/octet-stream"}
+                    if len(file_mimetypes) != len(file_mimetypes & polyfile_mimetypes):
+                        # PolyFile is more accurate than `file` at detecting PDFs:
+                        missed_mimetypes = file_mimetypes - polyfile_mimetypes
+                        if len(missed_mimetypes) == 1 and "text/plain" in missed_mimetypes and "application/pdf" in \
+                                polyfile_mimetypes:
+                            # PolyFile just detected a PDF that `file` misclassified as text/plain!
+                            pass
+                        else:
+                            if not FAILED_FILE_DIR.exists():
+                                FAILED_FILE_DIR.mkdir()
+                            suffix = 1
+                            out_file = FAILED_FILE_DIR / local_path.name
+                            while out_file.exists():
+                                suffix += 1
+                                out_file = FAILED_FILE_DIR / f"{local_path.stem}{suffix}{local_path.suffix}"
+                            shutil.move(local_path, out_file)
+                            self.fail(f"`file` matched {file_mimetypes - polyfile_mimetypes!r} but PolyFile matched "
+                                      f"{polyfile_mimetypes - file_mimetypes}.\nOriginal `file` output was: "
+                                      f"{orig_file_output!r}")
 
 
-def _init_tests():
-    with ZipFile(CORKAMI_CORPUS_ZIP, "r") as z:
-        for info in z.infolist():
-            if info.is_dir() or info.file_size <= 0:
-                continue
-            path = Path(info.filename)
-            if path.name.startswith("."):
-                continue
-
-            suffix = ""
-            func_name = f"test_{path.name.replace('.', '_')}"
-            while hasattr(CorkamiCorpusTest, f"{func_name}{suffix}"):
-                if not suffix:
-                    suffix = 2
-                else:
-                    suffix += 1
-
-            def test(self: CorkamiCorpusTest, info=info):
-                return test_file(self, info)
-
-            setattr(CorkamiCorpusTest, f"{func_name}{suffix}", test)
+# class CorkamiCorpusTest(TestCase):
+#     default_matcher: MagicMatcher
+#
+#     @classmethod
+#     def setUpClass(cls):
+#         if FAILED_FILE_DIR.exists():
+#             shutil.rmtree(FAILED_FILE_DIR)
+#         # skip the DER definition because we don't yet support it (and none of the tests actually require it)
+#         cls.default_matcher = MagicMatcher.parse(*(d for d in MAGIC_DEFS if d.name != "der"))
+#
+#
+# def test_file(self: CorkamiCorpusTest, info: ZipInfo):
+#     with TemporaryDirectory() as tmpdir:
+#         with ZipFile(CORKAMI_CORPUS_ZIP, "r") as z:
+#             file_path = z.extract(info, tmpdir)
+#             # see if this is a known bad file
+#             with open(file_path, "rb") as f:
+#                 md5_hash = md5(f.read()).hexdigest().lower()
+#                 if md5_hash in KNOWN_BAD_FILES:
+#                     print(f"Skipping known bad file {info.filename}")
+#                     return
+#         orig_file_output = subprocess.check_output([
+#             str(FILE_PATH), "-m", str(MAGIC_FILE_PATH), "-i", "--keep-going", str(file_path)
+#         ])
+#         file_output = orig_file_output
+#         file_mimetypes: Set[str] = set()
+#         while file_output:
+#             m = FILE_MIMETYPE_PATTERN.match(file_output)
+#             if not m:
+#                 break
+#             file_mimetypes.add(m.group("mime").decode("utf-8"))
+#             file_output = m.group("remainder")
+#         polyfile_mimetypes = {
+#             mimetype
+#             for match in self.default_matcher.match(MatchContext.load(file_path, only_match_mime=True))
+#             for mimetype in match.mimetypes
+#         }
+#         if len(file_mimetypes & polyfile_mimetypes) != len(file_mimetypes):
+#             # there are some mimetypes that `file` matched by PolyFile missed
+#             if "application/octet-stream" in file_mimetypes and "application/octet-stream" not in polyfile_mimetypes:
+#                 # this is just `file`'s default mime type, so take it out
+#                 file_mimetypes -= {"application/octet-stream"}
+#             if len(file_mimetypes) != len(file_mimetypes & polyfile_mimetypes):
+#                 # PolyFile is more accurate than `file` at detecting PDFs:
+#                 missed_mimetypes = file_mimetypes - polyfile_mimetypes
+#                 if len(missed_mimetypes) == 1 and "text/plain" in missed_mimetypes and "application/pdf" in \
+#                         polyfile_mimetypes:
+#                     # PolyFile just detected a PDF that `file` misclassified as text/plain!
+#                     pass
+#                 else:
+#                     if not FAILED_FILE_DIR.exists():
+#                         FAILED_FILE_DIR.mkdir()
+#                     suffix = 1
+#                     file_path = Path(file_path)
+#                     out_file = FAILED_FILE_DIR / file_path.name
+#                     while out_file.exists():
+#                         suffix += 1
+#                         out_file = FAILED_FILE_DIR / f"{file_path.stem}{suffix}{file_path.suffix}"
+#                     shutil.move(file_path, out_file)
+#                     self.fail(f"`file` matched {file_mimetypes - polyfile_mimetypes!r} but PolyFile matched "
+#                               f"{polyfile_mimetypes - file_mimetypes}.\nOriginal `file` output was: "
+#                               f"{orig_file_output!r}")
+#
+#
+# def _init_tests():
+#     with ZipFile(CORKAMI_CORPUS_ZIP, "r") as z:
+#         for info in z.infolist():
+#             if info.is_dir() or info.file_size <= 0:
+#                 continue
+#             path = Path(info.filename)
+#             if path.name.startswith("."):
+#                 continue
+#
+#             suffix = ""
+#             func_name = f"test_{path.name.replace('.', '_')}"
+#             while hasattr(CorkamiCorpusTest, f"{func_name}{suffix}"):
+#                 if not suffix:
+#                     suffix = 2
+#                 else:
+#                     suffix += 1
+#
+#             def test(self: CorkamiCorpusTest, info=info):
+#                 return test_file(self, info)
+#
+#             setattr(CorkamiCorpusTest, f"{func_name}{suffix}", test)
 
 
 def build_local_file():
@@ -156,6 +251,5 @@ def build_local_file():
         MAGIC_FILE_PATH.unlink()
     mgc_file.rename(MAGIC_FILE_PATH)
 
-
-build_local_file()
-_init_tests()
+# build_local_file()
+# _init_tests()
