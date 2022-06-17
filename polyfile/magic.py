@@ -11,6 +11,7 @@ details about the file.
 from abc import ABC, abstractmethod
 from collections import defaultdict
 import csv
+from datetime import datetime
 from enum import Enum
 from io import StringIO
 import json
@@ -24,6 +25,8 @@ from typing import (
     Any, BinaryIO, Callable, Dict, Generic, Iterable, Iterator, List, Optional, Set, Tuple, Type, TypeVar, Union
 )
 from uuid import UUID
+
+from chardet.universaldetector import UniversalDetector
 
 from .arithmetic import CStyleInt, make_c_style_int
 from .iterators import LazyIterableSet
@@ -246,7 +249,7 @@ def parse_numeric(text: Union[str, bytes]) -> int:
 
 class Offset(ABC):
     @abstractmethod
-    def to_absolute(self, data: bytes, last_match: Optional[TestResult]) -> int:
+    def to_absolute(self, data: bytes, last_match: Optional[TestResult], allow_invalid: bool = False) -> int:
         raise NotImplementedError()
 
     @staticmethod
@@ -276,8 +279,8 @@ class AbsoluteOffset(Offset):
     def __init__(self, offset: int):
         self.offset: int = offset
 
-    def to_absolute(self, data: bytes, last_match: Optional[TestResult]) -> int:
-        if self.offset >= len(data):
+    def to_absolute(self, data: bytes, last_match: Optional[TestResult], allow_invalid: bool = False) -> int:
+        if not allow_invalid and self.offset >= len(data):
             raise InvalidOffsetError(offset=self)
         return self.offset
 
@@ -293,7 +296,7 @@ class NamedAbsoluteOffset(AbsoluteOffset):
         super().__init__(offset)
         self.test: NamedTest = test
 
-    def to_absolute(self, data: bytes, last_match: Optional[TestResult]) -> int:
+    def to_absolute(self, data: bytes, last_match: Optional[TestResult], allow_invalid: bool = False) -> int:
         while last_match is not None and not last_match.test is self.test:
             last_match = last_match.parent
 
@@ -307,7 +310,7 @@ class NamedAbsoluteOffset(AbsoluteOffset):
 
         assert isinstance(last_match.test, UseTest)
 
-        if last_match.offset + self.offset >= len(data):
+        if not allow_invalid and last_match.offset + self.offset >= len(data):
             raise InvalidOffsetError(offset=self)
         return last_match.offset + self.offset
 
@@ -319,8 +322,8 @@ class NegativeOffset(Offset):
     def __init__(self, magnitude: int):
         self.magnitude: int = magnitude
 
-    def to_absolute(self, data: bytes, last_match: Optional[TestResult]) -> int:
-        if self.magnitude > len(data):
+    def to_absolute(self, data: bytes, last_match: Optional[TestResult], allow_invalid: bool = False) -> int:
+        if not allow_invalid and self.magnitude > len(data):
             raise InvalidOffsetError(offset=self)
         return len(data) - self.magnitude
 
@@ -335,7 +338,7 @@ class RelativeOffset(Offset):
     def __init__(self, relative_to: Offset):
         self.relative_to: Offset = relative_to
 
-    def to_absolute(self, data: bytes, last_match: Optional[TestResult]) -> int:
+    def to_absolute(self, data: bytes, last_match: Optional[TestResult], allow_invalid: bool = False) -> int:
         if isinstance(self.relative_to, NegativeOffset):
             difference = -self.relative_to.magnitude
         else:
@@ -344,7 +347,7 @@ class RelativeOffset(Offset):
             raise InvalidOffsetError(f"The last test was expected to be a match, but instead got {last_match!s}",
                                      offset=self)
         offset = last_match.offset + last_match.length + difference
-        if len(data) < offset < 0:
+        if not allow_invalid and len(data) < offset < 0:
             raise InvalidOffsetError(offset=self)
         return offset
 
@@ -368,7 +371,7 @@ class IndirectOffset(Offset):
         elif num_bytes not in (1, 2, 4, 8):
             raise ValueError(f"Invalid number of bytes: {num_bytes}")
 
-    def to_absolute(self, data: bytes, last_match: Optional[TestResult]) -> int:
+    def to_absolute(self, data: bytes, last_match: Optional[TestResult], allow_invalid: bool = False) -> int:
         if self.num_bytes == 1:
             fmt = "B"
         elif self.num_bytes == 2:
@@ -386,7 +389,10 @@ class IndirectOffset(Offset):
         offset = self.offset.to_absolute(data, last_match)
         to_unpack = data[offset:offset + self.num_bytes]
         if len(to_unpack) < self.num_bytes:
-            raise InvalidOffsetError(offset=self)
+            if allow_invalid:
+                return len(data)
+            else:
+                raise InvalidOffsetError(offset=self)
         return self.post_process(struct.unpack(fmt, to_unpack)[0])
 
     NUMBER_PATTERN: str = r"(0[xX][\dA-Fa-f]+|\d+)L?"
@@ -600,6 +606,8 @@ class Comment:
 
 
 class MagicTest(ABC):
+    AUTO_REGISTER_TEST: bool = True
+
     def __init__(
             self,
             offset: Offset,
@@ -648,7 +656,8 @@ class MagicTest(ABC):
         self.comments: Tuple[Comment, ...] = tuple(comments)
 
     def __init_subclass__(cls, **kwargs):
-        TEST_TYPES.add(cls)
+        if cls.AUTO_REGISTER_TEST:
+            TEST_TYPES.add(cls)
         return super().__init_subclass__(**kwargs)
 
     @property
@@ -750,11 +759,14 @@ class MagicTest(ABC):
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
         raise NotImplementedError()
 
+    def calculate_absolute_offset(self, data: bytes, parent_match: Optional[TestResult] = None) -> int:
+        return self.offset.to_absolute(data, parent_match)
+
     def _match(self, context: MatchContext, parent_match: Optional[TestResult] = None) -> Iterator[MatchedTest]:
         if context.only_match_mime and not self.can_match_mime:
             return
         try:
-            absolute_offset = self.offset.to_absolute(context.data, parent_match)
+            absolute_offset = self.calculate_absolute_offset(context.data, parent_match)
         except InvalidOffsetError:
             return
         m = self.test(context.data, absolute_offset, parent_match)
@@ -832,6 +844,9 @@ DataTypeMatch.INVALID = DataTypeMatch()
 class DataType(ABC, Generic[T]):
     def __init__(self, name: str):
         self.name: str = name
+
+    def allows_invalid_offsets(self, expected: T) -> bool:
+        return False
 
     @abstractmethod
     def parse_expected(self, specification: str) -> T:
@@ -964,7 +979,8 @@ class StringTest(ABC):
               compact_whitespace: bool = False,
               case_insensitive_lower: bool = False,
               case_insensitive_upper: bool = False,
-              optional_blanks: bool = False) -> "StringTest":
+              optional_blanks: bool = False,
+              full_word_match: bool = False) -> "StringTest":
         if specification.strip() == "x":
             return StringWildcard(trim=trim, compact_whitespace=compact_whitespace)
         if specification.startswith("!"):
@@ -988,7 +1004,8 @@ class StringTest(ABC):
                 compact_whitespace=compact_whitespace,
                 case_insensitive_lower=case_insensitive_lower,
                 case_insensitive_upper=case_insensitive_upper,
-                optional_blanks=optional_blanks
+                optional_blanks=optional_blanks,
+                full_word_match=full_word_match
             )
         if negate:
             return NegatedStringTest(test)
@@ -1070,31 +1087,69 @@ class StringMatch(StringTest):
                  case_insensitive_lower: bool = False,
                  case_insensitive_upper: bool = False,
                  optional_blanks: bool = False,
+                 full_word_match: bool = False
     ):
         super().__init__(trim=trim, compact_whitespace=compact_whitespace)
         self.string: bytes = to_match
         self.case_insensitive_lower: bool = case_insensitive_lower
         self.case_insensitive_upper: bool = case_insensitive_upper
         self.optional_blanks: bool = optional_blanks
+        self.full_word_match: bool = full_word_match
+        if optional_blanks and compact_whitespace:
+            raise ValueError("Optional blanks `w` and compacting whitespace `W` cannot be selected at the same time")
         self._pattern: Optional[re.Pattern] = None
         _ = self.pattern
 
     def pattern_string(self) -> bytes:
         pattern = re.escape(self.string)
-        if self.optional_blanks:
-            pattern = pattern.replace(b"\\ ", b"\\ ?")
+        if self.case_insensitive_lower and not self.case_insensitive_upper:
+            # treat lower case letters as either lower or upper case
+            delta = ord('A') - ord('a')
+            for ordinal in range(ord('a'), ord('z') + 1):
+                pattern = pattern.replace(bytes([ordinal]), f"[{chr(ordinal)}{chr(ordinal+delta)}]".encode("utf-8"))
+        elif not self.case_insensitive_lower and self.case_insensitive_upper:
+            # treat upper case letters as either lower or upper case
+            delta = ord('a') - ord('A')
+            for ordinal in range(ord('A'), ord('Z') + 1):
+                pattern = pattern.replace(bytes([ordinal]), f"[{chr(ordinal)}{chr(ordinal+delta)}]".encode("utf-8"))
+        if self.compact_whitespace:
+            new_pattern_bytes: List[Tuple[bytes, int]] = []
+            escaped = False
+            for c in (bytes([b]) for b in pattern):
+                if escaped:
+                    c = b"\\" + c
+                    escaped = False
+                elif c == b"\\":
+                    escaped = True
+                    continue
+                if new_pattern_bytes and new_pattern_bytes[-1][0] == c:
+                    new_pattern_bytes[-1] = (c, new_pattern_bytes[-1][1] + 1)
+                else:
+                    new_pattern_bytes.append((c, 1))
+            if escaped:
+                raise ValueError(f"Error parsing search pattern {self.string!r}")
+            pattern_bytes = bytearray()
+            for c, count in new_pattern_bytes:
+                pattern_bytes.extend(c)
+                if c in (b'\\ ', b'\\s', b'\\t', b'\\r', b'\\v', b'\\f'):
+                    # this is whitespace
+                    if count == 1:
+                        pattern_bytes.extend(b"+")
+                    else:
+                        pattern_bytes.extend(f"{{{count},}}".encode("utf-8"))
+                elif count > 1:
+                    pattern_bytes.extend(f"{{{count}}}".encode("utf-8"))
+            pattern = bytes(pattern_bytes)
+        elif self.optional_blanks:
+            pattern = pattern.replace(rb"\ ", rb"\ ?")
+        if self.full_word_match:
+            pattern = rb"\b" + pattern + rb"\b"
         return pattern
 
     def pattern_flags(self) -> int:
         flags: int = 0
         if self.case_insensitive_upper and self.case_insensitive_lower:
             flags |= re.IGNORECASE
-        elif self.case_insensitive_lower:
-            raise NotImplementedError("TODO: Implement support for the `c` flag by itself")
-        elif self.case_insensitive_upper:
-            raise NotImplementedError("TODO: Implement support for the `C` flag by itself")
-        if self.compact_whitespace:
-            raise NotImplementedError("TODO: Implement support for the `W` flag")
         return flags
 
     @property
@@ -1126,6 +1181,7 @@ class StringType(DataType[StringTest]):
             case_insensitive_upper: bool = False,
             compact_whitespace: bool = False,
             optional_blanks: bool = False,
+            full_word_match: bool = False,
             trim: bool = False
     ):
         if not all((case_insensitive_lower, case_insensitive_upper, compact_whitespace, optional_blanks, trim)):
@@ -1133,21 +1189,32 @@ class StringType(DataType[StringTest]):
         else:
             name = f"string/{['', 'W'][compact_whitespace]}{['', 'w'][optional_blanks]}"\
                    f"{['', 'C'][case_insensitive_upper]}{['', 'c'][case_insensitive_lower]}"\
-                   f"{['', 'T'][trim]}"
+                   f"{['', 'T'][trim]}{['', 'f'][full_word_match]}"
         super().__init__(name)
         self.case_insensitive_lower: bool = case_insensitive_lower
         self.case_insensitive_upper: bool = case_insensitive_upper
         self.compact_whitespace: bool = compact_whitespace
         self.optional_blanks: bool = optional_blanks
+        self.full_word_match: bool = full_word_match
         self.trim: bool = trim
 
+    def allows_invalid_offsets(self, expected: StringTest) -> bool:
+        return isinstance(expected, NegatedStringTest)
+
     def parse_expected(self, specification: str) -> StringTest:
-        return StringTest.parse(specification)
+        return StringTest.parse(
+            specification,
+            trim=self.trim,
+            case_insensitive_lower=self.case_insensitive_lower,
+            case_insensitive_upper=self.case_insensitive_upper,
+            compact_whitespace=self.compact_whitespace,
+            full_word_match=self.full_word_match
+        )
 
     def match(self, data: bytes, expected: StringTest) -> DataTypeMatch:
         return expected.matches(data)
 
-    STRING_TYPE_FORMAT: Pattern[str] = re.compile(r"^u?string(/[BbCctTWw]*)?$")
+    STRING_TYPE_FORMAT: Pattern[str] = re.compile(r"^u?string(/[BbCctTWwf]*)?$")
 
     @classmethod
     def parse(cls, format_str: str) -> "StringType":
@@ -1158,7 +1225,7 @@ class StringType(DataType[StringTest]):
             options: Iterable[str] = ()
         else:
             options = m.group(1)
-        unsupported_options = {opt for opt in options if opt not in "/WwcCtbT"}
+        unsupported_options = {opt for opt in options if opt not in "/WwcCtbTf"}
         if unsupported_options:
             log.warning(f"{format_str!r} has invalid option(s) that will be ignored: {', '.join(unsupported_options)}")
         return StringType(
@@ -1166,6 +1233,7 @@ class StringType(DataType[StringTest]):
             case_insensitive_upper="C" in options,
             compact_whitespace="W" in options,
             optional_blanks="w" in options,
+            full_word_match="f" in options,
             trim="T" in options
         )
 
@@ -1179,6 +1247,7 @@ class SearchType(StringType):
             compact_whitespace: bool = False,
             optional_blanks: bool = False,
             match_to_start: bool = False,
+            full_word_match: bool = False,
             trim: bool = False
     ):
         if repetitions is not None and repetitions <= 0:
@@ -1188,6 +1257,7 @@ class SearchType(StringType):
             case_insensitive_upper=case_insensitive_upper,
             compact_whitespace=compact_whitespace,
             optional_blanks=optional_blanks,
+            full_word_match=full_word_match,
             trim=trim
         )
         self.repetitions: Optional[int] = repetitions
@@ -1209,8 +1279,8 @@ class SearchType(StringType):
 
     SEARCH_TYPE_FORMAT: Pattern[str] = re.compile(
         r"^search"
-        r"((/(?P<repetitions1>(0[xX][\dA-Fa-f]+|\d+)))(/(?P<flags1>[BbCctTWws]*)?)?|"
-        r"/((?P<flags2>[BbCctTWws]*)/?)?(?P<repetitions2>(0[xX][\dA-Fa-f]+|\d+)))$"
+        r"((/(?P<repetitions1>(0[xX][\dA-Fa-f]+|\d+)))(/(?P<flags1>[BbCctTWwsf]*)?)?|"
+        r"/((?P<flags2>[BbCctTWwsf]*)/?)?(?P<repetitions2>(0[xX][\dA-Fa-f]+|\d+)))$"
     )
     # NOTE: some specification files like `ber` use `search/b64`, which is undocumented. We treat that equivalent to
     #       the compliant `search/b/64`.
@@ -1242,6 +1312,7 @@ class SearchType(StringType):
             case_insensitive_upper="C" in options,
             compact_whitespace="B" in options or "W" in options,
             optional_blanks="b" in options or "w" in options,
+            full_word_match="f" in options,
             trim="T" in options,
             match_to_start="s" in options
         )
@@ -1378,14 +1449,18 @@ class RegexType(DataType[Pattern[bytes]]):
         super().__init__(f"regex/{self.length}{['', 'c'][case_insensitive]}{['', 's'][match_to_start]}"
                          f"{['', 'l'][self.limit_lines]}{['', 'T'][self.trim]}")
 
+    DOLLAR_PATTERN = re.compile(rb"(^|[^\\])\$", re.MULTILINE)
+
     def parse_expected(self, specification: str) -> Pattern[bytes]:
         # handle POSIX-style character classes:
         unescaped_spec = posix_to_python_re(unescape(specification))
+        # convert '$' to '[\r$]'
+        # unescaped_spec = self.__class__.DOLLAR_PATTERN.sub(rb"[\r$]", unescaped_spec)
         try:
             if self.case_insensitive:
-                return re.compile(unescaped_spec, re.IGNORECASE)
+                return re.compile(unescaped_spec, re.IGNORECASE | re.MULTILINE)
             else:
-                return re.compile(unescaped_spec)
+                return re.compile(unescaped_spec, re.MULTILINE)
         except re.error as e:
             raise ValueError(str(e))
 
@@ -1400,7 +1475,7 @@ class RegexType(DataType[Pattern[bytes]]):
                 if line_offset < 0:
                     return DataTypeMatch.INVALID
                 line = data[offset:line_offset]
-                m = expected.search(line)
+                m = expected.match(line)
                 if m:
                     match = data[:offset + m.end()]
                     try:
@@ -1454,15 +1529,35 @@ class RegexType(DataType[Pattern[bytes]]):
 BASE_NUMERIC_TYPES_BY_NAME: Dict[str, "BaseNumericDataType"] = {}
 
 
-DATE_FORMAT: str = "%a %b %e %H:%M:%S %Y"
+DATETIME_FORMAT: str = "%a %b %e %H:%M:%S %Y"
+DATE_FORMAT: str = "%a %b %e %Y"
+TIME_FORMAT: str = "%H:%M:%S"
 
 
 def local_date(ms_since_epoch: int) -> str:
-    return strftime(DATE_FORMAT, localtime(ms_since_epoch / 1000.0))
+    return strftime(DATETIME_FORMAT, localtime(ms_since_epoch / 1000.0))
 
 
 def utc_date(ms_since_epoch: int) -> str:
-    return strftime(DATE_FORMAT, gmtime(ms_since_epoch / 1000.0))
+    return strftime(DATETIME_FORMAT, gmtime(ms_since_epoch / 1000.0))
+
+
+def msdos_date(value: int) -> str:
+    day = (value & 0b11111) + 1
+    value >>= 5
+    month = (value & 0b1111) + 1
+    value >>= 4
+    year = 1980 + (value & 0b1111111)
+    return strftime(DATE_FORMAT, datetime(year, month, day).timetuple())
+
+
+def msdos_time(value: int) -> str:
+    seconds = (value & 0b11111) * 2
+    value >>= 5
+    minutes = value & 0b111111
+    value >>= 6
+    hour = value & 0b11111
+    return strftime(TIME_FORMAT, datetime(1, 1, 1, hour, minutes, seconds).timetuple())
 
 
 class BaseNumericDataType(Enum):
@@ -1472,11 +1567,13 @@ class BaseNumericDataType(Enum):
     QUAD = ("quad", "q", 8)
     FLOAT = ("float", "f", 4)
     DOUBLE = ("double", "d", 8)
-    DATE = ("date", "L", 4, lambda n : utc_date(n * 1000))
+    DATE = ("date", "L", 4, lambda n: utc_date(n * 1000))
     QDATE = ("qdate", "Q", 8, utc_date)
     LDATE = ("ldate", "L", 4, lambda n: local_date(n * 1000))
     QLDATE = ("qldate", "Q", 8, local_date)
     QWDATE = ("qwdate", "Q", 8)
+    MSDOSDATE = ("msdosdate", "h", 2, msdos_date)
+    MSDOSTIME = ("msdostime", "h", 2, msdos_time)
 
     def __init__(
             self, name: str,
@@ -1709,6 +1806,9 @@ class ConstantMatchTest(MagicTest, Generic[T]):
         self.data_type: DataType[T] = data_type
         self.constant: T = constant
 
+    def calculate_absolute_offset(self, data: bytes, parent_match: Optional[TestResult] = None) -> int:
+        return self.offset.to_absolute(data, parent_match, self.data_type.allows_invalid_offsets(self.constant))
+
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
         match = self.data_type.match(data[absolute_offset:], self.constant)
         if match:
@@ -1804,7 +1904,7 @@ class NamedTest(MagicTest):
         assert isinstance(offset, AbsoluteOffset) and offset.offset == 0
 
         class NamedTestOffset(Offset):
-            def to_absolute(self, data: bytes, last_match: Optional[TestResult]) -> int:
+            def to_absolute(self, data: bytes, last_match: Optional[TestResult], allow_invalid: bool = False) -> int:
                 assert last_match is not None
                 return last_match.offset
         offset = NamedTestOffset()
@@ -1953,6 +2053,65 @@ class DERTest(MagicTest):
         raise NotImplementedError(
             "TODO: Implement support for the DER test (e.g., using the Kaitai asn1_der.py parser)"
         )
+
+
+class PlainTextTest(MagicTest):
+    AUTO_REGISTER_TEST = False
+
+    def __init__(
+            self,
+            offset: Offset = AbsoluteOffset(0),
+            mime: Union[str, TernaryExecutableMessage] = "text/plain",
+            extensions: Iterable[str] = ("txt",),
+            parent: Optional["MagicTest"] = None,
+            comments: Iterable[Comment] = (),
+            minimum_encoding_confidence: float = 0.5
+    ):
+        super().__init__(offset, mime, extensions, "", parent, comments)
+        self.minimum_encoding_confidence: float = minimum_encoding_confidence
+
+    def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
+        if not isinstance(self.message, ConstantMessage) or self.message.message:
+            raise ValueError(f"A new PlainTextTest must be constructed for each call to .test")
+        detector = UniversalDetector()
+        offset = absolute_offset
+        while not detector.done and offset < len(data):
+            # feed 1kB at a time until we have high confidence in the classification
+            detector.feed(data[offset:offset+1024])
+            offset += 1024
+        detector.close()
+        if detector.result["confidence"] >= self.minimum_encoding_confidence:
+            encoding = detector.result["encoding"]
+            try:
+                value = data[absolute_offset:].decode(encoding)
+            except UnicodeDecodeError:
+                value = data[absolute_offset:]
+            self.message = ConstantMessage(f"{encoding} text")
+            return MatchedTest(self, offset=absolute_offset, length=len(data) - absolute_offset, parent=parent_match,
+                               value=value)
+        else:
+            return FailedTest(self, offset=absolute_offset, parent=parent_match, message="the data do not appear to "
+                                                                                         "be encoded in a text format")
+
+
+class OctetStreamTest(MagicTest):
+    AUTO_REGISTER_TEST = False
+
+    def __init__(
+            self,
+            offset: Offset = AbsoluteOffset(0),
+            mime: Union[str, TernaryExecutableMessage] = "application/octet-stream",
+            extensions: Iterable[str] = (),
+            message: Union[str, Message] = "data",
+            parent: Optional["MagicTest"] = None,
+            comments: Iterable[Comment] = ()
+    ):
+        super().__init__(offset, mime, extensions, message, parent, comments)
+
+    def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
+        # Everything is an octet stream!
+        return MatchedTest(self, offset=absolute_offset, length=len(data) - absolute_offset, parent=parent_match,
+                           value=data)
 
 
 TEST_PATTERN: Pattern[str] = re.compile(
@@ -2179,10 +2338,20 @@ class MagicMatcher:
             to_match = MatchContext(to_match)
         elif not isinstance(to_match, MatchContext):
             to_match = MatchContext.load(to_match)
+        yielded = False
         for test in log.range(self._tests, desc="matching", unit=" tests", delay=1.0):
             m = Match(matcher=self, context=to_match, results=test.match(to_match))
             if m and (not to_match.only_match_mime or any(t is not None for t in m.mimetypes)):
                 yield m
+                yielded = True
+        if not yielded:
+            # is this a plain text file?
+            m = Match(matcher=self, context=to_match, results=PlainTextTest().match(to_match))
+            if m and (not to_match.only_match_mime or any(t is not None for t in m.mimetypes)):
+                yield m
+            else:
+                yield Match(matcher=self, context=to_match, results=OctetStreamTest().match(to_match))
+
 
     @staticmethod
     def parse_test(

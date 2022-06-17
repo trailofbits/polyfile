@@ -16,6 +16,7 @@ from .wildcards import Wildcard
 
 
 B = TypeVar("B", bound="Breakpoint")
+T = TypeVar("T")
 
 
 BREAKPOINT_TYPES: List[Type["Breakpoint"]] = []
@@ -427,6 +428,7 @@ class Debugger(REPL):
         }
         self.profile_results: Dict[Union[MagicTest, Type[Parser]], float] = {}
         self._pdb: Optional[Pdb] = None
+        self._debug_next: bool = False
 
     def save_context(self):
         class DebugContext:
@@ -555,6 +557,30 @@ class Debugger(REPL):
         self.write(f"{'^' * len(current_byte)}", bold=True)
         self.write(f"{' ' * len(context_after)}\n")
 
+    def _debug(self, func: Callable[[Any], T], *args, **kwargs) -> T:
+        if self.profile.value:
+            self.write("Warning:", bold=True, color=ANSIColor.RED)
+            self.write(" Profiling will be disabled for this test while debugging!\n")
+        with Unprofiled():
+            # check if there is already a debugger attached, most likely an IDE like PyCharm;
+            # if so, use that debugger instead of creating our own instance of pdb
+            external_debugger = sys.gettrace() is not None or self._pdb is not None
+            if not external_debugger:
+                self._pdb = Pdb(skip=["polyfile.magic_debugger", "polyfile.magic"])
+                if sys.stderr.isatty():
+                    self._pdb.prompt = "\001\u001b[1m\002(polyfile-Pdb)\001\u001b[0m\002 "
+                else:
+                    self._pdb.prompt = "(polyfile-Pdb) "
+                try:
+                    result = self._pdb.runcall(func, *args, **kwargs)
+                finally:
+                    self._pdb = None
+            else:
+                breakpoint()
+                # This next line will invoke the test:
+                result = func(*args, **kwargs)
+            return result
+
     def debug(
             self,
             instrumented_test: InstrumentedTest,
@@ -564,11 +590,16 @@ class Debugger(REPL):
             parent_match: Optional[TestResult]
     ) -> Optional[TestResult]:
         profiler = Profiler()
-        with profiler:
-            if instrumented_test.original_test is None:
-                result = instrumented_test.test.test(test, data, absolute_offset, parent_match)
-            else:
-                result = instrumented_test.original_test(test, data, absolute_offset, parent_match)
+        if instrumented_test.original_test is None:
+            test_func = instrumented_test.test.test
+        else:
+            test_func = instrumented_test.original_test
+        if self._debug_next:
+            self._debug_next = False
+            result: TestResult = self._debug(test_func, test, data, absolute_offset, parent_match)
+        else:
+            with profiler:
+                result = test_func(test, data, absolute_offset, parent_match)
         if self.profile.value:
             self.profile_results[test] = profiler.elapsed_ms
         if self.repl_test is test:
@@ -714,15 +745,24 @@ class Debugger(REPL):
                 self.write("Warning:", bold=True, color=ANSIColor.RED)
                 self.write(" Profiling will be disabled for this parser while debugging!\n")
             with Unprofiled():
-                self._pdb = Pdb(skip=["polyfile.magic_debugger", "polyfile.magic"])
-                if sys.stderr.isatty():
-                    self._pdb.prompt = "\001\u001b[1m\002(polyfile-Pdb)\001\u001b[0m\002 "
-                else:
-                    self._pdb.prompt = "(polyfile-Pdb) "
+                # check if there is already a debugger attached, most likely an IDE like PyCharm;
+                # if so, use that debugger instead of creating our own instance of pdb
+                external_debugger = sys.gettrace() is not None
+                if not external_debugger:
+                    self._pdb = Pdb(skip=["polyfile.magic_debugger", "polyfile.magic"])
+                    if sys.stderr.isatty():
+                        self._pdb.prompt = "\001\u001b[1m\002(polyfile-Pdb)\001\u001b[0m\002 "
+                    else:
+                        self._pdb.prompt = "(polyfile-Pdb) "
                 generator = parse(file_stream, match)
                 while True:
                     try:
-                        result = self._pdb.runcall(next, generator)
+                        if external_debugger:
+                            breakpoint()
+                            # This next line will invoke the parser:
+                            result = next(generator)
+                        else:
+                            result = self._pdb.runcall(next, generator)
                         self.write(f"Got a submatch:\n", dim=True)
                         self.print_match(result)
                         yield result
@@ -757,6 +797,45 @@ class Debugger(REPL):
     def step(self, arguments: str):
         self.step_mode = StepMode.SINGLE_STEPPING
         self.last_command = command
+        raise ExitREPL()
+
+    @command(allows_abbreviation=False, name="debug_and_rerun", help="re-run the last test and debug in PDB")
+    def debug_and_rerun(self, arguments: str):
+        self.last_command = command
+        if self.last_test is None:
+            self.write("Error: A test has not yet been run\n", color=ANSIColor.RED)
+            return
+        test = self.last_test.__class__.test
+        # Is the test instrumented? If so, find the original version!
+        for instrumented in self.instrumented_tests:
+            if instrumented.test.test is test:
+                test = instrumented.original_test
+                break
+        self._debug(test, self.last_test, self.data, self.last_offset, self.last_parent_match)
+
+    @command(allows_abbreviation=False, name="debug_and_continue", aliases=("debug", "debug_and_cont"),
+             help="continue while debugging in PDB")
+    def debug_and_continue(self, arguments: str):
+        if sys.gettrace() is None and self._pdb is None:
+            self.write("Error: ", color=ANSIColor.RED)
+            self.write("`", dim=True)
+            self.write("debug_and_continue", color=ANSIColor.BLUE)
+            self.write("`", dim=True)
+            self.write(" can only be called when running from an external debugger like PDB or PyCharm",
+                       color=ANSIColor.RED)
+            return
+        self.step_mode = StepMode.RUNNING
+        self.last_command = command
+        try:
+            raise ExitREPL()
+        finally:
+            breakpoint()
+
+    @command(allows_abbreviation=False, help="step into the next magic test and debug in PDB")
+    def debug_and_step(self, arguments: str):
+        self.step_mode = StepMode.SINGLE_STEPPING
+        self.last_command = command
+        self._debug_next = True
         raise ExitREPL()
 
     @command(allows_abbreviation=True, help="continue execution until the next test that matches")

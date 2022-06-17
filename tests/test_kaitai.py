@@ -17,12 +17,13 @@ class TestKaitai(TestCase):
             with zipfile.ZipFile(f.name, "w") as test_zip:
                 test_zip.write(__file__)
             for node in KaitaiParser.load("archive/zip.ksy").parse(f.name).ast.dfs():
-                if node.parent is None:
-                    self.assertIsInstance(node, RootNode)
-                else:
-                    self.assertGreaterEqual(node.start, node.parent.start)
-                    self.assertLessEqual(node.end, node.parent.end)
-                    self.assertLessEqual(len(node.segment), len(node.parent.segment))
+                with self.subTest(kaitai_node=node.name):
+                    if node.parent is None:
+                        self.assertIsInstance(node, RootNode)
+                    else:
+                        self.assertGreaterEqual(node.start, node.parent.start)
+                        self.assertLessEqual(node.end, node.parent.end)
+                        self.assertLessEqual(len(node.segment), len(node.parent.segment))
         finally:
             path = Path(f.name)
             if path.exists():
