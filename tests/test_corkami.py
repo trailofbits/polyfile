@@ -1,5 +1,4 @@
 import zipfile
-from functools import partial
 from pathlib import Path
 import re
 import shutil
@@ -15,6 +14,10 @@ from polyfile.magic import MAGIC_DEFS, MagicMatcher, MatchContext
 CORKAMI_CORPUS_ZIP = Path(__file__).absolute().parent / "corkami.zip"
 FAILED_FILE_DIR = Path(__file__).absolute().parent / "failed_corkami_files"
 CORKAMI_URL = "https://github.com/corkami/pocs/archive/refs/heads/master.zip"
+SCRIPT_DIR = Path(__file__).absolute().parent
+FILE_DIR = SCRIPT_DIR.parent / "file"
+FILE_PATH = FILE_DIR / "src" / "file"
+MAGIC_FILE_PATH = SCRIPT_DIR / "magic.mgc"
 
 
 class CorkamiCorpusTest(TestCase):
@@ -41,7 +44,9 @@ def test_file(self: CorkamiCorpusTest, info: zipfile.ZipInfo):
     with TemporaryDirectory() as tmpdir:
         with ZipFile(CORKAMI_CORPUS_ZIP, "r") as z:
             file_path = z.extract(info, tmpdir)
-        orig_file_output = subprocess.check_output(["file", "-I", "--keep-going", str(file_path)])
+        orig_file_output = subprocess.check_output([
+            str(FILE_PATH), "-m", str(MAGIC_FILE_PATH), "-i", "--keep-going", str(file_path)
+        ])
         file_output = orig_file_output
         file_mimetypes: Set[str] = set()
         while file_output:
@@ -105,4 +110,37 @@ def _init_tests():
             setattr(CorkamiCorpusTest, f"{func_name}{suffix}", test)
 
 
+def build_local_file():
+    """Builds the local version of `file`"""
+    if not FILE_DIR.exists():
+        print("Cloning the `file` git submodule...")
+        subprocess.check_call(["git", "submodule", "update", "--init", "--recursive"], cwd=str(FILE_DIR.parent))
+        if not FILE_DIR.exists():
+            raise ValueError("Could not init the `file` git submodule")
+    configure_path = FILE_DIR / "configure"
+    if not configure_path.exists():
+        print("Running autoreconf...")
+        subprocess.check_call(["autoreconf", "-f", "-i"], cwd=str(FILE_DIR))
+        if not configure_path.exists():
+            raise ValueError(f"Error running autoreconf to build {configure_path}")
+    makefile_path = FILE_DIR / "Makefile"
+    if not makefile_path.exists():
+        print("Configuring the `file` build")
+        subprocess.check_call(["./configure", "--disable-silent-rules"], cwd=str(FILE_DIR))
+        if not makefile_path.exists():
+            raise ValueError(f"Error running ./configure to build {makefile_path}")
+    print("Recompiling `file`...")
+    subprocess.check_call(["make"], cwd=str(FILE_DIR))
+    magdir = FILE_DIR / "magic" / "Magdir"
+    assert magdir.exists()
+    print("Recompiling PolyFile's magic definitions...")
+    subprocess.check_call([str(FILE_PATH), "-m", str(magdir), "-C"], cwd=str(SCRIPT_DIR))
+    mgc_file = SCRIPT_DIR / f"{magdir.name}.mgc"
+    assert mgc_file.exists()
+    if MAGIC_FILE_PATH.exists():
+        MAGIC_FILE_PATH.unlink()
+    mgc_file.rename(MAGIC_FILE_PATH)
+
+
+build_local_file()
 _init_tests()
