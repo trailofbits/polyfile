@@ -1190,8 +1190,12 @@ class StringMatch(StringTest):
         super().__init__(trim=trim, compact_whitespace=compact_whitespace)
         self.string: bytes = to_match
         try:
-            _ = to_match.decode("ascii")
-            self._is_text: bool = True
+            ascii_text = to_match.decode("ascii")
+            if any((0 < ord(c) <= 8) or (0x0E <= ord(c) < 0x20) for c in ascii_text):
+                # Call it binary if it has these control characters
+                self._is_text: bool = False
+            else:
+                self._is_text = True
         except UnicodeDecodeError:
             self._is_text = False
         self.case_insensitive_lower: bool = case_insensitive_lower
@@ -2533,7 +2537,7 @@ class MagicMatcher:
         # is this a plain text file?
         text_matcher = Match(matcher=self, context=to_match, results=PlainTextTest().match(to_match))
         is_text = text_matcher and (not to_match.only_match_mime or any(t is not None for t in text_matcher.mimetypes))
-        if True or is_text:
+        if is_text:
             # this is a text file, so try all of the textual tests:
             for test in log.range(self.text_tests, desc="text matching", unit=" tests", delay=1.0):
                 m = Match(matcher=self, context=to_match, results=test.match(to_match))
