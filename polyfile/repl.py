@@ -97,7 +97,11 @@ class ANSIWriter:
             self.data.write(str(message))
 
     def write_context(self, file: Streamable, offset: int, context_bytes: int = 32, num_bytes: int = 1,
-                      indent: str = ""):
+                      indent: str = "", max_num_bytes: Optional[int] = 80):
+        ellipsis = ""
+        if max_num_bytes is not None and num_bytes > max_num_bytes:
+            ellipsis = "⋯"
+            num_bytes = max_num_bytes - 1
         file = make_stream(file)
         bytes_before = min(offset, context_bytes)
         context_before = string_escape(file[offset - bytes_before:offset].content)
@@ -105,12 +109,15 @@ class ANSIWriter:
         context_after = string_escape(file[offset + num_bytes:offset + num_bytes + context_bytes].content)
         self.write(indent)
         self.write(context_before)
-        self.write(current_byte, bold=True)
+        self.write(f"{current_byte}", bold=True)
+        self.write(ellipsis, dim=True)
         self.write(context_after)
         self.write("\n")
         self.write(indent)
         self.write(f"{' ' * len(context_before)}")
         self.write(f"{'^' * max(len(current_byte), 1)}", bold=True)
+        if ellipsis:
+            self.write("^", dim=True)
         self.write(f"{' ' * len(context_after)}\n")
 
     def __str__(self):

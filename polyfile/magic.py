@@ -194,11 +194,13 @@ class MatchedTest(TestResult):
         if self.parent is not None:
             self.parent.explain(writer, file=file)
         indent = self.test.write(writer)
-        writer.write(f"{indent}Matched {self.length} byte{['','s'][self.length != 1]} at offset {self.offset}\n",
-                     bold=True, color=ANSIColor.GREEN)
-        writer.write_context(file, offset=self.offset, context_bytes=max(0, (80 - len(indent) - self.length) // 2),
-                             num_bytes=self.length, indent=indent)
-        # writer.write(f"{self.test} matched the {self.length} bytes at offset {self.offset}\n", dim=True)
+        if not isinstance(self.test, (NamedTest, UseTest)):
+            writer.write(f"{indent}Matched ", bold=True, color=ANSIColor.GREEN)
+            writer.write(str(self.length), bold=True)
+            writer.write(f" byte{['','s'][self.length != 1]} at offset ", bold=True, color=ANSIColor.GREEN)
+            writer.write(f"{self.offset}\n", bold=True)
+            writer.write_context(file, offset=self.offset, context_bytes=max(0, (80 - len(indent) - self.length) // 2),
+                                 num_bytes=self.length, indent=indent)
 
     def __hash__(self):
         return hash((self.test, self.offset, self.length))
