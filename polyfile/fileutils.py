@@ -8,7 +8,7 @@ import sys
 from typing import AnyStr, ContextManager, IO, Iterator, Iterable, List, Optional, TextIO, Union
 
 
-Streamable = Union[str, Path, IO, "FileStream"]
+Streamable = Union[str, Path, IO, "FileStream", bytes]
 
 
 def make_stream(path_or_stream: Streamable, mode: str = 'rb',
@@ -115,7 +115,10 @@ class FileStream(IO):
             if close_on_exit is None:
                 close_on_exit = True
         else:
-            if not path_or_stream.seekable():
+            if isinstance(path_or_stream, bytes):
+                path_or_stream = BytesIO(path_or_stream)
+                setattr(path_or_stream, "name", "bytes")
+            elif not path_or_stream.seekable():
                 raise ValueError('FileStream can only wrap streams that are seekable')
             elif not path_or_stream.readable():
                 raise ValueError('FileStream can only wrap streams that are readable')
@@ -286,10 +289,13 @@ class FileStream(IO):
             raise ValueError(f"Invalid slice step: {index}")
         length=None
         if index.stop is not None:
-            if index.stop < 0:
+            if index.stop < 0 and (
+                    (index.stop < index.start and index.start > 0) or (index.stop > index.start and index.start < 0)):
                 length = len(self) + index.stop - index.start
+            elif index.stop < index.start:
+                length = 0
             else:
-                length = len(self) - (index.stop - index.start)
+                length = index.stop - index.start
         return FileStream(self, start=index.start, length=length, close_on_exit=False)
 
     def __enter__(self) -> "FileStream":

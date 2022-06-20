@@ -29,8 +29,10 @@ from uuid import UUID
 from chardet.universaldetector import UniversalDetector
 
 from .arithmetic import CStyleInt, make_c_style_int
+from .fileutils import Streamable
 from .iterators import LazyIterableSet
 from .logger import getStatusLogger, TRACE
+from .repl import ANSIColor, ANSIWriter
 
 
 if sys.version_info < (3, 9):
@@ -134,6 +136,10 @@ class TestResult(ABC):
                 parent.child_matched = True
         self._child_matched: bool = False
 
+    @abstractmethod
+    def explain(self, writer: ANSIWriter, file: Streamable):
+        raise NotImplementedError()
+
     @property
     def child_matched(self) -> bool:
         return self._child_matched
@@ -184,6 +190,16 @@ class MatchedTest(TestResult):
         self.value: Any = value
         self.length: int = length
 
+    def explain(self, writer: ANSIWriter, file: Streamable):
+        if self.parent is not None:
+            self.parent.explain(writer, file=file)
+        indent = self.test.write(writer)
+        writer.write(f"{indent}Matched {self.length} byte{['','s'][self.length != 1]} at offset {self.offset}\n",
+                     bold=True, color=ANSIColor.GREEN)
+        writer.write_context(file, offset=self.offset, context_bytes=max(0, (80 - len(indent) - self.length) // 2),
+                             num_bytes=self.length, indent=indent)
+        # writer.write(f"{self.test} matched the {self.length} bytes at offset {self.offset}\n", dim=True)
+
     def __hash__(self):
         return hash((self.test, self.offset, self.length))
 
@@ -217,6 +233,9 @@ class FailedTest(TestResult):
 
     def __bool__(self):
         return False
+
+    def explain(self, writer: ANSIWriter, file: Streamable):
+        writer.write(f"{self.test} did not match at offset {self.offset} because {self.message}\n", dim=True)
 
 
 class Endianness(Enum):
@@ -758,6 +777,42 @@ class MagicTest(ABC):
     @abstractmethod
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
         raise NotImplementedError()
+
+    def write(self, writer: ANSIWriter, is_current_test: bool = False, pre_mime_text: str = "") -> str:
+        for comment in self.comments:
+            if comment.source_info is not None and comment.source_info.original_line is not None:
+                writer.write(f"  {comment.source_info.path.name}", dim=True, color=ANSIColor.CYAN)
+                writer.write(":", dim=True)
+                writer.write(f"{comment.source_info.line}\t", dim=True, color=ANSIColor.CYAN)
+                writer.write(comment.source_info.original_line.strip(), dim=True)
+                writer.write("\n")
+            else:
+                writer.write(f"  # {comment!s}\n", dim=True)
+        if is_current_test:
+            writer.write("→ ", bold=True)
+        else:
+            writer.write("  ")
+        if self.source_info is not None and self.source_info.original_line is not None:
+            source_prefix = f"{self.source_info.path.name}:{self.source_info.line}"
+            indent = f"{' ' * len(source_prefix)}\t"
+            writer.write(self.source_info.path.name, dim=True, color=ANSIColor.CYAN)
+            writer.write(":", dim=True)
+            writer.write(self.source_info.line, dim=True, color=ANSIColor.CYAN)
+            writer.write("\t")
+            writer.write(self.source_info.original_line.strip(), color=ANSIColor.BLUE, bold=True)
+        else:
+            indent = ""
+            writer.write(f"{'>' * self.level}{self.offset!s}\t")
+            writer.write(self.message, color=ANSIColor.BLUE, bold=True)
+        writer.write(pre_mime_text)
+        if self.mime is not None:
+            writer.write(f"\n  {indent}!:mime ", dim=True)
+            writer.write(self.mime, color=ANSIColor.BLUE)
+        for e in self.extensions:
+            writer.write(f"\n  {indent}!:ext  ", dim=True)
+            writer.write(str(e), color=ANSIColor.BLUE)
+        writer.write("\n")
+        return f"  {indent}"
 
     def calculate_absolute_offset(self, data: bytes, parent_match: Optional[TestResult] = None) -> int:
         return self.offset.to_absolute(data, parent_match)
@@ -1852,6 +1907,9 @@ class IndirectResult(MatchedTest):
     def __init__(self, test: "IndirectTest", offset: int, parent: Optional[TestResult] = None):
         super().__init__(test, value=None, offset=offset, length=0, parent=parent)
 
+    def explain(self, writer: ANSIWriter, file: Streamable):
+        writer.write(f"Indirect test {self.test} matched at offset {self.offset}\n", dim=True)
+
 
 class IndirectTest(MagicTest):
     def __init__(
@@ -2171,6 +2229,14 @@ class Match:
             for result in self:
                 yield from result.test.extensions
         return LazyIterableSet(_extensions())
+
+    def explain(self, file: Streamable, ansi_color: Optional[bool] = None) -> str:
+        if ansi_color is None:
+            ansi_color = sys.stdout.isatty()
+        writer = ANSIWriter(use_ansi=ansi_color)
+        for result in self:
+            result.explain(writer, file=file)
+        return str(writer)
 
     def __bool__(self):
         return any(m for m in self.mimetypes) or any(e for e in self.extensions) or bool(self.message())

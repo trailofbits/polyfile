@@ -57,7 +57,7 @@ class KeyboardInterruptHandler:
 
 
 class FormatOutput:
-    valid_formats = ("mime", "html", "json", "sbud")
+    valid_formats = ("mime", "html", "json", "sbud", "explain")
     # TODO: Change this from "sbud" to "mime" in v0.5.0:
     default_format = "sbud"
 
@@ -125,11 +125,13 @@ def main(argv=None):
     ], help=dedent("""PolyFile's output format
 
 Output formats are:
-mime ... the detected MIME types associated with the file,
-         like the output of the `file` command
-html ... an interactive HTML-based hex viewer
-json ... a modified version of the SBUD format in JSON syntax
-sbud ... equivalent to 'json'
+mime ...... the detected MIME types associated with the file,
+            like the output of the `file` command
+explain ... like 'mime', but adds a human-readable explanation
+            for why each MIME type matched
+html ...... an interactive HTML-based hex viewer
+json ...... a modified version of the SBUD format in JSON syntax
+sbud ...... equivalent to 'json'
 
 Multiple formats can be output at once:
 
@@ -173,6 +175,7 @@ then it will implicitly be printed to STDOUT.
     group.add_argument('--html', '-t', action="append",
                        help=dedent("""path to write an interactive HTML file for exploring the PDF;
 equivalent to `--format html --output HTML`"""))
+    group.add_argument("--explain", action="store_true", help="equivalent to `--format explain")
     # parser.add_argument('--try-all-offsets', '-a', action='store_true',
     #                     help='Search for a file match at every possible offset; this can be very slow for larger '
     #                     'files')
@@ -239,6 +242,9 @@ equivalent to `--format mime`"""))
         for html_path in args.html:
             args.format.append(FormatOutput(output_format="html"))
             ValidateOutput.add_output(args, html_path)
+
+    if hasattr(args, "explain") and args.explain:
+        args.format.append(FormatOutput(output_format="explain"))
 
     if args.only_match_mime:
         args.format.append(FormatOutput(output_format="mime"))
@@ -326,7 +332,7 @@ Please update your scripts!
 
         for output_format in args.format:
             with output_format.output_stream as output:
-                if output_format.output_format == "mime":
+                if output_format.output_format == "mime" or output_format.output_format == "explain":
                     omm = sys.stderr.isatty() and output.isatty() and logging.root.level <= logging.INFO
                     if omm:
                         # figure out the longest MIME type so we can make sure the columns are aligned
@@ -347,6 +353,8 @@ Please update your scripts!
                             else:
                                 output.write(mimetype)
                                 output.write("\n")
+                            if output_format.output_format == "explain":
+                                output.write(match.explain(ansi_color=output.isatty(), file=file_path))
                     if args.require_match and not found_match and not needs_sbud:
                         log.info("No matches found, exiting")
                         exit(127)

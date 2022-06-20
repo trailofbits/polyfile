@@ -9,6 +9,7 @@ import sys
 import traceback
 from typing import Any, Callable, Dict, Iterable, Iterator, List, Optional, Set, Tuple, Type, TypeVar, Union
 
+from .fileutils import make_stream, Streamable
 from .profiling import Unprofiled
 
 if os.name == "posix":
@@ -37,6 +38,25 @@ class ANSIColor(Enum):
 
     def to_code(self) -> str:
         return f"\u001b[{self.value}m"
+
+
+def string_escape(data: Union[bytes, int]) -> str:
+    if not isinstance(data, int):
+        return "".join(string_escape(d) for d in data)
+    elif data == ord('\n'):
+        return "\\n"
+    elif data == ord('\t'):
+        return "\\t"
+    elif data == ord('\r'):
+        return "\\r"
+    elif data == 0:
+        return "\\0"
+    elif data == ord('\\'):
+        return "\\\\"
+    elif 32 <= data <= 126:
+        return chr(data)
+    else:
+        return f"\\x{data:02X}"
 
 
 class ANSIWriter:
@@ -75,6 +95,23 @@ class ANSIWriter:
                                         escape_for_readline=escape_for_readline))
         else:
             self.data.write(str(message))
+
+    def write_context(self, file: Streamable, offset: int, context_bytes: int = 32, num_bytes: int = 1,
+                      indent: str = ""):
+        file = make_stream(file)
+        bytes_before = min(offset, context_bytes)
+        context_before = string_escape(file[offset - bytes_before:offset].content)
+        current_byte = string_escape(file[offset:offset + num_bytes].content)
+        context_after = string_escape(file[offset + num_bytes:offset + num_bytes + context_bytes].content)
+        self.write(indent)
+        self.write(context_before)
+        self.write(current_byte, bold=True)
+        self.write(context_after)
+        self.write("\n")
+        self.write(indent)
+        self.write(f"{' ' * len(context_before)}")
+        self.write(f"{'^' * max(len(current_byte), 1)}", bold=True)
+        self.write(f"{' ' * len(context_after)}\n")
 
     def __str__(self):
         return self.data.getvalue()
