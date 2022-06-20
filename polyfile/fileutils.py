@@ -8,7 +8,11 @@ import sys
 from typing import AnyStr, ContextManager, IO, Iterator, Iterable, List, Optional, TextIO, Union
 
 
-def make_stream(path_or_stream, mode='rb', close_on_exit=None):
+Streamable = Union[str, Path, IO, "FileStream"]
+
+
+def make_stream(path_or_stream: Streamable, mode: str = 'rb',
+                close_on_exit: Optional[bool] = None) -> "FileStream":
     if isinstance(path_or_stream, FileStream):
         return path_or_stream
     else:
@@ -98,7 +102,7 @@ class PathOrStdout(ContextManager[TextIO]):
 class FileStream(IO):
     def __init__(
             self,
-            path_or_stream: Union[str, Path, IO, "FileStream"],
+            path_or_stream: Streamable,
             start: int = 0,
             length: Optional[int] = None,
             mode: str = "rb",
@@ -204,7 +208,7 @@ class FileStream(IO):
     def tell(self):
         return min(max(self._stream.tell() - self.start, 0), self._length)
 
-    def read(self, n=None):
+    def read(self, n=None) -> bytes:
         if self._stream.tell() - self.start < 0:
             # another context moved the position, so move it back to our zero index:
             self.seek(0)
@@ -243,6 +247,9 @@ class FileStream(IO):
             self.seek(0)
             return self.read(len(self))
 
+    def __bytes__(self):
+        return self.content
+
     def tempfile(self, prefix=None, suffix=None):
         class FSTempfile:
             def __init__(self, file_stream: FileStream):
@@ -270,8 +277,9 @@ class FileStream(IO):
 
     def __getitem__(self, index) -> Union[bytes, "FileStream"]:
         if isinstance(index, int):
-            self.seek(index)
-            return self.read(1)
+            with self.save_pos():
+                self.seek(index)
+                return self.read(1)
         elif not isinstance(index, slice):
             raise ValueError(f"unexpected argument {index}")
         if index.step is not None and index.step != 1:
