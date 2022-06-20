@@ -12,7 +12,7 @@ from abc import ABC, abstractmethod
 from collections import defaultdict
 import csv
 from datetime import datetime
-from enum import Enum
+from enum import Enum, IntFlag
 from io import StringIO
 import json
 import logging
@@ -626,6 +626,12 @@ class Comment:
         return self.message
 
 
+class TestType(IntFlag):
+    UNKNOWN = 0
+    BINARY = 1
+    TEXT = 2
+
+
 class MagicTest(ABC):
     AUTO_REGISTER_TEST: bool = True
 
@@ -675,11 +681,29 @@ class MagicTest(ABC):
         self.mime = mime
         self.source_info: Optional[SourceInfo] = None
         self.comments: Tuple[Comment, ...] = tuple(comments)
+        self._type: TestType = TestType.UNKNOWN
 
     def __init_subclass__(cls, **kwargs):
         if cls.AUTO_REGISTER_TEST:
             TEST_TYPES.add(cls)
         return super().__init_subclass__(**kwargs)
+
+    @property
+    def test_type(self) -> TestType:
+        if self._type == TestType.UNKNOWN:
+            self._type = self.subtest_type()
+            if self._type == TestType.UNKNOWN or (self._type & TestType.TEXT and self.level == 0):
+                # A top-level pattern is considered to be a test text when all its patterns are text patterns;
+                # otherwise, it is considered to be a binary pattern.
+                if all(not bool(child.test_type & TestType.BINARY) for child in self.children):
+                    self._type = TestType.TEXT
+                else:
+                    self._type = TestType.BINARY
+        return self._type
+
+    @abstractmethod
+    def subtest_type(self) -> TestType:
+        raise NotImplementedError()
 
     @property
     def parent(self) -> Optional["MagicTest"]:
@@ -906,6 +930,10 @@ class DataType(ABC, Generic[T]):
         return False
 
     @abstractmethod
+    def is_text(self, value: T) -> bool:
+        raise NotImplementedError()
+
+    @abstractmethod
     def parse_expected(self, specification: str) -> T:
         raise NotImplementedError()
 
@@ -957,6 +985,9 @@ class GUIDType(DataType[Union[UUID, UUIDWildcard]]):
     def __init__(self):
         super().__init__("guid")
 
+    def is_text(self, value: Union[UUID, UUIDWildcard]) -> bool:
+        return False
+
     def parse_expected(self, specification: str) -> Union[UUID, UUIDWildcard]:
         if specification.strip() == "x":
             return UUIDWildcard()
@@ -987,6 +1018,9 @@ class UTF16Type(DataType[bytes]):
         else:
             raise ValueError(f"UTF16 strings only support big and little endianness, not {endianness!r}")
         self.endianness: Endianness = endianness
+
+    def is_text(self, value: bytes) -> bool:
+        return True
 
     def parse_expected(self, specification: str) -> bytes:
         specification = unescape(specification).decode("utf-8")
@@ -1021,6 +1055,10 @@ class StringTest(ABC):
         except UnicodeDecodeError:
             pass
         return DataTypeMatch(data, value, initial_offset=initial_offset)
+
+    @abstractmethod
+    def is_text(self) -> bool:
+        raise NotImplementedError()
 
     @abstractmethod
     def matches(self, data: bytes) -> DataTypeMatch:
@@ -1071,6 +1109,9 @@ class StringTest(ABC):
 
 
 class StringWildcard(StringTest):
+    def is_text(self) -> bool:
+        return True
+
     def matches(self, data: bytes) -> DataTypeMatch:
         first_null = data.find(b"\0")
         if first_null >= 0:
@@ -1148,6 +1189,11 @@ class StringMatch(StringTest):
     ):
         super().__init__(trim=trim, compact_whitespace=compact_whitespace)
         self.string: bytes = to_match
+        try:
+            _ = to_match.decode("ascii")
+            self._is_text: bool = True
+        except UnicodeDecodeError:
+            self._is_text = False
         self.case_insensitive_lower: bool = case_insensitive_lower
         self.case_insensitive_upper: bool = case_insensitive_upper
         self.optional_blanks: bool = optional_blanks
@@ -1156,6 +1202,9 @@ class StringMatch(StringTest):
             raise ValueError("Optional blanks `w` and compacting whitespace `W` cannot be selected at the same time")
         self._pattern: Optional[re.Pattern] = None
         _ = self.pattern
+
+    def is_text(self) -> bool:
+        return self._is_text
 
     def pattern_string(self) -> bytes:
         pattern = re.escape(self.string)
@@ -1254,6 +1303,9 @@ class StringType(DataType[StringTest]):
         self.optional_blanks: bool = optional_blanks
         self.full_word_match: bool = full_word_match
         self.trim: bool = trim
+
+    def is_text(self, value: StringTest) -> bool:
+        return value.is_text()
 
     def allows_invalid_offsets(self, expected: StringTest) -> bool:
         return isinstance(expected, NegatedStringTest)
@@ -1405,6 +1457,9 @@ class PascalStringType(DataType[StringTest]):
         self.endianness: Endianness = endianness
         self.count_includes_length: int = count_includes_length
 
+    def is_text(self, value: StringTest) -> bool:
+        return value.is_text()
+
     def parse_expected(self, specification: str) -> StringTest:
         return StringTest.parse(specification)
 
@@ -1507,6 +1562,13 @@ class RegexType(DataType[Pattern[bytes]]):
                          f"{['', 'l'][self.limit_lines]}{['', 'T'][self.trim]}")
 
     DOLLAR_PATTERN = re.compile(rb"(^|[^\\])\$", re.MULTILINE)
+
+    def is_text(self, value: Pattern[bytes]) -> bool:
+        try:
+            _ = value.pattern.decode("ascii")
+            return True
+        except UnicodeDecodeError:
+            return False
 
     def parse_expected(self, specification: str) -> Pattern[bytes]:
         # handle POSIX-style character classes:
@@ -1766,6 +1828,17 @@ class NumericDataType(DataType[NumericValue]):
         if self.endianness == Endianness.PDP and self.base_type.num_bytes != 4:
             raise ValueError(f"PDP endianness can only be used with four byte base types, not {self.base_type}")
 
+    def is_text(self, value: NumericValue) -> bool:
+        if isinstance(value, NumericWildcard):
+            return True
+        elif not isinstance(value.value, int):
+            return False
+        try:
+            _ = bytes([value.value]).decode("ascii")
+            return True
+        except (UnicodeDecodeError, ValueError):
+            return False
+
     def parse_expected(self, specification: str) -> NumericValue:
         if specification.strip() == "x":
             return NumericWildcard()
@@ -1863,6 +1936,12 @@ class ConstantMatchTest(MagicTest, Generic[T]):
         self.data_type: DataType[T] = data_type
         self.constant: T = constant
 
+    def subtest_type(self) -> TestType:
+        if self.data_type.is_text(self.constant):
+            return TestType.TEXT
+        else:
+            return TestType.BINARY
+
     def calculate_absolute_offset(self, data: bytes, parent_match: Optional[TestResult] = None) -> int:
         return self.offset.to_absolute(data, parent_match, self.data_type.allows_invalid_offsets(self.constant))
 
@@ -1892,6 +1971,9 @@ class OffsetMatchTest(MagicTest):
     ):
         super().__init__(offset=offset, mime=mime, extensions=extensions, message=message, parent=parent)
         self.value: IntegerValue = value
+
+    def subtest_type(self) -> TestType:
+        return TestType.UNKNOWN
 
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
         if self.value.test(absolute_offset, unsigned=True, num_bytes=8):
@@ -1935,6 +2017,9 @@ class IndirectTest(MagicTest):
             p.can_match_mime = True
             p = p.parent
 
+    def subtest_type(self) -> TestType:
+        return TestType.UNKNOWN
+
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
         if self.relative:
             if parent_match is None:
@@ -1973,6 +2058,9 @@ class NamedTest(MagicTest):
         self.named_test = self
         self.used_by: Set[UseTest] = set()
 
+    def subtest_type(self) -> TestType:
+        return TestType.UNKNOWN
+
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> MatchedTest:
         if parent_match is not None:
             return MatchedTest(self, offset=parent_match.offset + parent_match.length, length=0, value=self.name,
@@ -2001,6 +2089,9 @@ class UseTest(MagicTest):
         self.flip_endianness: bool = flip_endianness
         self.late_binding: bool = late_binding
         referenced_test.used_by.add(self)
+
+    def subtest_type(self) -> TestType:
+        return self.referenced_test.test_type
 
     def referenced_tests(self) -> Set[NamedTest]:
         result = super().referenced_tests() | {self.referenced_test}
@@ -2053,6 +2144,9 @@ class JSONTest(MagicTest):
                 message=str(e)
             )
 
+    def subtest_type(self) -> TestType:
+        return TestType.TEXT
+
 
 class CSVTest(MagicTest):
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
@@ -2089,8 +2183,14 @@ class CSVTest(MagicTest):
             message=f"the input did not match a known CSV dialect ({', '.join(csv.list_dialects())})"
         )
 
+    def subtest_type(self) -> TestType:
+        return TestType.TEXT
+
 
 class DefaultTest(MagicTest):
+    def subtest_type(self) -> TestType:
+        return TestType.UNKNOWN
+
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
         if parent_match is None or not parent_match.child_matched:
             return MatchedTest(self, offset=absolute_offset, length=0, value=True, parent=parent_match)
@@ -2100,6 +2200,9 @@ class DefaultTest(MagicTest):
 
 
 class ClearTest(MagicTest):
+    def subtest_type(self) -> TestType:
+        return TestType.UNKNOWN
+
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> MatchedTest:
         if parent_match is None:
             return MatchedTest(self, offset=absolute_offset, length=0, value=None)
@@ -2109,6 +2212,9 @@ class ClearTest(MagicTest):
 
 
 class DERTest(MagicTest):
+    def subtest_type(self) -> TestType:
+        return TestType.BINARY
+
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
         raise NotImplementedError(
             "TODO: Implement support for the DER test (e.g., using the Kaitai asn1_der.py parser)"
@@ -2129,6 +2235,9 @@ class PlainTextTest(MagicTest):
     ):
         super().__init__(offset, mime, extensions, "", parent, comments)
         self.minimum_encoding_confidence: float = minimum_encoding_confidence
+
+    def subtest_type(self) -> TestType:
+        return TestType.TEXT
 
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
         if not isinstance(self.message, ConstantMessage) or self.message.message:
@@ -2167,6 +2276,9 @@ class OctetStreamTest(MagicTest):
             comments: Iterable[Comment] = ()
     ):
         super().__init__(offset, mime, extensions, message, parent, comments)
+
+    def subtest_type(self) -> TestType:
+        return TestType.BINARY
 
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
         # Everything is an octet stream!
@@ -2324,6 +2436,8 @@ class MagicMatcher:
         self.tests_by_mime: Dict[str, Set[MagicTest]] = defaultdict(set)
         self.tests_by_ext: Dict[str, Set[MagicTest]] = defaultdict(set)
         self.tests_that_can_be_indirect: Set[MagicTest] = set()
+        self.non_text_tests: Set[MagicTest] = set()
+        self.text_tests: Set[MagicTest] = set()
         for test in tests:
             self.add(test)
 
@@ -2353,6 +2467,10 @@ class MagicMatcher:
                 self.tests_by_mime[mime].add(test)
             for ext in test.all_extensions():
                 self.tests_by_ext[ext].add(test)
+            if test.test_type == TestType.TEXT:
+                self.text_tests.add(test)
+            else:
+                self.non_text_tests.add(test)
             if test.can_be_indirect:
                 self.tests_that_can_be_indirect.add(test)
 
@@ -2407,19 +2525,26 @@ class MagicMatcher:
         elif not isinstance(to_match, MatchContext):
             to_match = MatchContext.load(to_match)
         yielded = False
-        for test in log.range(self._tests, desc="matching", unit=" tests", delay=1.0):
+        for test in log.range(self.non_text_tests, desc="binary matching", unit=" tests", delay=1.0):
             m = Match(matcher=self, context=to_match, results=test.match(to_match))
             if m and (not to_match.only_match_mime or any(t is not None for t in m.mimetypes)):
                 yield m
                 yielded = True
+        # is this a plain text file?
+        text_matcher = Match(matcher=self, context=to_match, results=PlainTextTest().match(to_match))
+        is_text = text_matcher and (not to_match.only_match_mime or any(t is not None for t in text_matcher.mimetypes))
+        if True or is_text:
+            # this is a text file, so try all of the textual tests:
+            for test in log.range(self.text_tests, desc="text matching", unit=" tests", delay=1.0):
+                m = Match(matcher=self, context=to_match, results=test.match(to_match))
+                if m and (not to_match.only_match_mime or any(t is not None for t in m.mimetypes)):
+                    yield m
+                    yielded = True
         if not yielded:
-            # is this a plain text file?
-            m = Match(matcher=self, context=to_match, results=PlainTextTest().match(to_match))
-            if m and (not to_match.only_match_mime or any(t is not None for t in m.mimetypes)):
-                yield m
+            if is_text:
+                yield text_matcher
             else:
                 yield Match(matcher=self, context=to_match, results=OctetStreamTest().match(to_match))
-
 
     @staticmethod
     def parse_test(

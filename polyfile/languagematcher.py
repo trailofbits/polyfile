@@ -3,7 +3,7 @@ from typing import List, Optional, Sequence
 
 from .logger import StatusLogger
 from .polyfile import Match, Submatch, register_parser
-from .magic import AbsoluteOffset, FailedTest, MagicMatcher, MagicTest, MatchedTest, TestResult
+from .magic import AbsoluteOffset, FailedTest, MagicMatcher, MagicTest, MatchedTest, TestResult, TestType
 
 
 log = StatusLogger("polyfile")
@@ -121,6 +121,11 @@ class BFMatcher(MagicTest):
             extensions=("bf",),
             message="Brainfu** Program"
         )
+
+    def subtest_type(self) -> TestType:
+        # BF can technically contain any arbitrary bytes, which are interpreted as comments,
+        # so declare this as a binary test so we don't miss BF polyglots.
+        return TestType.BINARY
 
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
         try:
