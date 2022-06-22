@@ -830,6 +830,11 @@ class MagicTest(ABC):
             indent = ""
             writer.write(f"{'>' * self.level}{self.offset!s}\t")
             writer.write(self.message, color=ANSIColor.BLUE, bold=True)
+        if self.level == 0:
+            if self.test_type & TestType.BINARY:
+                writer.write(f" \uF5BB BINARY TEST", color=ANSIColor.BLUE)
+            elif self.test_type & TestType.TEXT:
+                writer.write(f" \uF5B9 ASCII TEST", color=ANSIColor.BLUE)
         writer.write(pre_mime_text)
         if self.mime is not None:
             writer.write(f"\n  {indent}!:mime ", dim=True)
