@@ -42,7 +42,7 @@ def import_spec(compiled: CompiledKSY) -> Optional[Type[KaitaiStruct]]:
     module_name = compiled.python_path.name
     assert module_name.lower().endswith(".py")
     module_name = module_name[:-3]
-    module_name = f"{__name__}.parsers.{module_name}"
+    module_name = f"{__name__[:__name__.rfind('.')]}.parsers.{module_name}"
     spec = importlib.util.spec_from_file_location(module_name, compiled.python_path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
