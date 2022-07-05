@@ -53,7 +53,7 @@ class MagicTest(TestCase):
                                                 "root of this repository.")
 
         # skip the DER definition because we don't yet support it (and none of the tests actually require it)
-        default_matcher = MagicMatcher.parse(*(d for d in MAGIC_DEFS if d.name != "der"))
+        default_matcher = MagicMatcher.parse(*(d for d in MAGIC_DEFS))
 
         tests = sorted([
             f.stem for f in FILE_TEST_DIR.glob("*.testfile")

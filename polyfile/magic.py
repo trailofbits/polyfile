@@ -29,6 +29,7 @@ from uuid import UUID
 from chardet.universaldetector import UniversalDetector
 
 from .arithmetic import CStyleInt, make_c_style_int
+from .der import DERQuery
 from .iterators import LazyIterableSet
 from .logger import getStatusLogger, TRACE
 
@@ -2049,9 +2050,39 @@ class ClearTest(MagicTest):
 
 
 class DERTest(MagicTest):
+    def __init__(
+            self,
+            offset: Offset,
+            test_str: str,
+            mime: Optional[Union[str, TernaryExecutableMessage]] = None,
+            extensions: Iterable[str] = (),
+            message: Union[str, Message] = "",
+            parent: Optional["MagicTest"] = None,
+            comments: Iterable[Comment] = ()
+    ):
+        if parent is None and mime is None:
+            mime = "application/x-509"
+        super().__init__(offset=offset, mime=mime, extensions=(".cer", ".crt"), message=message, parent=parent,
+                         comments=comments)
+        self.test_str: str = test_str
+
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
-        raise NotImplementedError(
-            "TODO: Implement support for the DER test (e.g., using the Kaitai asn1_der.py parser)"
+        if parent_match is not None:
+            if not isinstance(parent_match, MatchedTest):
+                raise ValueError("A DERTest can only be run if its parent was a match!")
+            elif not isinstance(parent_match.value, DERQuery):
+                raise ValueError("A DERTest's parent match must be an instance of DERQuery!")
+            parent_query: DERQuery = parent_match.value
+        else:
+            query = DERQuery.parse(data[absolute_offset:])
+            if query is not None:
+                return MatchedTest(self, query, absolute_offset, len(data) - absolute_offset, None)
+        # TODO:
+        return FailedTest(
+            self,
+            offset=absolute_offset,
+            parent=parent_match,
+            message=f"expected TODO!"
         )
 
 
@@ -2438,7 +2469,7 @@ class MagicMatcher:
                 )
             elif data_type == "der":
                 # TODO: Update this as necessary once we fully implement the DERTest
-                test = DERTest(offset=offset, message=message, parent=parent)
+                test = DERTest(offset=offset, test_str=test_str, message=message, parent=parent)
             else:
                 try:
                     data_type = DataType.parse(data_type)
