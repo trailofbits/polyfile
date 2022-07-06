@@ -29,7 +29,7 @@ from uuid import UUID
 from chardet.universaldetector import UniversalDetector
 
 from .arithmetic import CStyleInt, make_c_style_int
-from .der import DERQuery
+from .der import DERQuery, Tag
 from .iterators import LazyIterableSet
 from .logger import getStatusLogger, TRACE
 
@@ -2053,7 +2053,7 @@ class DERTest(MagicTest):
     def __init__(
             self,
             offset: Offset,
-            test_str: str,
+            tag: Tag,
             mime: Optional[Union[str, TernaryExecutableMessage]] = None,
             extensions: Iterable[str] = (),
             message: Union[str, Message] = "",
@@ -2064,7 +2064,7 @@ class DERTest(MagicTest):
             mime = "application/x-509"
         super().__init__(offset=offset, mime=mime, extensions=(".cer", ".crt"), message=message, parent=parent,
                          comments=comments)
-        self.test_str: str = test_str
+        self.tag: Tag = tag
 
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
         if parent_match is not None:
@@ -2072,18 +2072,27 @@ class DERTest(MagicTest):
                 raise ValueError("A DERTest can only be run if its parent was a match!")
             elif not isinstance(parent_match.value, DERQuery):
                 raise ValueError("A DERTest's parent match must be an instance of DERQuery!")
-            parent_query: DERQuery = parent_match.value
+            query: DERQuery = parent_match.value
         else:
-            query = DERQuery.parse(data[absolute_offset:])
-            if query is not None:
-                return MatchedTest(self, query, absolute_offset, len(data) - absolute_offset, None)
-        # TODO:
-        return FailedTest(
-            self,
-            offset=absolute_offset,
-            parent=parent_match,
-            message=f"expected TODO!"
-        )
+            try:
+                query = DERQuery.parse(data[absolute_offset:])
+            except (EOFError, ValueError, Exception) as e:
+                return FailedTest(
+                    self,
+                    offset=absolute_offset,
+                    parent=parent_match,
+                    message=str(e)
+                )
+        try:
+            child_query = self.tag.test(query)
+        except ValueError as e:
+            return FailedTest(
+                self,
+                offset=absolute_offset,
+                parent=parent_match,
+                message=f"{self.tag!s}: {e!s}"
+            )
+        return MatchedTest(self, child_query, absolute_offset, len(data) - absolute_offset, parent_match)
 
 
 class PlainTextTest(MagicTest):
@@ -2468,8 +2477,11 @@ class MagicMatcher:
                     late_binding=late_binding
                 )
             elif data_type == "der":
-                # TODO: Update this as necessary once we fully implement the DERTest
-                test = DERTest(offset=offset, test_str=test_str, message=message, parent=parent)
+                try:
+                    der_tag = Tag.parse(test_str)
+                except ValueError as e:
+                    raise ValueError(f"{def_file!s} line {line_number}: {e!s}")
+                test = DERTest(offset=offset, tag=der_tag, message=message, parent=parent)
             else:
                 try:
                     data_type = DataType.parse(data_type)

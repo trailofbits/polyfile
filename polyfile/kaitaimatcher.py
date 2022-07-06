@@ -30,6 +30,7 @@ KAITAI_MIME_MAPPING: Dict[str, str] = {
     "application/x-python-code": "executable/python_pyc_27.ksy",
     "application/x-shockwave-flash": "executable/swf.ksy",
     "application/x-doom": "game/doom_wad.ksy",
+    "application/x-509": "serialization/asn1/asn1_der.ksy",
     "image/x-dcx": "image/pcx_dcx.ksy",
     "model/gltf-binary": "3d/gltf_binary.ksy",
     "application/x-rpm": "archive/rpm.ksy",
