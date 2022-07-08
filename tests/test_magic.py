@@ -1,3 +1,4 @@
+import gzip
 from pathlib import Path
 from typing import Callable, Optional
 from unittest import TestCase
@@ -48,12 +49,15 @@ class MagicTest(TestCase):
         self.assertIn("application/x-pie-executable", matcher.mimetypes)
         self.assertIn("application/x-sharedlib", matcher.mimetypes)
 
+    def test_der(self):
+        cer_path = Path(__file__).absolute().parent / "msjdbc.cer.gz"
+        with gzip.open(cer_path, "rb") as f:
+            for match in MagicMatcher.DEFAULT_INSTANCE.match(f):
+                print(match)
+
     def test_file_corpus(self):
         self.assertTrue(FILE_TEST_DIR.exists(), "Make sure to run `git submodule init && git submodule update` in the "
                                                 "root of this repository.")
-
-        # skip the DER definition because we don't yet support it (and none of the tests actually require it)
-        default_matcher = MagicMatcher.parse(*(d for d in MAGIC_DEFS))
 
         tests = sorted([
             f.stem for f in FILE_TEST_DIR.glob("*.testfile")
@@ -75,7 +79,7 @@ class MagicTest(TestCase):
                     print(f"\tParsing custom match script: {magicfile.stem}")
                     matcher = MagicMatcher.parse(magicfile)
                 else:
-                    matcher = default_matcher
+                    matcher = MagicMatcher.DEFAULT_INSTANCE
 
                 with open(result, "r") as f:
                     expected = f.read()

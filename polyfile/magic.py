@@ -29,7 +29,7 @@ from uuid import UUID
 from chardet.universaldetector import UniversalDetector
 
 from .arithmetic import CStyleInt, make_c_style_int
-from .der import DERQuery, Tag
+from .der import DERNode, Tag
 from .iterators import LazyIterableSet
 from .logger import getStatusLogger, TRACE
 
@@ -2062,20 +2062,20 @@ class DERTest(MagicTest):
     ):
         if parent is None and mime is None:
             mime = "application/x-509"
-        super().__init__(offset=offset, mime=mime, extensions=(".cer", ".crt"), message=message, parent=parent,
-                         comments=comments)
+        super().__init__(offset=offset, mime=mime, extensions=tuple(extensions) + (".cer", ".crt"), message=message,
+                         parent=parent, comments=comments)
         self.tag: Tag = tag
 
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
         if parent_match is not None:
             if not isinstance(parent_match, MatchedTest):
                 raise ValueError("A DERTest can only be run if its parent was a match!")
-            elif not isinstance(parent_match.value, DERQuery):
+            if not isinstance(parent_match.value, DERNode):
                 raise ValueError("A DERTest's parent match must be an instance of DERQuery!")
-            query: DERQuery = parent_match.value
+            query: DERNode = parent_match.value
         else:
             try:
-                query = DERQuery.parse(data[absolute_offset:])
+                query = DERNode.parse(data[absolute_offset:])
             except (EOFError, ValueError, Exception) as e:
                 return FailedTest(
                     self,
