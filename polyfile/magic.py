@@ -261,6 +261,10 @@ def parse_numeric(text: Union[str, bytes]) -> int:
     if text.endswith("L"):
         text = text[:-1]
     if text.startswith("0x") or text.startswith("0X"):
+        if text.lower().endswith("h"):
+            # Some hex constants now end with "h" 🤷
+            # (see https://github.com/file/file/blob/7a4e60a8f56ed45f76f28d2812a88d82efdc4bb8/magic/Magdir/sniffer#L369)
+            text = text[:-1]
         return int(text, 16) * factor
     elif text.startswith("0") and len(text) > 1:
         return int(text, 8) * factor
@@ -1053,9 +1057,10 @@ class UTF16Type(DataType[bytes]):
 
 
 class StringTest(ABC):
-    def __init__(self, trim: bool = False, compact_whitespace: bool = False):
+    def __init__(self, trim: bool = False, compact_whitespace: bool = False, num_bytes: Optional[int] = None):
         self.trim: bool = trim
         self.compact_whitespace: bool = compact_whitespace
+        self.num_bytes: Optional[int] = num_bytes
 
     def post_process(self, data: bytes, initial_offset: int = 0) -> DataTypeMatch:
         value = data
@@ -1088,9 +1093,11 @@ class StringTest(ABC):
               case_insensitive_lower: bool = False,
               case_insensitive_upper: bool = False,
               optional_blanks: bool = False,
-              full_word_match: bool = False) -> "StringTest":
+              full_word_match: bool = False,
+              num_bytes: Optional[int] = None) -> "StringTest":
+        original_spec = specification
         if specification.strip() == "x":
-            return StringWildcard(trim=trim, compact_whitespace=compact_whitespace)
+            return StringWildcard(trim=trim, compact_whitespace=compact_whitespace, num_bytes=num_bytes)
         if specification.startswith("!"):
             negate = True
             specification = specification[1:]
@@ -1101,9 +1108,13 @@ class StringTest(ABC):
                 to_match=unescape(specification[1:]),
                 test_smaller=specification.startswith("<"),
                 trim=trim,
-                compact_whitespace=compact_whitespace
+                compact_whitespace=compact_whitespace,
+                num_bytes=num_bytes,
             )
         else:
+            if num_bytes is not None:
+                raise ValueError(f"Invalid string match specification: {original_spec!r}: a string length limiter "
+                                 f"cannot be combined with an explicit string match")
             if specification.startswith("="):
                 specification = specification[1:]
             test = StringMatch(
@@ -1123,7 +1134,12 @@ class StringTest(ABC):
 
 class StringWildcard(StringTest):
     def matches(self, data: bytes) -> DataTypeMatch:
-        first_null = data.find(b"\0")
+        if self.num_bytes is None:
+            first_null = data.find(b"\0")
+        else:
+            first_null = data.find(b"\0", 0, self.num_bytes)
+            if first_null < 0:
+                return self.post_process(data[:self.num_bytes])
         if first_null >= 0:
             return self.post_process(data[:first_null])
         else:
@@ -1166,8 +1182,9 @@ class NegatedStringTest(StringWildcard):
 
 
 class StringLengthTest(StringWildcard):
-    def __init__(self, to_match: bytes, test_smaller: bool, trim: bool = False, compact_whitespace: bool = False):
-        super().__init__(trim=trim, compact_whitespace=compact_whitespace)
+    def __init__(self, to_match: bytes, test_smaller: bool, trim: bool = False, compact_whitespace: bool = False,
+                 num_bytes: Optional[int] = None):
+        super().__init__(trim=trim, compact_whitespace=compact_whitespace, num_bytes=num_bytes)
         self.to_match: bytes = to_match
         self.test_smaller: bool = test_smaller
 
@@ -1307,7 +1324,8 @@ class StringType(DataType[StringTest]):
             optional_blanks: bool = False,
             full_word_match: bool = False,
             trim: bool = False,
-            force_text: bool = False
+            force_text: bool = False,
+            num_bytes: Optional[int] = None
     ):
         if not all((case_insensitive_lower, case_insensitive_upper, compact_whitespace, optional_blanks, trim)):
             name = "string"
@@ -1323,6 +1341,7 @@ class StringType(DataType[StringTest]):
         self.full_word_match: bool = full_word_match
         self.trim: bool = trim
         self.force_text: bool = force_text
+        self.num_bytes: Optional[int] = num_bytes
 
     def is_text(self, value: StringTest) -> bool:
         return self.force_text
@@ -1337,23 +1356,28 @@ class StringType(DataType[StringTest]):
             case_insensitive_lower=self.case_insensitive_lower,
             case_insensitive_upper=self.case_insensitive_upper,
             compact_whitespace=self.compact_whitespace,
-            full_word_match=self.full_word_match
+            full_word_match=self.full_word_match,
+            num_bytes=self.num_bytes
         )
 
     def match(self, data: bytes, expected: StringTest) -> DataTypeMatch:
         return expected.matches(data)
 
-    STRING_TYPE_FORMAT: Pattern[str] = re.compile(r"^u?string(/[BbCctTWwf]*)?$")
+    STRING_TYPE_FORMAT: Pattern[str] = re.compile(r"^u?string(/(?P<numbytes>\d+))?(?P<opts>/[BbCctTWwf]*)?$")
 
     @classmethod
     def parse(cls, format_str: str) -> "StringType":
         m = cls.STRING_TYPE_FORMAT.match(format_str)
         if not m:
             raise ValueError(f"Invalid string type declaration: {format_str!r}")
-        if m.group(1) is None:
+        if m.group("numbytes") is None:
+            num_bytes: Optional[int] = None
+        else:
+            num_bytes = int(m.group("numbytes"))
+        if m.group("opts") is None:
             options: Iterable[str] = ()
         else:
-            options = m.group(1)
+            options = m.group("opts")
         unsupported_options = {opt for opt in options if opt not in "/WwcCtbTf"}
         if unsupported_options:
             log.warning(f"{format_str!r} has invalid option(s) that will be ignored: {', '.join(unsupported_options)}")
@@ -1364,7 +1388,8 @@ class StringType(DataType[StringTest]):
             optional_blanks="w" in options,
             full_word_match="f" in options,
             trim="T" in options,
-            force_text="t" in options
+            force_text="t" in options,
+            num_bytes=num_bytes
         )
 
 
