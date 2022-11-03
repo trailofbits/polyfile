@@ -701,6 +701,14 @@ class MagicTest(ABC):
                     self._type = TestType.BINARY
         return self._type
 
+    @test_type.setter
+    def test_type(self, value: TestType):
+        if self._type != TestType.UNKNOWN:
+            if value != self._type:
+                raise ValueError(f"Cannot assign type {value} to test {self} because it already has value {value}")
+        else:
+            self._type = value
+
     @abstractmethod
     def subtest_type(self) -> TestType:
         raise NotImplementedError()
@@ -2450,7 +2458,7 @@ class MagicMatcher:
         for test in tests:
             self.add(test)
 
-    def add(self, test: Union[MagicTest, Path]) -> List[MagicTest]:
+    def add(self, test: Union[MagicTest, Path], test_type: TestType = TestType.UNKNOWN) -> List[MagicTest]:
         if not isinstance(test, MagicTest):
             level_zero_tests, _, tests_with_mime, indirect_tests = self._parse_file(test, self)
             for test in tests_with_mime:
@@ -2463,8 +2471,11 @@ class MagicMatcher:
                 for ancestor in test.ancestors():
                     ancestor.can_be_indirect = True
             for test in level_zero_tests:
-                self.add(test)
+                self.add(test, test_type=test_type)
             return list(level_zero_tests)
+
+        if test_type != TestType.UNKNOWN:
+            test.test_type = test_type
 
         if isinstance(test, NamedTest):
             if test.name in self.named_tests:
