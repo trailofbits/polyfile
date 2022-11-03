@@ -384,6 +384,8 @@ class RelativeOffset(Offset):
 
 
 class IndirectOffset(Offset):
+    OctalIndirectOffset = -1
+
     def __init__(self, offset: Offset, num_bytes: int, endianness: Endianness, signed: bool,
                  post_process: Callable[[int], int] = lambda n: n):
         self.offset: Offset = offset
@@ -393,11 +395,24 @@ class IndirectOffset(Offset):
         self.post_process: Callable[[int], int] = post_process
         if self.endianness != Endianness.LITTLE and self.endianness != endianness.BIG:
             raise ValueError(f"Invalid endianness: {endianness!r}")
-        elif num_bytes not in (1, 2, 4, 8):
+        elif num_bytes not in (1, 2, 4, 8, IndirectOffset.OctalIndirectOffset):
             raise ValueError(f"Invalid number of bytes: {num_bytes}")
 
     def to_absolute(self, data: bytes, last_match: Optional[TestResult], allow_invalid: bool = False) -> int:
-        if self.num_bytes == 1:
+        if self.num_bytes == IndirectOffset.OctalIndirectOffset:
+            # Special case: This is for the new octal type used here:
+            # https://github.com/file/file/blob/7a4e60a8f56ed45f76f28d2812a88d82efdc4bb8/magic/Magdir/gentoo#L81
+            offset = self.offset.to_absolute(data, last_match)
+            octal_string_end = offset
+            while octal_string_end < len(data) and ord('0') <= data[octal_string_end] <= ord('7'):
+                octal_string_end += 1
+            if octal_string_end == offset:
+                if allow_invalid:
+                    return self.post_process(0)
+                else:
+                    raise ValueError(f"Invalid octal string expected for {self} at file offset {offset}")
+            return self.post_process(int(data[:octal_string_end], 8))
+        elif self.num_bytes == 1:
             fmt = "B"
         elif self.num_bytes == 2:
             fmt = "H"
@@ -424,7 +439,7 @@ class IndirectOffset(Offset):
     INDIRECT_OFFSET_PATTERN: Pattern[str] = re.compile(
         r"^\("
         rf"(?P<offset>&?-?{NUMBER_PATTERN})"
-        r"((?P<signedness>[.,])(?P<type>[bBcCeEfFgGhHiILlmsSqQ]))?"
+        r"((?P<signedness>[.,])(?P<type>[bBcCeEfFgGhHiILlmsSqQo]))?"
         rf"(?P<post_process>[*&/]?[+-]?({NUMBER_PATTERN}|\(-?{NUMBER_PATTERN}\)))?"
         r"\)$"
     )
@@ -453,6 +468,8 @@ class IndirectOffset(Offset):
         elif t in ("i", "l"):
             # TODO: Confirm that "l" should really be here
             num_bytes = 4
+        elif t in ("o",):
+            num_bytes = IndirectOffset.OctalIndirectOffset
         else:
             raise ValueError(f"Unsupported indirect specifier type: {m.group('type')!r}")
         pp = m.group("post_process")
