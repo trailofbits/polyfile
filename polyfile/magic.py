@@ -1070,11 +1070,11 @@ class StringTest(ABC):
         return DataTypeMatch(data, value, initial_offset=initial_offset)
 
     @abstractmethod
-    def is_text(self) -> bool:
+    def matches(self, data: bytes) -> DataTypeMatch:
         raise NotImplementedError()
 
     @abstractmethod
-    def matches(self, data: bytes) -> DataTypeMatch:
+    def is_always_text(self) -> bool:
         raise NotImplementedError()
 
     @abstractmethod
@@ -1122,15 +1122,15 @@ class StringTest(ABC):
 
 
 class StringWildcard(StringTest):
-    def is_text(self) -> bool:
-        return True
-
     def matches(self, data: bytes) -> DataTypeMatch:
         first_null = data.find(b"\0")
         if first_null >= 0:
             return self.post_process(data[:first_null])
         else:
             return self.post_process(data)
+
+    def is_always_text(self) -> bool:
+        return False
 
     def search(self, data: bytes) -> DataTypeMatch:
         return self.matches(data)
@@ -1143,6 +1143,9 @@ class NegatedStringTest(StringWildcard):
     def __init__(self, parent_test: StringTest):
         super().__init__(trim=parent_test.trim, compact_whitespace=parent_test.compact_whitespace)
         self.parent: StringTest = parent_test
+
+    def is_always_text(self) -> bool:
+        return False
 
     def matches(self, data: bytes) -> DataTypeMatch:
         result = self.parent.matches(data)
@@ -1177,6 +1180,9 @@ class StringLengthTest(StringWildcard):
         else:
             return DataTypeMatch.INVALID
 
+    def is_always_text(self) -> bool:
+        return False
+
     def search(self, data: bytes) -> DataTypeMatch:
         match = super().search(data)
         if self.test_smaller and match.raw_match < self.to_match:
@@ -1202,15 +1208,6 @@ class StringMatch(StringTest):
     ):
         super().__init__(trim=trim, compact_whitespace=compact_whitespace)
         self.string: bytes = to_match
-        try:
-            ascii_text = to_match.decode("ascii")
-            if any((0 < ord(c) <= 8) or (0x0E <= ord(c) < 0x20) for c in ascii_text):
-                # Call it binary if it has these control characters
-                self._is_text: bool = False
-            else:
-                self._is_text = True
-        except UnicodeDecodeError:
-            self._is_text = False
         self.case_insensitive_lower: bool = case_insensitive_lower
         self.case_insensitive_upper: bool = case_insensitive_upper
         self.optional_blanks: bool = optional_blanks
@@ -1219,9 +1216,6 @@ class StringMatch(StringTest):
             raise ValueError("Optional blanks `w` and compacting whitespace `W` cannot be selected at the same time")
         self._pattern: Optional[re.Pattern] = None
         _ = self.pattern
-
-    def is_text(self) -> bool:
-        return self._is_text
 
     def pattern_string(self) -> bytes:
         pattern = re.escape(self.string)
@@ -1281,6 +1275,13 @@ class StringMatch(StringTest):
             self._pattern = re.compile(self.pattern_string(), flags=self.pattern_flags())
         return self._pattern
 
+    def is_always_text(self) -> bool:
+        try:
+            _ = self.pattern.pattern.decode("ascii")
+            return True
+        except UnicodeDecodeError:
+            return False
+
     def matches(self, data: bytes) -> DataTypeMatch:
         m = self.pattern.match(data)
         if m:
@@ -1305,14 +1306,15 @@ class StringType(DataType[StringTest]):
             compact_whitespace: bool = False,
             optional_blanks: bool = False,
             full_word_match: bool = False,
-            trim: bool = False
+            trim: bool = False,
+            force_text: bool = False
     ):
         if not all((case_insensitive_lower, case_insensitive_upper, compact_whitespace, optional_blanks, trim)):
             name = "string"
         else:
             name = f"string/{['', 'W'][compact_whitespace]}{['', 'w'][optional_blanks]}"\
                    f"{['', 'C'][case_insensitive_upper]}{['', 'c'][case_insensitive_lower]}"\
-                   f"{['', 'T'][trim]}{['', 'f'][full_word_match]}"
+                   f"{['', 'T'][trim]}{['', 'f'][full_word_match]}{['', 't'][force_text]}"
         super().__init__(name)
         self.case_insensitive_lower: bool = case_insensitive_lower
         self.case_insensitive_upper: bool = case_insensitive_upper
@@ -1320,9 +1322,10 @@ class StringType(DataType[StringTest]):
         self.optional_blanks: bool = optional_blanks
         self.full_word_match: bool = full_word_match
         self.trim: bool = trim
+        self.force_text: bool = force_text
 
     def is_text(self, value: StringTest) -> bool:
-        return value.is_text()
+        return self.force_text
 
     def allows_invalid_offsets(self, expected: StringTest) -> bool:
         return isinstance(expected, NegatedStringTest)
@@ -1360,7 +1363,8 @@ class StringType(DataType[StringTest]):
             compact_whitespace="W" in options,
             optional_blanks="w" in options,
             full_word_match="f" in options,
-            trim="T" in options
+            trim="T" in options,
+            force_text="t" in options
         )
 
 
@@ -1399,6 +1403,9 @@ class SearchType(StringType):
                 self.name = f"search{rep_str}/s"
             else:
                 self.name = f"{self.name}s"
+
+    def is_text(self, value: StringTest) -> bool:
+        return value.is_always_text()
 
     def match(self, data: bytes, expected: StringTest) -> DataTypeMatch:
         return expected.search(data)
@@ -1475,7 +1482,8 @@ class PascalStringType(DataType[StringTest]):
         self.count_includes_length: int = count_includes_length
 
     def is_text(self, value: StringTest) -> bool:
-        return value.is_text()
+        # TODO: See if Pascal strings should sometimes be forced to be text
+        return False
 
     def parse_expected(self, specification: str) -> StringTest:
         return StringTest.parse(specification)
@@ -1846,15 +1854,7 @@ class NumericDataType(DataType[NumericValue]):
             raise ValueError(f"PDP endianness can only be used with four byte base types, not {self.base_type}")
 
     def is_text(self, value: NumericValue) -> bool:
-        if isinstance(value, NumericWildcard):
-            return True
-        elif not isinstance(value.value, int):
-            return False
-        try:
-            _ = bytes([value.value]).decode("ascii")
-            return True
-        except (UnicodeDecodeError, ValueError):
-            return False
+        return False
 
     def parse_expected(self, specification: str) -> NumericValue:
         if specification.strip() == "x":
@@ -2035,7 +2035,7 @@ class IndirectTest(MagicTest):
             p = p.parent
 
     def subtest_type(self) -> TestType:
-        return TestType.UNKNOWN
+        return TestType.BINARY
 
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
         if self.relative:
