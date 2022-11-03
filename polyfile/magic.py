@@ -406,12 +406,19 @@ class IndirectOffset(Offset):
             octal_string_end = offset
             while octal_string_end < len(data) and ord('0') <= data[octal_string_end] <= ord('7'):
                 octal_string_end += 1
-            if octal_string_end == offset:
+            value: Optional[int] = None
+            if octal_string_end > offset:
+                try:
+                    value = int(data[:octal_string_end], 8)
+                except ValueError:
+                    pass
+            if value is None:
                 if allow_invalid:
-                    return self.post_process(0)
+                    value = 0
                 else:
-                    raise ValueError(f"Invalid octal string expected for {self} at file offset {offset}")
-            return self.post_process(int(data[:octal_string_end], 8))
+                    return len(data)
+                    # raise ValueError(f"Invalid octal string expected for {self} at file offset {offset}")
+            return self.post_process(value)
         elif self.num_bytes == 1:
             fmt = "B"
         elif self.num_bytes == 2:
@@ -511,7 +518,11 @@ class IndirectOffset(Offset):
                f"endianness={self.endianness!r}, signed={self.signed}, post_process={self.post_process!r})"
 
     def __str__(self):
-        return f"({self.offset!s}{['.', ','][self.signed]}{self.num_bytes}{self.endianness})"
+        if self.num_bytes == IndirectOffset.OctalIndirectOffset:
+            num_bytes = "o"
+        else:
+            num_bytes = str(self.num_bytes)
+        return f"({self.offset!s}{['.', ','][self.signed]}{num_bytes}{self.endianness.value})"
 
 
 class SourceInfo:
