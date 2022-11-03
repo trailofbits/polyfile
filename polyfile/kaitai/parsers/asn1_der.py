@@ -36,7 +36,7 @@ class Asn1Der(KaitaiStruct):
     * https://www.alvestrand.no/objectid/top.html
     
     .. seealso::
-       Source - https://www.itu.int/rec/T-REC-X.690-201508-I/en
+       Source - https://www.itu.int/itu-t/recommendations/rec.aspx?rec=12483&lang=en
     """
 
     class TypeTag(Enum):

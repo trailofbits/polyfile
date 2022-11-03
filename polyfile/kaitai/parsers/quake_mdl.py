@@ -10,6 +10,42 @@ if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class QuakeMdl(KaitaiStruct):
+    """Quake 1 model format is used to store 3D models completely with
+    textures and animations used in the game. Quake 1 engine
+    (retroactively named "idtech2") is a popular 3D engine first used
+    for Quake game by id Software in 1996.
+    
+    Model is constructed traditionally from vertices in 3D space, faces
+    which connect vertices, textures ("skins", i.e. 2D bitmaps) and
+    texture UV mapping information. As opposed to more modern,
+    bones-based animation formats, Quake model was animated by changing
+    locations of all vertices it included in 3D space, frame by frame.
+    
+    File format stores:
+    
+    * "Skins" — effectively 2D bitmaps which will be used as a
+      texture. Every model can have multiple skins — e.g. these can be
+      switched to depict various levels of damage to the
+      monsters. Bitmaps are 8-bit-per-pixel, indexed in global Quake
+      palette, subject to lighting and gamma adjustment when rendering
+      in the game using colormap technique.
+    * "Texture coordinates" — UV coordinates, mapping 3D vertices to
+      skin coordinates.
+    * "Triangles" — triangular faces connecting 3D vertices.
+    * "Frames" — locations of vertices in 3D space; can include more
+      than one frame, thus allowing representation of different frames
+      for animation purposes.
+    
+    Originally, 3D geometry for models for Quake was designed in [Alias
+    PowerAnimator](https://en.wikipedia.org/wiki/PowerAnimator),
+    precursor of modern day Autodesk Maya and Autodesk Alias. Therefore,
+    3D-related part of Quake model format followed closely Alias TRI
+    format, and Quake development utilities included a converter from Alias
+    TRI (`modelgen`).
+    
+    Skins (textures) where prepared as LBM bitmaps with the help from
+    `texmap` utility in the same development utilities toolkit.
+    """
     SEQ_FIELDS = ["header", "skins", "texture_coordinates", "triangles", "frames"]
     def __init__(self, _io, _parent=None, _root=None):
         self._io = _io
@@ -96,6 +132,14 @@ class QuakeMdl(KaitaiStruct):
 
 
     class MdlTexcoord(KaitaiStruct):
+        """
+        .. seealso::
+           Source - https://github.com/id-Software/Quake/blob/0023db327bc1db00068284b70e1db45857aeee35/WinQuake/modelgen.h#L79-L83
+        
+        
+        .. seealso::
+           Source - https://www.gamers.org/dEngine/quake/spec/quake-spec34/qkspec_5.htm#MD2
+        """
         SEQ_FIELDS = ["on_seam", "s", "t"]
         def __init__(self, _io, _parent=None, _root=None):
             self._io = _io
@@ -116,7 +160,15 @@ class QuakeMdl(KaitaiStruct):
 
 
     class MdlHeader(KaitaiStruct):
-        SEQ_FIELDS = ["ident", "version_must_be_6", "scale", "origin", "radius", "eye_position", "num_skins", "skin_width", "skin_height", "num_verts", "num_tris", "num_frames", "synctype", "flags", "size"]
+        """
+        .. seealso::
+           Source - https://github.com/id-Software/Quake/blob/0023db327bc1db00068284b70e1db45857aeee35/WinQuake/modelgen.h#L59-L75
+        
+        
+        .. seealso::
+           Source - https://www.gamers.org/dEngine/quake/spec/quake-spec34/qkspec_5.htm#MD0
+        """
+        SEQ_FIELDS = ["ident", "version", "scale", "origin", "radius", "eye_position", "num_skins", "skin_width", "skin_height", "num_verts", "num_tris", "num_frames", "synctype", "flags", "size"]
         def __init__(self, _io, _parent=None, _root=None):
             self._io = _io
             self._parent = _parent
@@ -129,11 +181,11 @@ class QuakeMdl(KaitaiStruct):
             self._debug['ident']['end'] = self._io.pos()
             if not self.ident == b"\x49\x44\x50\x4F":
                 raise kaitaistruct.ValidationNotEqualError(b"\x49\x44\x50\x4F", self.ident, self._io, u"/types/mdl_header/seq/0")
-            self._debug['version_must_be_6']['start'] = self._io.pos()
-            self.version_must_be_6 = self._io.read_bytes(4)
-            self._debug['version_must_be_6']['end'] = self._io.pos()
-            if not self.version_must_be_6 == b"\x06\x00\x00\x00":
-                raise kaitaistruct.ValidationNotEqualError(b"\x06\x00\x00\x00", self.version_must_be_6, self._io, u"/types/mdl_header/seq/1")
+            self._debug['version']['start'] = self._io.pos()
+            self.version = self._io.read_s4le()
+            self._debug['version']['end'] = self._io.pos()
+            if not self.version == 6:
+                raise kaitaistruct.ValidationNotEqualError(6, self.version, self._io, u"/types/mdl_header/seq/1")
             self._debug['scale']['start'] = self._io.pos()
             self.scale = QuakeMdl.Vec3(self._io, self, self._root)
             self.scale._read()
@@ -178,15 +230,9 @@ class QuakeMdl(KaitaiStruct):
             self._debug['size']['end'] = self._io.pos()
 
         @property
-        def version(self):
-            if hasattr(self, '_m_version'):
-                return self._m_version if hasattr(self, '_m_version') else None
-
-            self._m_version = 6
-            return self._m_version if hasattr(self, '_m_version') else None
-
-        @property
         def skin_size(self):
+            """Skin size in pixels.
+            """
             if hasattr(self, '_m_skin_size'):
                 return self._m_skin_size if hasattr(self, '_m_skin_size') else None
 
@@ -335,6 +381,16 @@ class QuakeMdl(KaitaiStruct):
 
 
     class MdlTriangle(KaitaiStruct):
+        """Represents a triangular face, connecting 3 vertices, referenced
+        by their indexes.
+        
+        .. seealso::
+           Source - https://github.com/id-Software/Quake/blob/0023db327bc1db00068284b70e1db45857aeee35/WinQuake/modelgen.h#L85-L88
+        
+        
+        .. seealso::
+           Source - https://www.gamers.org/dEngine/quake/spec/quake-spec34/qkspec_5.htm#MD3
+        """
         SEQ_FIELDS = ["faces_front", "vertices"]
         def __init__(self, _io, _parent=None, _root=None):
             self._io = _io
@@ -359,6 +415,10 @@ class QuakeMdl(KaitaiStruct):
 
 
     class Vec3(KaitaiStruct):
+        """Basic 3D vector (x, y, z) using single-precision floating point
+        coordnates. Can be used to specify a point in 3D space,
+        direction, scaling factor, etc.
+        """
         SEQ_FIELDS = ["x", "y", "z"]
         def __init__(self, _io, _parent=None, _root=None):
             self._io = _io

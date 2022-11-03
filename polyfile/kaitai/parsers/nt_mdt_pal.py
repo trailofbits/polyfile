@@ -133,7 +133,7 @@ class NtMdtPal(KaitaiStruct):
             self.unkn = self._io.read_u1()
             self._debug['unkn']['end'] = self._io.pos()
             self._debug['title']['start'] = self._io.pos()
-            self.title = (self._io.read_bytes(self._root.meta[self.index].name_size)).decode(u"UTF-16")
+            self.title = (self._io.read_bytes(self._root.meta[self.index].name_size)).decode(u"UTF-16LE")
             self._debug['title']['end'] = self._io.pos()
             self._debug['unkn1']['start'] = self._io.pos()
             self.unkn1 = self._io.read_u2be()

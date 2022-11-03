@@ -15,7 +15,7 @@ class Xar(KaitaiStruct):
     """From [Wikipedia](https://en.wikipedia.org/wiki/Xar_(archiver)):
     
     "XAR (short for eXtensible ARchive format) is an open source file archiver
-    and the archiver’s file format. It was created within the OpenDarwin project
+    and the archiver's file format. It was created within the OpenDarwin project
     and is used in macOS X 10.5 and up for software installation routines, as
     well as browser extensions in Safari 5.0 and up."
     

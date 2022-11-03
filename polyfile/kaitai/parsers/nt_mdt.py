@@ -20,7 +20,7 @@ class NtMdt(KaitaiStruct):
     
     Some examples of mdt files can be downloaded at:
     
-    * http://www.ntmdt-si.ru/scan-gallery
+    * https://www.ntmdt-si.ru/resources/scan-gallery
     * http://callistosoft.narod.ru/Resources/Mdt.zip
     
     .. seealso::

@@ -46,7 +46,13 @@ class Zip(KaitaiStruct):
         lzma = 14
         ibm_terse = 18
         ibm_lz77_z = 19
+        zstandard = 93
+        mp3 = 94
+        xz = 95
+        jpeg = 96
+        wavpack = 97
         ppmd = 98
+        aex_encryption_marker = 99
 
     class ExtraCodes(Enum):
         zip64 = 1
@@ -67,8 +73,14 @@ class Zip(KaitaiStruct):
         ibm_s390_comp = 102
         poszip_4690 = 18064
         extended_timestamp = 21589
+        beos = 25922
+        asi_unix = 30062
         infozip_unix = 30805
         infozip_unix_var_size = 30837
+        aex_encryption = 39169
+        apache_commons_compress = 41246
+        microsoft_open_packaging_growth_hint = 41504
+        sms_qdos = 64842
     SEQ_FIELDS = ["sections"]
     def __init__(self, _io, _parent=None, _root=None):
         self._io = _io

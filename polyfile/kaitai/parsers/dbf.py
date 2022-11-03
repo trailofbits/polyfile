@@ -3,6 +3,7 @@
 from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
+from enum import Enum
 import collections
 
 
@@ -19,7 +20,11 @@ class Dbf(KaitaiStruct):
     .. seealso::
        Source - http://www.dbase.com/Knowledgebase/INT/db7_file_fmt.htm
     """
-    SEQ_FIELDS = ["header1", "header2", "records"]
+
+    class DeleteState(Enum):
+        false = 32
+        true = 42
+    SEQ_FIELDS = ["header1", "header2", "header_terminator", "records"]
     def __init__(self, _io, _parent=None, _root=None):
         self._io = _io
         self._parent = _parent
@@ -32,18 +37,28 @@ class Dbf(KaitaiStruct):
         self.header1._read()
         self._debug['header1']['end'] = self._io.pos()
         self._debug['header2']['start'] = self._io.pos()
-        self._raw_header2 = self._io.read_bytes((self.header1.len_header - 12))
+        self._raw_header2 = self._io.read_bytes(((self.header1.len_header - 12) - 1))
         _io__raw_header2 = KaitaiStream(BytesIO(self._raw_header2))
         self.header2 = Dbf.Header2(_io__raw_header2, self, self._root)
         self.header2._read()
         self._debug['header2']['end'] = self._io.pos()
+        self._debug['header_terminator']['start'] = self._io.pos()
+        self.header_terminator = self._io.read_bytes(1)
+        self._debug['header_terminator']['end'] = self._io.pos()
+        if not self.header_terminator == b"\x0D":
+            raise kaitaistruct.ValidationNotEqualError(b"\x0D", self.header_terminator, self._io, u"/seq/2")
         self._debug['records']['start'] = self._io.pos()
+        self._raw_records = [None] * (self.header1.num_records)
         self.records = [None] * (self.header1.num_records)
         for i in range(self.header1.num_records):
             if not 'arr' in self._debug['records']:
                 self._debug['records']['arr'] = []
             self._debug['records']['arr'].append({'start': self._io.pos()})
-            self.records[i] = self._io.read_bytes(self.header1.len_record)
+            self._raw_records[i] = self._io.read_bytes(self.header1.len_record)
+            _io__raw_records = KaitaiStream(BytesIO(self._raw_records[i]))
+            _t_records = Dbf.Record(_io__raw_records, self, self._root)
+            _t_records._read()
+            self.records[i] = _t_records
             self._debug['records']['arr'][i]['end'] = self._io.pos()
 
         self._debug['records']['end'] = self._io.pos()
@@ -70,15 +85,17 @@ class Dbf(KaitaiStruct):
                 self._debug['header_dbase_7']['end'] = self._io.pos()
 
             self._debug['fields']['start'] = self._io.pos()
-            self.fields = [None] * (11)
-            for i in range(11):
+            self.fields = []
+            i = 0
+            while not self._io.is_eof():
                 if not 'arr' in self._debug['fields']:
                     self._debug['fields']['arr'] = []
                 self._debug['fields']['arr'].append({'start': self._io.pos()})
                 _t_fields = Dbf.Field(self._io, self, self._root)
                 _t_fields._read()
-                self.fields[i] = _t_fields
-                self._debug['fields']['arr'][i]['end'] = self._io.pos()
+                self.fields.append(_t_fields)
+                self._debug['fields']['arr'][len(self.fields) - 1]['end'] = self._io.pos()
+                i += 1
 
             self._debug['fields']['end'] = self._io.pos()
 
@@ -228,6 +245,30 @@ class Dbf(KaitaiStruct):
             self._debug['reserved4']['start'] = self._io.pos()
             self.reserved4 = self._io.read_bytes(4)
             self._debug['reserved4']['end'] = self._io.pos()
+
+
+    class Record(KaitaiStruct):
+        SEQ_FIELDS = ["deleted", "record_fields"]
+        def __init__(self, _io, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root if _root else self
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['deleted']['start'] = self._io.pos()
+            self.deleted = KaitaiStream.resolve_enum(Dbf.DeleteState, self._io.read_u1())
+            self._debug['deleted']['end'] = self._io.pos()
+            self._debug['record_fields']['start'] = self._io.pos()
+            self.record_fields = [None] * (len(self._root.header2.fields))
+            for i in range(len(self._root.header2.fields)):
+                if not 'arr' in self._debug['record_fields']:
+                    self._debug['record_fields']['arr'] = []
+                self._debug['record_fields']['arr'].append({'start': self._io.pos()})
+                self.record_fields[i] = self._io.read_bytes(self._root.header2.fields[i].length)
+                self._debug['record_fields']['arr'][i]['end'] = self._io.pos()
+
+            self._debug['record_fields']['end'] = self._io.pos()
 
 
 
