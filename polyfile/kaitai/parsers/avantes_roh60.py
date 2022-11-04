@@ -1,12 +1,11 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
-from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class AvantesRoh60(KaitaiStruct):
@@ -64,12 +63,12 @@ class AvantesRoh60(KaitaiStruct):
         self.wlx4 = self._io.read_f4le()
         self._debug['wlx4']['end'] = self._io.pos()
         self._debug['unknown2']['start'] = self._io.pos()
-        self.unknown2 = [None] * (9)
+        self.unknown2 = []
         for i in range(9):
             if not 'arr' in self._debug['unknown2']:
                 self._debug['unknown2']['arr'] = []
             self._debug['unknown2']['arr'].append({'start': self._io.pos()})
-            self.unknown2[i] = self._io.read_f4le()
+            self.unknown2.append(self._io.read_f4le())
             self._debug['unknown2']['arr'][i]['end'] = self._io.pos()
 
         self._debug['unknown2']['end'] = self._io.pos()
@@ -80,22 +79,22 @@ class AvantesRoh60(KaitaiStruct):
         self.ipixlast = self._io.read_f4le()
         self._debug['ipixlast']['end'] = self._io.pos()
         self._debug['unknown3']['start'] = self._io.pos()
-        self.unknown3 = [None] * (4)
+        self.unknown3 = []
         for i in range(4):
             if not 'arr' in self._debug['unknown3']:
                 self._debug['unknown3']['arr'] = []
             self._debug['unknown3']['arr'].append({'start': self._io.pos()})
-            self.unknown3[i] = self._io.read_f4le()
+            self.unknown3.append(self._io.read_f4le())
             self._debug['unknown3']['arr'][i]['end'] = self._io.pos()
 
         self._debug['unknown3']['end'] = self._io.pos()
         self._debug['spectrum']['start'] = self._io.pos()
-        self.spectrum = [None] * (((int(self.ipixlast) - int(self.ipixfirst)) - 1))
+        self.spectrum = []
         for i in range(((int(self.ipixlast) - int(self.ipixfirst)) - 1)):
             if not 'arr' in self._debug['spectrum']:
                 self._debug['spectrum']['arr'] = []
             self._debug['spectrum']['arr'].append({'start': self._io.pos()})
-            self.spectrum[i] = self._io.read_f4le()
+            self.spectrum.append(self._io.read_f4le())
             self._debug['spectrum']['arr'][i]['end'] = self._io.pos()
 
         self._debug['spectrum']['end'] = self._io.pos()

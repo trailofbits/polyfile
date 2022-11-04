@@ -1,12 +1,11 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
-from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class HeapsPak(KaitaiStruct):
@@ -135,7 +134,7 @@ class HeapsPak(KaitaiStruct):
             @property
             def data(self):
                 if hasattr(self, '_m_data'):
-                    return self._m_data if hasattr(self, '_m_data') else None
+                    return self._m_data
 
                 io = self._root._io
                 _pos = io.pos()
@@ -144,7 +143,7 @@ class HeapsPak(KaitaiStruct):
                 self._m_data = io.read_bytes(self.len_data)
                 self._debug['_m_data']['end'] = io.pos()
                 io.seek(_pos)
-                return self._m_data if hasattr(self, '_m_data') else None
+                return getattr(self, '_m_data', None)
 
 
         class Dir(KaitaiStruct):
@@ -160,14 +159,14 @@ class HeapsPak(KaitaiStruct):
                 self.num_entries = self._io.read_u4le()
                 self._debug['num_entries']['end'] = self._io.pos()
                 self._debug['entries']['start'] = self._io.pos()
-                self.entries = [None] * (self.num_entries)
+                self.entries = []
                 for i in range(self.num_entries):
                     if not 'arr' in self._debug['entries']:
                         self._debug['entries']['arr'] = []
                     self._debug['entries']['arr'].append({'start': self._io.pos()})
                     _t_entries = HeapsPak.Header.Entry(self._io, self, self._root)
                     _t_entries._read()
-                    self.entries[i] = _t_entries
+                    self.entries.append(_t_entries)
                     self._debug['entries']['arr'][i]['end'] = self._io.pos()
 
                 self._debug['entries']['end'] = self._io.pos()

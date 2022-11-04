@@ -1,13 +1,12 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
-from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 from enum import Enum
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class VmwareVmdk(KaitaiStruct):
@@ -120,15 +119,15 @@ class VmwareVmdk(KaitaiStruct):
     @property
     def len_sector(self):
         if hasattr(self, '_m_len_sector'):
-            return self._m_len_sector if hasattr(self, '_m_len_sector') else None
+            return self._m_len_sector
 
         self._m_len_sector = 512
-        return self._m_len_sector if hasattr(self, '_m_len_sector') else None
+        return getattr(self, '_m_len_sector', None)
 
     @property
     def descriptor(self):
         if hasattr(self, '_m_descriptor'):
-            return self._m_descriptor if hasattr(self, '_m_descriptor') else None
+            return self._m_descriptor
 
         _pos = self._io.pos()
         self._io.seek((self.start_descriptor * self._root.len_sector))
@@ -136,12 +135,12 @@ class VmwareVmdk(KaitaiStruct):
         self._m_descriptor = self._io.read_bytes((self.size_descriptor * self._root.len_sector))
         self._debug['_m_descriptor']['end'] = self._io.pos()
         self._io.seek(_pos)
-        return self._m_descriptor if hasattr(self, '_m_descriptor') else None
+        return getattr(self, '_m_descriptor', None)
 
     @property
     def grain_primary(self):
         if hasattr(self, '_m_grain_primary'):
-            return self._m_grain_primary if hasattr(self, '_m_grain_primary') else None
+            return self._m_grain_primary
 
         _pos = self._io.pos()
         self._io.seek((self.start_primary_grain * self._root.len_sector))
@@ -149,12 +148,12 @@ class VmwareVmdk(KaitaiStruct):
         self._m_grain_primary = self._io.read_bytes((self.size_grain * self._root.len_sector))
         self._debug['_m_grain_primary']['end'] = self._io.pos()
         self._io.seek(_pos)
-        return self._m_grain_primary if hasattr(self, '_m_grain_primary') else None
+        return getattr(self, '_m_grain_primary', None)
 
     @property
     def grain_secondary(self):
         if hasattr(self, '_m_grain_secondary'):
-            return self._m_grain_secondary if hasattr(self, '_m_grain_secondary') else None
+            return self._m_grain_secondary
 
         _pos = self._io.pos()
         self._io.seek((self.start_secondary_grain * self._root.len_sector))
@@ -162,6 +161,6 @@ class VmwareVmdk(KaitaiStruct):
         self._m_grain_secondary = self._io.read_bytes((self.size_grain * self._root.len_sector))
         self._debug['_m_grain_secondary']['end'] = self._io.pos()
         self._io.seek(_pos)
-        return self._m_grain_secondary if hasattr(self, '_m_grain_secondary') else None
+        return getattr(self, '_m_grain_secondary', None)
 
 

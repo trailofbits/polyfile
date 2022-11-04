@@ -1,13 +1,12 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
-from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
 from enum import Enum
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class BitcoinTransaction(KaitaiStruct):
@@ -31,14 +30,14 @@ class BitcoinTransaction(KaitaiStruct):
         self.num_vins = self._io.read_u1()
         self._debug['num_vins']['end'] = self._io.pos()
         self._debug['vins']['start'] = self._io.pos()
-        self.vins = [None] * (self.num_vins)
+        self.vins = []
         for i in range(self.num_vins):
             if not 'arr' in self._debug['vins']:
                 self._debug['vins']['arr'] = []
             self._debug['vins']['arr'].append({'start': self._io.pos()})
             _t_vins = BitcoinTransaction.Vin(self._io, self, self._root)
             _t_vins._read()
-            self.vins[i] = _t_vins
+            self.vins.append(_t_vins)
             self._debug['vins']['arr'][i]['end'] = self._io.pos()
 
         self._debug['vins']['end'] = self._io.pos()
@@ -46,14 +45,14 @@ class BitcoinTransaction(KaitaiStruct):
         self.num_vouts = self._io.read_u1()
         self._debug['num_vouts']['end'] = self._io.pos()
         self._debug['vouts']['start'] = self._io.pos()
-        self.vouts = [None] * (self.num_vouts)
+        self.vouts = []
         for i in range(self.num_vouts):
             if not 'arr' in self._debug['vouts']:
                 self._debug['vouts']['arr'] = []
             self._debug['vouts']['arr'].append({'start': self._io.pos()})
             _t_vouts = BitcoinTransaction.Vout(self._io, self, self._root)
             _t_vouts._read()
-            self.vouts[i] = _t_vouts
+            self.vouts.append(_t_vouts)
             self._debug['vouts']['arr'][i]['end'] = self._io.pos()
 
         self._debug['vouts']['end'] = self._io.pos()

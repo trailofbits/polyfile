@@ -1,13 +1,12 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
-from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 from enum import Enum
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 from polyfile.kaitai.parsers import dos_datetime
@@ -46,7 +45,13 @@ class Zip(KaitaiStruct):
         lzma = 14
         ibm_terse = 18
         ibm_lz77_z = 19
+        zstandard = 93
+        mp3 = 94
+        xz = 95
+        jpeg = 96
+        wavpack = 97
         ppmd = 98
+        aex_encryption_marker = 99
 
     class ExtraCodes(Enum):
         zip64 = 1
@@ -67,8 +72,14 @@ class Zip(KaitaiStruct):
         ibm_s390_comp = 102
         poszip_4690 = 18064
         extended_timestamp = 21589
+        beos = 25922
+        asi_unix = 30062
         infozip_unix = 30805
         infozip_unix_var_size = 30837
+        aex_encryption = 39169
+        apache_commons_compress = 41246
+        microsoft_open_packaging_growth_hint = 41504
+        sms_qdos = 64842
     SEQ_FIELDS = ["sections"]
     def __init__(self, _io, _parent=None, _root=None):
         self._io = _io
@@ -412,7 +423,7 @@ class Zip(KaitaiStruct):
         @property
         def local_header(self):
             if hasattr(self, '_m_local_header'):
-                return self._m_local_header if hasattr(self, '_m_local_header') else None
+                return self._m_local_header
 
             _pos = self._io.pos()
             self._io.seek(self.ofs_local_header)
@@ -421,7 +432,7 @@ class Zip(KaitaiStruct):
             self._m_local_header._read()
             self._debug['_m_local_header']['end'] = self._io.pos()
             self._io.seek(_pos)
-            return self._m_local_header if hasattr(self, '_m_local_header') else None
+            return getattr(self, '_m_local_header', None)
 
 
     class PkSection(KaitaiStruct):
@@ -595,43 +606,43 @@ class Zip(KaitaiStruct):
             @property
             def deflated_mode(self):
                 if hasattr(self, '_m_deflated_mode'):
-                    return self._m_deflated_mode if hasattr(self, '_m_deflated_mode') else None
+                    return self._m_deflated_mode
 
                 if  ((self._parent.compression_method == Zip.Compression.deflated) or (self._parent.compression_method == Zip.Compression.enhanced_deflated)) :
                     self._m_deflated_mode = KaitaiStream.resolve_enum(Zip.LocalFileHeader.GpFlags.DeflateMode, self.comp_options_raw)
 
-                return self._m_deflated_mode if hasattr(self, '_m_deflated_mode') else None
+                return getattr(self, '_m_deflated_mode', None)
 
             @property
             def imploded_dict_byte_size(self):
                 """8KiB or 4KiB in bytes."""
                 if hasattr(self, '_m_imploded_dict_byte_size'):
-                    return self._m_imploded_dict_byte_size if hasattr(self, '_m_imploded_dict_byte_size') else None
+                    return self._m_imploded_dict_byte_size
 
                 if self._parent.compression_method == Zip.Compression.imploded:
                     self._m_imploded_dict_byte_size = ((8 if (self.comp_options_raw & 1) != 0 else 4) * 1024)
 
-                return self._m_imploded_dict_byte_size if hasattr(self, '_m_imploded_dict_byte_size') else None
+                return getattr(self, '_m_imploded_dict_byte_size', None)
 
             @property
             def imploded_num_sf_trees(self):
                 if hasattr(self, '_m_imploded_num_sf_trees'):
-                    return self._m_imploded_num_sf_trees if hasattr(self, '_m_imploded_num_sf_trees') else None
+                    return self._m_imploded_num_sf_trees
 
                 if self._parent.compression_method == Zip.Compression.imploded:
                     self._m_imploded_num_sf_trees = (3 if (self.comp_options_raw & 2) != 0 else 2)
 
-                return self._m_imploded_num_sf_trees if hasattr(self, '_m_imploded_num_sf_trees') else None
+                return getattr(self, '_m_imploded_num_sf_trees', None)
 
             @property
             def lzma_has_eos_marker(self):
                 if hasattr(self, '_m_lzma_has_eos_marker'):
-                    return self._m_lzma_has_eos_marker if hasattr(self, '_m_lzma_has_eos_marker') else None
+                    return self._m_lzma_has_eos_marker
 
                 if self._parent.compression_method == Zip.Compression.lzma:
                     self._m_lzma_has_eos_marker = (self.comp_options_raw & 1) != 0
 
-                return self._m_lzma_has_eos_marker if hasattr(self, '_m_lzma_has_eos_marker') else None
+                return getattr(self, '_m_lzma_has_eos_marker', None)
 
 
 

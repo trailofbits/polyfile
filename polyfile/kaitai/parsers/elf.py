@@ -1,13 +1,12 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
-from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 from enum import Enum
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class Elf(KaitaiStruct):
@@ -66,6 +65,7 @@ class Elf(KaitaiStruct):
         preinit_array = 16
         group = 17
         symtab_shndx = 18
+        relr = 19
         sunw_symnsort = 1879048172
         sunw_phname = 1879048173
         sunw_ancillary = 1879048174
@@ -311,6 +311,9 @@ class Elf(KaitaiStruct):
         wdc65816 = 257
         loongarch = 258
         kf32 = 259
+        u16_u8core = 260
+        tachyum = 261
+        nxp_56800ef = 262
         avr_old = 4183
         msp430_old = 4185
         adapteva_epiphany = 4643
@@ -392,6 +395,9 @@ class Elf(KaitaiStruct):
         preinit_array = 32
         preinit_arraysz = 33
         symtab_shndx = 34
+        relrsz = 35
+        relr = 36
+        relrent = 37
         deprecated_sparc_register = 117440513
         sunw_auxiliary = 1610612749
         sunw_rtldinf = 1610612750
@@ -847,7 +853,7 @@ class Elf(KaitaiStruct):
             @property
             def flags_obj(self):
                 if hasattr(self, '_m_flags_obj'):
-                    return self._m_flags_obj if hasattr(self, '_m_flags_obj') else None
+                    return self._m_flags_obj
 
                 self._debug['_m_flags_obj']['start'] = self._io.pos()
                 if self._is_le:
@@ -867,7 +873,7 @@ class Elf(KaitaiStruct):
                         self._m_flags_obj = Elf.PhdrTypeFlags(self.flags64, self._io, self, self._root)
                         self._m_flags_obj._read()
                 self._debug['_m_flags_obj']['end'] = self._io.pos()
-                return self._m_flags_obj if hasattr(self, '_m_flags_obj') else None
+                return getattr(self, '_m_flags_obj', None)
 
 
         class DynamicSectionEntry(KaitaiStruct):
@@ -930,7 +936,7 @@ class Elf(KaitaiStruct):
             @property
             def flag_1_values(self):
                 if hasattr(self, '_m_flag_1_values'):
-                    return self._m_flag_1_values if hasattr(self, '_m_flag_1_values') else None
+                    return self._m_flag_1_values
 
                 if self.tag_enum == Elf.DynamicArrayTags.flags_1:
                     self._debug['_m_flag_1_values']['start'] = self._io.pos()
@@ -942,12 +948,12 @@ class Elf(KaitaiStruct):
                         self._m_flag_1_values._read()
                     self._debug['_m_flag_1_values']['end'] = self._io.pos()
 
-                return self._m_flag_1_values if hasattr(self, '_m_flag_1_values') else None
+                return getattr(self, '_m_flag_1_values', None)
 
             @property
             def value_str(self):
                 if hasattr(self, '_m_value_str'):
-                    return self._m_value_str if hasattr(self, '_m_value_str') else None
+                    return self._m_value_str
 
                 if  ((self.is_value_str) and (self._parent.is_string_table_linked)) :
                     io = self._parent._parent.linked_section.body._io
@@ -961,20 +967,20 @@ class Elf(KaitaiStruct):
                     self._debug['_m_value_str']['end'] = io.pos()
                     io.seek(_pos)
 
-                return self._m_value_str if hasattr(self, '_m_value_str') else None
+                return getattr(self, '_m_value_str', None)
 
             @property
             def tag_enum(self):
                 if hasattr(self, '_m_tag_enum'):
-                    return self._m_tag_enum if hasattr(self, '_m_tag_enum') else None
+                    return self._m_tag_enum
 
                 self._m_tag_enum = KaitaiStream.resolve_enum(Elf.DynamicArrayTags, self.tag)
-                return self._m_tag_enum if hasattr(self, '_m_tag_enum') else None
+                return getattr(self, '_m_tag_enum', None)
 
             @property
             def flag_values(self):
                 if hasattr(self, '_m_flag_values'):
-                    return self._m_flag_values if hasattr(self, '_m_flag_values') else None
+                    return self._m_flag_values
 
                 if self.tag_enum == Elf.DynamicArrayTags.flags:
                     self._debug['_m_flag_values']['start'] = self._io.pos()
@@ -986,15 +992,15 @@ class Elf(KaitaiStruct):
                         self._m_flag_values._read()
                     self._debug['_m_flag_values']['end'] = self._io.pos()
 
-                return self._m_flag_values if hasattr(self, '_m_flag_values') else None
+                return getattr(self, '_m_flag_values', None)
 
             @property
             def is_value_str(self):
                 if hasattr(self, '_m_is_value_str'):
-                    return self._m_is_value_str if hasattr(self, '_m_is_value_str') else None
+                    return self._m_is_value_str
 
                 self._m_is_value_str =  ((self.value_or_ptr != 0) and ( ((self.tag_enum == Elf.DynamicArrayTags.needed) or (self.tag_enum == Elf.DynamicArrayTags.soname) or (self.tag_enum == Elf.DynamicArrayTags.rpath) or (self.tag_enum == Elf.DynamicArrayTags.runpath) or (self.tag_enum == Elf.DynamicArrayTags.sunw_auxiliary) or (self.tag_enum == Elf.DynamicArrayTags.sunw_filter) or (self.tag_enum == Elf.DynamicArrayTags.auxiliary) or (self.tag_enum == Elf.DynamicArrayTags.filter) or (self.tag_enum == Elf.DynamicArrayTags.config) or (self.tag_enum == Elf.DynamicArrayTags.depaudit) or (self.tag_enum == Elf.DynamicArrayTags.audit)) )) 
-                return self._m_is_value_str if hasattr(self, '_m_is_value_str') else None
+                return getattr(self, '_m_is_value_str', None)
 
 
         class SectionHeader(KaitaiStruct):
@@ -1129,7 +1135,7 @@ class Elf(KaitaiStruct):
             @property
             def body(self):
                 if hasattr(self, '_m_body'):
-                    return self._m_body if hasattr(self, '_m_body') else None
+                    return self._m_body
 
                 if self.type != Elf.ShType.nobits:
                     io = self._root._io
@@ -1217,7 +1223,7 @@ class Elf(KaitaiStruct):
                     self._debug['_m_body']['end'] = io.pos()
                     io.seek(_pos)
 
-                return self._m_body if hasattr(self, '_m_body') else None
+                return getattr(self, '_m_body', None)
 
             @property
             def linked_section(self):
@@ -1227,17 +1233,17 @@ class Elf(KaitaiStruct):
                    Source - https://refspecs.linuxfoundation.org/elf/gabi4+/ch4.sheader.html#sh_link
                 """
                 if hasattr(self, '_m_linked_section'):
-                    return self._m_linked_section if hasattr(self, '_m_linked_section') else None
+                    return self._m_linked_section
 
                 if  ((self.linked_section_idx != Elf.SectionHeaderIdxSpecial.undefined.value) and (self.linked_section_idx < self._root.header.qty_section_header)) :
                     self._m_linked_section = self._root.header.section_headers[self.linked_section_idx]
 
-                return self._m_linked_section if hasattr(self, '_m_linked_section') else None
+                return getattr(self, '_m_linked_section', None)
 
             @property
             def name(self):
                 if hasattr(self, '_m_name'):
-                    return self._m_name if hasattr(self, '_m_name') else None
+                    return self._m_name
 
                 io = self._root.header.section_names._io
                 _pos = io.pos()
@@ -1249,12 +1255,12 @@ class Elf(KaitaiStruct):
                     self._m_name = (io.read_bytes_term(0, False, True, True)).decode(u"ASCII")
                 self._debug['_m_name']['end'] = io.pos()
                 io.seek(_pos)
-                return self._m_name if hasattr(self, '_m_name') else None
+                return getattr(self, '_m_name', None)
 
             @property
             def flags_obj(self):
                 if hasattr(self, '_m_flags_obj'):
-                    return self._m_flags_obj if hasattr(self, '_m_flags_obj') else None
+                    return self._m_flags_obj
 
                 self._debug['_m_flags_obj']['start'] = self._io.pos()
                 if self._is_le:
@@ -1264,7 +1270,7 @@ class Elf(KaitaiStruct):
                     self._m_flags_obj = Elf.SectionHeaderFlags(self.flags, self._io, self, self._root)
                     self._m_flags_obj._read()
                 self._debug['_m_flags_obj']['end'] = self._io.pos()
-                return self._m_flags_obj if hasattr(self, '_m_flags_obj') else None
+                return getattr(self, '_m_flags_obj', None)
 
 
         class RelocationSection(KaitaiStruct):
@@ -1378,10 +1384,10 @@ class Elf(KaitaiStruct):
             @property
             def is_string_table_linked(self):
                 if hasattr(self, '_m_is_string_table_linked'):
-                    return self._m_is_string_table_linked if hasattr(self, '_m_is_string_table_linked') else None
+                    return self._m_is_string_table_linked
 
                 self._m_is_string_table_linked = self._parent.linked_section.type == Elf.ShType.strtab
-                return self._m_is_string_table_linked if hasattr(self, '_m_is_string_table_linked') else None
+                return getattr(self, '_m_is_string_table_linked', None)
 
 
         class DynsymSection(KaitaiStruct):
@@ -1436,10 +1442,10 @@ class Elf(KaitaiStruct):
             @property
             def is_string_table_linked(self):
                 if hasattr(self, '_m_is_string_table_linked'):
-                    return self._m_is_string_table_linked if hasattr(self, '_m_is_string_table_linked') else None
+                    return self._m_is_string_table_linked
 
                 self._m_is_string_table_linked = self._parent.linked_section.type == Elf.ShType.strtab
-                return self._m_is_string_table_linked if hasattr(self, '_m_is_string_table_linked') else None
+                return getattr(self, '_m_is_string_table_linked', None)
 
 
         class RelocationSectionEntry(KaitaiStruct):
@@ -1614,55 +1620,55 @@ class Elf(KaitaiStruct):
             @property
             def is_sh_idx_reserved(self):
                 if hasattr(self, '_m_is_sh_idx_reserved'):
-                    return self._m_is_sh_idx_reserved if hasattr(self, '_m_is_sh_idx_reserved') else None
+                    return self._m_is_sh_idx_reserved
 
                 self._m_is_sh_idx_reserved =  ((self.sh_idx >= self._root.sh_idx_lo_reserved) and (self.sh_idx <= self._root.sh_idx_hi_reserved)) 
-                return self._m_is_sh_idx_reserved if hasattr(self, '_m_is_sh_idx_reserved') else None
+                return getattr(self, '_m_is_sh_idx_reserved', None)
 
             @property
             def is_sh_idx_os(self):
                 if hasattr(self, '_m_is_sh_idx_os'):
-                    return self._m_is_sh_idx_os if hasattr(self, '_m_is_sh_idx_os') else None
+                    return self._m_is_sh_idx_os
 
                 self._m_is_sh_idx_os =  ((self.sh_idx >= self._root.sh_idx_lo_os) and (self.sh_idx <= self._root.sh_idx_hi_os)) 
-                return self._m_is_sh_idx_os if hasattr(self, '_m_is_sh_idx_os') else None
+                return getattr(self, '_m_is_sh_idx_os', None)
 
             @property
             def is_sh_idx_proc(self):
                 if hasattr(self, '_m_is_sh_idx_proc'):
-                    return self._m_is_sh_idx_proc if hasattr(self, '_m_is_sh_idx_proc') else None
+                    return self._m_is_sh_idx_proc
 
                 self._m_is_sh_idx_proc =  ((self.sh_idx >= self._root.sh_idx_lo_proc) and (self.sh_idx <= self._root.sh_idx_hi_proc)) 
-                return self._m_is_sh_idx_proc if hasattr(self, '_m_is_sh_idx_proc') else None
+                return getattr(self, '_m_is_sh_idx_proc', None)
 
             @property
             def size(self):
                 if hasattr(self, '_m_size'):
-                    return self._m_size if hasattr(self, '_m_size') else None
+                    return self._m_size
 
                 self._m_size = (self.size_b32 if self._root.bits == Elf.Bits.b32 else (self.size_b64 if self._root.bits == Elf.Bits.b64 else 0))
-                return self._m_size if hasattr(self, '_m_size') else None
+                return getattr(self, '_m_size', None)
 
             @property
             def visibility(self):
                 if hasattr(self, '_m_visibility'):
-                    return self._m_visibility if hasattr(self, '_m_visibility') else None
+                    return self._m_visibility
 
                 self._m_visibility = KaitaiStream.resolve_enum(Elf.SymbolVisibility, (self.other & 3))
-                return self._m_visibility if hasattr(self, '_m_visibility') else None
+                return getattr(self, '_m_visibility', None)
 
             @property
             def value(self):
                 if hasattr(self, '_m_value'):
-                    return self._m_value if hasattr(self, '_m_value') else None
+                    return self._m_value
 
                 self._m_value = (self.value_b32 if self._root.bits == Elf.Bits.b32 else (self.value_b64 if self._root.bits == Elf.Bits.b64 else 0))
-                return self._m_value if hasattr(self, '_m_value') else None
+                return getattr(self, '_m_value', None)
 
             @property
             def name(self):
                 if hasattr(self, '_m_name'):
-                    return self._m_name if hasattr(self, '_m_name') else None
+                    return self._m_name
 
                 if  ((self.ofs_name != 0) and (self._parent.is_string_table_linked)) :
                     io = self._parent._parent.linked_section.body._io
@@ -1676,15 +1682,15 @@ class Elf(KaitaiStruct):
                     self._debug['_m_name']['end'] = io.pos()
                     io.seek(_pos)
 
-                return self._m_name if hasattr(self, '_m_name') else None
+                return getattr(self, '_m_name', None)
 
             @property
             def sh_idx_special(self):
                 if hasattr(self, '_m_sh_idx_special'):
-                    return self._m_sh_idx_special if hasattr(self, '_m_sh_idx_special') else None
+                    return self._m_sh_idx_special
 
                 self._m_sh_idx_special = KaitaiStream.resolve_enum(Elf.SectionHeaderIdxSpecial, self.sh_idx)
-                return self._m_sh_idx_special if hasattr(self, '_m_sh_idx_special') else None
+                return getattr(self, '_m_sh_idx_special', None)
 
 
         class NoteSectionEntry(KaitaiStruct):
@@ -1808,87 +1814,87 @@ class Elf(KaitaiStruct):
         @property
         def program_headers(self):
             if hasattr(self, '_m_program_headers'):
-                return self._m_program_headers if hasattr(self, '_m_program_headers') else None
+                return self._m_program_headers
 
             _pos = self._io.pos()
             self._io.seek(self.program_header_offset)
             self._debug['_m_program_headers']['start'] = self._io.pos()
             if self._is_le:
-                self._raw__m_program_headers = [None] * (self.qty_program_header)
-                self._m_program_headers = [None] * (self.qty_program_header)
+                self._raw__m_program_headers = []
+                self._m_program_headers = []
                 for i in range(self.qty_program_header):
                     if not 'arr' in self._debug['_m_program_headers']:
                         self._debug['_m_program_headers']['arr'] = []
                     self._debug['_m_program_headers']['arr'].append({'start': self._io.pos()})
-                    self._raw__m_program_headers[i] = self._io.read_bytes(self.program_header_entry_size)
+                    self._raw__m_program_headers.append(self._io.read_bytes(self.program_header_entry_size))
                     _io__raw__m_program_headers = KaitaiStream(BytesIO(self._raw__m_program_headers[i]))
                     _t__m_program_headers = Elf.EndianElf.ProgramHeader(_io__raw__m_program_headers, self, self._root, self._is_le)
                     _t__m_program_headers._read()
-                    self._m_program_headers[i] = _t__m_program_headers
+                    self._m_program_headers.append(_t__m_program_headers)
                     self._debug['_m_program_headers']['arr'][i]['end'] = self._io.pos()
 
             else:
-                self._raw__m_program_headers = [None] * (self.qty_program_header)
-                self._m_program_headers = [None] * (self.qty_program_header)
+                self._raw__m_program_headers = []
+                self._m_program_headers = []
                 for i in range(self.qty_program_header):
                     if not 'arr' in self._debug['_m_program_headers']:
                         self._debug['_m_program_headers']['arr'] = []
                     self._debug['_m_program_headers']['arr'].append({'start': self._io.pos()})
-                    self._raw__m_program_headers[i] = self._io.read_bytes(self.program_header_entry_size)
+                    self._raw__m_program_headers.append(self._io.read_bytes(self.program_header_entry_size))
                     _io__raw__m_program_headers = KaitaiStream(BytesIO(self._raw__m_program_headers[i]))
                     _t__m_program_headers = Elf.EndianElf.ProgramHeader(_io__raw__m_program_headers, self, self._root, self._is_le)
                     _t__m_program_headers._read()
-                    self._m_program_headers[i] = _t__m_program_headers
+                    self._m_program_headers.append(_t__m_program_headers)
                     self._debug['_m_program_headers']['arr'][i]['end'] = self._io.pos()
 
             self._debug['_m_program_headers']['end'] = self._io.pos()
             self._io.seek(_pos)
-            return self._m_program_headers if hasattr(self, '_m_program_headers') else None
+            return getattr(self, '_m_program_headers', None)
 
         @property
         def section_headers(self):
             if hasattr(self, '_m_section_headers'):
-                return self._m_section_headers if hasattr(self, '_m_section_headers') else None
+                return self._m_section_headers
 
             _pos = self._io.pos()
             self._io.seek(self.section_header_offset)
             self._debug['_m_section_headers']['start'] = self._io.pos()
             if self._is_le:
-                self._raw__m_section_headers = [None] * (self.qty_section_header)
-                self._m_section_headers = [None] * (self.qty_section_header)
+                self._raw__m_section_headers = []
+                self._m_section_headers = []
                 for i in range(self.qty_section_header):
                     if not 'arr' in self._debug['_m_section_headers']:
                         self._debug['_m_section_headers']['arr'] = []
                     self._debug['_m_section_headers']['arr'].append({'start': self._io.pos()})
-                    self._raw__m_section_headers[i] = self._io.read_bytes(self.section_header_entry_size)
+                    self._raw__m_section_headers.append(self._io.read_bytes(self.section_header_entry_size))
                     _io__raw__m_section_headers = KaitaiStream(BytesIO(self._raw__m_section_headers[i]))
                     _t__m_section_headers = Elf.EndianElf.SectionHeader(_io__raw__m_section_headers, self, self._root, self._is_le)
                     _t__m_section_headers._read()
-                    self._m_section_headers[i] = _t__m_section_headers
+                    self._m_section_headers.append(_t__m_section_headers)
                     self._debug['_m_section_headers']['arr'][i]['end'] = self._io.pos()
 
             else:
-                self._raw__m_section_headers = [None] * (self.qty_section_header)
-                self._m_section_headers = [None] * (self.qty_section_header)
+                self._raw__m_section_headers = []
+                self._m_section_headers = []
                 for i in range(self.qty_section_header):
                     if not 'arr' in self._debug['_m_section_headers']:
                         self._debug['_m_section_headers']['arr'] = []
                     self._debug['_m_section_headers']['arr'].append({'start': self._io.pos()})
-                    self._raw__m_section_headers[i] = self._io.read_bytes(self.section_header_entry_size)
+                    self._raw__m_section_headers.append(self._io.read_bytes(self.section_header_entry_size))
                     _io__raw__m_section_headers = KaitaiStream(BytesIO(self._raw__m_section_headers[i]))
                     _t__m_section_headers = Elf.EndianElf.SectionHeader(_io__raw__m_section_headers, self, self._root, self._is_le)
                     _t__m_section_headers._read()
-                    self._m_section_headers[i] = _t__m_section_headers
+                    self._m_section_headers.append(_t__m_section_headers)
                     self._debug['_m_section_headers']['arr'][i]['end'] = self._io.pos()
 
             self._debug['_m_section_headers']['end'] = self._io.pos()
             self._io.seek(_pos)
-            return self._m_section_headers if hasattr(self, '_m_section_headers') else None
+            return getattr(self, '_m_section_headers', None)
 
         @property
         def section_names(self):
             if hasattr(self, '_m_section_names'):
-                return self._m_section_names if hasattr(self, '_m_section_names') else None
+                return self._m_section_names
 
             if  ((self.section_names_idx != Elf.SectionHeaderIdxSpecial.undefined.value) and (self.section_names_idx < self._root.header.qty_section_header)) :
                 _pos = self._io.pos()
@@ -1907,7 +1913,7 @@ class Elf(KaitaiStruct):
                 self._debug['_m_section_names']['end'] = self._io.pos()
                 self._io.seek(_pos)
 
-            return self._m_section_names if hasattr(self, '_m_section_names') else None
+            return getattr(self, '_m_section_names', None)
 
 
     class DtFlag1Values(KaitaiStruct):
@@ -1926,246 +1932,246 @@ class Elf(KaitaiStruct):
         def singleton(self):
             """Singleton symbols are used."""
             if hasattr(self, '_m_singleton'):
-                return self._m_singleton if hasattr(self, '_m_singleton') else None
+                return self._m_singleton
 
             self._m_singleton = (self.value & 33554432) != 0
-            return self._m_singleton if hasattr(self, '_m_singleton') else None
+            return getattr(self, '_m_singleton', None)
 
         @property
         def ignmuldef(self):
             if hasattr(self, '_m_ignmuldef'):
-                return self._m_ignmuldef if hasattr(self, '_m_ignmuldef') else None
+                return self._m_ignmuldef
 
             self._m_ignmuldef = (self.value & 262144) != 0
-            return self._m_ignmuldef if hasattr(self, '_m_ignmuldef') else None
+            return getattr(self, '_m_ignmuldef', None)
 
         @property
         def loadfltr(self):
             """Trigger filtee loading at runtime."""
             if hasattr(self, '_m_loadfltr'):
-                return self._m_loadfltr if hasattr(self, '_m_loadfltr') else None
+                return self._m_loadfltr
 
             self._m_loadfltr = (self.value & 16) != 0
-            return self._m_loadfltr if hasattr(self, '_m_loadfltr') else None
+            return getattr(self, '_m_loadfltr', None)
 
         @property
         def initfirst(self):
             """Set RTLD_INITFIRST for this object."""
             if hasattr(self, '_m_initfirst'):
-                return self._m_initfirst if hasattr(self, '_m_initfirst') else None
+                return self._m_initfirst
 
             self._m_initfirst = (self.value & 32) != 0
-            return self._m_initfirst if hasattr(self, '_m_initfirst') else None
+            return getattr(self, '_m_initfirst', None)
 
         @property
         def symintpose(self):
             """Object has individual interposers."""
             if hasattr(self, '_m_symintpose'):
-                return self._m_symintpose if hasattr(self, '_m_symintpose') else None
+                return self._m_symintpose
 
             self._m_symintpose = (self.value & 8388608) != 0
-            return self._m_symintpose if hasattr(self, '_m_symintpose') else None
+            return getattr(self, '_m_symintpose', None)
 
         @property
         def noreloc(self):
             if hasattr(self, '_m_noreloc'):
-                return self._m_noreloc if hasattr(self, '_m_noreloc') else None
+                return self._m_noreloc
 
             self._m_noreloc = (self.value & 4194304) != 0
-            return self._m_noreloc if hasattr(self, '_m_noreloc') else None
+            return getattr(self, '_m_noreloc', None)
 
         @property
         def confalt(self):
             """Configuration alternative created."""
             if hasattr(self, '_m_confalt'):
-                return self._m_confalt if hasattr(self, '_m_confalt') else None
+                return self._m_confalt
 
             self._m_confalt = (self.value & 8192) != 0
-            return self._m_confalt if hasattr(self, '_m_confalt') else None
+            return getattr(self, '_m_confalt', None)
 
         @property
         def dispreldne(self):
             """Disp reloc applied at build time."""
             if hasattr(self, '_m_dispreldne'):
-                return self._m_dispreldne if hasattr(self, '_m_dispreldne') else None
+                return self._m_dispreldne
 
             self._m_dispreldne = (self.value & 32768) != 0
-            return self._m_dispreldne if hasattr(self, '_m_dispreldne') else None
+            return getattr(self, '_m_dispreldne', None)
 
         @property
         def rtld_global(self):
             """Set RTLD_GLOBAL for this object."""
             if hasattr(self, '_m_rtld_global'):
-                return self._m_rtld_global if hasattr(self, '_m_rtld_global') else None
+                return self._m_rtld_global
 
             self._m_rtld_global = (self.value & 2) != 0
-            return self._m_rtld_global if hasattr(self, '_m_rtld_global') else None
+            return getattr(self, '_m_rtld_global', None)
 
         @property
         def nodelete(self):
             """Set RTLD_NODELETE for this object."""
             if hasattr(self, '_m_nodelete'):
-                return self._m_nodelete if hasattr(self, '_m_nodelete') else None
+                return self._m_nodelete
 
             self._m_nodelete = (self.value & 8) != 0
-            return self._m_nodelete if hasattr(self, '_m_nodelete') else None
+            return getattr(self, '_m_nodelete', None)
 
         @property
         def trans(self):
             if hasattr(self, '_m_trans'):
-                return self._m_trans if hasattr(self, '_m_trans') else None
+                return self._m_trans
 
             self._m_trans = (self.value & 512) != 0
-            return self._m_trans if hasattr(self, '_m_trans') else None
+            return getattr(self, '_m_trans', None)
 
         @property
         def origin(self):
             """$ORIGIN must be handled."""
             if hasattr(self, '_m_origin'):
-                return self._m_origin if hasattr(self, '_m_origin') else None
+                return self._m_origin
 
             self._m_origin = (self.value & 128) != 0
-            return self._m_origin if hasattr(self, '_m_origin') else None
+            return getattr(self, '_m_origin', None)
 
         @property
         def now(self):
             """Set RTLD_NOW for this object."""
             if hasattr(self, '_m_now'):
-                return self._m_now if hasattr(self, '_m_now') else None
+                return self._m_now
 
             self._m_now = (self.value & 1) != 0
-            return self._m_now if hasattr(self, '_m_now') else None
+            return getattr(self, '_m_now', None)
 
         @property
         def nohdr(self):
             if hasattr(self, '_m_nohdr'):
-                return self._m_nohdr if hasattr(self, '_m_nohdr') else None
+                return self._m_nohdr
 
             self._m_nohdr = (self.value & 1048576) != 0
-            return self._m_nohdr if hasattr(self, '_m_nohdr') else None
+            return getattr(self, '_m_nohdr', None)
 
         @property
         def endfiltee(self):
             """Filtee terminates filters search."""
             if hasattr(self, '_m_endfiltee'):
-                return self._m_endfiltee if hasattr(self, '_m_endfiltee') else None
+                return self._m_endfiltee
 
             self._m_endfiltee = (self.value & 16384) != 0
-            return self._m_endfiltee if hasattr(self, '_m_endfiltee') else None
+            return getattr(self, '_m_endfiltee', None)
 
         @property
         def nodirect(self):
             """Object has no-direct binding."""
             if hasattr(self, '_m_nodirect'):
-                return self._m_nodirect if hasattr(self, '_m_nodirect') else None
+                return self._m_nodirect
 
             self._m_nodirect = (self.value & 131072) != 0
-            return self._m_nodirect if hasattr(self, '_m_nodirect') else None
+            return getattr(self, '_m_nodirect', None)
 
         @property
         def globaudit(self):
             """Global auditing required."""
             if hasattr(self, '_m_globaudit'):
-                return self._m_globaudit if hasattr(self, '_m_globaudit') else None
+                return self._m_globaudit
 
             self._m_globaudit = (self.value & 16777216) != 0
-            return self._m_globaudit if hasattr(self, '_m_globaudit') else None
+            return getattr(self, '_m_globaudit', None)
 
         @property
         def noksyms(self):
             if hasattr(self, '_m_noksyms'):
-                return self._m_noksyms if hasattr(self, '_m_noksyms') else None
+                return self._m_noksyms
 
             self._m_noksyms = (self.value & 524288) != 0
-            return self._m_noksyms if hasattr(self, '_m_noksyms') else None
+            return getattr(self, '_m_noksyms', None)
 
         @property
         def interpose(self):
             """Object is used to interpose."""
             if hasattr(self, '_m_interpose'):
-                return self._m_interpose if hasattr(self, '_m_interpose') else None
+                return self._m_interpose
 
             self._m_interpose = (self.value & 1024) != 0
-            return self._m_interpose if hasattr(self, '_m_interpose') else None
+            return getattr(self, '_m_interpose', None)
 
         @property
         def nodump(self):
             """Object can't be dldump'ed."""
             if hasattr(self, '_m_nodump'):
-                return self._m_nodump if hasattr(self, '_m_nodump') else None
+                return self._m_nodump
 
             self._m_nodump = (self.value & 4096) != 0
-            return self._m_nodump if hasattr(self, '_m_nodump') else None
+            return getattr(self, '_m_nodump', None)
 
         @property
         def disprelpnd(self):
             """Disp reloc applied at run-time."""
             if hasattr(self, '_m_disprelpnd'):
-                return self._m_disprelpnd if hasattr(self, '_m_disprelpnd') else None
+                return self._m_disprelpnd
 
             self._m_disprelpnd = (self.value & 65536) != 0
-            return self._m_disprelpnd if hasattr(self, '_m_disprelpnd') else None
+            return getattr(self, '_m_disprelpnd', None)
 
         @property
         def noopen(self):
             """Set RTLD_NOOPEN for this object."""
             if hasattr(self, '_m_noopen'):
-                return self._m_noopen if hasattr(self, '_m_noopen') else None
+                return self._m_noopen
 
             self._m_noopen = (self.value & 64) != 0
-            return self._m_noopen if hasattr(self, '_m_noopen') else None
+            return getattr(self, '_m_noopen', None)
 
         @property
         def stub(self):
             if hasattr(self, '_m_stub'):
-                return self._m_stub if hasattr(self, '_m_stub') else None
+                return self._m_stub
 
             self._m_stub = (self.value & 67108864) != 0
-            return self._m_stub if hasattr(self, '_m_stub') else None
+            return getattr(self, '_m_stub', None)
 
         @property
         def direct(self):
             """Direct binding enabled."""
             if hasattr(self, '_m_direct'):
-                return self._m_direct if hasattr(self, '_m_direct') else None
+                return self._m_direct
 
             self._m_direct = (self.value & 256) != 0
-            return self._m_direct if hasattr(self, '_m_direct') else None
+            return getattr(self, '_m_direct', None)
 
         @property
         def edited(self):
             """Object is modified after built."""
             if hasattr(self, '_m_edited'):
-                return self._m_edited if hasattr(self, '_m_edited') else None
+                return self._m_edited
 
             self._m_edited = (self.value & 2097152) != 0
-            return self._m_edited if hasattr(self, '_m_edited') else None
+            return getattr(self, '_m_edited', None)
 
         @property
         def group(self):
             """Set RTLD_GROUP for this object."""
             if hasattr(self, '_m_group'):
-                return self._m_group if hasattr(self, '_m_group') else None
+                return self._m_group
 
             self._m_group = (self.value & 4) != 0
-            return self._m_group if hasattr(self, '_m_group') else None
+            return getattr(self, '_m_group', None)
 
         @property
         def pie(self):
             if hasattr(self, '_m_pie'):
-                return self._m_pie if hasattr(self, '_m_pie') else None
+                return self._m_pie
 
             self._m_pie = (self.value & 134217728) != 0
-            return self._m_pie if hasattr(self, '_m_pie') else None
+            return getattr(self, '_m_pie', None)
 
         @property
         def nodeflib(self):
             """Ignore default lib search path."""
             if hasattr(self, '_m_nodeflib'):
-                return self._m_nodeflib if hasattr(self, '_m_nodeflib') else None
+                return self._m_nodeflib
 
             self._m_nodeflib = (self.value & 2048) != 0
-            return self._m_nodeflib if hasattr(self, '_m_nodeflib') else None
+            return getattr(self, '_m_nodeflib', None)
 
 
     class SectionHeaderFlags(KaitaiStruct):
@@ -2184,127 +2190,127 @@ class Elf(KaitaiStruct):
         def merge(self):
             """might be merged."""
             if hasattr(self, '_m_merge'):
-                return self._m_merge if hasattr(self, '_m_merge') else None
+                return self._m_merge
 
             self._m_merge = (self.value & 16) != 0
-            return self._m_merge if hasattr(self, '_m_merge') else None
+            return getattr(self, '_m_merge', None)
 
         @property
         def mask_os(self):
             """OS-specific."""
             if hasattr(self, '_m_mask_os'):
-                return self._m_mask_os if hasattr(self, '_m_mask_os') else None
+                return self._m_mask_os
 
             self._m_mask_os = (self.value & 267386880) != 0
-            return self._m_mask_os if hasattr(self, '_m_mask_os') else None
+            return getattr(self, '_m_mask_os', None)
 
         @property
         def exclude(self):
             """section is excluded unless referenced or allocated (Solaris)."""
             if hasattr(self, '_m_exclude'):
-                return self._m_exclude if hasattr(self, '_m_exclude') else None
+                return self._m_exclude
 
             self._m_exclude = (self.value & 134217728) != 0
-            return self._m_exclude if hasattr(self, '_m_exclude') else None
+            return getattr(self, '_m_exclude', None)
 
         @property
         def mask_proc(self):
             """Processor-specific."""
             if hasattr(self, '_m_mask_proc'):
-                return self._m_mask_proc if hasattr(self, '_m_mask_proc') else None
+                return self._m_mask_proc
 
             self._m_mask_proc = (self.value & 4026531840) != 0
-            return self._m_mask_proc if hasattr(self, '_m_mask_proc') else None
+            return getattr(self, '_m_mask_proc', None)
 
         @property
         def strings(self):
             """contains nul-terminated strings."""
             if hasattr(self, '_m_strings'):
-                return self._m_strings if hasattr(self, '_m_strings') else None
+                return self._m_strings
 
             self._m_strings = (self.value & 32) != 0
-            return self._m_strings if hasattr(self, '_m_strings') else None
+            return getattr(self, '_m_strings', None)
 
         @property
         def os_non_conforming(self):
             """non-standard OS specific handling required."""
             if hasattr(self, '_m_os_non_conforming'):
-                return self._m_os_non_conforming if hasattr(self, '_m_os_non_conforming') else None
+                return self._m_os_non_conforming
 
             self._m_os_non_conforming = (self.value & 256) != 0
-            return self._m_os_non_conforming if hasattr(self, '_m_os_non_conforming') else None
+            return getattr(self, '_m_os_non_conforming', None)
 
         @property
         def alloc(self):
             """occupies memory during execution."""
             if hasattr(self, '_m_alloc'):
-                return self._m_alloc if hasattr(self, '_m_alloc') else None
+                return self._m_alloc
 
             self._m_alloc = (self.value & 2) != 0
-            return self._m_alloc if hasattr(self, '_m_alloc') else None
+            return getattr(self, '_m_alloc', None)
 
         @property
         def exec_instr(self):
             """executable."""
             if hasattr(self, '_m_exec_instr'):
-                return self._m_exec_instr if hasattr(self, '_m_exec_instr') else None
+                return self._m_exec_instr
 
             self._m_exec_instr = (self.value & 4) != 0
-            return self._m_exec_instr if hasattr(self, '_m_exec_instr') else None
+            return getattr(self, '_m_exec_instr', None)
 
         @property
         def info_link(self):
             """'sh_info' contains SHT index."""
             if hasattr(self, '_m_info_link'):
-                return self._m_info_link if hasattr(self, '_m_info_link') else None
+                return self._m_info_link
 
             self._m_info_link = (self.value & 64) != 0
-            return self._m_info_link if hasattr(self, '_m_info_link') else None
+            return getattr(self, '_m_info_link', None)
 
         @property
         def write(self):
             """writable."""
             if hasattr(self, '_m_write'):
-                return self._m_write if hasattr(self, '_m_write') else None
+                return self._m_write
 
             self._m_write = (self.value & 1) != 0
-            return self._m_write if hasattr(self, '_m_write') else None
+            return getattr(self, '_m_write', None)
 
         @property
         def link_order(self):
             """preserve order after combining."""
             if hasattr(self, '_m_link_order'):
-                return self._m_link_order if hasattr(self, '_m_link_order') else None
+                return self._m_link_order
 
             self._m_link_order = (self.value & 128) != 0
-            return self._m_link_order if hasattr(self, '_m_link_order') else None
+            return getattr(self, '_m_link_order', None)
 
         @property
         def ordered(self):
             """special ordering requirement (Solaris)."""
             if hasattr(self, '_m_ordered'):
-                return self._m_ordered if hasattr(self, '_m_ordered') else None
+                return self._m_ordered
 
             self._m_ordered = (self.value & 67108864) != 0
-            return self._m_ordered if hasattr(self, '_m_ordered') else None
+            return getattr(self, '_m_ordered', None)
 
         @property
         def tls(self):
             """section hold thread-local data."""
             if hasattr(self, '_m_tls'):
-                return self._m_tls if hasattr(self, '_m_tls') else None
+                return self._m_tls
 
             self._m_tls = (self.value & 1024) != 0
-            return self._m_tls if hasattr(self, '_m_tls') else None
+            return getattr(self, '_m_tls', None)
 
         @property
         def group(self):
             """section is member of a group."""
             if hasattr(self, '_m_group'):
-                return self._m_group if hasattr(self, '_m_group') else None
+                return self._m_group
 
             self._m_group = (self.value & 512) != 0
-            return self._m_group if hasattr(self, '_m_group') else None
+            return getattr(self, '_m_group', None)
 
 
     class PhdrTypeFlags(KaitaiStruct):
@@ -2322,34 +2328,34 @@ class Elf(KaitaiStruct):
         @property
         def read(self):
             if hasattr(self, '_m_read'):
-                return self._m_read if hasattr(self, '_m_read') else None
+                return self._m_read
 
             self._m_read = (self.value & 4) != 0
-            return self._m_read if hasattr(self, '_m_read') else None
+            return getattr(self, '_m_read', None)
 
         @property
         def write(self):
             if hasattr(self, '_m_write'):
-                return self._m_write if hasattr(self, '_m_write') else None
+                return self._m_write
 
             self._m_write = (self.value & 2) != 0
-            return self._m_write if hasattr(self, '_m_write') else None
+            return getattr(self, '_m_write', None)
 
         @property
         def execute(self):
             if hasattr(self, '_m_execute'):
-                return self._m_execute if hasattr(self, '_m_execute') else None
+                return self._m_execute
 
             self._m_execute = (self.value & 1) != 0
-            return self._m_execute if hasattr(self, '_m_execute') else None
+            return getattr(self, '_m_execute', None)
 
         @property
         def mask_proc(self):
             if hasattr(self, '_m_mask_proc'):
-                return self._m_mask_proc if hasattr(self, '_m_mask_proc') else None
+                return self._m_mask_proc
 
             self._m_mask_proc = (self.value & 4026531840) != 0
-            return self._m_mask_proc if hasattr(self, '_m_mask_proc') else None
+            return getattr(self, '_m_mask_proc', None)
 
 
     class DtFlagValues(KaitaiStruct):
@@ -2382,94 +2388,94 @@ class Elf(KaitaiStruct):
             control to the program
             """
             if hasattr(self, '_m_bind_now'):
-                return self._m_bind_now if hasattr(self, '_m_bind_now') else None
+                return self._m_bind_now
 
             self._m_bind_now = (self.value & 8) != 0
-            return self._m_bind_now if hasattr(self, '_m_bind_now') else None
+            return getattr(self, '_m_bind_now', None)
 
         @property
         def origin(self):
             """object may reference the $ORIGIN substitution string."""
             if hasattr(self, '_m_origin'):
-                return self._m_origin if hasattr(self, '_m_origin') else None
+                return self._m_origin
 
             self._m_origin = (self.value & 1) != 0
-            return self._m_origin if hasattr(self, '_m_origin') else None
+            return getattr(self, '_m_origin', None)
 
         @property
         def textrel(self):
             """relocation entries might request modifications to a non-writable segment."""
             if hasattr(self, '_m_textrel'):
-                return self._m_textrel if hasattr(self, '_m_textrel') else None
+                return self._m_textrel
 
             self._m_textrel = (self.value & 4) != 0
-            return self._m_textrel if hasattr(self, '_m_textrel') else None
+            return getattr(self, '_m_textrel', None)
 
         @property
         def static_tls(self):
             """object uses static thread-local storage scheme."""
             if hasattr(self, '_m_static_tls'):
-                return self._m_static_tls if hasattr(self, '_m_static_tls') else None
+                return self._m_static_tls
 
             self._m_static_tls = (self.value & 16) != 0
-            return self._m_static_tls if hasattr(self, '_m_static_tls') else None
+            return getattr(self, '_m_static_tls', None)
 
         @property
         def symbolic(self):
             """symbolic linking."""
             if hasattr(self, '_m_symbolic'):
-                return self._m_symbolic if hasattr(self, '_m_symbolic') else None
+                return self._m_symbolic
 
             self._m_symbolic = (self.value & 2) != 0
-            return self._m_symbolic if hasattr(self, '_m_symbolic') else None
+            return getattr(self, '_m_symbolic', None)
 
 
     @property
     def sh_idx_lo_os(self):
         if hasattr(self, '_m_sh_idx_lo_os'):
-            return self._m_sh_idx_lo_os if hasattr(self, '_m_sh_idx_lo_os') else None
+            return self._m_sh_idx_lo_os
 
         self._m_sh_idx_lo_os = 65312
-        return self._m_sh_idx_lo_os if hasattr(self, '_m_sh_idx_lo_os') else None
+        return getattr(self, '_m_sh_idx_lo_os', None)
 
     @property
     def sh_idx_lo_reserved(self):
         if hasattr(self, '_m_sh_idx_lo_reserved'):
-            return self._m_sh_idx_lo_reserved if hasattr(self, '_m_sh_idx_lo_reserved') else None
+            return self._m_sh_idx_lo_reserved
 
         self._m_sh_idx_lo_reserved = 65280
-        return self._m_sh_idx_lo_reserved if hasattr(self, '_m_sh_idx_lo_reserved') else None
+        return getattr(self, '_m_sh_idx_lo_reserved', None)
 
     @property
     def sh_idx_hi_proc(self):
         if hasattr(self, '_m_sh_idx_hi_proc'):
-            return self._m_sh_idx_hi_proc if hasattr(self, '_m_sh_idx_hi_proc') else None
+            return self._m_sh_idx_hi_proc
 
         self._m_sh_idx_hi_proc = 65311
-        return self._m_sh_idx_hi_proc if hasattr(self, '_m_sh_idx_hi_proc') else None
+        return getattr(self, '_m_sh_idx_hi_proc', None)
 
     @property
     def sh_idx_lo_proc(self):
         if hasattr(self, '_m_sh_idx_lo_proc'):
-            return self._m_sh_idx_lo_proc if hasattr(self, '_m_sh_idx_lo_proc') else None
+            return self._m_sh_idx_lo_proc
 
         self._m_sh_idx_lo_proc = 65280
-        return self._m_sh_idx_lo_proc if hasattr(self, '_m_sh_idx_lo_proc') else None
+        return getattr(self, '_m_sh_idx_lo_proc', None)
 
     @property
     def sh_idx_hi_os(self):
         if hasattr(self, '_m_sh_idx_hi_os'):
-            return self._m_sh_idx_hi_os if hasattr(self, '_m_sh_idx_hi_os') else None
+            return self._m_sh_idx_hi_os
 
         self._m_sh_idx_hi_os = 65343
-        return self._m_sh_idx_hi_os if hasattr(self, '_m_sh_idx_hi_os') else None
+        return getattr(self, '_m_sh_idx_hi_os', None)
 
     @property
     def sh_idx_hi_reserved(self):
         if hasattr(self, '_m_sh_idx_hi_reserved'):
-            return self._m_sh_idx_hi_reserved if hasattr(self, '_m_sh_idx_hi_reserved') else None
+            return self._m_sh_idx_hi_reserved
 
         self._m_sh_idx_hi_reserved = 65535
-        return self._m_sh_idx_hi_reserved if hasattr(self, '_m_sh_idx_hi_reserved') else None
+        return getattr(self, '_m_sh_idx_hi_reserved', None)
 
 

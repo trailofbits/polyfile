@@ -1,13 +1,12 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
-from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 from enum import Enum
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class FalloutDat(KaitaiStruct):
@@ -36,26 +35,26 @@ class FalloutDat(KaitaiStruct):
         self.timestamp = self._io.read_u4be()
         self._debug['timestamp']['end'] = self._io.pos()
         self._debug['folder_names']['start'] = self._io.pos()
-        self.folder_names = [None] * (self.folder_count)
+        self.folder_names = []
         for i in range(self.folder_count):
             if not 'arr' in self._debug['folder_names']:
                 self._debug['folder_names']['arr'] = []
             self._debug['folder_names']['arr'].append({'start': self._io.pos()})
             _t_folder_names = FalloutDat.Pstr(self._io, self, self._root)
             _t_folder_names._read()
-            self.folder_names[i] = _t_folder_names
+            self.folder_names.append(_t_folder_names)
             self._debug['folder_names']['arr'][i]['end'] = self._io.pos()
 
         self._debug['folder_names']['end'] = self._io.pos()
         self._debug['folders']['start'] = self._io.pos()
-        self.folders = [None] * (self.folder_count)
+        self.folders = []
         for i in range(self.folder_count):
             if not 'arr' in self._debug['folders']:
                 self._debug['folders']['arr'] = []
             self._debug['folders']['arr'].append({'start': self._io.pos()})
             _t_folders = FalloutDat.Folder(self._io, self, self._root)
             _t_folders._read()
-            self.folders[i] = _t_folders
+            self.folders.append(_t_folders)
             self._debug['folders']['arr'][i]['end'] = self._io.pos()
 
         self._debug['folders']['end'] = self._io.pos()
@@ -99,14 +98,14 @@ class FalloutDat(KaitaiStruct):
             self.timestamp = self._io.read_u4be()
             self._debug['timestamp']['end'] = self._io.pos()
             self._debug['files']['start'] = self._io.pos()
-            self.files = [None] * (self.file_count)
+            self.files = []
             for i in range(self.file_count):
                 if not 'arr' in self._debug['files']:
                     self._debug['files']['arr'] = []
                 self._debug['files']['arr'].append({'start': self._io.pos()})
                 _t_files = FalloutDat.File(self._io, self, self._root)
                 _t_files._read()
-                self.files[i] = _t_files
+                self.files.append(_t_files)
                 self._debug['files']['arr'][i]['end'] = self._io.pos()
 
             self._debug['files']['end'] = self._io.pos()
@@ -141,7 +140,7 @@ class FalloutDat(KaitaiStruct):
         @property
         def contents(self):
             if hasattr(self, '_m_contents'):
-                return self._m_contents if hasattr(self, '_m_contents') else None
+                return self._m_contents
 
             io = self._root._io
             _pos = io.pos()
@@ -150,7 +149,7 @@ class FalloutDat(KaitaiStruct):
             self._m_contents = io.read_bytes((self.size_unpacked if self.flags == FalloutDat.Compression.none else self.size_packed))
             self._debug['_m_contents']['end'] = io.pos()
             io.seek(_pos)
-            return self._m_contents if hasattr(self, '_m_contents') else None
+            return getattr(self, '_m_contents', None)
 
 
 

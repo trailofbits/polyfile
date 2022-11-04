@@ -1,12 +1,11 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
-from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class QuakeMdl(KaitaiStruct):
@@ -23,50 +22,50 @@ class QuakeMdl(KaitaiStruct):
         self.header._read()
         self._debug['header']['end'] = self._io.pos()
         self._debug['skins']['start'] = self._io.pos()
-        self.skins = [None] * (self.header.num_skins)
+        self.skins = []
         for i in range(self.header.num_skins):
             if not 'arr' in self._debug['skins']:
                 self._debug['skins']['arr'] = []
             self._debug['skins']['arr'].append({'start': self._io.pos()})
             _t_skins = QuakeMdl.MdlSkin(self._io, self, self._root)
             _t_skins._read()
-            self.skins[i] = _t_skins
+            self.skins.append(_t_skins)
             self._debug['skins']['arr'][i]['end'] = self._io.pos()
 
         self._debug['skins']['end'] = self._io.pos()
         self._debug['texture_coordinates']['start'] = self._io.pos()
-        self.texture_coordinates = [None] * (self.header.num_verts)
+        self.texture_coordinates = []
         for i in range(self.header.num_verts):
             if not 'arr' in self._debug['texture_coordinates']:
                 self._debug['texture_coordinates']['arr'] = []
             self._debug['texture_coordinates']['arr'].append({'start': self._io.pos()})
             _t_texture_coordinates = QuakeMdl.MdlTexcoord(self._io, self, self._root)
             _t_texture_coordinates._read()
-            self.texture_coordinates[i] = _t_texture_coordinates
+            self.texture_coordinates.append(_t_texture_coordinates)
             self._debug['texture_coordinates']['arr'][i]['end'] = self._io.pos()
 
         self._debug['texture_coordinates']['end'] = self._io.pos()
         self._debug['triangles']['start'] = self._io.pos()
-        self.triangles = [None] * (self.header.num_tris)
+        self.triangles = []
         for i in range(self.header.num_tris):
             if not 'arr' in self._debug['triangles']:
                 self._debug['triangles']['arr'] = []
             self._debug['triangles']['arr'].append({'start': self._io.pos()})
             _t_triangles = QuakeMdl.MdlTriangle(self._io, self, self._root)
             _t_triangles._read()
-            self.triangles[i] = _t_triangles
+            self.triangles.append(_t_triangles)
             self._debug['triangles']['arr'][i]['end'] = self._io.pos()
 
         self._debug['triangles']['end'] = self._io.pos()
         self._debug['frames']['start'] = self._io.pos()
-        self.frames = [None] * (self.header.num_frames)
+        self.frames = []
         for i in range(self.header.num_frames):
             if not 'arr' in self._debug['frames']:
                 self._debug['frames']['arr'] = []
             self._debug['frames']['arr'].append({'start': self._io.pos()})
             _t_frames = QuakeMdl.MdlFrame(self._io, self, self._root)
             _t_frames._read()
-            self.frames[i] = _t_frames
+            self.frames.append(_t_frames)
             self._debug['frames']['arr'][i]['end'] = self._io.pos()
 
         self._debug['frames']['end'] = self._io.pos()
@@ -81,12 +80,12 @@ class QuakeMdl(KaitaiStruct):
 
         def _read(self):
             self._debug['values']['start'] = self._io.pos()
-            self.values = [None] * (3)
+            self.values = []
             for i in range(3):
                 if not 'arr' in self._debug['values']:
                     self._debug['values']['arr'] = []
                 self._debug['values']['arr'].append({'start': self._io.pos()})
-                self.values[i] = self._io.read_u1()
+                self.values.append(self._io.read_u1())
                 self._debug['values']['arr'][i]['end'] = self._io.pos()
 
             self._debug['values']['end'] = self._io.pos()
@@ -180,18 +179,18 @@ class QuakeMdl(KaitaiStruct):
         @property
         def version(self):
             if hasattr(self, '_m_version'):
-                return self._m_version if hasattr(self, '_m_version') else None
+                return self._m_version
 
             self._m_version = 6
-            return self._m_version if hasattr(self, '_m_version') else None
+            return getattr(self, '_m_version', None)
 
         @property
         def skin_size(self):
             if hasattr(self, '_m_skin_size'):
-                return self._m_skin_size if hasattr(self, '_m_skin_size') else None
+                return self._m_skin_size
 
             self._m_skin_size = (self.skin_width * self.skin_height)
-            return self._m_skin_size if hasattr(self, '_m_skin_size') else None
+            return getattr(self, '_m_skin_size', None)
 
 
     class MdlSkin(KaitaiStruct):
@@ -218,24 +217,24 @@ class QuakeMdl(KaitaiStruct):
 
             if self.group != 0:
                 self._debug['frame_times']['start'] = self._io.pos()
-                self.frame_times = [None] * (self.num_frames)
+                self.frame_times = []
                 for i in range(self.num_frames):
                     if not 'arr' in self._debug['frame_times']:
                         self._debug['frame_times']['arr'] = []
                     self._debug['frame_times']['arr'].append({'start': self._io.pos()})
-                    self.frame_times[i] = self._io.read_f4le()
+                    self.frame_times.append(self._io.read_f4le())
                     self._debug['frame_times']['arr'][i]['end'] = self._io.pos()
 
                 self._debug['frame_times']['end'] = self._io.pos()
 
             if self.group != 0:
                 self._debug['group_texture_data']['start'] = self._io.pos()
-                self.group_texture_data = [None] * (self.num_frames)
+                self.group_texture_data = []
                 for i in range(self.num_frames):
                     if not 'arr' in self._debug['group_texture_data']:
                         self._debug['group_texture_data']['arr'] = []
                     self._debug['group_texture_data']['arr'].append({'start': self._io.pos()})
-                    self.group_texture_data[i] = self._io.read_bytes(self._root.header.skin_size)
+                    self.group_texture_data.append(self._io.read_bytes(self._root.header.skin_size))
                     self._debug['group_texture_data']['arr'][i]['end'] = self._io.pos()
 
                 self._debug['group_texture_data']['end'] = self._io.pos()
@@ -268,25 +267,25 @@ class QuakeMdl(KaitaiStruct):
 
             if self.type != 0:
                 self._debug['time']['start'] = self._io.pos()
-                self.time = [None] * (self.type)
+                self.time = []
                 for i in range(self.type):
                     if not 'arr' in self._debug['time']:
                         self._debug['time']['arr'] = []
                     self._debug['time']['arr'].append({'start': self._io.pos()})
-                    self.time[i] = self._io.read_f4le()
+                    self.time.append(self._io.read_f4le())
                     self._debug['time']['arr'][i]['end'] = self._io.pos()
 
                 self._debug['time']['end'] = self._io.pos()
 
             self._debug['frames']['start'] = self._io.pos()
-            self.frames = [None] * (self.num_simple_frames)
+            self.frames = []
             for i in range(self.num_simple_frames):
                 if not 'arr' in self._debug['frames']:
                     self._debug['frames']['arr'] = []
                 self._debug['frames']['arr'].append({'start': self._io.pos()})
                 _t_frames = QuakeMdl.MdlSimpleFrame(self._io, self, self._root)
                 _t_frames._read()
-                self.frames[i] = _t_frames
+                self.frames.append(_t_frames)
                 self._debug['frames']['arr'][i]['end'] = self._io.pos()
 
             self._debug['frames']['end'] = self._io.pos()
@@ -294,10 +293,10 @@ class QuakeMdl(KaitaiStruct):
         @property
         def num_simple_frames(self):
             if hasattr(self, '_m_num_simple_frames'):
-                return self._m_num_simple_frames if hasattr(self, '_m_num_simple_frames') else None
+                return self._m_num_simple_frames
 
             self._m_num_simple_frames = (1 if self.type == 0 else self.type)
-            return self._m_num_simple_frames if hasattr(self, '_m_num_simple_frames') else None
+            return getattr(self, '_m_num_simple_frames', None)
 
 
     class MdlSimpleFrame(KaitaiStruct):
@@ -321,14 +320,14 @@ class QuakeMdl(KaitaiStruct):
             self.name = (KaitaiStream.bytes_terminate(KaitaiStream.bytes_strip_right(self._io.read_bytes(16), 0), 0, False)).decode(u"ASCII")
             self._debug['name']['end'] = self._io.pos()
             self._debug['vertices']['start'] = self._io.pos()
-            self.vertices = [None] * (self._root.header.num_verts)
+            self.vertices = []
             for i in range(self._root.header.num_verts):
                 if not 'arr' in self._debug['vertices']:
                     self._debug['vertices']['arr'] = []
                 self._debug['vertices']['arr'].append({'start': self._io.pos()})
                 _t_vertices = QuakeMdl.MdlVertex(self._io, self, self._root)
                 _t_vertices._read()
-                self.vertices[i] = _t_vertices
+                self.vertices.append(_t_vertices)
                 self._debug['vertices']['arr'][i]['end'] = self._io.pos()
 
             self._debug['vertices']['end'] = self._io.pos()
@@ -347,12 +346,12 @@ class QuakeMdl(KaitaiStruct):
             self.faces_front = self._io.read_s4le()
             self._debug['faces_front']['end'] = self._io.pos()
             self._debug['vertices']['start'] = self._io.pos()
-            self.vertices = [None] * (3)
+            self.vertices = []
             for i in range(3):
                 if not 'arr' in self._debug['vertices']:
                     self._debug['vertices']['arr'] = []
                 self._debug['vertices']['arr'].append({'start': self._io.pos()})
-                self.vertices[i] = self._io.read_s4le()
+                self.vertices.append(self._io.read_s4le())
                 self._debug['vertices']['arr'][i]['end'] = self._io.pos()
 
             self._debug['vertices']['end'] = self._io.pos()

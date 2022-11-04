@@ -1,13 +1,12 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
-from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 from enum import Enum
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 from polyfile.kaitai.parsers import windows_shell_items
@@ -184,15 +183,15 @@ class WindowsLnkFile(KaitaiStruct):
             @property
             def is_unicode(self):
                 if hasattr(self, '_m_is_unicode'):
-                    return self._m_is_unicode if hasattr(self, '_m_is_unicode') else None
+                    return self._m_is_unicode
 
                 self._m_is_unicode = self.ofs_volume_label == 20
-                return self._m_is_unicode if hasattr(self, '_m_is_unicode') else None
+                return getattr(self, '_m_is_unicode', None)
 
             @property
             def volume_label_ansi(self):
                 if hasattr(self, '_m_volume_label_ansi'):
-                    return self._m_volume_label_ansi if hasattr(self, '_m_volume_label_ansi') else None
+                    return self._m_volume_label_ansi
 
                 if not (self.is_unicode):
                     _pos = self._io.pos()
@@ -202,7 +201,7 @@ class WindowsLnkFile(KaitaiStruct):
                     self._debug['_m_volume_label_ansi']['end'] = self._io.pos()
                     self._io.seek(_pos)
 
-                return self._m_volume_label_ansi if hasattr(self, '_m_volume_label_ansi') else None
+                return getattr(self, '_m_volume_label_ansi', None)
 
 
         class All(KaitaiStruct):
@@ -231,7 +230,7 @@ class WindowsLnkFile(KaitaiStruct):
             @property
             def volume_id(self):
                 if hasattr(self, '_m_volume_id'):
-                    return self._m_volume_id if hasattr(self, '_m_volume_id') else None
+                    return self._m_volume_id
 
                 if self.header.flags.has_volume_id_and_local_base_path:
                     _pos = self._io.pos()
@@ -242,12 +241,12 @@ class WindowsLnkFile(KaitaiStruct):
                     self._debug['_m_volume_id']['end'] = self._io.pos()
                     self._io.seek(_pos)
 
-                return self._m_volume_id if hasattr(self, '_m_volume_id') else None
+                return getattr(self, '_m_volume_id', None)
 
             @property
             def local_base_path(self):
                 if hasattr(self, '_m_local_base_path'):
-                    return self._m_local_base_path if hasattr(self, '_m_local_base_path') else None
+                    return self._m_local_base_path
 
                 if self.header.flags.has_volume_id_and_local_base_path:
                     _pos = self._io.pos()
@@ -257,7 +256,7 @@ class WindowsLnkFile(KaitaiStruct):
                     self._debug['_m_local_base_path']['end'] = self._io.pos()
                     self._io.seek(_pos)
 
-                return self._m_local_base_path if hasattr(self, '_m_local_base_path') else None
+                return getattr(self, '_m_local_base_path', None)
 
 
         class VolumeIdSpec(KaitaiStruct):

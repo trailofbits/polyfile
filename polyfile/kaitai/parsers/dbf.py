@@ -1,12 +1,11 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
-from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class Dbf(KaitaiStruct):
@@ -38,12 +37,12 @@ class Dbf(KaitaiStruct):
         self.header2._read()
         self._debug['header2']['end'] = self._io.pos()
         self._debug['records']['start'] = self._io.pos()
-        self.records = [None] * (self.header1.num_records)
+        self.records = []
         for i in range(self.header1.num_records):
             if not 'arr' in self._debug['records']:
                 self._debug['records']['arr'] = []
             self._debug['records']['arr'].append({'start': self._io.pos()})
-            self.records[i] = self._io.read_bytes(self.header1.len_record)
+            self.records.append(self._io.read_bytes(self.header1.len_record))
             self._debug['records']['arr'][i]['end'] = self._io.pos()
 
         self._debug['records']['end'] = self._io.pos()
@@ -70,14 +69,14 @@ class Dbf(KaitaiStruct):
                 self._debug['header_dbase_7']['end'] = self._io.pos()
 
             self._debug['fields']['start'] = self._io.pos()
-            self.fields = [None] * (11)
+            self.fields = []
             for i in range(11):
                 if not 'arr' in self._debug['fields']:
                     self._debug['fields']['arr'] = []
                 self._debug['fields']['arr'].append({'start': self._io.pos()})
                 _t_fields = Dbf.Field(self._io, self, self._root)
                 _t_fields._read()
-                self.fields[i] = _t_fields
+                self.fields.append(_t_fields)
                 self._debug['fields']['arr'][i]['end'] = self._io.pos()
 
             self._debug['fields']['end'] = self._io.pos()
@@ -162,10 +161,10 @@ class Dbf(KaitaiStruct):
         @property
         def dbase_level(self):
             if hasattr(self, '_m_dbase_level'):
-                return self._m_dbase_level if hasattr(self, '_m_dbase_level') else None
+                return self._m_dbase_level
 
             self._m_dbase_level = (self.version & 7)
-            return self._m_dbase_level if hasattr(self, '_m_dbase_level') else None
+            return getattr(self, '_m_dbase_level', None)
 
 
     class HeaderDbase3(KaitaiStruct):

@@ -1,13 +1,12 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
-from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 from enum import Enum
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class OpenpgpMessage(KaitaiStruct):
@@ -856,10 +855,10 @@ class OpenpgpMessage(KaitaiStruct):
         @property
         def len(self):
             if hasattr(self, '_m_len'):
-                return self._m_len if hasattr(self, '_m_len') else None
+                return self._m_len
 
             self._m_len = (self.first_octet if self.first_octet < 192 else (((((self.first_octet - 192) << 8) + self.second_octet) + 192) if  ((self.first_octet >= 192) and (self.first_octet < 255))  else self.scalar))
-            return self._m_len if hasattr(self, '_m_len') else None
+            return getattr(self, '_m_len', None)
 
 
     class NotationData(KaitaiStruct):

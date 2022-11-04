@@ -1,12 +1,11 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
-from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class Grub2Font(KaitaiStruct):
@@ -249,7 +248,7 @@ class Grub2Font(KaitaiStruct):
             @property
             def definition(self):
                 if hasattr(self, '_m_definition'):
-                    return self._m_definition if hasattr(self, '_m_definition') else None
+                    return self._m_definition
 
                 io = self._root._io
                 _pos = io.pos()
@@ -259,7 +258,7 @@ class Grub2Font(KaitaiStruct):
                 self._m_definition._read()
                 self._debug['_m_definition']['end'] = io.pos()
                 io.seek(_pos)
-                return self._m_definition if hasattr(self, '_m_definition') else None
+                return getattr(self, '_m_definition', None)
 
 
         class CharacterDefinition(KaitaiStruct):

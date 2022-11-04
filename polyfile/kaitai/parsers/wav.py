@@ -1,13 +1,12 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
-from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 from enum import Enum
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class Wav(KaitaiStruct):
@@ -399,34 +398,34 @@ class Wav(KaitaiStruct):
         @property
         def is_extensible(self):
             if hasattr(self, '_m_is_extensible'):
-                return self._m_is_extensible if hasattr(self, '_m_is_extensible') else None
+                return self._m_is_extensible
 
             self._m_is_extensible = self.w_format_tag == Wav.WFormatTagType.extensible
-            return self._m_is_extensible if hasattr(self, '_m_is_extensible') else None
+            return getattr(self, '_m_is_extensible', None)
 
         @property
         def is_basic_pcm(self):
             if hasattr(self, '_m_is_basic_pcm'):
-                return self._m_is_basic_pcm if hasattr(self, '_m_is_basic_pcm') else None
+                return self._m_is_basic_pcm
 
             self._m_is_basic_pcm = self.w_format_tag == Wav.WFormatTagType.pcm
-            return self._m_is_basic_pcm if hasattr(self, '_m_is_basic_pcm') else None
+            return getattr(self, '_m_is_basic_pcm', None)
 
         @property
         def is_basic_float(self):
             if hasattr(self, '_m_is_basic_float'):
-                return self._m_is_basic_float if hasattr(self, '_m_is_basic_float') else None
+                return self._m_is_basic_float
 
             self._m_is_basic_float = self.w_format_tag == Wav.WFormatTagType.ieee_float
-            return self._m_is_basic_float if hasattr(self, '_m_is_basic_float') else None
+            return getattr(self, '_m_is_basic_float', None)
 
         @property
         def is_cb_size_meaningful(self):
             if hasattr(self, '_m_is_cb_size_meaningful'):
-                return self._m_is_cb_size_meaningful if hasattr(self, '_m_is_cb_size_meaningful') else None
+                return self._m_is_cb_size_meaningful
 
             self._m_is_cb_size_meaningful =  ((not (self.is_basic_pcm)) and (self.cb_size != 0)) 
-            return self._m_is_cb_size_meaningful if hasattr(self, '_m_is_cb_size_meaningful') else None
+            return getattr(self, '_m_is_cb_size_meaningful', None)
 
 
     class PmxChunkType(KaitaiStruct):
@@ -522,7 +521,7 @@ class Wav(KaitaiStruct):
         @property
         def chunk_data(self):
             if hasattr(self, '_m_chunk_data'):
-                return self._m_chunk_data if hasattr(self, '_m_chunk_data') else None
+                return self._m_chunk_data
 
             io = self.chunk.data_slot._io
             _pos = io.pos()
@@ -531,7 +530,7 @@ class Wav(KaitaiStruct):
             self._m_chunk_data = (io.read_bytes_term(0, False, True, True)).decode(u"ASCII")
             self._debug['_m_chunk_data']['end'] = io.pos()
             io.seek(_pos)
-            return self._m_chunk_data if hasattr(self, '_m_chunk_data') else None
+            return getattr(self, '_m_chunk_data', None)
 
 
     class CuePointType(KaitaiStruct):
@@ -623,14 +622,14 @@ class Wav(KaitaiStruct):
             self.dw_cue_points = self._io.read_u4le()
             self._debug['dw_cue_points']['end'] = self._io.pos()
             self._debug['cue_points']['start'] = self._io.pos()
-            self.cue_points = [None] * (self.dw_cue_points)
+            self.cue_points = []
             for i in range(self.dw_cue_points):
                 if not 'arr' in self._debug['cue_points']:
                     self._debug['cue_points']['arr'] = []
                 self._debug['cue_points']['arr'].append({'start': self._io.pos()})
                 _t_cue_points = Wav.CuePointType(self._io, self, self._root)
                 _t_cue_points._read()
-                self.cue_points[i] = _t_cue_points
+                self.cue_points.append(_t_cue_points)
                 self._debug['cue_points']['arr'][i]['end'] = self._io.pos()
 
             self._debug['cue_points']['end'] = self._io.pos()
@@ -653,15 +652,15 @@ class Wav(KaitaiStruct):
         @property
         def form_type(self):
             if hasattr(self, '_m_form_type'):
-                return self._m_form_type if hasattr(self, '_m_form_type') else None
+                return self._m_form_type
 
             self._m_form_type = KaitaiStream.resolve_enum(Wav.Fourcc, self.parent_chunk_data.form_type)
-            return self._m_form_type if hasattr(self, '_m_form_type') else None
+            return getattr(self, '_m_form_type', None)
 
         @property
         def subchunks(self):
             if hasattr(self, '_m_subchunks'):
-                return self._m_subchunks if hasattr(self, '_m_subchunks') else None
+                return self._m_subchunks
 
             io = self.parent_chunk_data.subchunks_slot._io
             _pos = io.pos()
@@ -687,7 +686,7 @@ class Wav(KaitaiStruct):
 
             self._debug['_m_subchunks']['end'] = io.pos()
             io.seek(_pos)
-            return self._m_subchunks if hasattr(self, '_m_subchunks') else None
+            return getattr(self, '_m_subchunks', None)
 
 
     class ChannelMaskType(KaitaiStruct):
@@ -828,15 +827,15 @@ class Wav(KaitaiStruct):
         @property
         def chunk_id(self):
             if hasattr(self, '_m_chunk_id'):
-                return self._m_chunk_id if hasattr(self, '_m_chunk_id') else None
+                return self._m_chunk_id
 
             self._m_chunk_id = KaitaiStream.resolve_enum(Wav.Fourcc, self.chunk.id)
-            return self._m_chunk_id if hasattr(self, '_m_chunk_id') else None
+            return getattr(self, '_m_chunk_id', None)
 
         @property
         def chunk_data(self):
             if hasattr(self, '_m_chunk_data'):
-                return self._m_chunk_data if hasattr(self, '_m_chunk_data') else None
+                return self._m_chunk_data
 
             io = self.chunk.data_slot._io
             _pos = io.pos()
@@ -875,7 +874,7 @@ class Wav(KaitaiStruct):
                 self._m_chunk_data._read()
             self._debug['_m_chunk_data']['end'] = io.pos()
             io.seek(_pos)
-            return self._m_chunk_data if hasattr(self, '_m_chunk_data') else None
+            return getattr(self, '_m_chunk_data', None)
 
 
     class BextChunkType(KaitaiStruct):
@@ -938,7 +937,7 @@ class Wav(KaitaiStruct):
     @property
     def subchunks(self):
         if hasattr(self, '_m_subchunks'):
-            return self._m_subchunks if hasattr(self, '_m_subchunks') else None
+            return self._m_subchunks
 
         if self.is_form_type_wave:
             io = self.parent_chunk_data.subchunks_slot._io
@@ -960,12 +959,12 @@ class Wav(KaitaiStruct):
             self._debug['_m_subchunks']['end'] = io.pos()
             io.seek(_pos)
 
-        return self._m_subchunks if hasattr(self, '_m_subchunks') else None
+        return getattr(self, '_m_subchunks', None)
 
     @property
     def parent_chunk_data(self):
         if hasattr(self, '_m_parent_chunk_data'):
-            return self._m_parent_chunk_data if hasattr(self, '_m_parent_chunk_data') else None
+            return self._m_parent_chunk_data
 
         if self.is_riff_chunk:
             io = self.chunk.data_slot._io
@@ -977,38 +976,38 @@ class Wav(KaitaiStruct):
             self._debug['_m_parent_chunk_data']['end'] = io.pos()
             io.seek(_pos)
 
-        return self._m_parent_chunk_data if hasattr(self, '_m_parent_chunk_data') else None
+        return getattr(self, '_m_parent_chunk_data', None)
 
     @property
     def is_form_type_wave(self):
         if hasattr(self, '_m_is_form_type_wave'):
-            return self._m_is_form_type_wave if hasattr(self, '_m_is_form_type_wave') else None
+            return self._m_is_form_type_wave
 
         self._m_is_form_type_wave =  ((self.is_riff_chunk) and (self.form_type == Wav.Fourcc.wave)) 
-        return self._m_is_form_type_wave if hasattr(self, '_m_is_form_type_wave') else None
+        return getattr(self, '_m_is_form_type_wave', None)
 
     @property
     def is_riff_chunk(self):
         if hasattr(self, '_m_is_riff_chunk'):
-            return self._m_is_riff_chunk if hasattr(self, '_m_is_riff_chunk') else None
+            return self._m_is_riff_chunk
 
         self._m_is_riff_chunk = self.chunk_id == Wav.Fourcc.riff
-        return self._m_is_riff_chunk if hasattr(self, '_m_is_riff_chunk') else None
+        return getattr(self, '_m_is_riff_chunk', None)
 
     @property
     def chunk_id(self):
         if hasattr(self, '_m_chunk_id'):
-            return self._m_chunk_id if hasattr(self, '_m_chunk_id') else None
+            return self._m_chunk_id
 
         self._m_chunk_id = KaitaiStream.resolve_enum(Wav.Fourcc, self.chunk.id)
-        return self._m_chunk_id if hasattr(self, '_m_chunk_id') else None
+        return getattr(self, '_m_chunk_id', None)
 
     @property
     def form_type(self):
         if hasattr(self, '_m_form_type'):
-            return self._m_form_type if hasattr(self, '_m_form_type') else None
+            return self._m_form_type
 
         self._m_form_type = KaitaiStream.resolve_enum(Wav.Fourcc, self.parent_chunk_data.form_type)
-        return self._m_form_type if hasattr(self, '_m_form_type') else None
+        return getattr(self, '_m_form_type', None)
 
 

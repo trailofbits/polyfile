@@ -1,13 +1,12 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
-from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 from enum import Enum
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class NtMdt(KaitaiStruct):
@@ -20,7 +19,7 @@ class NtMdt(KaitaiStruct):
     
     Some examples of mdt files can be downloaded at:
     
-    * http://www.ntmdt-si.ru/scan-gallery
+    * https://www.ntmdt-si.ru/resources/scan-gallery
     * http://callistosoft.narod.ru/Resources/Mdt.zip
     
     .. seealso::
@@ -219,12 +218,12 @@ class NtMdt(KaitaiStruct):
 
         def _read(self):
             self._debug['data']['start'] = self._io.pos()
-            self.data = [None] * (16)
+            self.data = []
             for i in range(16):
                 if not 'arr' in self._debug['data']:
                     self._debug['data']['arr'] = []
                 self._debug['data']['arr'].append({'start': self._io.pos()})
-                self.data[i] = self._io.read_u1()
+                self.data.append(self._io.read_u1())
                 self._debug['data']['arr'][i]['end'] = self._io.pos()
 
             self._debug['data']['end'] = self._io.pos()
@@ -240,14 +239,14 @@ class NtMdt(KaitaiStruct):
 
         def _read(self):
             self._debug['frames']['start'] = self._io.pos()
-            self.frames = [None] * ((self._root.last_frame + 1))
+            self.frames = []
             for i in range((self._root.last_frame + 1)):
                 if not 'arr' in self._debug['frames']:
                     self._debug['frames']['arr'] = []
                 self._debug['frames']['arr'].append({'start': self._io.pos()})
                 _t_frames = NtMdt.Frame(self._io, self, self._root)
                 _t_frames._read()
-                self.frames[i] = _t_frames
+                self.frames.append(_t_frames)
                 self._debug['frames']['arr'][i]['end'] = self._io.pos()
 
             self._debug['frames']['end'] = self._io.pos()
@@ -301,26 +300,26 @@ class NtMdt(KaitaiStruct):
                     self._debug['coord_header']['end'] = self._io.pos()
 
                 self._debug['coordinates']['start'] = self._io.pos()
-                self.coordinates = [None] * (self.fm_ndots)
+                self.coordinates = []
                 for i in range(self.fm_ndots):
                     if not 'arr' in self._debug['coordinates']:
                         self._debug['coordinates']['arr'] = []
                     self._debug['coordinates']['arr'].append({'start': self._io.pos()})
                     _t_coordinates = NtMdt.Frame.Dots.DotsData(self._io, self, self._root)
                     _t_coordinates._read()
-                    self.coordinates[i] = _t_coordinates
+                    self.coordinates.append(_t_coordinates)
                     self._debug['coordinates']['arr'][i]['end'] = self._io.pos()
 
                 self._debug['coordinates']['end'] = self._io.pos()
                 self._debug['data']['start'] = self._io.pos()
-                self.data = [None] * (self.fm_ndots)
+                self.data = []
                 for i in range(self.fm_ndots):
                     if not 'arr' in self._debug['data']:
                         self._debug['data']['arr'] = []
                     self._debug['data']['arr'].append({'start': self._io.pos()})
                     _t_data = NtMdt.Frame.Dots.DataLinez(i, self._io, self, self._root)
                     _t_data._read()
-                    self.data[i] = _t_data
+                    self.data.append(_t_data)
                     self._debug['data']['arr'][i]['end'] = self._io.pos()
 
                 self._debug['data']['end'] = self._io.pos()
@@ -399,22 +398,22 @@ class NtMdt(KaitaiStruct):
 
                 def _read(self):
                     self._debug['forward']['start'] = self._io.pos()
-                    self.forward = [None] * (self._parent.coordinates[self.index].forward_size)
+                    self.forward = []
                     for i in range(self._parent.coordinates[self.index].forward_size):
                         if not 'arr' in self._debug['forward']:
                             self._debug['forward']['arr'] = []
                         self._debug['forward']['arr'].append({'start': self._io.pos()})
-                        self.forward[i] = self._io.read_s2le()
+                        self.forward.append(self._io.read_s2le())
                         self._debug['forward']['arr'][i]['end'] = self._io.pos()
 
                     self._debug['forward']['end'] = self._io.pos()
                     self._debug['backward']['start'] = self._io.pos()
-                    self.backward = [None] * (self._parent.coordinates[self.index].backward_size)
+                    self.backward = []
                     for i in range(self._parent.coordinates[self.index].backward_size):
                         if not 'arr' in self._debug['backward']:
                             self._debug['backward']['arr'] = []
                         self._debug['backward']['arr'].append({'start': self._io.pos()})
-                        self.backward[i] = self._io.read_s2le()
+                        self.backward.append(self._io.read_s2le())
                         self._debug['backward']['arr'][i]['end'] = self._io.pos()
 
                     self._debug['backward']['end'] = self._io.pos()
@@ -489,34 +488,34 @@ class NtMdt(KaitaiStruct):
                 self.block_count = self._io.read_u4le()
                 self._debug['block_count']['end'] = self._io.pos()
                 self._debug['blocks_headers']['start'] = self._io.pos()
-                self.blocks_headers = [None] * (self.block_count)
+                self.blocks_headers = []
                 for i in range(self.block_count):
                     if not 'arr' in self._debug['blocks_headers']:
                         self._debug['blocks_headers']['arr'] = []
                     self._debug['blocks_headers']['arr'].append({'start': self._io.pos()})
                     _t_blocks_headers = NtMdt.Frame.FdCurvesNew.BlockDescr(self._io, self, self._root)
                     _t_blocks_headers._read()
-                    self.blocks_headers[i] = _t_blocks_headers
+                    self.blocks_headers.append(_t_blocks_headers)
                     self._debug['blocks_headers']['arr'][i]['end'] = self._io.pos()
 
                 self._debug['blocks_headers']['end'] = self._io.pos()
                 self._debug['blocks_names']['start'] = self._io.pos()
-                self.blocks_names = [None] * (self.block_count)
+                self.blocks_names = []
                 for i in range(self.block_count):
                     if not 'arr' in self._debug['blocks_names']:
                         self._debug['blocks_names']['arr'] = []
                     self._debug['blocks_names']['arr'].append({'start': self._io.pos()})
-                    self.blocks_names[i] = (self._io.read_bytes(self.blocks_headers[i].name_len)).decode(u"UTF-8")
+                    self.blocks_names.append((self._io.read_bytes(self.blocks_headers[i].name_len)).decode(u"UTF-8"))
                     self._debug['blocks_names']['arr'][i]['end'] = self._io.pos()
 
                 self._debug['blocks_names']['end'] = self._io.pos()
                 self._debug['blocks_data']['start'] = self._io.pos()
-                self.blocks_data = [None] * (self.block_count)
+                self.blocks_data = []
                 for i in range(self.block_count):
                     if not 'arr' in self._debug['blocks_data']:
                         self._debug['blocks_data']['arr'] = []
                     self._debug['blocks_data']['arr'].append({'start': self._io.pos()})
-                    self.blocks_data[i] = self._io.read_bytes(self.blocks_headers[i].len)
+                    self.blocks_data.append(self._io.read_bytes(self.blocks_headers[i].len))
                     self._debug['blocks_data']['arr'][i]['end'] = self._io.pos()
 
                 self._debug['blocks_data']['end'] = self._io.pos()
@@ -555,14 +554,14 @@ class NtMdt(KaitaiStruct):
                 self.tot_len = self._io.read_u4le()
                 self._debug['tot_len']['end'] = self._io.pos()
                 self._debug['guids']['start'] = self._io.pos()
-                self.guids = [None] * (2)
+                self.guids = []
                 for i in range(2):
                     if not 'arr' in self._debug['guids']:
                         self._debug['guids']['arr'] = []
                     self._debug['guids']['arr'].append({'start': self._io.pos()})
                     _t_guids = NtMdt.Uuid(self._io, self, self._root)
                     _t_guids._read()
-                    self.guids[i] = _t_guids
+                    self.guids.append(_t_guids)
                     self._debug['guids']['arr'][i]['end'] = self._io.pos()
 
                 self._debug['guids']['end'] = self._io.pos()
@@ -615,26 +614,26 @@ class NtMdt(KaitaiStruct):
                 self.n_mesurands = self._io.read_u4le()
                 self._debug['n_mesurands']['end'] = self._io.pos()
                 self._debug['dimensions']['start'] = self._io.pos()
-                self.dimensions = [None] * (self.n_dimensions)
+                self.dimensions = []
                 for i in range(self.n_dimensions):
                     if not 'arr' in self._debug['dimensions']:
                         self._debug['dimensions']['arr'] = []
                     self._debug['dimensions']['arr'].append({'start': self._io.pos()})
                     _t_dimensions = NtMdt.Frame.FdMetaData.Calibration(self._io, self, self._root)
                     _t_dimensions._read()
-                    self.dimensions[i] = _t_dimensions
+                    self.dimensions.append(_t_dimensions)
                     self._debug['dimensions']['arr'][i]['end'] = self._io.pos()
 
                 self._debug['dimensions']['end'] = self._io.pos()
                 self._debug['mesurands']['start'] = self._io.pos()
-                self.mesurands = [None] * (self.n_mesurands)
+                self.mesurands = []
                 for i in range(self.n_mesurands):
                     if not 'arr' in self._debug['mesurands']:
                         self._debug['mesurands']['arr'] = []
                     self._debug['mesurands']['arr'].append({'start': self._io.pos()})
                     _t_mesurands = NtMdt.Frame.FdMetaData.Calibration(self._io, self, self._root)
                     _t_mesurands._read()
-                    self.mesurands[i] = _t_mesurands
+                    self.mesurands.append(_t_mesurands)
                     self._debug['mesurands']['arr'][i]['end'] = self._io.pos()
 
                 self._debug['mesurands']['end'] = self._io.pos()
@@ -673,7 +672,7 @@ class NtMdt(KaitaiStruct):
 
                     def _read(self):
                         self._debug['items']['start'] = self._io.pos()
-                        self.items = [None] * (self._parent._parent.n_mesurands)
+                        self.items = []
                         for i in range(self._parent._parent.n_mesurands):
                             if not 'arr' in self._debug['items']:
                                 self._debug['items']['arr'] = []
@@ -683,61 +682,61 @@ class NtMdt(KaitaiStruct):
                                 if not 'arr' in self._debug['items']:
                                     self._debug['items']['arr'] = []
                                 self._debug['items']['arr'].append({'start': self._io.pos()})
-                                self.items[i] = self._io.read_u8le()
+                                self.items.append(self._io.read_u8le())
                                 self._debug['items']['arr'][i]['end'] = self._io.pos()
                             elif _on == NtMdt.DataType.uint8:
                                 if not 'arr' in self._debug['items']:
                                     self._debug['items']['arr'] = []
                                 self._debug['items']['arr'].append({'start': self._io.pos()})
-                                self.items[i] = self._io.read_u1()
+                                self.items.append(self._io.read_u1())
                                 self._debug['items']['arr'][i]['end'] = self._io.pos()
                             elif _on == NtMdt.DataType.float32:
                                 if not 'arr' in self._debug['items']:
                                     self._debug['items']['arr'] = []
                                 self._debug['items']['arr'].append({'start': self._io.pos()})
-                                self.items[i] = self._io.read_f4le()
+                                self.items.append(self._io.read_f4le())
                                 self._debug['items']['arr'][i]['end'] = self._io.pos()
                             elif _on == NtMdt.DataType.int8:
                                 if not 'arr' in self._debug['items']:
                                     self._debug['items']['arr'] = []
                                 self._debug['items']['arr'].append({'start': self._io.pos()})
-                                self.items[i] = self._io.read_s1()
+                                self.items.append(self._io.read_s1())
                                 self._debug['items']['arr'][i]['end'] = self._io.pos()
                             elif _on == NtMdt.DataType.uint16:
                                 if not 'arr' in self._debug['items']:
                                     self._debug['items']['arr'] = []
                                 self._debug['items']['arr'].append({'start': self._io.pos()})
-                                self.items[i] = self._io.read_u2le()
+                                self.items.append(self._io.read_u2le())
                                 self._debug['items']['arr'][i]['end'] = self._io.pos()
                             elif _on == NtMdt.DataType.int64:
                                 if not 'arr' in self._debug['items']:
                                     self._debug['items']['arr'] = []
                                 self._debug['items']['arr'].append({'start': self._io.pos()})
-                                self.items[i] = self._io.read_s8le()
+                                self.items.append(self._io.read_s8le())
                                 self._debug['items']['arr'][i]['end'] = self._io.pos()
                             elif _on == NtMdt.DataType.uint32:
                                 if not 'arr' in self._debug['items']:
                                     self._debug['items']['arr'] = []
                                 self._debug['items']['arr'].append({'start': self._io.pos()})
-                                self.items[i] = self._io.read_u4le()
+                                self.items.append(self._io.read_u4le())
                                 self._debug['items']['arr'][i]['end'] = self._io.pos()
                             elif _on == NtMdt.DataType.float64:
                                 if not 'arr' in self._debug['items']:
                                     self._debug['items']['arr'] = []
                                 self._debug['items']['arr'].append({'start': self._io.pos()})
-                                self.items[i] = self._io.read_f8le()
+                                self.items.append(self._io.read_f8le())
                                 self._debug['items']['arr'][i]['end'] = self._io.pos()
                             elif _on == NtMdt.DataType.int16:
                                 if not 'arr' in self._debug['items']:
                                     self._debug['items']['arr'] = []
                                 self._debug['items']['arr'].append({'start': self._io.pos()})
-                                self.items[i] = self._io.read_s2le()
+                                self.items.append(self._io.read_s2le())
                                 self._debug['items']['arr'][i]['end'] = self._io.pos()
                             elif _on == NtMdt.DataType.int32:
                                 if not 'arr' in self._debug['items']:
                                     self._debug['items']['arr'] = []
                                 self._debug['items']['arr'].append({'start': self._io.pos()})
-                                self.items[i] = self._io.read_s4le()
+                                self.items.append(self._io.read_s4le())
                                 self._debug['items']['arr'][i]['end'] = self._io.pos()
                             self._debug['items']['arr'][i]['end'] = self._io.pos()
 
@@ -812,16 +811,16 @@ class NtMdt(KaitaiStruct):
                 @property
                 def count(self):
                     if hasattr(self, '_m_count'):
-                        return self._m_count if hasattr(self, '_m_count') else None
+                        return self._m_count
 
                     self._m_count = ((self.max_index - self.min_index) + 1)
-                    return self._m_count if hasattr(self, '_m_count') else None
+                    return getattr(self, '_m_count', None)
 
 
             @property
             def image(self):
                 if hasattr(self, '_m_image'):
-                    return self._m_image if hasattr(self, '_m_image') else None
+                    return self._m_image
 
                 _pos = self._io.pos()
                 self._io.seek(self.data_offset)
@@ -832,7 +831,7 @@ class NtMdt(KaitaiStruct):
                 self._m_image._read()
                 self._debug['_m_image']['end'] = self._io.pos()
                 self._io.seek(_pos)
-                return self._m_image if hasattr(self, '_m_image') else None
+                return getattr(self, '_m_image', None)
 
 
         class FdSpectroscopy(KaitaiStruct):
@@ -864,12 +863,12 @@ class NtMdt(KaitaiStruct):
                 self.dots._read()
                 self._debug['dots']['end'] = self._io.pos()
                 self._debug['data']['start'] = self._io.pos()
-                self.data = [None] * ((self.fm_xres * self.fm_yres))
+                self.data = []
                 for i in range((self.fm_xres * self.fm_yres)):
                     if not 'arr' in self._debug['data']:
                         self._debug['data']['arr'] = []
                     self._debug['data']['arr'].append({'start': self._io.pos()})
-                    self.data[i] = self._io.read_s2le()
+                    self.data.append(self._io.read_s2le())
                     self._debug['data']['arr'][i]['end'] = self._io.pos()
 
                 self._debug['data']['end'] = self._io.pos()
@@ -1107,12 +1106,12 @@ class NtMdt(KaitaiStruct):
                 self.dots._read()
                 self._debug['dots']['end'] = self._io.pos()
                 self._debug['image']['start'] = self._io.pos()
-                self.image = [None] * ((self.fm_xres * self.fm_yres))
+                self.image = []
                 for i in range((self.fm_xres * self.fm_yres)):
                     if not 'arr' in self._debug['image']:
                         self._debug['image']['arr'] = []
                     self._debug['image']['arr'].append({'start': self._io.pos()})
-                    self.image[i] = self._io.read_s2le()
+                    self.image.append(self._io.read_s2le())
                     self._debug['image']['arr'][i]['end'] = self._io.pos()
 
                 self._debug['image']['end'] = self._io.pos()

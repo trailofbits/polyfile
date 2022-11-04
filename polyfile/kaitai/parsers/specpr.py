@@ -1,13 +1,12 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
-from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 from enum import Enum
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class Specpr(KaitaiStruct):
@@ -97,12 +96,12 @@ class Specpr(KaitaiStruct):
             self.revs = self._io.read_s4be()
             self._debug['revs']['end'] = self._io.pos()
             self._debug['iband']['start'] = self._io.pos()
-            self.iband = [None] * (2)
+            self.iband = []
             for i in range(2):
                 if not 'arr' in self._debug['iband']:
                     self._debug['iband']['arr'] = []
                 self._debug['iband']['arr'].append({'start': self._io.pos()})
-                self.iband[i] = self._io.read_s4be()
+                self.iband.append(self._io.read_s4be())
                 self._debug['iband']['arr'][i]['end'] = self._io.pos()
 
             self._debug['iband']['end'] = self._io.pos()
@@ -122,12 +121,12 @@ class Specpr(KaitaiStruct):
             self.ihist = (KaitaiStream.bytes_strip_right(self._io.read_bytes(60), 32)).decode(u"ascii")
             self._debug['ihist']['end'] = self._io.pos()
             self._debug['mhist']['start'] = self._io.pos()
-            self.mhist = [None] * (4)
+            self.mhist = []
             for i in range(4):
                 if not 'arr' in self._debug['mhist']:
                     self._debug['mhist']['arr'] = []
                 self._debug['mhist']['arr'].append({'start': self._io.pos()})
-                self.mhist[i] = (self._io.read_bytes(74)).decode(u"ascii")
+                self.mhist.append((self._io.read_bytes(74)).decode(u"ascii"))
                 self._debug['mhist']['arr'][i]['end'] = self._io.pos()
 
             self._debug['mhist']['end'] = self._io.pos()
@@ -164,12 +163,12 @@ class Specpr(KaitaiStruct):
             self.tempd = self._io.read_f4be()
             self._debug['tempd']['end'] = self._io.pos()
             self._debug['data']['start'] = self._io.pos()
-            self.data = [None] * (256)
+            self.data = []
             for i in range(256):
                 if not 'arr' in self._debug['data']:
                     self._debug['data']['arr'] = []
                 self._debug['data']['arr'].append({'start': self._io.pos()})
-                self.data[i] = self._io.read_f4be()
+                self.data.append(self._io.read_f4be())
                 self._debug['data']['arr'][i]['end'] = self._io.pos()
 
             self._debug['data']['end'] = self._io.pos()
@@ -178,10 +177,10 @@ class Specpr(KaitaiStruct):
         def phase_angle_arcsec(self):
             """The phase angle between iangl and eangl in seconds."""
             if hasattr(self, '_m_phase_angle_arcsec'):
-                return self._m_phase_angle_arcsec if hasattr(self, '_m_phase_angle_arcsec') else None
+                return self._m_phase_angle_arcsec
 
             self._m_phase_angle_arcsec = (self.sphase / 1500)
-            return self._m_phase_angle_arcsec if hasattr(self, '_m_phase_angle_arcsec') else None
+            return getattr(self, '_m_phase_angle_arcsec', None)
 
 
     class CoarseTimestamp(KaitaiStruct):
@@ -200,10 +199,10 @@ class Specpr(KaitaiStruct):
         @property
         def seconds(self):
             if hasattr(self, '_m_seconds'):
-                return self._m_seconds if hasattr(self, '_m_seconds') else None
+                return self._m_seconds
 
             self._m_seconds = (self.scaled_seconds * 24000)
-            return self._m_seconds if hasattr(self, '_m_seconds') else None
+            return getattr(self, '_m_seconds', None)
 
 
     class Icflag(KaitaiStruct):
@@ -241,10 +240,10 @@ class Specpr(KaitaiStruct):
         @property
         def type(self):
             if hasattr(self, '_m_type'):
-                return self._m_type if hasattr(self, '_m_type') else None
+                return self._m_type
 
             self._m_type = KaitaiStream.resolve_enum(Specpr.RecordType, ((int(self.text) * 1) + (int(self.continuation) * 2)))
-            return self._m_type if hasattr(self, '_m_type') else None
+            return getattr(self, '_m_type', None)
 
 
     class DataContinuation(KaitaiStruct):
@@ -257,12 +256,12 @@ class Specpr(KaitaiStruct):
 
         def _read(self):
             self._debug['cdata']['start'] = self._io.pos()
-            self.cdata = [None] * (383)
+            self.cdata = []
             for i in range(383):
                 if not 'arr' in self._debug['cdata']:
                     self._debug['cdata']['arr'] = []
                 self._debug['cdata']['arr'].append({'start': self._io.pos()})
-                self.cdata[i] = self._io.read_f4be()
+                self.cdata.append(self._io.read_f4be())
                 self._debug['cdata']['arr'][i]['end'] = self._io.pos()
 
             self._debug['cdata']['end'] = self._io.pos()
@@ -301,26 +300,26 @@ class Specpr(KaitaiStruct):
         @property
         def seconds_total(self):
             if hasattr(self, '_m_seconds_total'):
-                return self._m_seconds_total if hasattr(self, '_m_seconds_total') else None
+                return self._m_seconds_total
 
             self._m_seconds_total = self.angl // 6000
-            return self._m_seconds_total if hasattr(self, '_m_seconds_total') else None
+            return getattr(self, '_m_seconds_total', None)
 
         @property
         def minutes_total(self):
             if hasattr(self, '_m_minutes_total'):
-                return self._m_minutes_total if hasattr(self, '_m_minutes_total') else None
+                return self._m_minutes_total
 
             self._m_minutes_total = self.seconds_total // 60
-            return self._m_minutes_total if hasattr(self, '_m_minutes_total') else None
+            return getattr(self, '_m_minutes_total', None)
 
         @property
         def degrees_total(self):
             if hasattr(self, '_m_degrees_total'):
-                return self._m_degrees_total if hasattr(self, '_m_degrees_total') else None
+                return self._m_degrees_total
 
             self._m_degrees_total = self.minutes_total // 60
-            return self._m_degrees_total if hasattr(self, '_m_degrees_total') else None
+            return getattr(self, '_m_degrees_total', None)
 
 
     class TextInitial(KaitaiStruct):

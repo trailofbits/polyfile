@@ -1,13 +1,12 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
-from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 from enum import Enum
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 from polyfile.kaitai.parsers import bytes_with_io
@@ -56,14 +55,14 @@ class PcfFont(KaitaiStruct):
         self.num_tables = self._io.read_u4le()
         self._debug['num_tables']['end'] = self._io.pos()
         self._debug['tables']['start'] = self._io.pos()
-        self.tables = [None] * (self.num_tables)
+        self.tables = []
         for i in range(self.num_tables):
             if not 'arr' in self._debug['tables']:
                 self._debug['tables']['arr'] = []
             self._debug['tables']['arr'].append({'start': self._io.pos()})
             _t_tables = PcfFont.Table(self._io, self, self._root)
             _t_tables._read()
-            self.tables[i] = _t_tables
+            self.tables.append(_t_tables)
             self._debug['tables']['arr'][i]['end'] = self._io.pos()
 
         self._debug['tables']['end'] = self._io.pos()
@@ -117,12 +116,12 @@ class PcfFont(KaitaiStruct):
                 self.num_glyphs = self._io.read_u4le()
                 self._debug['num_glyphs']['end'] = self._io.pos()
                 self._debug['swidths']['start'] = self._io.pos()
-                self.swidths = [None] * (self.num_glyphs)
+                self.swidths = []
                 for i in range(self.num_glyphs):
                     if not 'arr' in self._debug['swidths']:
                         self._debug['swidths']['arr'] = []
                     self._debug['swidths']['arr'].append({'start': self._io.pos()})
-                    self.swidths[i] = self._io.read_u4le()
+                    self.swidths.append(self._io.read_u4le())
                     self._debug['swidths']['arr'][i]['end'] = self._io.pos()
 
                 self._debug['swidths']['end'] = self._io.pos()
@@ -151,14 +150,14 @@ class PcfFont(KaitaiStruct):
                 self.num_props = self._io.read_u4le()
                 self._debug['num_props']['end'] = self._io.pos()
                 self._debug['props']['start'] = self._io.pos()
-                self.props = [None] * (self.num_props)
+                self.props = []
                 for i in range(self.num_props):
                     if not 'arr' in self._debug['props']:
                         self._debug['props']['arr'] = []
                     self._debug['props']['arr'].append({'start': self._io.pos()})
                     _t_props = PcfFont.Table.Properties.Prop(self._io, self, self._root)
                     _t_props._read()
-                    self.props[i] = _t_props
+                    self.props.append(_t_props)
                     self._debug['props']['arr'][i]['end'] = self._io.pos()
 
                 self._debug['props']['end'] = self._io.pos()
@@ -207,7 +206,7 @@ class PcfFont(KaitaiStruct):
                     """Name of the property addressed in the strings buffer.
                     """
                     if hasattr(self, '_m_name'):
-                        return self._m_name if hasattr(self, '_m_name') else None
+                        return self._m_name
 
                     io = self._parent.strings._io
                     _pos = io.pos()
@@ -216,7 +215,7 @@ class PcfFont(KaitaiStruct):
                     self._m_name = (io.read_bytes_term(0, False, True, True)).decode(u"UTF-8")
                     self._debug['_m_name']['end'] = io.pos()
                     io.seek(_pos)
-                    return self._m_name if hasattr(self, '_m_name') else None
+                    return getattr(self, '_m_name', None)
 
                 @property
                 def str_value(self):
@@ -224,7 +223,7 @@ class PcfFont(KaitaiStruct):
                     buffer, if this is a string value.
                     """
                     if hasattr(self, '_m_str_value'):
-                        return self._m_str_value if hasattr(self, '_m_str_value') else None
+                        return self._m_str_value
 
                     if self.is_string != 0:
                         io = self._parent.strings._io
@@ -235,19 +234,19 @@ class PcfFont(KaitaiStruct):
                         self._debug['_m_str_value']['end'] = io.pos()
                         io.seek(_pos)
 
-                    return self._m_str_value if hasattr(self, '_m_str_value') else None
+                    return getattr(self, '_m_str_value', None)
 
                 @property
                 def int_value(self):
                     """Value of the property, if this is an integer value.
                     """
                     if hasattr(self, '_m_int_value'):
-                        return self._m_int_value if hasattr(self, '_m_int_value') else None
+                        return self._m_int_value
 
                     if self.is_string == 0:
                         self._m_int_value = self.value_or_ofs_value
 
-                    return self._m_int_value if hasattr(self, '_m_int_value') else None
+                    return getattr(self, '_m_int_value', None)
 
 
 
@@ -292,12 +291,12 @@ class PcfFont(KaitaiStruct):
                 self.default_char = self._io.read_u2le()
                 self._debug['default_char']['end'] = self._io.pos()
                 self._debug['glyph_indexes']['start'] = self._io.pos()
-                self.glyph_indexes = [None] * ((((self.max_char_or_byte2 - self.min_char_or_byte2) + 1) * ((self.max_byte1 - self.min_byte1) + 1)))
+                self.glyph_indexes = []
                 for i in range((((self.max_char_or_byte2 - self.min_char_or_byte2) + 1) * ((self.max_byte1 - self.min_byte1) + 1))):
                     if not 'arr' in self._debug['glyph_indexes']:
                         self._debug['glyph_indexes']['arr'] = []
                     self._debug['glyph_indexes']['arr'].append({'start': self._io.pos()})
-                    self.glyph_indexes[i] = self._io.read_u2le()
+                    self.glyph_indexes.append(self._io.read_u2le())
                     self._debug['glyph_indexes']['arr'][i]['end'] = self._io.pos()
 
                 self._debug['glyph_indexes']['end'] = self._io.pos()
@@ -325,14 +324,14 @@ class PcfFont(KaitaiStruct):
                 self.num_glyphs = self._io.read_u4le()
                 self._debug['num_glyphs']['end'] = self._io.pos()
                 self._debug['names']['start'] = self._io.pos()
-                self.names = [None] * (self.num_glyphs)
+                self.names = []
                 for i in range(self.num_glyphs):
                     if not 'arr' in self._debug['names']:
                         self._debug['names']['arr'] = []
                     self._debug['names']['arr'].append({'start': self._io.pos()})
                     _t_names = PcfFont.Table.GlyphNames.StringRef(self._io, self, self._root)
                     _t_names._read()
-                    self.names[i] = _t_names
+                    self.names.append(_t_names)
                     self._debug['names']['arr'][i]['end'] = self._io.pos()
 
                 self._debug['names']['end'] = self._io.pos()
@@ -362,7 +361,7 @@ class PcfFont(KaitaiStruct):
                 @property
                 def value(self):
                     if hasattr(self, '_m_value'):
-                        return self._m_value if hasattr(self, '_m_value') else None
+                        return self._m_value
 
                     io = self._parent.strings._io
                     _pos = io.pos()
@@ -371,7 +370,7 @@ class PcfFont(KaitaiStruct):
                     self._m_value = (io.read_bytes_term(0, False, True, True)).decode(u"UTF-8")
                     self._debug['_m_value']['end'] = io.pos()
                     io.seek(_pos)
-                    return self._m_value if hasattr(self, '_m_value') else None
+                    return getattr(self, '_m_value', None)
 
 
 
@@ -397,22 +396,22 @@ class PcfFont(KaitaiStruct):
                 self.num_glyphs = self._io.read_u4le()
                 self._debug['num_glyphs']['end'] = self._io.pos()
                 self._debug['offsets']['start'] = self._io.pos()
-                self.offsets = [None] * (self.num_glyphs)
+                self.offsets = []
                 for i in range(self.num_glyphs):
                     if not 'arr' in self._debug['offsets']:
                         self._debug['offsets']['arr'] = []
                     self._debug['offsets']['arr'].append({'start': self._io.pos()})
-                    self.offsets[i] = self._io.read_u4le()
+                    self.offsets.append(self._io.read_u4le())
                     self._debug['offsets']['arr'][i]['end'] = self._io.pos()
 
                 self._debug['offsets']['end'] = self._io.pos()
                 self._debug['bitmap_sizes']['start'] = self._io.pos()
-                self.bitmap_sizes = [None] * (4)
+                self.bitmap_sizes = []
                 for i in range(4):
                     if not 'arr' in self._debug['bitmap_sizes']:
                         self._debug['bitmap_sizes']['arr'] = []
                     self._debug['bitmap_sizes']['arr'].append({'start': self._io.pos()})
-                    self.bitmap_sizes[i] = self._io.read_u4le()
+                    self.bitmap_sizes.append(self._io.read_u4le())
                     self._debug['bitmap_sizes']['arr'][i]['end'] = self._io.pos()
 
                 self._debug['bitmap_sizes']['end'] = self._io.pos()
@@ -421,7 +420,7 @@ class PcfFont(KaitaiStruct):
         @property
         def body(self):
             if hasattr(self, '_m_body'):
-                return self._m_body if hasattr(self, '_m_body') else None
+                return self._m_body
 
             _pos = self._io.pos()
             self._io.seek(self.ofs_body)
@@ -456,7 +455,7 @@ class PcfFont(KaitaiStruct):
                 self._m_body = self._io.read_bytes(self.len_body)
             self._debug['_m_body']['end'] = self._io.pos()
             self._io.seek(_pos)
-            return self._m_body if hasattr(self, '_m_body') else None
+            return getattr(self, '_m_body', None)
 
 
     class Format(KaitaiStruct):

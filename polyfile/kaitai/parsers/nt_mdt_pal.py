@@ -1,12 +1,11 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
-from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class NtMdtPal(KaitaiStruct):
@@ -28,14 +27,14 @@ class NtMdtPal(KaitaiStruct):
         self.count = self._io.read_u4be()
         self._debug['count']['end'] = self._io.pos()
         self._debug['meta']['start'] = self._io.pos()
-        self.meta = [None] * (self.count)
+        self.meta = []
         for i in range(self.count):
             if not 'arr' in self._debug['meta']:
                 self._debug['meta']['arr'] = []
             self._debug['meta']['arr'].append({'start': self._io.pos()})
             _t_meta = NtMdtPal.Meta(self._io, self, self._root)
             _t_meta._read()
-            self.meta[i] = _t_meta
+            self.meta.append(_t_meta)
             self._debug['meta']['arr'][i]['end'] = self._io.pos()
 
         self._debug['meta']['end'] = self._io.pos()
@@ -43,14 +42,14 @@ class NtMdtPal(KaitaiStruct):
         self.something2 = self._io.read_bytes(1)
         self._debug['something2']['end'] = self._io.pos()
         self._debug['tables']['start'] = self._io.pos()
-        self.tables = [None] * (self.count)
+        self.tables = []
         for i in range(self.count):
             if not 'arr' in self._debug['tables']:
                 self._debug['tables']['arr'] = []
             self._debug['tables']['arr'].append({'start': self._io.pos()})
             _t_tables = NtMdtPal.ColTable(i, self._io, self, self._root)
             _t_tables._read()
-            self.tables[i] = _t_tables
+            self.tables.append(_t_tables)
             self._debug['tables']['arr'][i]['end'] = self._io.pos()
 
         self._debug['tables']['end'] = self._io.pos()
@@ -133,20 +132,20 @@ class NtMdtPal(KaitaiStruct):
             self.unkn = self._io.read_u1()
             self._debug['unkn']['end'] = self._io.pos()
             self._debug['title']['start'] = self._io.pos()
-            self.title = (self._io.read_bytes(self._root.meta[self.index].name_size)).decode(u"UTF-16")
+            self.title = (self._io.read_bytes(self._root.meta[self.index].name_size)).decode(u"UTF-16LE")
             self._debug['title']['end'] = self._io.pos()
             self._debug['unkn1']['start'] = self._io.pos()
             self.unkn1 = self._io.read_u2be()
             self._debug['unkn1']['end'] = self._io.pos()
             self._debug['colors']['start'] = self._io.pos()
-            self.colors = [None] * ((self._root.meta[self.index].colors_count - 1))
+            self.colors = []
             for i in range((self._root.meta[self.index].colors_count - 1)):
                 if not 'arr' in self._debug['colors']:
                     self._debug['colors']['arr'] = []
                 self._debug['colors']['arr'].append({'start': self._io.pos()})
                 _t_colors = NtMdtPal.Color(self._io, self, self._root)
                 _t_colors._read()
-                self.colors[i] = _t_colors
+                self.colors.append(_t_colors)
                 self._debug['colors']['arr'][i]['end'] = self._io.pos()
 
             self._debug['colors']['end'] = self._io.pos()

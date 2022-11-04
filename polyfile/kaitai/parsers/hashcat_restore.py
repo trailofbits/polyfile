@@ -1,12 +1,11 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
-from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class HashcatRestore(KaitaiStruct):
@@ -47,12 +46,12 @@ class HashcatRestore(KaitaiStruct):
         self.padding2 = self._io.read_bytes(12)
         self._debug['padding2']['end'] = self._io.pos()
         self._debug['argv']['start'] = self._io.pos()
-        self.argv = [None] * (self.argc)
+        self.argv = []
         for i in range(self.argc):
             if not 'arr' in self._debug['argv']:
                 self._debug['argv']['arr'] = []
             self._debug['argv']['arr'].append({'start': self._io.pos()})
-            self.argv[i] = (self._io.read_bytes_term(10, False, True, True)).decode(u"UTF-8")
+            self.argv.append((self._io.read_bytes_term(10, False, True, True)).decode(u"UTF-8"))
             self._debug['argv']['arr'][i]['end'] = self._io.pos()
 
         self._debug['argv']['end'] = self._io.pos()

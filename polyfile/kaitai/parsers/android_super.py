@@ -1,13 +1,12 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
-from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
 from enum import Enum
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class AndroidSuper(KaitaiStruct):
@@ -56,32 +55,32 @@ class AndroidSuper(KaitaiStruct):
             self.backup_geometry._read()
             self._debug['backup_geometry']['end'] = self._io.pos()
             self._debug['primary_metadata']['start'] = self._io.pos()
-            self._raw_primary_metadata = [None] * (self.primary_geometry.metadata_slot_count)
-            self.primary_metadata = [None] * (self.primary_geometry.metadata_slot_count)
+            self._raw_primary_metadata = []
+            self.primary_metadata = []
             for i in range(self.primary_geometry.metadata_slot_count):
                 if not 'arr' in self._debug['primary_metadata']:
                     self._debug['primary_metadata']['arr'] = []
                 self._debug['primary_metadata']['arr'].append({'start': self._io.pos()})
-                self._raw_primary_metadata[i] = self._io.read_bytes(self.primary_geometry.metadata_max_size)
+                self._raw_primary_metadata.append(self._io.read_bytes(self.primary_geometry.metadata_max_size))
                 _io__raw_primary_metadata = KaitaiStream(BytesIO(self._raw_primary_metadata[i]))
                 _t_primary_metadata = AndroidSuper.Metadata(_io__raw_primary_metadata, self, self._root)
                 _t_primary_metadata._read()
-                self.primary_metadata[i] = _t_primary_metadata
+                self.primary_metadata.append(_t_primary_metadata)
                 self._debug['primary_metadata']['arr'][i]['end'] = self._io.pos()
 
             self._debug['primary_metadata']['end'] = self._io.pos()
             self._debug['backup_metadata']['start'] = self._io.pos()
-            self._raw_backup_metadata = [None] * (self.primary_geometry.metadata_slot_count)
-            self.backup_metadata = [None] * (self.primary_geometry.metadata_slot_count)
+            self._raw_backup_metadata = []
+            self.backup_metadata = []
             for i in range(self.primary_geometry.metadata_slot_count):
                 if not 'arr' in self._debug['backup_metadata']:
                     self._debug['backup_metadata']['arr'] = []
                 self._debug['backup_metadata']['arr'].append({'start': self._io.pos()})
-                self._raw_backup_metadata[i] = self._io.read_bytes(self.primary_geometry.metadata_max_size)
+                self._raw_backup_metadata.append(self._io.read_bytes(self.primary_geometry.metadata_max_size))
                 _io__raw_backup_metadata = KaitaiStream(BytesIO(self._raw_backup_metadata[i]))
                 _t_backup_metadata = AndroidSuper.Metadata(_io__raw_backup_metadata, self, self._root)
                 _t_backup_metadata._read()
-                self.backup_metadata[i] = _t_backup_metadata
+                self.backup_metadata.append(_t_backup_metadata)
                 self._debug['backup_metadata']['arr'][i]['end'] = self._io.pos()
 
             self._debug['backup_metadata']['end'] = self._io.pos()
@@ -255,13 +254,13 @@ class AndroidSuper(KaitaiStruct):
             @property
             def table(self):
                 if hasattr(self, '_m_table'):
-                    return self._m_table if hasattr(self, '_m_table') else None
+                    return self._m_table
 
                 _pos = self._io.pos()
                 self._io.seek((self._parent.header_size + self.offset))
                 self._debug['_m_table']['start'] = self._io.pos()
-                self._raw__m_table = [None] * (self.num_entries)
-                self._m_table = [None] * (self.num_entries)
+                self._raw__m_table = []
+                self._m_table = []
                 for i in range(self.num_entries):
                     if not 'arr' in self._debug['_m_table']:
                         self._debug['_m_table']['arr'] = []
@@ -271,53 +270,53 @@ class AndroidSuper(KaitaiStruct):
                         if not 'arr' in self._debug['_m_table']:
                             self._debug['_m_table']['arr'] = []
                         self._debug['_m_table']['arr'].append({'start': self._io.pos()})
-                        self._raw__m_table[i] = self._io.read_bytes(self.entry_size)
+                        self._raw__m_table.append(self._io.read_bytes(self.entry_size))
                         _io__raw__m_table = KaitaiStream(BytesIO(self._raw__m_table[i]))
                         _t__m_table = AndroidSuper.Metadata.Partition(_io__raw__m_table, self, self._root)
                         _t__m_table._read()
-                        self._m_table[i] = _t__m_table
+                        self._m_table.append(_t__m_table)
                         self._debug['_m_table']['arr'][i]['end'] = self._io.pos()
                     elif _on == AndroidSuper.Metadata.TableKind.extents:
                         if not 'arr' in self._debug['_m_table']:
                             self._debug['_m_table']['arr'] = []
                         self._debug['_m_table']['arr'].append({'start': self._io.pos()})
-                        self._raw__m_table[i] = self._io.read_bytes(self.entry_size)
+                        self._raw__m_table.append(self._io.read_bytes(self.entry_size))
                         _io__raw__m_table = KaitaiStream(BytesIO(self._raw__m_table[i]))
                         _t__m_table = AndroidSuper.Metadata.Extent(_io__raw__m_table, self, self._root)
                         _t__m_table._read()
-                        self._m_table[i] = _t__m_table
+                        self._m_table.append(_t__m_table)
                         self._debug['_m_table']['arr'][i]['end'] = self._io.pos()
                     elif _on == AndroidSuper.Metadata.TableKind.groups:
                         if not 'arr' in self._debug['_m_table']:
                             self._debug['_m_table']['arr'] = []
                         self._debug['_m_table']['arr'].append({'start': self._io.pos()})
-                        self._raw__m_table[i] = self._io.read_bytes(self.entry_size)
+                        self._raw__m_table.append(self._io.read_bytes(self.entry_size))
                         _io__raw__m_table = KaitaiStream(BytesIO(self._raw__m_table[i]))
                         _t__m_table = AndroidSuper.Metadata.Group(_io__raw__m_table, self, self._root)
                         _t__m_table._read()
-                        self._m_table[i] = _t__m_table
+                        self._m_table.append(_t__m_table)
                         self._debug['_m_table']['arr'][i]['end'] = self._io.pos()
                     elif _on == AndroidSuper.Metadata.TableKind.block_devices:
                         if not 'arr' in self._debug['_m_table']:
                             self._debug['_m_table']['arr'] = []
                         self._debug['_m_table']['arr'].append({'start': self._io.pos()})
-                        self._raw__m_table[i] = self._io.read_bytes(self.entry_size)
+                        self._raw__m_table.append(self._io.read_bytes(self.entry_size))
                         _io__raw__m_table = KaitaiStream(BytesIO(self._raw__m_table[i]))
                         _t__m_table = AndroidSuper.Metadata.BlockDevice(_io__raw__m_table, self, self._root)
                         _t__m_table._read()
-                        self._m_table[i] = _t__m_table
+                        self._m_table.append(_t__m_table)
                         self._debug['_m_table']['arr'][i]['end'] = self._io.pos()
                     else:
                         if not 'arr' in self._debug['_m_table']:
                             self._debug['_m_table']['arr'] = []
                         self._debug['_m_table']['arr'].append({'start': self._io.pos()})
-                        self._m_table[i] = self._io.read_bytes(self.entry_size)
+                        self._m_table.append(self._io.read_bytes(self.entry_size))
                         self._debug['_m_table']['arr'][i]['end'] = self._io.pos()
                     self._debug['_m_table']['arr'][i]['end'] = self._io.pos()
 
                 self._debug['_m_table']['end'] = self._io.pos()
                 self._io.seek(_pos)
-                return self._m_table if hasattr(self, '_m_table') else None
+                return getattr(self, '_m_table', None)
 
 
         class Partition(KaitaiStruct):
@@ -387,7 +386,7 @@ class AndroidSuper(KaitaiStruct):
     @property
     def root(self):
         if hasattr(self, '_m_root'):
-            return self._m_root if hasattr(self, '_m_root') else None
+            return self._m_root
 
         _pos = self._io.pos()
         self._io.seek(4096)
@@ -396,6 +395,6 @@ class AndroidSuper(KaitaiStruct):
         self._m_root._read()
         self._debug['_m_root']['end'] = self._io.pos()
         self._io.seek(_pos)
-        return self._m_root if hasattr(self, '_m_root') else None
+        return getattr(self, '_m_root', None)
 
 
