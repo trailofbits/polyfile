@@ -1,11 +1,12 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
+from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
 
 
-if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
+if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class AndroidDto(KaitaiStruct):
@@ -37,14 +38,14 @@ class AndroidDto(KaitaiStruct):
         self.header._read()
         self._debug['header']['end'] = self._io.pos()
         self._debug['entries']['start'] = self._io.pos()
-        self.entries = []
+        self.entries = [None] * (self.header.dt_entry_count)
         for i in range(self.header.dt_entry_count):
             if not 'arr' in self._debug['entries']:
                 self._debug['entries']['arr'] = []
             self._debug['entries']['arr'].append({'start': self._io.pos()})
             _t_entries = AndroidDto.DtTableEntry(self._io, self, self._root)
             _t_entries._read()
-            self.entries.append(_t_entries)
+            self.entries[i] = _t_entries
             self._debug['entries']['arr'][i]['end'] = self._io.pos()
 
         self._debug['entries']['end'] = self._io.pos()
@@ -108,12 +109,12 @@ class AndroidDto(KaitaiStruct):
             self.rev = self._io.read_u4be()
             self._debug['rev']['end'] = self._io.pos()
             self._debug['custom']['start'] = self._io.pos()
-            self.custom = []
+            self.custom = [None] * (4)
             for i in range(4):
                 if not 'arr' in self._debug['custom']:
                     self._debug['custom']['arr'] = []
                 self._debug['custom']['arr'].append({'start': self._io.pos()})
-                self.custom.append(self._io.read_u4be())
+                self.custom[i] = self._io.read_u4be()
                 self._debug['custom']['arr'][i]['end'] = self._io.pos()
 
             self._debug['custom']['end'] = self._io.pos()
@@ -122,7 +123,7 @@ class AndroidDto(KaitaiStruct):
         def body(self):
             """DTB/DTBO file."""
             if hasattr(self, '_m_body'):
-                return self._m_body
+                return self._m_body if hasattr(self, '_m_body') else None
 
             io = self._root._io
             _pos = io.pos()
@@ -131,7 +132,7 @@ class AndroidDto(KaitaiStruct):
             self._m_body = io.read_bytes(self.dt_size)
             self._debug['_m_body']['end'] = io.pos()
             io.seek(_pos)
-            return getattr(self, '_m_body', None)
+            return self._m_body if hasattr(self, '_m_body') else None
 
 
 

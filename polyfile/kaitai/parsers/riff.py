@@ -1,12 +1,13 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
+from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 from enum import Enum
 import collections
 
 
-if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
+if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class Riff(KaitaiStruct):
@@ -60,23 +61,23 @@ class Riff(KaitaiStruct):
         @property
         def parent_chunk_data_ofs(self):
             if hasattr(self, '_m_parent_chunk_data_ofs'):
-                return self._m_parent_chunk_data_ofs
+                return self._m_parent_chunk_data_ofs if hasattr(self, '_m_parent_chunk_data_ofs') else None
 
             self._m_parent_chunk_data_ofs = self._io.pos()
-            return getattr(self, '_m_parent_chunk_data_ofs', None)
+            return self._m_parent_chunk_data_ofs if hasattr(self, '_m_parent_chunk_data_ofs') else None
 
         @property
         def form_type(self):
             if hasattr(self, '_m_form_type'):
-                return self._m_form_type
+                return self._m_form_type if hasattr(self, '_m_form_type') else None
 
             self._m_form_type = KaitaiStream.resolve_enum(Riff.Fourcc, self.parent_chunk_data.form_type)
-            return getattr(self, '_m_form_type', None)
+            return self._m_form_type if hasattr(self, '_m_form_type') else None
 
         @property
         def form_type_readable(self):
             if hasattr(self, '_m_form_type_readable'):
-                return self._m_form_type_readable
+                return self._m_form_type_readable if hasattr(self, '_m_form_type_readable') else None
 
             _pos = self._io.pos()
             self._io.seek(self.parent_chunk_data_ofs)
@@ -84,12 +85,12 @@ class Riff(KaitaiStruct):
             self._m_form_type_readable = (self._io.read_bytes(4)).decode(u"ASCII")
             self._debug['_m_form_type_readable']['end'] = self._io.pos()
             self._io.seek(_pos)
-            return getattr(self, '_m_form_type_readable', None)
+            return self._m_form_type_readable if hasattr(self, '_m_form_type_readable') else None
 
         @property
         def subchunks(self):
             if hasattr(self, '_m_subchunks'):
-                return self._m_subchunks
+                return self._m_subchunks if hasattr(self, '_m_subchunks') else None
 
             io = self.parent_chunk_data.subchunks_slot._io
             _pos = io.pos()
@@ -123,7 +124,7 @@ class Riff(KaitaiStruct):
 
             self._debug['_m_subchunks']['end'] = io.pos()
             io.seek(_pos)
-            return getattr(self, '_m_subchunks', None)
+            return self._m_subchunks if hasattr(self, '_m_subchunks') else None
 
 
     class Chunk(KaitaiStruct):
@@ -226,7 +227,7 @@ class Riff(KaitaiStruct):
         @property
         def chunk_data(self):
             if hasattr(self, '_m_chunk_data'):
-                return self._m_chunk_data
+                return self._m_chunk_data if hasattr(self, '_m_chunk_data') else None
 
             io = self.chunk.data_slot._io
             _pos = io.pos()
@@ -237,22 +238,22 @@ class Riff(KaitaiStruct):
                 self._m_chunk_data = (io.read_bytes_term(0, False, True, True)).decode(u"UTF-8")
             self._debug['_m_chunk_data']['end'] = io.pos()
             io.seek(_pos)
-            return getattr(self, '_m_chunk_data', None)
+            return self._m_chunk_data if hasattr(self, '_m_chunk_data') else None
 
         @property
         def is_unregistered_tag(self):
             """Check if chunk_id contains lowercase characters ([a-z], ASCII 97 = a, ASCII 122 = z).
             """
             if hasattr(self, '_m_is_unregistered_tag'):
-                return self._m_is_unregistered_tag
+                return self._m_is_unregistered_tag if hasattr(self, '_m_is_unregistered_tag') else None
 
             self._m_is_unregistered_tag =  (( ((KaitaiStream.byte_array_index(self.id_chars, 0) >= 97) and (KaitaiStream.byte_array_index(self.id_chars, 0) <= 122)) ) or ( ((KaitaiStream.byte_array_index(self.id_chars, 1) >= 97) and (KaitaiStream.byte_array_index(self.id_chars, 1) <= 122)) ) or ( ((KaitaiStream.byte_array_index(self.id_chars, 2) >= 97) and (KaitaiStream.byte_array_index(self.id_chars, 2) <= 122)) ) or ( ((KaitaiStream.byte_array_index(self.id_chars, 3) >= 97) and (KaitaiStream.byte_array_index(self.id_chars, 3) <= 122)) )) 
-            return getattr(self, '_m_is_unregistered_tag', None)
+            return self._m_is_unregistered_tag if hasattr(self, '_m_is_unregistered_tag') else None
 
         @property
         def id_chars(self):
             if hasattr(self, '_m_id_chars'):
-                return self._m_id_chars
+                return self._m_id_chars if hasattr(self, '_m_id_chars') else None
 
             _pos = self._io.pos()
             self._io.seek(self.chunk_ofs)
@@ -260,23 +261,23 @@ class Riff(KaitaiStruct):
             self._m_id_chars = self._io.read_bytes(4)
             self._debug['_m_id_chars']['end'] = self._io.pos()
             self._io.seek(_pos)
-            return getattr(self, '_m_id_chars', None)
+            return self._m_id_chars if hasattr(self, '_m_id_chars') else None
 
         @property
         def chunk_id_readable(self):
             if hasattr(self, '_m_chunk_id_readable'):
-                return self._m_chunk_id_readable
+                return self._m_chunk_id_readable if hasattr(self, '_m_chunk_id_readable') else None
 
             self._m_chunk_id_readable = (self.id_chars).decode(u"ASCII")
-            return getattr(self, '_m_chunk_id_readable', None)
+            return self._m_chunk_id_readable if hasattr(self, '_m_chunk_id_readable') else None
 
         @property
         def chunk_ofs(self):
             if hasattr(self, '_m_chunk_ofs'):
-                return self._m_chunk_ofs
+                return self._m_chunk_ofs if hasattr(self, '_m_chunk_ofs') else None
 
             self._m_chunk_ofs = self._io.pos()
-            return getattr(self, '_m_chunk_ofs', None)
+            return self._m_chunk_ofs if hasattr(self, '_m_chunk_ofs') else None
 
 
     class ChunkType(KaitaiStruct):
@@ -301,23 +302,23 @@ class Riff(KaitaiStruct):
         @property
         def chunk_ofs(self):
             if hasattr(self, '_m_chunk_ofs'):
-                return self._m_chunk_ofs
+                return self._m_chunk_ofs if hasattr(self, '_m_chunk_ofs') else None
 
             self._m_chunk_ofs = self._io.pos()
-            return getattr(self, '_m_chunk_ofs', None)
+            return self._m_chunk_ofs if hasattr(self, '_m_chunk_ofs') else None
 
         @property
         def chunk_id(self):
             if hasattr(self, '_m_chunk_id'):
-                return self._m_chunk_id
+                return self._m_chunk_id if hasattr(self, '_m_chunk_id') else None
 
             self._m_chunk_id = KaitaiStream.resolve_enum(Riff.Fourcc, self.chunk.id)
-            return getattr(self, '_m_chunk_id', None)
+            return self._m_chunk_id if hasattr(self, '_m_chunk_id') else None
 
         @property
         def chunk_id_readable(self):
             if hasattr(self, '_m_chunk_id_readable'):
-                return self._m_chunk_id_readable
+                return self._m_chunk_id_readable if hasattr(self, '_m_chunk_id_readable') else None
 
             _pos = self._io.pos()
             self._io.seek(self.chunk_ofs)
@@ -325,12 +326,12 @@ class Riff(KaitaiStruct):
             self._m_chunk_id_readable = (self._io.read_bytes(4)).decode(u"ASCII")
             self._debug['_m_chunk_id_readable']['end'] = self._io.pos()
             self._io.seek(_pos)
-            return getattr(self, '_m_chunk_id_readable', None)
+            return self._m_chunk_id_readable if hasattr(self, '_m_chunk_id_readable') else None
 
         @property
         def chunk_data(self):
             if hasattr(self, '_m_chunk_data'):
-                return self._m_chunk_data
+                return self._m_chunk_data if hasattr(self, '_m_chunk_data') else None
 
             io = self.chunk.data_slot._io
             _pos = io.pos()
@@ -342,29 +343,29 @@ class Riff(KaitaiStruct):
                 self._m_chunk_data._read()
             self._debug['_m_chunk_data']['end'] = io.pos()
             io.seek(_pos)
-            return getattr(self, '_m_chunk_data', None)
+            return self._m_chunk_data if hasattr(self, '_m_chunk_data') else None
 
 
     @property
     def chunk_id(self):
         if hasattr(self, '_m_chunk_id'):
-            return self._m_chunk_id
+            return self._m_chunk_id if hasattr(self, '_m_chunk_id') else None
 
         self._m_chunk_id = KaitaiStream.resolve_enum(Riff.Fourcc, self.chunk.id)
-        return getattr(self, '_m_chunk_id', None)
+        return self._m_chunk_id if hasattr(self, '_m_chunk_id') else None
 
     @property
     def is_riff_chunk(self):
         if hasattr(self, '_m_is_riff_chunk'):
-            return self._m_is_riff_chunk
+            return self._m_is_riff_chunk if hasattr(self, '_m_is_riff_chunk') else None
 
         self._m_is_riff_chunk = self.chunk_id == Riff.Fourcc.riff
-        return getattr(self, '_m_is_riff_chunk', None)
+        return self._m_is_riff_chunk if hasattr(self, '_m_is_riff_chunk') else None
 
     @property
     def parent_chunk_data(self):
         if hasattr(self, '_m_parent_chunk_data'):
-            return self._m_parent_chunk_data
+            return self._m_parent_chunk_data if hasattr(self, '_m_parent_chunk_data') else None
 
         if self.is_riff_chunk:
             io = self.chunk.data_slot._io
@@ -376,12 +377,12 @@ class Riff(KaitaiStruct):
             self._debug['_m_parent_chunk_data']['end'] = io.pos()
             io.seek(_pos)
 
-        return getattr(self, '_m_parent_chunk_data', None)
+        return self._m_parent_chunk_data if hasattr(self, '_m_parent_chunk_data') else None
 
     @property
     def subchunks(self):
         if hasattr(self, '_m_subchunks'):
-            return self._m_subchunks
+            return self._m_subchunks if hasattr(self, '_m_subchunks') else None
 
         if self.is_riff_chunk:
             io = self.parent_chunk_data.subchunks_slot._io
@@ -403,6 +404,6 @@ class Riff(KaitaiStruct):
             self._debug['_m_subchunks']['end'] = io.pos()
             io.seek(_pos)
 
-        return getattr(self, '_m_subchunks', None)
+        return self._m_subchunks if hasattr(self, '_m_subchunks') else None
 
 

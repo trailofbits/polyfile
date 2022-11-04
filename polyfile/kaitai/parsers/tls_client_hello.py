@@ -1,11 +1,12 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
+from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
 
 
-if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
+if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class TlsClientHello(KaitaiStruct):
@@ -139,12 +140,12 @@ class TlsClientHello(KaitaiStruct):
             self.len = self._io.read_u2be()
             self._debug['len']['end'] = self._io.pos()
             self._debug['cipher_suites']['start'] = self._io.pos()
-            self.cipher_suites = []
+            self.cipher_suites = [None] * (self.len // 2)
             for i in range(self.len // 2):
                 if not 'arr' in self._debug['cipher_suites']:
                     self._debug['cipher_suites']['arr'] = []
                 self._debug['cipher_suites']['arr'].append({'start': self._io.pos()})
-                self.cipher_suites.append(self._io.read_u2be())
+                self.cipher_suites[i] = self._io.read_u2be()
                 self._debug['cipher_suites']['arr'][i]['end'] = self._io.pos()
 
             self._debug['cipher_suites']['end'] = self._io.pos()

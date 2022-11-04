@@ -1,12 +1,13 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
+from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 from enum import Enum
 import collections
 
 
-if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
+if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class RenderwareBinaryStream(KaitaiStruct):
@@ -302,14 +303,14 @@ class RenderwareBinaryStream(KaitaiStruct):
                 self._debug['geometry']['end'] = self._io.pos()
 
             self._debug['morph_targets']['start'] = self._io.pos()
-            self.morph_targets = []
+            self.morph_targets = [None] * (self.num_morph_targets)
             for i in range(self.num_morph_targets):
                 if not 'arr' in self._debug['morph_targets']:
                     self._debug['morph_targets']['arr'] = []
                 self._debug['morph_targets']['arr'].append({'start': self._io.pos()})
                 _t_morph_targets = RenderwareBinaryStream.MorphTarget(self._io, self, self._root)
                 _t_morph_targets._read()
-                self.morph_targets.append(_t_morph_targets)
+                self.morph_targets[i] = _t_morph_targets
                 self._debug['morph_targets']['arr'][i]['end'] = self._io.pos()
 
             self._debug['morph_targets']['end'] = self._io.pos()
@@ -317,34 +318,34 @@ class RenderwareBinaryStream(KaitaiStruct):
         @property
         def is_textured(self):
             if hasattr(self, '_m_is_textured'):
-                return self._m_is_textured
+                return self._m_is_textured if hasattr(self, '_m_is_textured') else None
 
             self._m_is_textured = (self.format & 4) != 0
-            return getattr(self, '_m_is_textured', None)
+            return self._m_is_textured if hasattr(self, '_m_is_textured') else None
 
         @property
         def is_prelit(self):
             if hasattr(self, '_m_is_prelit'):
-                return self._m_is_prelit
+                return self._m_is_prelit if hasattr(self, '_m_is_prelit') else None
 
             self._m_is_prelit = (self.format & 8) != 0
-            return getattr(self, '_m_is_prelit', None)
+            return self._m_is_prelit if hasattr(self, '_m_is_prelit') else None
 
         @property
         def is_textured2(self):
             if hasattr(self, '_m_is_textured2'):
-                return self._m_is_textured2
+                return self._m_is_textured2 if hasattr(self, '_m_is_textured2') else None
 
             self._m_is_textured2 = (self.format & 128) != 0
-            return getattr(self, '_m_is_textured2', None)
+            return self._m_is_textured2 if hasattr(self, '_m_is_textured2') else None
 
         @property
         def is_native(self):
             if hasattr(self, '_m_is_native'):
-                return self._m_is_native
+                return self._m_is_native if hasattr(self, '_m_is_native') else None
 
             self._m_is_native = (self.format & 16777216) != 0
-            return getattr(self, '_m_is_native', None)
+            return self._m_is_native if hasattr(self, '_m_is_native') else None
 
 
     class GeometryNonNative(KaitaiStruct):
@@ -358,41 +359,41 @@ class RenderwareBinaryStream(KaitaiStruct):
         def _read(self):
             if self._parent.is_prelit:
                 self._debug['prelit_colors']['start'] = self._io.pos()
-                self.prelit_colors = []
+                self.prelit_colors = [None] * (self._parent.num_vertices)
                 for i in range(self._parent.num_vertices):
                     if not 'arr' in self._debug['prelit_colors']:
                         self._debug['prelit_colors']['arr'] = []
                     self._debug['prelit_colors']['arr'].append({'start': self._io.pos()})
                     _t_prelit_colors = RenderwareBinaryStream.Rgba(self._io, self, self._root)
                     _t_prelit_colors._read()
-                    self.prelit_colors.append(_t_prelit_colors)
+                    self.prelit_colors[i] = _t_prelit_colors
                     self._debug['prelit_colors']['arr'][i]['end'] = self._io.pos()
 
                 self._debug['prelit_colors']['end'] = self._io.pos()
 
             if  ((self._parent.is_textured) or (self._parent.is_textured2)) :
                 self._debug['tex_coords']['start'] = self._io.pos()
-                self.tex_coords = []
+                self.tex_coords = [None] * (self._parent.num_vertices)
                 for i in range(self._parent.num_vertices):
                     if not 'arr' in self._debug['tex_coords']:
                         self._debug['tex_coords']['arr'] = []
                     self._debug['tex_coords']['arr'].append({'start': self._io.pos()})
                     _t_tex_coords = RenderwareBinaryStream.TexCoord(self._io, self, self._root)
                     _t_tex_coords._read()
-                    self.tex_coords.append(_t_tex_coords)
+                    self.tex_coords[i] = _t_tex_coords
                     self._debug['tex_coords']['arr'][i]['end'] = self._io.pos()
 
                 self._debug['tex_coords']['end'] = self._io.pos()
 
             self._debug['triangles']['start'] = self._io.pos()
-            self.triangles = []
+            self.triangles = [None] * (self._parent.num_triangles)
             for i in range(self._parent.num_triangles):
                 if not 'arr' in self._debug['triangles']:
                     self._debug['triangles']['arr'] = []
                 self._debug['triangles']['arr'].append({'start': self._io.pos()})
                 _t_triangles = RenderwareBinaryStream.Triangle(self._io, self, self._root)
                 _t_triangles._read()
-                self.triangles.append(_t_triangles)
+                self.triangles[i] = _t_triangles
                 self._debug['triangles']['arr'][i]['end'] = self._io.pos()
 
             self._debug['triangles']['end'] = self._io.pos()
@@ -483,28 +484,28 @@ class RenderwareBinaryStream(KaitaiStruct):
             self._debug['has_normals']['end'] = self._io.pos()
             if self.has_vertices != 0:
                 self._debug['vertices']['start'] = self._io.pos()
-                self.vertices = []
+                self.vertices = [None] * (self._parent.num_vertices)
                 for i in range(self._parent.num_vertices):
                     if not 'arr' in self._debug['vertices']:
                         self._debug['vertices']['arr'] = []
                     self._debug['vertices']['arr'].append({'start': self._io.pos()})
                     _t_vertices = RenderwareBinaryStream.Vector3d(self._io, self, self._root)
                     _t_vertices._read()
-                    self.vertices.append(_t_vertices)
+                    self.vertices[i] = _t_vertices
                     self._debug['vertices']['arr'][i]['end'] = self._io.pos()
 
                 self._debug['vertices']['end'] = self._io.pos()
 
             if self.has_normals != 0:
                 self._debug['normals']['start'] = self._io.pos()
-                self.normals = []
+                self.normals = [None] * (self._parent.num_vertices)
                 for i in range(self._parent.num_vertices):
                     if not 'arr' in self._debug['normals']:
                         self._debug['normals']['arr'] = []
                     self._debug['normals']['arr'].append({'start': self._io.pos()})
                     _t_normals = RenderwareBinaryStream.Vector3d(self._io, self, self._root)
                     _t_normals._read()
-                    self.normals.append(_t_normals)
+                    self.normals[i] = _t_normals
                     self._debug['normals']['arr'][i]['end'] = self._io.pos()
 
                 self._debug['normals']['end'] = self._io.pos()
@@ -552,14 +553,14 @@ class RenderwareBinaryStream(KaitaiStruct):
             self.num_frames = self._io.read_u4le()
             self._debug['num_frames']['end'] = self._io.pos()
             self._debug['frames']['start'] = self._io.pos()
-            self.frames = []
+            self.frames = [None] * (self.num_frames)
             for i in range(self.num_frames):
                 if not 'arr' in self._debug['frames']:
                     self._debug['frames']['arr'] = []
                 self._debug['frames']['arr'].append({'start': self._io.pos()})
                 _t_frames = RenderwareBinaryStream.Frame(self._io, self, self._root)
                 _t_frames._read()
-                self.frames.append(_t_frames)
+                self.frames[i] = _t_frames
                 self._debug['frames']['arr'][i]['end'] = self._io.pos()
 
             self._debug['frames']['end'] = self._io.pos()
@@ -579,14 +580,14 @@ class RenderwareBinaryStream(KaitaiStruct):
 
         def _read(self):
             self._debug['entries']['start'] = self._io.pos()
-            self.entries = []
+            self.entries = [None] * (3)
             for i in range(3):
                 if not 'arr' in self._debug['entries']:
                     self._debug['entries']['arr'] = []
                 self._debug['entries']['arr'].append({'start': self._io.pos()})
                 _t_entries = RenderwareBinaryStream.Vector3d(self._io, self, self._root)
                 _t_entries._read()
-                self.entries.append(_t_entries)
+                self.entries[i] = _t_entries
                 self._debug['entries']['arr'][i]['end'] = self._io.pos()
 
             self._debug['entries']['end'] = self._io.pos()
@@ -691,10 +692,10 @@ class RenderwareBinaryStream(KaitaiStruct):
         @property
         def version(self):
             if hasattr(self, '_m_version'):
-                return self._m_version
+                return self._m_version if hasattr(self, '_m_version') else None
 
             self._m_version = (((((self.library_id_stamp >> 14) & 261888) + 196608) | ((self.library_id_stamp >> 16) & 63)) if (self.library_id_stamp & 4294901760) != 0 else (self.library_id_stamp << 8))
-            return getattr(self, '_m_version', None)
+            return self._m_version if hasattr(self, '_m_version') else None
 
 
     class Triangle(KaitaiStruct):
@@ -783,9 +784,9 @@ class RenderwareBinaryStream(KaitaiStruct):
     @property
     def version(self):
         if hasattr(self, '_m_version'):
-            return self._m_version
+            return self._m_version if hasattr(self, '_m_version') else None
 
         self._m_version = (((((self.library_id_stamp >> 14) & 261888) + 196608) | ((self.library_id_stamp >> 16) & 63)) if (self.library_id_stamp & 4294901760) != 0 else (self.library_id_stamp << 8))
-        return getattr(self, '_m_version', None)
+        return self._m_version if hasattr(self, '_m_version') else None
 
 

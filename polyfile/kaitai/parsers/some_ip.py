@@ -1,12 +1,13 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
+from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
 from enum import Enum
 
 
-if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
+if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 from polyfile.kaitai.parsers import some_ip_sd
@@ -143,7 +144,7 @@ class SomeIp(KaitaiStruct):
             def value(self):
                 """The value provides the undissected Message ID."""
                 if hasattr(self, '_m_value'):
-                    return self._m_value
+                    return self._m_value if hasattr(self, '_m_value') else None
 
                 _pos = self._io.pos()
                 self._io.seek(0)
@@ -151,7 +152,7 @@ class SomeIp(KaitaiStruct):
                 self._m_value = self._io.read_u4be()
                 self._debug['_m_value']['end'] = self._io.pos()
                 self._io.seek(_pos)
-                return getattr(self, '_m_value', None)
+                return self._m_value if hasattr(self, '_m_value') else None
 
 
         class RequestId(KaitaiStruct):
@@ -180,7 +181,7 @@ class SomeIp(KaitaiStruct):
             def value(self):
                 """The value provides the undissected Request ID."""
                 if hasattr(self, '_m_value'):
-                    return self._m_value
+                    return self._m_value if hasattr(self, '_m_value') else None
 
                 _pos = self._io.pos()
                 self._io.seek(0)
@@ -188,7 +189,7 @@ class SomeIp(KaitaiStruct):
                 self._m_value = self._io.read_u4be()
                 self._debug['_m_value']['end'] = self._io.pos()
                 self._io.seek(_pos)
-                return getattr(self, '_m_value', None)
+                return self._m_value if hasattr(self, '_m_value') else None
 
 
         @property
@@ -199,10 +200,10 @@ class SomeIp(KaitaiStruct):
                AUTOSAR_PRS_SOMEIPServiceDiscoveryProtocol.pdf - section 4.1.2.1 General Requirements
             """
             if hasattr(self, '_m_is_valid_service_discovery'):
-                return self._m_is_valid_service_discovery
+                return self._m_is_valid_service_discovery if hasattr(self, '_m_is_valid_service_discovery') else None
 
             self._m_is_valid_service_discovery =  ((self.message_id.value == 4294934784) and (self.protocol_version == 1) and (self.interface_version == 1) and (self.message_type == SomeIp.Header.MessageTypeEnum.notification) and (self.return_code == SomeIp.Header.ReturnCodeEnum.ok)) 
-            return getattr(self, '_m_is_valid_service_discovery', None)
+            return self._m_is_valid_service_discovery if hasattr(self, '_m_is_valid_service_discovery') else None
 
 
 

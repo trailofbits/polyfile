@@ -1,11 +1,12 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
+from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
 
 
-if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
+if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class SshPublicKey(KaitaiStruct):
@@ -76,10 +77,10 @@ class SshPublicKey(KaitaiStruct):
         def key_length(self):
             """Key length in bits."""
             if hasattr(self, '_m_key_length'):
-                return self._m_key_length
+                return self._m_key_length if hasattr(self, '_m_key_length') else None
 
             self._m_key_length = self.rsa_n.length_in_bits
-            return getattr(self, '_m_key_length', None)
+            return self._m_key_length if hasattr(self, '_m_key_length') else None
 
 
     class KeyEd25519(KaitaiStruct):
@@ -242,10 +243,10 @@ class SshPublicKey(KaitaiStruct):
             `BN_num_bits` function.
             """
             if hasattr(self, '_m_length_in_bits'):
-                return self._m_length_in_bits
+                return self._m_length_in_bits if hasattr(self, '_m_length_in_bits') else None
 
             self._m_length_in_bits = ((self.len - 1) * 8)
-            return getattr(self, '_m_length_in_bits', None)
+            return self._m_length_in_bits if hasattr(self, '_m_length_in_bits') else None
 
 
 

@@ -1,12 +1,13 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
+from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
 from enum import Enum
 
 
-if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
+if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class Luks(KaitaiStruct):
@@ -76,14 +77,14 @@ class Luks(KaitaiStruct):
             self.uuid = (self._io.read_bytes(40)).decode(u"ASCII")
             self._debug['uuid']['end'] = self._io.pos()
             self._debug['key_slots']['start'] = self._io.pos()
-            self.key_slots = []
+            self.key_slots = [None] * (8)
             for i in range(8):
                 if not 'arr' in self._debug['key_slots']:
                     self._debug['key_slots']['arr'] = []
                 self._debug['key_slots']['arr'].append({'start': self._io.pos()})
                 _t_key_slots = Luks.PartitionHeader.KeySlot(self._io, self, self._root)
                 _t_key_slots._read()
-                self.key_slots.append(_t_key_slots)
+                self.key_slots[i] = _t_key_slots
                 self._debug['key_slots']['arr'][i]['end'] = self._io.pos()
 
             self._debug['key_slots']['end'] = self._io.pos()
@@ -120,7 +121,7 @@ class Luks(KaitaiStruct):
             @property
             def key_material(self):
                 if hasattr(self, '_m_key_material'):
-                    return self._m_key_material
+                    return self._m_key_material if hasattr(self, '_m_key_material') else None
 
                 _pos = self._io.pos()
                 self._io.seek((self.start_sector_of_key_material * 512))
@@ -128,14 +129,14 @@ class Luks(KaitaiStruct):
                 self._m_key_material = self._io.read_bytes((self._parent.number_of_key_bytes * self.number_of_anti_forensic_stripes))
                 self._debug['_m_key_material']['end'] = self._io.pos()
                 self._io.seek(_pos)
-                return getattr(self, '_m_key_material', None)
+                return self._m_key_material if hasattr(self, '_m_key_material') else None
 
 
 
     @property
     def payload(self):
         if hasattr(self, '_m_payload'):
-            return self._m_payload
+            return self._m_payload if hasattr(self, '_m_payload') else None
 
         _pos = self._io.pos()
         self._io.seek((self.partition_header.payload_offset * 512))
@@ -143,6 +144,6 @@ class Luks(KaitaiStruct):
         self._m_payload = self._io.read_bytes_full()
         self._debug['_m_payload']['end'] = self._io.pos()
         self._io.seek(_pos)
-        return getattr(self, '_m_payload', None)
+        return self._m_payload if hasattr(self, '_m_payload') else None
 
 

@@ -1,12 +1,13 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
+from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 from enum import Enum
 import collections
 
 
-if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
+if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class Warcraft2Pud(KaitaiStruct):
@@ -411,12 +412,12 @@ class Warcraft2Pud(KaitaiStruct):
         @property
         def resource(self):
             if hasattr(self, '_m_resource'):
-                return self._m_resource
+                return self._m_resource if hasattr(self, '_m_resource') else None
 
             if  ((self.u_type == Warcraft2Pud.UnitType.gold_mine) or (self.u_type == Warcraft2Pud.UnitType.human_oil_well) or (self.u_type == Warcraft2Pud.UnitType.orc_oil_well) or (self.u_type == Warcraft2Pud.UnitType.oil_patch)) :
                 self._m_resource = (self.options * 2500)
 
-            return getattr(self, '_m_resource', None)
+            return self._m_resource if hasattr(self, '_m_resource') else None
 
 
 

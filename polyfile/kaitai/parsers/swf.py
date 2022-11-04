@@ -1,5 +1,6 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
+from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 from enum import Enum
@@ -7,7 +8,7 @@ import collections
 import zlib
 
 
-if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
+if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class Swf(KaitaiStruct):
@@ -191,18 +192,18 @@ class Swf(KaitaiStruct):
         @property
         def num_bits(self):
             if hasattr(self, '_m_num_bits'):
-                return self._m_num_bits
+                return self._m_num_bits if hasattr(self, '_m_num_bits') else None
 
             self._m_num_bits = (self.b1 >> 3)
-            return getattr(self, '_m_num_bits', None)
+            return self._m_num_bits if hasattr(self, '_m_num_bits') else None
 
         @property
         def num_bytes(self):
             if hasattr(self, '_m_num_bytes'):
-                return self._m_num_bytes
+                return self._m_num_bytes if hasattr(self, '_m_num_bytes') else None
 
             self._m_num_bytes = (((self.num_bits * 4) - 3) + 7) // 8
-            return getattr(self, '_m_num_bytes', None)
+            return self._m_num_bytes if hasattr(self, '_m_num_bytes') else None
 
 
     class Tag(KaitaiStruct):
@@ -268,14 +269,14 @@ class Swf(KaitaiStruct):
             self.num_symbols = self._io.read_u2le()
             self._debug['num_symbols']['end'] = self._io.pos()
             self._debug['symbols']['start'] = self._io.pos()
-            self.symbols = []
+            self.symbols = [None] * (self.num_symbols)
             for i in range(self.num_symbols):
                 if not 'arr' in self._debug['symbols']:
                     self._debug['symbols']['arr'] = []
                 self._debug['symbols']['arr'].append({'start': self._io.pos()})
                 _t_symbols = Swf.SymbolClassBody.Symbol(self._io, self, self._root)
                 _t_symbols._read()
-                self.symbols.append(_t_symbols)
+                self.symbols[i] = _t_symbols
                 self._debug['symbols']['arr'][i]['end'] = self._io.pos()
 
             self._debug['symbols']['end'] = self._io.pos()
@@ -363,26 +364,26 @@ class Swf(KaitaiStruct):
         @property
         def tag_type(self):
             if hasattr(self, '_m_tag_type'):
-                return self._m_tag_type
+                return self._m_tag_type if hasattr(self, '_m_tag_type') else None
 
             self._m_tag_type = KaitaiStream.resolve_enum(Swf.TagType, (self.tag_code_and_length >> 6))
-            return getattr(self, '_m_tag_type', None)
+            return self._m_tag_type if hasattr(self, '_m_tag_type') else None
 
         @property
         def small_len(self):
             if hasattr(self, '_m_small_len'):
-                return self._m_small_len
+                return self._m_small_len if hasattr(self, '_m_small_len') else None
 
             self._m_small_len = (self.tag_code_and_length & 63)
-            return getattr(self, '_m_small_len', None)
+            return self._m_small_len if hasattr(self, '_m_small_len') else None
 
         @property
         def len(self):
             if hasattr(self, '_m_len'):
-                return self._m_len
+                return self._m_len if hasattr(self, '_m_len') else None
 
             self._m_len = (self.big_len if self.small_len == 63 else self.small_len)
-            return getattr(self, '_m_len', None)
+            return self._m_len if hasattr(self, '_m_len') else None
 
 
     class ScriptLimitsBody(KaitaiStruct):

@@ -1,12 +1,13 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
+from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
 from enum import Enum
 
 
-if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
+if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class WindowsEvtLog(KaitaiStruct):
@@ -244,7 +245,7 @@ class WindowsEvtLog(KaitaiStruct):
         @property
         def user_sid(self):
             if hasattr(self, '_m_user_sid'):
-                return self._m_user_sid
+                return self._m_user_sid if hasattr(self, '_m_user_sid') else None
 
             _pos = self._io.pos()
             self._io.seek((self.ofs_user_sid - 8))
@@ -252,12 +253,12 @@ class WindowsEvtLog(KaitaiStruct):
             self._m_user_sid = self._io.read_bytes(self.len_user_sid)
             self._debug['_m_user_sid']['end'] = self._io.pos()
             self._io.seek(_pos)
-            return getattr(self, '_m_user_sid', None)
+            return self._m_user_sid if hasattr(self, '_m_user_sid') else None
 
         @property
         def data(self):
             if hasattr(self, '_m_data'):
-                return self._m_data
+                return self._m_data if hasattr(self, '_m_data') else None
 
             _pos = self._io.pos()
             self._io.seek((self.ofs_data - 8))
@@ -265,7 +266,7 @@ class WindowsEvtLog(KaitaiStruct):
             self._m_data = self._io.read_bytes(self.len_data)
             self._debug['_m_data']['end'] = self._io.pos()
             self._io.seek(_pos)
-            return getattr(self, '_m_data', None)
+            return self._m_data if hasattr(self, '_m_data') else None
 
 
     class CursorRecordBody(KaitaiStruct):

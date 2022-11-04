@@ -1,11 +1,12 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
+from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
 
 
-if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
+if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class SaintsRow2VppPc(KaitaiStruct):
@@ -114,7 +115,7 @@ class SaintsRow2VppPc(KaitaiStruct):
             @property
             def filename(self):
                 if hasattr(self, '_m_filename'):
-                    return self._m_filename
+                    return self._m_filename if hasattr(self, '_m_filename') else None
 
                 io = self._root.filenames._io
                 _pos = io.pos()
@@ -123,12 +124,12 @@ class SaintsRow2VppPc(KaitaiStruct):
                 self._m_filename = (io.read_bytes_term(0, False, True, True)).decode(u"UTF-8")
                 self._debug['_m_filename']['end'] = io.pos()
                 io.seek(_pos)
-                return getattr(self, '_m_filename', None)
+                return self._m_filename if hasattr(self, '_m_filename') else None
 
             @property
             def ext(self):
                 if hasattr(self, '_m_ext'):
-                    return self._m_ext
+                    return self._m_ext if hasattr(self, '_m_ext') else None
 
                 io = self._root.extensions._io
                 _pos = io.pos()
@@ -137,12 +138,12 @@ class SaintsRow2VppPc(KaitaiStruct):
                 self._m_ext = (io.read_bytes_term(0, False, True, True)).decode(u"UTF-8")
                 self._debug['_m_ext']['end'] = io.pos()
                 io.seek(_pos)
-                return getattr(self, '_m_ext', None)
+                return self._m_ext if hasattr(self, '_m_ext') else None
 
             @property
             def body(self):
                 if hasattr(self, '_m_body'):
-                    return self._m_body
+                    return self._m_body if hasattr(self, '_m_body') else None
 
                 io = self._root._io
                 _pos = io.pos()
@@ -151,7 +152,7 @@ class SaintsRow2VppPc(KaitaiStruct):
                 self._m_body = io.read_bytes(self.len_body)
                 self._debug['_m_body']['end'] = io.pos()
                 io.seek(_pos)
-                return getattr(self, '_m_body', None)
+                return self._m_body if hasattr(self, '_m_body') else None
 
 
 
@@ -181,7 +182,7 @@ class SaintsRow2VppPc(KaitaiStruct):
     @property
     def filenames(self):
         if hasattr(self, '_m_filenames'):
-            return self._m_filenames
+            return self._m_filenames if hasattr(self, '_m_filenames') else None
 
         _pos = self._io.pos()
         self._io.seek(self.ofs_filenames)
@@ -192,20 +193,20 @@ class SaintsRow2VppPc(KaitaiStruct):
         self._m_filenames._read()
         self._debug['_m_filenames']['end'] = self._io.pos()
         self._io.seek(_pos)
-        return getattr(self, '_m_filenames', None)
+        return self._m_filenames if hasattr(self, '_m_filenames') else None
 
     @property
     def ofs_extensions(self):
         if hasattr(self, '_m_ofs_extensions'):
-            return self._m_ofs_extensions
+            return self._m_ofs_extensions if hasattr(self, '_m_ofs_extensions') else None
 
         self._m_ofs_extensions = (((self.ofs_filenames + self.len_filenames) & 4294965248) + 2048)
-        return getattr(self, '_m_ofs_extensions', None)
+        return self._m_ofs_extensions if hasattr(self, '_m_ofs_extensions') else None
 
     @property
     def files(self):
         if hasattr(self, '_m_files'):
-            return self._m_files
+            return self._m_files if hasattr(self, '_m_files') else None
 
         _pos = self._io.pos()
         self._io.seek(2048)
@@ -216,20 +217,20 @@ class SaintsRow2VppPc(KaitaiStruct):
         self._m_files._read()
         self._debug['_m_files']['end'] = self._io.pos()
         self._io.seek(_pos)
-        return getattr(self, '_m_files', None)
+        return self._m_files if hasattr(self, '_m_files') else None
 
     @property
     def data_start(self):
         if hasattr(self, '_m_data_start'):
-            return self._m_data_start
+            return self._m_data_start if hasattr(self, '_m_data_start') else None
 
         self._m_data_start = (((self.ofs_extensions + self.len_extensions) & 4294965248) + 2048)
-        return getattr(self, '_m_data_start', None)
+        return self._m_data_start if hasattr(self, '_m_data_start') else None
 
     @property
     def extensions(self):
         if hasattr(self, '_m_extensions'):
-            return self._m_extensions
+            return self._m_extensions if hasattr(self, '_m_extensions') else None
 
         _pos = self._io.pos()
         self._io.seek(self.ofs_extensions)
@@ -240,14 +241,14 @@ class SaintsRow2VppPc(KaitaiStruct):
         self._m_extensions._read()
         self._debug['_m_extensions']['end'] = self._io.pos()
         self._io.seek(_pos)
-        return getattr(self, '_m_extensions', None)
+        return self._m_extensions if hasattr(self, '_m_extensions') else None
 
     @property
     def ofs_filenames(self):
         if hasattr(self, '_m_ofs_filenames'):
-            return self._m_ofs_filenames
+            return self._m_ofs_filenames if hasattr(self, '_m_ofs_filenames') else None
 
         self._m_ofs_filenames = (((2048 + self.len_offsets) & 4294965248) + 2048)
-        return getattr(self, '_m_ofs_filenames', None)
+        return self._m_ofs_filenames if hasattr(self, '_m_ofs_filenames') else None
 
 

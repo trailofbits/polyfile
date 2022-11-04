@@ -1,11 +1,12 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
+from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
 
 
-if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
+if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class VlqBase128Le(KaitaiStruct):
@@ -73,45 +74,45 @@ class VlqBase128Le(KaitaiStruct):
         def has_next(self):
             """If true, then we have more bytes to read."""
             if hasattr(self, '_m_has_next'):
-                return self._m_has_next
+                return self._m_has_next if hasattr(self, '_m_has_next') else None
 
             self._m_has_next = (self.b & 128) != 0
-            return getattr(self, '_m_has_next', None)
+            return self._m_has_next if hasattr(self, '_m_has_next') else None
 
         @property
         def value(self):
             """The 7-bit (base128) numeric value chunk of this group."""
             if hasattr(self, '_m_value'):
-                return self._m_value
+                return self._m_value if hasattr(self, '_m_value') else None
 
             self._m_value = (self.b & 127)
-            return getattr(self, '_m_value', None)
+            return self._m_value if hasattr(self, '_m_value') else None
 
 
     @property
     def len(self):
         if hasattr(self, '_m_len'):
-            return self._m_len
+            return self._m_len if hasattr(self, '_m_len') else None
 
         self._m_len = len(self.groups)
-        return getattr(self, '_m_len', None)
+        return self._m_len if hasattr(self, '_m_len') else None
 
     @property
     def value(self):
         """Resulting unsigned value as normal integer."""
         if hasattr(self, '_m_value'):
-            return self._m_value
+            return self._m_value if hasattr(self, '_m_value') else None
 
         self._m_value = (((((((self.groups[0].value + ((self.groups[1].value << 7) if self.len >= 2 else 0)) + ((self.groups[2].value << 14) if self.len >= 3 else 0)) + ((self.groups[3].value << 21) if self.len >= 4 else 0)) + ((self.groups[4].value << 28) if self.len >= 5 else 0)) + ((self.groups[5].value << 35) if self.len >= 6 else 0)) + ((self.groups[6].value << 42) if self.len >= 7 else 0)) + ((self.groups[7].value << 49) if self.len >= 8 else 0))
-        return getattr(self, '_m_value', None)
+        return self._m_value if hasattr(self, '_m_value') else None
 
     @property
     def sign_bit(self):
         if hasattr(self, '_m_sign_bit'):
-            return self._m_sign_bit
+            return self._m_sign_bit if hasattr(self, '_m_sign_bit') else None
 
         self._m_sign_bit = (1 << ((7 * self.len) - 1))
-        return getattr(self, '_m_sign_bit', None)
+        return self._m_sign_bit if hasattr(self, '_m_sign_bit') else None
 
     @property
     def value_signed(self):
@@ -120,9 +121,9 @@ class VlqBase128Le(KaitaiStruct):
            Source - https://graphics.stanford.edu/~seander/bithacks.html#VariableSignExtend
         """
         if hasattr(self, '_m_value_signed'):
-            return self._m_value_signed
+            return self._m_value_signed if hasattr(self, '_m_value_signed') else None
 
         self._m_value_signed = ((self.value ^ self.sign_bit) - self.sign_bit)
-        return getattr(self, '_m_value_signed', None)
+        return self._m_value_signed if hasattr(self, '_m_value_signed') else None
 
 

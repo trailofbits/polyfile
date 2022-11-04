@@ -1,12 +1,13 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
+from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 from enum import Enum
 import collections
 
 
-if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
+if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class Websocket(KaitaiStruct):
@@ -107,10 +108,10 @@ class Websocket(KaitaiStruct):
         @property
         def len_payload(self):
             if hasattr(self, '_m_len_payload'):
-                return self._m_len_payload
+                return self._m_len_payload if hasattr(self, '_m_len_payload') else None
 
             self._m_len_payload = (self.len_payload_primary if self.len_payload_primary <= 125 else (self.len_payload_extended_1 if self.len_payload_primary == 126 else self.len_payload_extended_2))
-            return getattr(self, '_m_len_payload', None)
+            return self._m_len_payload if hasattr(self, '_m_len_payload') else None
 
 
     class InitialFrame(KaitaiStruct):

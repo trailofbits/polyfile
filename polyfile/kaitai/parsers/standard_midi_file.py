@@ -1,12 +1,13 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
+from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
 from enum import Enum
 
 
-if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
+if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 from polyfile.kaitai.parsers import vlq_base128_be
@@ -39,14 +40,14 @@ class StandardMidiFile(KaitaiStruct):
         self.hdr._read()
         self._debug['hdr']['end'] = self._io.pos()
         self._debug['tracks']['start'] = self._io.pos()
-        self.tracks = []
+        self.tracks = [None] * (self.hdr.num_tracks)
         for i in range(self.hdr.num_tracks):
             if not 'arr' in self._debug['tracks']:
                 self._debug['tracks']['arr'] = []
             self._debug['tracks']['arr'].append({'start': self._io.pos()})
             _t_tracks = StandardMidiFile.Track(self._io, self, self._root)
             _t_tracks._read()
-            self.tracks.append(_t_tracks)
+            self.tracks[i] = _t_tracks
             self._debug['tracks']['arr'][i]['end'] = self._io.pos()
 
         self._debug['tracks']['end'] = self._io.pos()
@@ -132,20 +133,20 @@ class StandardMidiFile(KaitaiStruct):
         @property
         def event_type(self):
             if hasattr(self, '_m_event_type'):
-                return self._m_event_type
+                return self._m_event_type if hasattr(self, '_m_event_type') else None
 
             self._m_event_type = (self.event_header & 240)
-            return getattr(self, '_m_event_type', None)
+            return self._m_event_type if hasattr(self, '_m_event_type') else None
 
         @property
         def channel(self):
             if hasattr(self, '_m_channel'):
-                return self._m_channel
+                return self._m_channel if hasattr(self, '_m_channel') else None
 
             if self.event_type != 240:
                 self._m_channel = (self.event_header & 15)
 
-            return getattr(self, '_m_channel', None)
+            return self._m_channel if hasattr(self, '_m_channel') else None
 
 
     class PitchBendEvent(KaitaiStruct):
@@ -167,18 +168,18 @@ class StandardMidiFile(KaitaiStruct):
         @property
         def bend_value(self):
             if hasattr(self, '_m_bend_value'):
-                return self._m_bend_value
+                return self._m_bend_value if hasattr(self, '_m_bend_value') else None
 
             self._m_bend_value = (((self.b2 << 7) + self.b1) - 16384)
-            return getattr(self, '_m_bend_value', None)
+            return self._m_bend_value if hasattr(self, '_m_bend_value') else None
 
         @property
         def adj_bend_value(self):
             if hasattr(self, '_m_adj_bend_value'):
-                return self._m_adj_bend_value
+                return self._m_adj_bend_value if hasattr(self, '_m_adj_bend_value') else None
 
             self._m_adj_bend_value = (self.bend_value - 16384)
-            return getattr(self, '_m_adj_bend_value', None)
+            return self._m_adj_bend_value if hasattr(self, '_m_adj_bend_value') else None
 
 
     class ProgramChangeEvent(KaitaiStruct):

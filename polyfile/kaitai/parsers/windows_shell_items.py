@@ -1,11 +1,12 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
+from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
 
 
-if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
+if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class WindowsShellItems(KaitaiStruct):
@@ -172,18 +173,18 @@ class WindowsShellItems(KaitaiStruct):
         @property
         def is_dir(self):
             if hasattr(self, '_m_is_dir'):
-                return self._m_is_dir
+                return self._m_is_dir if hasattr(self, '_m_is_dir') else None
 
             self._m_is_dir = (self._parent.code & 1) != 0
-            return getattr(self, '_m_is_dir', None)
+            return self._m_is_dir if hasattr(self, '_m_is_dir') else None
 
         @property
         def is_file(self):
             if hasattr(self, '_m_is_file'):
-                return self._m_is_file
+                return self._m_is_file if hasattr(self, '_m_is_file') else None
 
             self._m_is_file = (self._parent.code & 2) != 0
-            return getattr(self, '_m_is_file', None)
+            return self._m_is_file if hasattr(self, '_m_is_file') else None
 
 
 

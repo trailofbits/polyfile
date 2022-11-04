@@ -1,11 +1,12 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
+from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
 
 
-if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
+if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class MifareClassic(KaitaiStruct):
@@ -116,22 +117,22 @@ class MifareClassic(KaitaiStruct):
 
                 def _read(self):
                     self._debug['valuez']['start'] = self._io.pos()
-                    self.valuez = []
+                    self.valuez = [None] * (3)
                     for i in range(3):
                         if not 'arr' in self._debug['valuez']:
                             self._debug['valuez']['arr'] = []
                         self._debug['valuez']['arr'].append({'start': self._io.pos()})
-                        self.valuez.append(self._io.read_u4le())
+                        self.valuez[i] = self._io.read_u4le()
                         self._debug['valuez']['arr'][i]['end'] = self._io.pos()
 
                     self._debug['valuez']['end'] = self._io.pos()
                     self._debug['addrz']['start'] = self._io.pos()
-                    self.addrz = []
+                    self.addrz = [None] * (4)
                     for i in range(4):
                         if not 'arr' in self._debug['addrz']:
                             self._debug['addrz']['arr'] = []
                         self._debug['addrz']['arr'].append({'start': self._io.pos()})
-                        self.addrz.append(self._io.read_u1())
+                        self.addrz[i] = self._io.read_u1()
                         self._debug['addrz']['arr'][i]['end'] = self._io.pos()
 
                     self._debug['addrz']['end'] = self._io.pos()
@@ -139,46 +140,46 @@ class MifareClassic(KaitaiStruct):
                 @property
                 def addr(self):
                     if hasattr(self, '_m_addr'):
-                        return self._m_addr
+                        return self._m_addr if hasattr(self, '_m_addr') else None
 
                     if self.valid:
                         self._m_addr = self.addrz[0]
 
-                    return getattr(self, '_m_addr', None)
+                    return self._m_addr if hasattr(self, '_m_addr') else None
 
                 @property
                 def addr_valid(self):
                     if hasattr(self, '_m_addr_valid'):
-                        return self._m_addr_valid
+                        return self._m_addr_valid if hasattr(self, '_m_addr_valid') else None
 
                     self._m_addr_valid =  ((self.addrz[0] == ~(self.addrz[1])) and (self.addrz[0] == self.addrz[2]) and (self.addrz[1] == self.addrz[3])) 
-                    return getattr(self, '_m_addr_valid', None)
+                    return self._m_addr_valid if hasattr(self, '_m_addr_valid') else None
 
                 @property
                 def valid(self):
                     if hasattr(self, '_m_valid'):
-                        return self._m_valid
+                        return self._m_valid if hasattr(self, '_m_valid') else None
 
                     self._m_valid =  ((self.value_valid) and (self.addr_valid)) 
-                    return getattr(self, '_m_valid', None)
+                    return self._m_valid if hasattr(self, '_m_valid') else None
 
                 @property
                 def value_valid(self):
                     if hasattr(self, '_m_value_valid'):
-                        return self._m_value_valid
+                        return self._m_value_valid if hasattr(self, '_m_value_valid') else None
 
                     self._m_value_valid =  ((self.valuez[0] == ~(self.valuez[1])) and (self.valuez[0] == self.valuez[2])) 
-                    return getattr(self, '_m_value_valid', None)
+                    return self._m_value_valid if hasattr(self, '_m_value_valid') else None
 
                 @property
                 def value(self):
                     if hasattr(self, '_m_value'):
-                        return self._m_value
+                        return self._m_value if hasattr(self, '_m_value') else None
 
                     if self.valid:
                         self._m_value = self.valuez[0]
 
-                    return getattr(self, '_m_value', None)
+                    return self._m_value if hasattr(self, '_m_value') else None
 
 
 
@@ -200,23 +201,23 @@ class MifareClassic(KaitaiStruct):
         @property
         def block_size(self):
             if hasattr(self, '_m_block_size'):
-                return self._m_block_size
+                return self._m_block_size if hasattr(self, '_m_block_size') else None
 
             self._m_block_size = 16
-            return getattr(self, '_m_block_size', None)
+            return self._m_block_size if hasattr(self, '_m_block_size') else None
 
         @property
         def data(self):
             if hasattr(self, '_m_data'):
-                return self._m_data
+                return self._m_data if hasattr(self, '_m_data') else None
 
             self._m_data = self.data_filler.data
-            return getattr(self, '_m_data', None)
+            return self._m_data if hasattr(self, '_m_data') else None
 
         @property
         def blocks(self):
             if hasattr(self, '_m_blocks'):
-                return self._m_blocks
+                return self._m_blocks if hasattr(self, '_m_blocks') else None
 
             io = self.data_filler._io
             _pos = io.pos()
@@ -234,12 +235,12 @@ class MifareClassic(KaitaiStruct):
 
             self._debug['_m_blocks']['end'] = io.pos()
             io.seek(_pos)
-            return getattr(self, '_m_blocks', None)
+            return self._m_blocks if hasattr(self, '_m_blocks') else None
 
         @property
         def values(self):
             if hasattr(self, '_m_values'):
-                return self._m_values
+                return self._m_values if hasattr(self, '_m_values') else None
 
             io = self.data_filler._io
             _pos = io.pos()
@@ -249,7 +250,7 @@ class MifareClassic(KaitaiStruct):
             self._m_values._read()
             self._debug['_m_values']['end'] = io.pos()
             io.seek(_pos)
-            return getattr(self, '_m_values', None)
+            return self._m_values if hasattr(self, '_m_values') else None
 
 
     class Manufacturer(KaitaiStruct):
@@ -315,12 +316,12 @@ class MifareClassic(KaitaiStruct):
 
             def _read(self):
                 self._debug['raw_chunks']['start'] = self._io.pos()
-                self.raw_chunks = []
+                self.raw_chunks = [None] * (self._parent.ac_count_of_chunks)
                 for i in range(self._parent.ac_count_of_chunks):
                     if not 'arr' in self._debug['raw_chunks']:
                         self._debug['raw_chunks']['arr'] = []
                     self._debug['raw_chunks']['arr'].append({'start': self._io.pos()})
-                    self.raw_chunks.append(self._io.read_bits_int_be(4))
+                    self.raw_chunks[i] = self._io.read_bits_int_be(4)
                     self._debug['raw_chunks']['arr'][i]['end'] = self._io.pos()
 
                 self._debug['raw_chunks']['end'] = self._io.pos()
@@ -341,34 +342,34 @@ class MifareClassic(KaitaiStruct):
                 def can_read_key_b(self):
                     """key A is required."""
                     if hasattr(self, '_m_can_read_key_b'):
-                        return self._m_can_read_key_b
+                        return self._m_can_read_key_b if hasattr(self, '_m_can_read_key_b') else None
 
                     self._m_can_read_key_b = self.ac.inv_shift_val <= 2
-                    return getattr(self, '_m_can_read_key_b', None)
+                    return self._m_can_read_key_b if hasattr(self, '_m_can_read_key_b') else None
 
                 @property
                 def can_write_keys(self):
                     if hasattr(self, '_m_can_write_keys'):
-                        return self._m_can_write_keys
+                        return self._m_can_write_keys if hasattr(self, '_m_can_write_keys') else None
 
                     self._m_can_write_keys =  ((((self.ac.inv_shift_val + 1) % 3) != 0) and (self.ac.inv_shift_val < 6)) 
-                    return getattr(self, '_m_can_write_keys', None)
+                    return self._m_can_write_keys if hasattr(self, '_m_can_write_keys') else None
 
                 @property
                 def can_write_access_bits(self):
                     if hasattr(self, '_m_can_write_access_bits'):
-                        return self._m_can_write_access_bits
+                        return self._m_can_write_access_bits if hasattr(self, '_m_can_write_access_bits') else None
 
                     self._m_can_write_access_bits = self.ac.bits[2].b
-                    return getattr(self, '_m_can_write_access_bits', None)
+                    return self._m_can_write_access_bits if hasattr(self, '_m_can_write_access_bits') else None
 
                 @property
                 def key_b_controls_write(self):
                     if hasattr(self, '_m_key_b_controls_write'):
-                        return self._m_key_b_controls_write
+                        return self._m_key_b_controls_write if hasattr(self, '_m_key_b_controls_write') else None
 
                     self._m_key_b_controls_write = not (self.can_read_key_b)
-                    return getattr(self, '_m_key_b_controls_write', None)
+                    return self._m_key_b_controls_write if hasattr(self, '_m_key_b_controls_write') else None
 
 
             class ChunkBitRemap(KaitaiStruct):
@@ -386,26 +387,26 @@ class MifareClassic(KaitaiStruct):
                 @property
                 def shift_value(self):
                     if hasattr(self, '_m_shift_value'):
-                        return self._m_shift_value
+                        return self._m_shift_value if hasattr(self, '_m_shift_value') else None
 
                     self._m_shift_value = (-1 if self.bit_no == 1 else 1)
-                    return getattr(self, '_m_shift_value', None)
+                    return self._m_shift_value if hasattr(self, '_m_shift_value') else None
 
                 @property
                 def chunk_no(self):
                     if hasattr(self, '_m_chunk_no'):
-                        return self._m_chunk_no
+                        return self._m_chunk_no if hasattr(self, '_m_chunk_no') else None
 
                     self._m_chunk_no = (((self.inv_chunk_no + self.shift_value) + self._parent._parent.ac_count_of_chunks) % self._parent._parent.ac_count_of_chunks)
-                    return getattr(self, '_m_chunk_no', None)
+                    return self._m_chunk_no if hasattr(self, '_m_chunk_no') else None
 
                 @property
                 def inv_chunk_no(self):
                     if hasattr(self, '_m_inv_chunk_no'):
-                        return self._m_inv_chunk_no
+                        return self._m_inv_chunk_no if hasattr(self, '_m_inv_chunk_no') else None
 
                     self._m_inv_chunk_no = (self.bit_no + self.shift_value)
-                    return getattr(self, '_m_inv_chunk_no', None)
+                    return self._m_inv_chunk_no if hasattr(self, '_m_inv_chunk_no') else None
 
 
             class DataAc(KaitaiStruct):
@@ -423,50 +424,50 @@ class MifareClassic(KaitaiStruct):
                 @property
                 def read_key_a_required(self):
                     if hasattr(self, '_m_read_key_a_required'):
-                        return self._m_read_key_a_required
+                        return self._m_read_key_a_required if hasattr(self, '_m_read_key_a_required') else None
 
                     self._m_read_key_a_required = self.ac.val <= 4
-                    return getattr(self, '_m_read_key_a_required', None)
+                    return self._m_read_key_a_required if hasattr(self, '_m_read_key_a_required') else None
 
                 @property
                 def write_key_b_required(self):
                     if hasattr(self, '_m_write_key_b_required'):
-                        return self._m_write_key_b_required
+                        return self._m_write_key_b_required if hasattr(self, '_m_write_key_b_required') else None
 
                     self._m_write_key_b_required =  (( ((not (self.read_key_a_required)) or (self.read_key_b_required)) ) and (not (self.ac.bits[0].b))) 
-                    return getattr(self, '_m_write_key_b_required', None)
+                    return self._m_write_key_b_required if hasattr(self, '_m_write_key_b_required') else None
 
                 @property
                 def write_key_a_required(self):
                     if hasattr(self, '_m_write_key_a_required'):
-                        return self._m_write_key_a_required
+                        return self._m_write_key_a_required if hasattr(self, '_m_write_key_a_required') else None
 
                     self._m_write_key_a_required = self.ac.val == 0
-                    return getattr(self, '_m_write_key_a_required', None)
+                    return self._m_write_key_a_required if hasattr(self, '_m_write_key_a_required') else None
 
                 @property
                 def read_key_b_required(self):
                     if hasattr(self, '_m_read_key_b_required'):
-                        return self._m_read_key_b_required
+                        return self._m_read_key_b_required if hasattr(self, '_m_read_key_b_required') else None
 
                     self._m_read_key_b_required = self.ac.val <= 6
-                    return getattr(self, '_m_read_key_b_required', None)
+                    return self._m_read_key_b_required if hasattr(self, '_m_read_key_b_required') else None
 
                 @property
                 def decrement_available(self):
                     if hasattr(self, '_m_decrement_available'):
-                        return self._m_decrement_available
+                        return self._m_decrement_available if hasattr(self, '_m_decrement_available') else None
 
                     self._m_decrement_available =  (( ((self.ac.bits[1].b) or (not (self.ac.bits[0].b))) ) and (not (self.ac.bits[2].b))) 
-                    return getattr(self, '_m_decrement_available', None)
+                    return self._m_decrement_available if hasattr(self, '_m_decrement_available') else None
 
                 @property
                 def increment_available(self):
                     if hasattr(self, '_m_increment_available'):
-                        return self._m_increment_available
+                        return self._m_increment_available if hasattr(self, '_m_increment_available') else None
 
                     self._m_increment_available =  (( ((not (self.ac.bits[0].b)) and (not (self.read_key_a_required)) and (not (self.read_key_b_required))) ) or ( ((not (self.ac.bits[0].b)) and (self.read_key_a_required) and (self.read_key_b_required)) )) 
-                    return getattr(self, '_m_increment_available', None)
+                    return self._m_increment_available if hasattr(self, '_m_increment_available') else None
 
 
             class Ac(KaitaiStruct):
@@ -497,58 +498,58 @@ class MifareClassic(KaitaiStruct):
                     @property
                     def n(self):
                         if hasattr(self, '_m_n'):
-                            return self._m_n
+                            return self._m_n if hasattr(self, '_m_n') else None
 
                         self._m_n = ((self.chunk >> self.i) & 1)
-                        return getattr(self, '_m_n', None)
+                        return self._m_n if hasattr(self, '_m_n') else None
 
                     @property
                     def b(self):
                         if hasattr(self, '_m_b'):
-                            return self._m_b
+                            return self._m_b if hasattr(self, '_m_b') else None
 
                         self._m_b = self.n == 1
-                        return getattr(self, '_m_b', None)
+                        return self._m_b if hasattr(self, '_m_b') else None
 
 
                 @property
                 def bits(self):
                     if hasattr(self, '_m_bits'):
-                        return self._m_bits
+                        return self._m_bits if hasattr(self, '_m_bits') else None
 
                     _pos = self._io.pos()
                     self._io.seek(0)
                     self._debug['_m_bits']['start'] = self._io.pos()
-                    self._m_bits = []
+                    self._m_bits = [None] * (self._parent._parent.ac_bits)
                     for i in range(self._parent._parent.ac_bits):
                         if not 'arr' in self._debug['_m_bits']:
                             self._debug['_m_bits']['arr'] = []
                         self._debug['_m_bits']['arr'].append({'start': self._io.pos()})
                         _t__m_bits = MifareClassic.Trailer.AccessConditions.Ac.AcBit(self.index, self._parent.chunks[i].chunk, self._io, self, self._root)
                         _t__m_bits._read()
-                        self._m_bits.append(_t__m_bits)
+                        self._m_bits[i] = _t__m_bits
                         self._debug['_m_bits']['arr'][i]['end'] = self._io.pos()
 
                     self._debug['_m_bits']['end'] = self._io.pos()
                     self._io.seek(_pos)
-                    return getattr(self, '_m_bits', None)
+                    return self._m_bits if hasattr(self, '_m_bits') else None
 
                 @property
                 def val(self):
                     """c3 c2 c1."""
                     if hasattr(self, '_m_val'):
-                        return self._m_val
+                        return self._m_val if hasattr(self, '_m_val') else None
 
                     self._m_val = (((self.bits[2].n << 2) | (self.bits[1].n << 1)) | self.bits[0].n)
-                    return getattr(self, '_m_val', None)
+                    return self._m_val if hasattr(self, '_m_val') else None
 
                 @property
                 def inv_shift_val(self):
                     if hasattr(self, '_m_inv_shift_val'):
-                        return self._m_inv_shift_val
+                        return self._m_inv_shift_val if hasattr(self, '_m_inv_shift_val') else None
 
                     self._m_inv_shift_val = (((self.bits[0].n << 2) | (self.bits[1].n << 1)) | self.bits[2].n)
-                    return getattr(self, '_m_inv_shift_val', None)
+                    return self._m_inv_shift_val if hasattr(self, '_m_inv_shift_val') else None
 
 
             class ValidChunk(KaitaiStruct):
@@ -567,82 +568,82 @@ class MifareClassic(KaitaiStruct):
                 @property
                 def valid(self):
                     if hasattr(self, '_m_valid'):
-                        return self._m_valid
+                        return self._m_valid if hasattr(self, '_m_valid') else None
 
                     self._m_valid = (self.inv_chunk ^ self.chunk) == 15
-                    return getattr(self, '_m_valid', None)
+                    return self._m_valid if hasattr(self, '_m_valid') else None
 
 
             @property
             def data_acs(self):
                 if hasattr(self, '_m_data_acs'):
-                    return self._m_data_acs
+                    return self._m_data_acs if hasattr(self, '_m_data_acs') else None
 
                 _pos = self._io.pos()
                 self._io.seek(0)
                 self._debug['_m_data_acs']['start'] = self._io.pos()
-                self._m_data_acs = []
+                self._m_data_acs = [None] * ((self._parent.acs_in_sector - 1))
                 for i in range((self._parent.acs_in_sector - 1)):
                     if not 'arr' in self._debug['_m_data_acs']:
                         self._debug['_m_data_acs']['arr'] = []
                     self._debug['_m_data_acs']['arr'].append({'start': self._io.pos()})
                     _t__m_data_acs = MifareClassic.Trailer.AccessConditions.DataAc(self.acs_raw[i], self._io, self, self._root)
                     _t__m_data_acs._read()
-                    self._m_data_acs.append(_t__m_data_acs)
+                    self._m_data_acs[i] = _t__m_data_acs
                     self._debug['_m_data_acs']['arr'][i]['end'] = self._io.pos()
 
                 self._debug['_m_data_acs']['end'] = self._io.pos()
                 self._io.seek(_pos)
-                return getattr(self, '_m_data_acs', None)
+                return self._m_data_acs if hasattr(self, '_m_data_acs') else None
 
             @property
             def remaps(self):
                 if hasattr(self, '_m_remaps'):
-                    return self._m_remaps
+                    return self._m_remaps if hasattr(self, '_m_remaps') else None
 
                 _pos = self._io.pos()
                 self._io.seek(0)
                 self._debug['_m_remaps']['start'] = self._io.pos()
-                self._m_remaps = []
+                self._m_remaps = [None] * (self._parent.ac_bits)
                 for i in range(self._parent.ac_bits):
                     if not 'arr' in self._debug['_m_remaps']:
                         self._debug['_m_remaps']['arr'] = []
                     self._debug['_m_remaps']['arr'].append({'start': self._io.pos()})
                     _t__m_remaps = MifareClassic.Trailer.AccessConditions.ChunkBitRemap(i, self._io, self, self._root)
                     _t__m_remaps._read()
-                    self._m_remaps.append(_t__m_remaps)
+                    self._m_remaps[i] = _t__m_remaps
                     self._debug['_m_remaps']['arr'][i]['end'] = self._io.pos()
 
                 self._debug['_m_remaps']['end'] = self._io.pos()
                 self._io.seek(_pos)
-                return getattr(self, '_m_remaps', None)
+                return self._m_remaps if hasattr(self, '_m_remaps') else None
 
             @property
             def acs_raw(self):
                 if hasattr(self, '_m_acs_raw'):
-                    return self._m_acs_raw
+                    return self._m_acs_raw if hasattr(self, '_m_acs_raw') else None
 
                 _pos = self._io.pos()
                 self._io.seek(0)
                 self._debug['_m_acs_raw']['start'] = self._io.pos()
-                self._m_acs_raw = []
+                self._m_acs_raw = [None] * (self._parent.acs_in_sector)
                 for i in range(self._parent.acs_in_sector):
                     if not 'arr' in self._debug['_m_acs_raw']:
                         self._debug['_m_acs_raw']['arr'] = []
                     self._debug['_m_acs_raw']['arr'].append({'start': self._io.pos()})
                     _t__m_acs_raw = MifareClassic.Trailer.AccessConditions.Ac(i, self._io, self, self._root)
                     _t__m_acs_raw._read()
-                    self._m_acs_raw.append(_t__m_acs_raw)
+                    self._m_acs_raw[i] = _t__m_acs_raw
                     self._debug['_m_acs_raw']['arr'][i]['end'] = self._io.pos()
 
                 self._debug['_m_acs_raw']['end'] = self._io.pos()
                 self._io.seek(_pos)
-                return getattr(self, '_m_acs_raw', None)
+                return self._m_acs_raw if hasattr(self, '_m_acs_raw') else None
 
             @property
             def trailer_ac(self):
                 if hasattr(self, '_m_trailer_ac'):
-                    return self._m_trailer_ac
+                    return self._m_trailer_ac if hasattr(self, '_m_trailer_ac') else None
 
                 _pos = self._io.pos()
                 self._io.seek(0)
@@ -651,54 +652,54 @@ class MifareClassic(KaitaiStruct):
                 self._m_trailer_ac._read()
                 self._debug['_m_trailer_ac']['end'] = self._io.pos()
                 self._io.seek(_pos)
-                return getattr(self, '_m_trailer_ac', None)
+                return self._m_trailer_ac if hasattr(self, '_m_trailer_ac') else None
 
             @property
             def chunks(self):
                 if hasattr(self, '_m_chunks'):
-                    return self._m_chunks
+                    return self._m_chunks if hasattr(self, '_m_chunks') else None
 
                 _pos = self._io.pos()
                 self._io.seek(0)
                 self._debug['_m_chunks']['start'] = self._io.pos()
-                self._m_chunks = []
+                self._m_chunks = [None] * (self._parent.ac_bits)
                 for i in range(self._parent.ac_bits):
                     if not 'arr' in self._debug['_m_chunks']:
                         self._debug['_m_chunks']['arr'] = []
                     self._debug['_m_chunks']['arr'].append({'start': self._io.pos()})
                     _t__m_chunks = MifareClassic.Trailer.AccessConditions.ValidChunk(self.raw_chunks[self.remaps[i].inv_chunk_no], self.raw_chunks[self.remaps[i].chunk_no], self._io, self, self._root)
                     _t__m_chunks._read()
-                    self._m_chunks.append(_t__m_chunks)
+                    self._m_chunks[i] = _t__m_chunks
                     self._debug['_m_chunks']['arr'][i]['end'] = self._io.pos()
 
                 self._debug['_m_chunks']['end'] = self._io.pos()
                 self._io.seek(_pos)
-                return getattr(self, '_m_chunks', None)
+                return self._m_chunks if hasattr(self, '_m_chunks') else None
 
 
         @property
         def ac_bits(self):
             if hasattr(self, '_m_ac_bits'):
-                return self._m_ac_bits
+                return self._m_ac_bits if hasattr(self, '_m_ac_bits') else None
 
             self._m_ac_bits = 3
-            return getattr(self, '_m_ac_bits', None)
+            return self._m_ac_bits if hasattr(self, '_m_ac_bits') else None
 
         @property
         def acs_in_sector(self):
             if hasattr(self, '_m_acs_in_sector'):
-                return self._m_acs_in_sector
+                return self._m_acs_in_sector if hasattr(self, '_m_acs_in_sector') else None
 
             self._m_acs_in_sector = 4
-            return getattr(self, '_m_acs_in_sector', None)
+            return self._m_acs_in_sector if hasattr(self, '_m_acs_in_sector') else None
 
         @property
         def ac_count_of_chunks(self):
             if hasattr(self, '_m_ac_count_of_chunks'):
-                return self._m_ac_count_of_chunks
+                return self._m_ac_count_of_chunks if hasattr(self, '_m_ac_count_of_chunks') else None
 
             self._m_ac_count_of_chunks = (self.ac_bits * 2)
-            return getattr(self, '_m_ac_count_of_chunks', None)
+            return self._m_ac_count_of_chunks if hasattr(self, '_m_ac_count_of_chunks') else None
 
 
 

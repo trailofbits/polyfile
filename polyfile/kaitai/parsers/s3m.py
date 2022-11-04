@@ -1,12 +1,13 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
+from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
 from enum import Enum
 
 
-if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
+if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class S3m(KaitaiStruct):
@@ -103,14 +104,14 @@ class S3m(KaitaiStruct):
         self.ofs_special = self._io.read_u2le()
         self._debug['ofs_special']['end'] = self._io.pos()
         self._debug['channels']['start'] = self._io.pos()
-        self.channels = []
+        self.channels = [None] * (32)
         for i in range(32):
             if not 'arr' in self._debug['channels']:
                 self._debug['channels']['arr'] = []
             self._debug['channels']['arr'].append({'start': self._io.pos()})
             _t_channels = S3m.Channel(self._io, self, self._root)
             _t_channels._read()
-            self.channels.append(_t_channels)
+            self.channels[i] = _t_channels
             self._debug['channels']['arr'][i]['end'] = self._io.pos()
 
         self._debug['channels']['end'] = self._io.pos()
@@ -118,39 +119,39 @@ class S3m(KaitaiStruct):
         self.orders = self._io.read_bytes(self.num_orders)
         self._debug['orders']['end'] = self._io.pos()
         self._debug['instruments']['start'] = self._io.pos()
-        self.instruments = []
+        self.instruments = [None] * (self.num_instruments)
         for i in range(self.num_instruments):
             if not 'arr' in self._debug['instruments']:
                 self._debug['instruments']['arr'] = []
             self._debug['instruments']['arr'].append({'start': self._io.pos()})
             _t_instruments = S3m.InstrumentPtr(self._io, self, self._root)
             _t_instruments._read()
-            self.instruments.append(_t_instruments)
+            self.instruments[i] = _t_instruments
             self._debug['instruments']['arr'][i]['end'] = self._io.pos()
 
         self._debug['instruments']['end'] = self._io.pos()
         self._debug['patterns']['start'] = self._io.pos()
-        self.patterns = []
+        self.patterns = [None] * (self.num_patterns)
         for i in range(self.num_patterns):
             if not 'arr' in self._debug['patterns']:
                 self._debug['patterns']['arr'] = []
             self._debug['patterns']['arr'].append({'start': self._io.pos()})
             _t_patterns = S3m.PatternPtr(self._io, self, self._root)
             _t_patterns._read()
-            self.patterns.append(_t_patterns)
+            self.patterns[i] = _t_patterns
             self._debug['patterns']['arr'][i]['end'] = self._io.pos()
 
         self._debug['patterns']['end'] = self._io.pos()
         if self.has_custom_pan == 252:
             self._debug['channel_pans']['start'] = self._io.pos()
-            self.channel_pans = []
+            self.channel_pans = [None] * (32)
             for i in range(32):
                 if not 'arr' in self._debug['channel_pans']:
                     self._debug['channel_pans']['arr'] = []
                 self._debug['channel_pans']['arr'].append({'start': self._io.pos()})
                 _t_channel_pans = S3m.ChannelPan(self._io, self, self._root)
                 _t_channel_pans._read()
-                self.channel_pans.append(_t_channel_pans)
+                self.channel_pans[i] = _t_channel_pans
                 self._debug['channel_pans']['arr'][i]['end'] = self._io.pos()
 
             self._debug['channel_pans']['end'] = self._io.pos()
@@ -290,10 +291,10 @@ class S3m(KaitaiStruct):
         @property
         def value(self):
             if hasattr(self, '_m_value'):
-                return self._m_value
+                return self._m_value if hasattr(self, '_m_value') else None
 
             self._m_value = (self.lo | (self.hi << 16))
-            return getattr(self, '_m_value', None)
+            return self._m_value if hasattr(self, '_m_value') else None
 
 
     class Pattern(KaitaiStruct):
@@ -332,7 +333,7 @@ class S3m(KaitaiStruct):
         @property
         def body(self):
             if hasattr(self, '_m_body'):
-                return self._m_body
+                return self._m_body if hasattr(self, '_m_body') else None
 
             _pos = self._io.pos()
             self._io.seek((self.paraptr * 16))
@@ -341,7 +342,7 @@ class S3m(KaitaiStruct):
             self._m_body._read()
             self._debug['_m_body']['end'] = self._io.pos()
             self._io.seek(_pos)
-            return getattr(self, '_m_body', None)
+            return self._m_body if hasattr(self, '_m_body') else None
 
 
     class InstrumentPtr(KaitaiStruct):
@@ -360,7 +361,7 @@ class S3m(KaitaiStruct):
         @property
         def body(self):
             if hasattr(self, '_m_body'):
-                return self._m_body
+                return self._m_body if hasattr(self, '_m_body') else None
 
             _pos = self._io.pos()
             self._io.seek((self.paraptr * 16))
@@ -369,7 +370,7 @@ class S3m(KaitaiStruct):
             self._m_body._read()
             self._debug['_m_body']['end'] = self._io.pos()
             self._io.seek(_pos)
-            return getattr(self, '_m_body', None)
+            return self._m_body if hasattr(self, '_m_body') else None
 
 
     class Instrument(KaitaiStruct):
@@ -458,7 +459,7 @@ class S3m(KaitaiStruct):
             @property
             def sample(self):
                 if hasattr(self, '_m_sample'):
-                    return self._m_sample
+                    return self._m_sample if hasattr(self, '_m_sample') else None
 
                 _pos = self._io.pos()
                 self._io.seek((self.paraptr_sample.value * 16))
@@ -466,7 +467,7 @@ class S3m(KaitaiStruct):
                 self._m_sample = self._io.read_bytes(self.len_sample)
                 self._debug['_m_sample']['end'] = self._io.pos()
                 self._io.seek(_pos)
-                return getattr(self, '_m_sample', None)
+                return self._m_sample if hasattr(self, '_m_sample') else None
 
 
         class Adlib(KaitaiStruct):

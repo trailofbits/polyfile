@@ -1,12 +1,13 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
+from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 from enum import Enum
 import collections
 
 
-if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
+if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class SystemdJournal(KaitaiStruct):
@@ -42,14 +43,14 @@ class SystemdJournal(KaitaiStruct):
         self.header._read()
         self._debug['header']['end'] = self._io.pos()
         self._debug['objects']['start'] = self._io.pos()
-        self.objects = []
+        self.objects = [None] * (self.header.num_objects)
         for i in range(self.header.num_objects):
             if not 'arr' in self._debug['objects']:
                 self._debug['objects']['arr'] = []
             self._debug['objects']['arr'].append({'start': self._io.pos()})
             _t_objects = SystemdJournal.JournalObject(self._io, self, self._root)
             _t_objects._read()
-            self.objects.append(_t_objects)
+            self.objects[i] = _t_objects
             self._debug['objects']['arr'][i]['end'] = self._io.pos()
 
         self._debug['objects']['end'] = self._io.pos()
@@ -249,7 +250,7 @@ class SystemdJournal(KaitaiStruct):
         @property
         def next_hash(self):
             if hasattr(self, '_m_next_hash'):
-                return self._m_next_hash
+                return self._m_next_hash if hasattr(self, '_m_next_hash') else None
 
             if self.ofs_next_hash != 0:
                 io = self._root._io
@@ -261,12 +262,12 @@ class SystemdJournal(KaitaiStruct):
                 self._debug['_m_next_hash']['end'] = io.pos()
                 io.seek(_pos)
 
-            return getattr(self, '_m_next_hash', None)
+            return self._m_next_hash if hasattr(self, '_m_next_hash') else None
 
         @property
         def head_field(self):
             if hasattr(self, '_m_head_field'):
-                return self._m_head_field
+                return self._m_head_field if hasattr(self, '_m_head_field') else None
 
             if self.ofs_head_field != 0:
                 io = self._root._io
@@ -278,12 +279,12 @@ class SystemdJournal(KaitaiStruct):
                 self._debug['_m_head_field']['end'] = io.pos()
                 io.seek(_pos)
 
-            return getattr(self, '_m_head_field', None)
+            return self._m_head_field if hasattr(self, '_m_head_field') else None
 
         @property
         def entry(self):
             if hasattr(self, '_m_entry'):
-                return self._m_entry
+                return self._m_entry if hasattr(self, '_m_entry') else None
 
             if self.ofs_entry != 0:
                 io = self._root._io
@@ -295,12 +296,12 @@ class SystemdJournal(KaitaiStruct):
                 self._debug['_m_entry']['end'] = io.pos()
                 io.seek(_pos)
 
-            return getattr(self, '_m_entry', None)
+            return self._m_entry if hasattr(self, '_m_entry') else None
 
         @property
         def entry_array(self):
             if hasattr(self, '_m_entry_array'):
-                return self._m_entry_array
+                return self._m_entry_array if hasattr(self, '_m_entry_array') else None
 
             if self.ofs_entry_array != 0:
                 io = self._root._io
@@ -312,7 +313,7 @@ class SystemdJournal(KaitaiStruct):
                 self._debug['_m_entry_array']['end'] = io.pos()
                 io.seek(_pos)
 
-            return getattr(self, '_m_entry_array', None)
+            return self._m_entry_array if hasattr(self, '_m_entry_array') else None
 
 
     @property
@@ -321,7 +322,7 @@ class SystemdJournal(KaitaiStruct):
         prior to declaration of header.
         """
         if hasattr(self, '_m_len_header'):
-            return self._m_len_header
+            return self._m_len_header if hasattr(self, '_m_len_header') else None
 
         _pos = self._io.pos()
         self._io.seek(88)
@@ -329,12 +330,12 @@ class SystemdJournal(KaitaiStruct):
         self._m_len_header = self._io.read_u8le()
         self._debug['_m_len_header']['end'] = self._io.pos()
         self._io.seek(_pos)
-        return getattr(self, '_m_len_header', None)
+        return self._m_len_header if hasattr(self, '_m_len_header') else None
 
     @property
     def data_hash_table(self):
         if hasattr(self, '_m_data_hash_table'):
-            return self._m_data_hash_table
+            return self._m_data_hash_table if hasattr(self, '_m_data_hash_table') else None
 
         _pos = self._io.pos()
         self._io.seek(self.header.ofs_data_hash_table)
@@ -342,12 +343,12 @@ class SystemdJournal(KaitaiStruct):
         self._m_data_hash_table = self._io.read_bytes(self.header.len_data_hash_table)
         self._debug['_m_data_hash_table']['end'] = self._io.pos()
         self._io.seek(_pos)
-        return getattr(self, '_m_data_hash_table', None)
+        return self._m_data_hash_table if hasattr(self, '_m_data_hash_table') else None
 
     @property
     def field_hash_table(self):
         if hasattr(self, '_m_field_hash_table'):
-            return self._m_field_hash_table
+            return self._m_field_hash_table if hasattr(self, '_m_field_hash_table') else None
 
         _pos = self._io.pos()
         self._io.seek(self.header.ofs_field_hash_table)
@@ -355,6 +356,6 @@ class SystemdJournal(KaitaiStruct):
         self._m_field_hash_table = self._io.read_bytes(self.header.len_field_hash_table)
         self._debug['_m_field_hash_table']['end'] = self._io.pos()
         self._io.seek(_pos)
-        return getattr(self, '_m_field_hash_table', None)
+        return self._m_field_hash_table if hasattr(self, '_m_field_hash_table') else None
 
 

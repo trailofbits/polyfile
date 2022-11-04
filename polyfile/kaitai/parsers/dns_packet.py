@@ -1,12 +1,13 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
+from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 from enum import Enum
 import collections
 
 
-if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
+if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class DnsPacket(KaitaiStruct):
@@ -75,56 +76,56 @@ class DnsPacket(KaitaiStruct):
 
         if self.flags.is_opcode_valid:
             self._debug['queries']['start'] = self._io.pos()
-            self.queries = []
+            self.queries = [None] * (self.qdcount)
             for i in range(self.qdcount):
                 if not 'arr' in self._debug['queries']:
                     self._debug['queries']['arr'] = []
                 self._debug['queries']['arr'].append({'start': self._io.pos()})
                 _t_queries = DnsPacket.Query(self._io, self, self._root)
                 _t_queries._read()
-                self.queries.append(_t_queries)
+                self.queries[i] = _t_queries
                 self._debug['queries']['arr'][i]['end'] = self._io.pos()
 
             self._debug['queries']['end'] = self._io.pos()
 
         if self.flags.is_opcode_valid:
             self._debug['answers']['start'] = self._io.pos()
-            self.answers = []
+            self.answers = [None] * (self.ancount)
             for i in range(self.ancount):
                 if not 'arr' in self._debug['answers']:
                     self._debug['answers']['arr'] = []
                 self._debug['answers']['arr'].append({'start': self._io.pos()})
                 _t_answers = DnsPacket.Answer(self._io, self, self._root)
                 _t_answers._read()
-                self.answers.append(_t_answers)
+                self.answers[i] = _t_answers
                 self._debug['answers']['arr'][i]['end'] = self._io.pos()
 
             self._debug['answers']['end'] = self._io.pos()
 
         if self.flags.is_opcode_valid:
             self._debug['authorities']['start'] = self._io.pos()
-            self.authorities = []
+            self.authorities = [None] * (self.nscount)
             for i in range(self.nscount):
                 if not 'arr' in self._debug['authorities']:
                     self._debug['authorities']['arr'] = []
                 self._debug['authorities']['arr'].append({'start': self._io.pos()})
                 _t_authorities = DnsPacket.Answer(self._io, self, self._root)
                 _t_authorities._read()
-                self.authorities.append(_t_authorities)
+                self.authorities[i] = _t_authorities
                 self._debug['authorities']['arr'][i]['end'] = self._io.pos()
 
             self._debug['authorities']['end'] = self._io.pos()
 
         if self.flags.is_opcode_valid:
             self._debug['additionals']['start'] = self._io.pos()
-            self.additionals = []
+            self.additionals = [None] * (self.arcount)
             for i in range(self.arcount):
                 if not 'arr' in self._debug['additionals']:
                     self._debug['additionals']['arr'] = []
                 self._debug['additionals']['arr'].append({'start': self._io.pos()})
                 _t_additionals = DnsPacket.Answer(self._io, self, self._root)
                 _t_additionals._read()
-                self.additionals.append(_t_additionals)
+                self.additionals[i] = _t_additionals
                 self._debug['additionals']['arr'][i]['end'] = self._io.pos()
 
             self._debug['additionals']['end'] = self._io.pos()
@@ -164,7 +165,7 @@ class DnsPacket(KaitaiStruct):
         @property
         def contents(self):
             if hasattr(self, '_m_contents'):
-                return self._m_contents
+                return self._m_contents if hasattr(self, '_m_contents') else None
 
             io = self._root._io
             _pos = io.pos()
@@ -174,7 +175,7 @@ class DnsPacket(KaitaiStruct):
             self._m_contents._read()
             self._debug['_m_contents']['end'] = io.pos()
             io.seek(_pos)
-            return getattr(self, '_m_contents', None)
+            return self._m_contents if hasattr(self, '_m_contents') else None
 
 
     class Label(KaitaiStruct):
@@ -204,10 +205,10 @@ class DnsPacket(KaitaiStruct):
         @property
         def is_pointer(self):
             if hasattr(self, '_m_is_pointer'):
-                return self._m_is_pointer
+                return self._m_is_pointer if hasattr(self, '_m_is_pointer') else None
 
             self._m_is_pointer = self.length >= 192
-            return getattr(self, '_m_is_pointer', None)
+            return self._m_is_pointer if hasattr(self, '_m_is_pointer') else None
 
 
     class Query(KaitaiStruct):
@@ -445,90 +446,90 @@ class DnsPacket(KaitaiStruct):
         @property
         def qr(self):
             if hasattr(self, '_m_qr'):
-                return self._m_qr
+                return self._m_qr if hasattr(self, '_m_qr') else None
 
             self._m_qr = ((self.flag & 32768) >> 15)
-            return getattr(self, '_m_qr', None)
+            return self._m_qr if hasattr(self, '_m_qr') else None
 
         @property
         def ra(self):
             if hasattr(self, '_m_ra'):
-                return self._m_ra
+                return self._m_ra if hasattr(self, '_m_ra') else None
 
             self._m_ra = ((self.flag & 128) >> 7)
-            return getattr(self, '_m_ra', None)
+            return self._m_ra if hasattr(self, '_m_ra') else None
 
         @property
         def tc(self):
             if hasattr(self, '_m_tc'):
-                return self._m_tc
+                return self._m_tc if hasattr(self, '_m_tc') else None
 
             self._m_tc = ((self.flag & 512) >> 9)
-            return getattr(self, '_m_tc', None)
+            return self._m_tc if hasattr(self, '_m_tc') else None
 
         @property
         def is_opcode_valid(self):
             if hasattr(self, '_m_is_opcode_valid'):
-                return self._m_is_opcode_valid
+                return self._m_is_opcode_valid if hasattr(self, '_m_is_opcode_valid') else None
 
             self._m_is_opcode_valid =  ((self.opcode == 0) or (self.opcode == 1) or (self.opcode == 2)) 
-            return getattr(self, '_m_is_opcode_valid', None)
+            return self._m_is_opcode_valid if hasattr(self, '_m_is_opcode_valid') else None
 
         @property
         def rcode(self):
             if hasattr(self, '_m_rcode'):
-                return self._m_rcode
+                return self._m_rcode if hasattr(self, '_m_rcode') else None
 
             self._m_rcode = ((self.flag & 15) >> 0)
-            return getattr(self, '_m_rcode', None)
+            return self._m_rcode if hasattr(self, '_m_rcode') else None
 
         @property
         def opcode(self):
             if hasattr(self, '_m_opcode'):
-                return self._m_opcode
+                return self._m_opcode if hasattr(self, '_m_opcode') else None
 
             self._m_opcode = ((self.flag & 30720) >> 11)
-            return getattr(self, '_m_opcode', None)
+            return self._m_opcode if hasattr(self, '_m_opcode') else None
 
         @property
         def aa(self):
             if hasattr(self, '_m_aa'):
-                return self._m_aa
+                return self._m_aa if hasattr(self, '_m_aa') else None
 
             self._m_aa = ((self.flag & 1024) >> 10)
-            return getattr(self, '_m_aa', None)
+            return self._m_aa if hasattr(self, '_m_aa') else None
 
         @property
         def z(self):
             if hasattr(self, '_m_z'):
-                return self._m_z
+                return self._m_z if hasattr(self, '_m_z') else None
 
             self._m_z = ((self.flag & 64) >> 6)
-            return getattr(self, '_m_z', None)
+            return self._m_z if hasattr(self, '_m_z') else None
 
         @property
         def rd(self):
             if hasattr(self, '_m_rd'):
-                return self._m_rd
+                return self._m_rd if hasattr(self, '_m_rd') else None
 
             self._m_rd = ((self.flag & 256) >> 8)
-            return getattr(self, '_m_rd', None)
+            return self._m_rd if hasattr(self, '_m_rd') else None
 
         @property
         def cd(self):
             if hasattr(self, '_m_cd'):
-                return self._m_cd
+                return self._m_cd if hasattr(self, '_m_cd') else None
 
             self._m_cd = ((self.flag & 16) >> 4)
-            return getattr(self, '_m_cd', None)
+            return self._m_cd if hasattr(self, '_m_cd') else None
 
         @property
         def ad(self):
             if hasattr(self, '_m_ad'):
-                return self._m_ad
+                return self._m_ad if hasattr(self, '_m_ad') else None
 
             self._m_ad = ((self.flag & 32) >> 5)
-            return getattr(self, '_m_ad', None)
+            return self._m_ad if hasattr(self, '_m_ad') else None
 
 
     class AuthorityInfo(KaitaiStruct):

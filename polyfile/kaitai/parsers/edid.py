@@ -1,5 +1,6 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
+from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
@@ -7,7 +8,7 @@ from enum import Enum
 import struct
 
 
-if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
+if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class Edid(KaitaiStruct):
@@ -69,17 +70,17 @@ class Edid(KaitaiStruct):
         self.est_timings._read()
         self._debug['est_timings']['end'] = self._io.pos()
         self._debug['std_timings']['start'] = self._io.pos()
-        self._raw_std_timings = []
-        self.std_timings = []
+        self._raw_std_timings = [None] * (8)
+        self.std_timings = [None] * (8)
         for i in range(8):
             if not 'arr' in self._debug['std_timings']:
                 self._debug['std_timings']['arr'] = []
             self._debug['std_timings']['arr'].append({'start': self._io.pos()})
-            self._raw_std_timings.append(self._io.read_bytes(2))
+            self._raw_std_timings[i] = self._io.read_bytes(2)
             _io__raw_std_timings = KaitaiStream(BytesIO(self._raw_std_timings[i]))
             _t_std_timings = Edid.StdTiming(_io__raw_std_timings, self, self._root)
             _t_std_timings._read()
-            self.std_timings.append(_t_std_timings)
+            self.std_timings[i] = _t_std_timings
             self._debug['std_timings']['arr'][i]['end'] = self._io.pos()
 
         self._debug['std_timings']['end'] = self._io.pos()
@@ -150,138 +151,138 @@ class Edid(KaitaiStruct):
         @property
         def green_x_int(self):
             if hasattr(self, '_m_green_x_int'):
-                return self._m_green_x_int
+                return self._m_green_x_int if hasattr(self, '_m_green_x_int') else None
 
             self._m_green_x_int = ((self.green_x_9_2 << 2) | self.green_x_1_0)
-            return getattr(self, '_m_green_x_int', None)
+            return self._m_green_x_int if hasattr(self, '_m_green_x_int') else None
 
         @property
         def red_y(self):
             """Red Y coordinate."""
             if hasattr(self, '_m_red_y'):
-                return self._m_red_y
+                return self._m_red_y if hasattr(self, '_m_red_y') else None
 
             self._m_red_y = (self.red_y_int / 1024.0)
-            return getattr(self, '_m_red_y', None)
+            return self._m_red_y if hasattr(self, '_m_red_y') else None
 
         @property
         def green_y_int(self):
             if hasattr(self, '_m_green_y_int'):
-                return self._m_green_y_int
+                return self._m_green_y_int if hasattr(self, '_m_green_y_int') else None
 
             self._m_green_y_int = ((self.green_y_9_2 << 2) | self.green_y_1_0)
-            return getattr(self, '_m_green_y_int', None)
+            return self._m_green_y_int if hasattr(self, '_m_green_y_int') else None
 
         @property
         def white_y(self):
             """White Y coordinate."""
             if hasattr(self, '_m_white_y'):
-                return self._m_white_y
+                return self._m_white_y if hasattr(self, '_m_white_y') else None
 
             self._m_white_y = (self.white_y_int / 1024.0)
-            return getattr(self, '_m_white_y', None)
+            return self._m_white_y if hasattr(self, '_m_white_y') else None
 
         @property
         def red_x(self):
             """Red X coordinate."""
             if hasattr(self, '_m_red_x'):
-                return self._m_red_x
+                return self._m_red_x if hasattr(self, '_m_red_x') else None
 
             self._m_red_x = (self.red_x_int / 1024.0)
-            return getattr(self, '_m_red_x', None)
+            return self._m_red_x if hasattr(self, '_m_red_x') else None
 
         @property
         def white_x(self):
             """White X coordinate."""
             if hasattr(self, '_m_white_x'):
-                return self._m_white_x
+                return self._m_white_x if hasattr(self, '_m_white_x') else None
 
             self._m_white_x = (self.white_x_int / 1024.0)
-            return getattr(self, '_m_white_x', None)
+            return self._m_white_x if hasattr(self, '_m_white_x') else None
 
         @property
         def blue_x(self):
             """Blue X coordinate."""
             if hasattr(self, '_m_blue_x'):
-                return self._m_blue_x
+                return self._m_blue_x if hasattr(self, '_m_blue_x') else None
 
             self._m_blue_x = (self.blue_x_int / 1024.0)
-            return getattr(self, '_m_blue_x', None)
+            return self._m_blue_x if hasattr(self, '_m_blue_x') else None
 
         @property
         def white_x_int(self):
             if hasattr(self, '_m_white_x_int'):
-                return self._m_white_x_int
+                return self._m_white_x_int if hasattr(self, '_m_white_x_int') else None
 
             self._m_white_x_int = ((self.white_x_9_2 << 2) | self.white_x_1_0)
-            return getattr(self, '_m_white_x_int', None)
+            return self._m_white_x_int if hasattr(self, '_m_white_x_int') else None
 
         @property
         def white_y_int(self):
             if hasattr(self, '_m_white_y_int'):
-                return self._m_white_y_int
+                return self._m_white_y_int if hasattr(self, '_m_white_y_int') else None
 
             self._m_white_y_int = ((self.white_y_9_2 << 2) | self.white_y_1_0)
-            return getattr(self, '_m_white_y_int', None)
+            return self._m_white_y_int if hasattr(self, '_m_white_y_int') else None
 
         @property
         def green_x(self):
             """Green X coordinate."""
             if hasattr(self, '_m_green_x'):
-                return self._m_green_x
+                return self._m_green_x if hasattr(self, '_m_green_x') else None
 
             self._m_green_x = (self.green_x_int / 1024.0)
-            return getattr(self, '_m_green_x', None)
+            return self._m_green_x if hasattr(self, '_m_green_x') else None
 
         @property
         def red_x_int(self):
             if hasattr(self, '_m_red_x_int'):
-                return self._m_red_x_int
+                return self._m_red_x_int if hasattr(self, '_m_red_x_int') else None
 
             self._m_red_x_int = ((self.red_x_9_2 << 2) | self.red_x_1_0)
-            return getattr(self, '_m_red_x_int', None)
+            return self._m_red_x_int if hasattr(self, '_m_red_x_int') else None
 
         @property
         def red_y_int(self):
             if hasattr(self, '_m_red_y_int'):
-                return self._m_red_y_int
+                return self._m_red_y_int if hasattr(self, '_m_red_y_int') else None
 
             self._m_red_y_int = ((self.red_y_9_2 << 2) | self.red_y_1_0)
-            return getattr(self, '_m_red_y_int', None)
+            return self._m_red_y_int if hasattr(self, '_m_red_y_int') else None
 
         @property
         def blue_x_int(self):
             if hasattr(self, '_m_blue_x_int'):
-                return self._m_blue_x_int
+                return self._m_blue_x_int if hasattr(self, '_m_blue_x_int') else None
 
             self._m_blue_x_int = ((self.blue_x_9_2 << 2) | self.blue_x_1_0)
-            return getattr(self, '_m_blue_x_int', None)
+            return self._m_blue_x_int if hasattr(self, '_m_blue_x_int') else None
 
         @property
         def blue_y(self):
             """Blue Y coordinate."""
             if hasattr(self, '_m_blue_y'):
-                return self._m_blue_y
+                return self._m_blue_y if hasattr(self, '_m_blue_y') else None
 
             self._m_blue_y = (self.blue_y_int / 1024.0)
-            return getattr(self, '_m_blue_y', None)
+            return self._m_blue_y if hasattr(self, '_m_blue_y') else None
 
         @property
         def green_y(self):
             """Green Y coordinate."""
             if hasattr(self, '_m_green_y'):
-                return self._m_green_y
+                return self._m_green_y if hasattr(self, '_m_green_y') else None
 
             self._m_green_y = (self.green_y_int / 1024.0)
-            return getattr(self, '_m_green_y', None)
+            return self._m_green_y if hasattr(self, '_m_green_y') else None
 
         @property
         def blue_y_int(self):
             if hasattr(self, '_m_blue_y_int'):
-                return self._m_blue_y_int
+                return self._m_blue_y_int if hasattr(self, '_m_blue_y_int') else None
 
             self._m_blue_y_int = ((self.blue_y_9_2 << 2) | self.blue_y_1_0)
-            return getattr(self, '_m_blue_y_int', None)
+            return self._m_blue_y_int if hasattr(self, '_m_blue_y_int') else None
 
 
     class EstTimingsInfo(KaitaiStruct):
@@ -377,7 +378,7 @@ class Edid(KaitaiStruct):
         @property
         def bytes_lookahead(self):
             if hasattr(self, '_m_bytes_lookahead'):
-                return self._m_bytes_lookahead
+                return self._m_bytes_lookahead if hasattr(self, '_m_bytes_lookahead') else None
 
             _pos = self._io.pos()
             self._io.seek(0)
@@ -385,87 +386,87 @@ class Edid(KaitaiStruct):
             self._m_bytes_lookahead = self._io.read_bytes(2)
             self._debug['_m_bytes_lookahead']['end'] = self._io.pos()
             self._io.seek(_pos)
-            return getattr(self, '_m_bytes_lookahead', None)
+            return self._m_bytes_lookahead if hasattr(self, '_m_bytes_lookahead') else None
 
         @property
         def is_used(self):
             if hasattr(self, '_m_is_used'):
-                return self._m_is_used
+                return self._m_is_used if hasattr(self, '_m_is_used') else None
 
             self._m_is_used = self.bytes_lookahead != b"\x01\x01"
-            return getattr(self, '_m_is_used', None)
+            return self._m_is_used if hasattr(self, '_m_is_used') else None
 
         @property
         def horiz_active_pixels(self):
             """Range of horizontal active pixels."""
             if hasattr(self, '_m_horiz_active_pixels'):
-                return self._m_horiz_active_pixels
+                return self._m_horiz_active_pixels if hasattr(self, '_m_horiz_active_pixels') else None
 
             if self.is_used:
                 self._m_horiz_active_pixels = ((self.horiz_active_pixels_mod + 31) * 8)
 
-            return getattr(self, '_m_horiz_active_pixels', None)
+            return self._m_horiz_active_pixels if hasattr(self, '_m_horiz_active_pixels') else None
 
         @property
         def refresh_rate(self):
             """Vertical refresh rate, Hz."""
             if hasattr(self, '_m_refresh_rate'):
-                return self._m_refresh_rate
+                return self._m_refresh_rate if hasattr(self, '_m_refresh_rate') else None
 
             if self.is_used:
                 self._m_refresh_rate = (self.refresh_rate_mod + 60)
 
-            return getattr(self, '_m_refresh_rate', None)
+            return self._m_refresh_rate if hasattr(self, '_m_refresh_rate') else None
 
 
     @property
     def mfg_year(self):
         if hasattr(self, '_m_mfg_year'):
-            return self._m_mfg_year
+            return self._m_mfg_year if hasattr(self, '_m_mfg_year') else None
 
         self._m_mfg_year = (self.mfg_year_mod + 1990)
-        return getattr(self, '_m_mfg_year', None)
+        return self._m_mfg_year if hasattr(self, '_m_mfg_year') else None
 
     @property
     def mfg_id_ch1(self):
         if hasattr(self, '_m_mfg_id_ch1'):
-            return self._m_mfg_id_ch1
+            return self._m_mfg_id_ch1 if hasattr(self, '_m_mfg_id_ch1') else None
 
         self._m_mfg_id_ch1 = ((self.mfg_bytes & 31744) >> 10)
-        return getattr(self, '_m_mfg_id_ch1', None)
+        return self._m_mfg_id_ch1 if hasattr(self, '_m_mfg_id_ch1') else None
 
     @property
     def mfg_id_ch3(self):
         if hasattr(self, '_m_mfg_id_ch3'):
-            return self._m_mfg_id_ch3
+            return self._m_mfg_id_ch3 if hasattr(self, '_m_mfg_id_ch3') else None
 
         self._m_mfg_id_ch3 = (self.mfg_bytes & 31)
-        return getattr(self, '_m_mfg_id_ch3', None)
+        return self._m_mfg_id_ch3 if hasattr(self, '_m_mfg_id_ch3') else None
 
     @property
     def gamma(self):
         if hasattr(self, '_m_gamma'):
-            return self._m_gamma
+            return self._m_gamma if hasattr(self, '_m_gamma') else None
 
         if self.gamma_mod != 255:
             self._m_gamma = ((self.gamma_mod + 100) / 100.0)
 
-        return getattr(self, '_m_gamma', None)
+        return self._m_gamma if hasattr(self, '_m_gamma') else None
 
     @property
     def mfg_str(self):
         if hasattr(self, '_m_mfg_str'):
-            return self._m_mfg_str
+            return self._m_mfg_str if hasattr(self, '_m_mfg_str') else None
 
         self._m_mfg_str = (struct.pack('3b', (self.mfg_id_ch1 + 64), (self.mfg_id_ch2 + 64), (self.mfg_id_ch3 + 64))).decode(u"ASCII")
-        return getattr(self, '_m_mfg_str', None)
+        return self._m_mfg_str if hasattr(self, '_m_mfg_str') else None
 
     @property
     def mfg_id_ch2(self):
         if hasattr(self, '_m_mfg_id_ch2'):
-            return self._m_mfg_id_ch2
+            return self._m_mfg_id_ch2 if hasattr(self, '_m_mfg_id_ch2') else None
 
         self._m_mfg_id_ch2 = ((self.mfg_bytes & 992) >> 5)
-        return getattr(self, '_m_mfg_id_ch2', None)
+        return self._m_mfg_id_ch2 if hasattr(self, '_m_mfg_id_ch2') else None
 
 

@@ -1,12 +1,13 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
+from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 from enum import Enum
 import collections
 
 
-if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
+if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class Mcap(KaitaiStruct):
@@ -359,7 +360,7 @@ class Mcap(KaitaiStruct):
         @property
         def attachment(self):
             if hasattr(self, '_m_attachment'):
-                return self._m_attachment
+                return self._m_attachment if hasattr(self, '_m_attachment') else None
 
             io = self._root._io
             _pos = io.pos()
@@ -371,7 +372,7 @@ class Mcap(KaitaiStruct):
             self._m_attachment._read()
             self._debug['_m_attachment']['end'] = io.pos()
             io.seek(_pos)
-            return getattr(self, '_m_attachment', None)
+            return self._m_attachment if hasattr(self, '_m_attachment') else None
 
 
     class Schema(KaitaiStruct):
@@ -469,7 +470,7 @@ class Mcap(KaitaiStruct):
         @property
         def group(self):
             if hasattr(self, '_m_group'):
-                return self._m_group
+                return self._m_group if hasattr(self, '_m_group') else None
 
             io = self._root._io
             _pos = io.pos()
@@ -481,7 +482,7 @@ class Mcap(KaitaiStruct):
             self._m_group._read()
             self._debug['_m_group']['end'] = io.pos()
             io.seek(_pos)
-            return getattr(self, '_m_group', None)
+            return self._m_group if hasattr(self, '_m_group') else None
 
 
     class Attachment(KaitaiStruct):
@@ -525,15 +526,15 @@ class Mcap(KaitaiStruct):
         @property
         def crc32_input_end(self):
             if hasattr(self, '_m_crc32_input_end'):
-                return self._m_crc32_input_end
+                return self._m_crc32_input_end if hasattr(self, '_m_crc32_input_end') else None
 
             self._m_crc32_input_end = self._io.pos()
-            return getattr(self, '_m_crc32_input_end', None)
+            return self._m_crc32_input_end if hasattr(self, '_m_crc32_input_end') else None
 
         @property
         def crc32_input(self):
             if hasattr(self, '_m_crc32_input'):
-                return self._m_crc32_input
+                return self._m_crc32_input if hasattr(self, '_m_crc32_input') else None
 
             _pos = self._io.pos()
             self._io.seek(0)
@@ -541,7 +542,7 @@ class Mcap(KaitaiStruct):
             self._m_crc32_input = self._io.read_bytes(self.crc32_input_end)
             self._debug['_m_crc32_input']['end'] = self._io.pos()
             self._io.seek(_pos)
-            return getattr(self, '_m_crc32_input', None)
+            return self._m_crc32_input if hasattr(self, '_m_crc32_input') else None
 
 
     class Metadata(KaitaiStruct):
@@ -650,7 +651,7 @@ class Mcap(KaitaiStruct):
         @property
         def metadata(self):
             if hasattr(self, '_m_metadata'):
-                return self._m_metadata
+                return self._m_metadata if hasattr(self, '_m_metadata') else None
 
             io = self._root._io
             _pos = io.pos()
@@ -662,7 +663,7 @@ class Mcap(KaitaiStruct):
             self._m_metadata._read()
             self._debug['_m_metadata']['end'] = io.pos()
             io.seek(_pos)
-            return getattr(self, '_m_metadata', None)
+            return self._m_metadata if hasattr(self, '_m_metadata') else None
 
 
     class Magic(KaitaiStruct):
@@ -728,7 +729,7 @@ class Mcap(KaitaiStruct):
         @property
         def summary_section(self):
             if hasattr(self, '_m_summary_section'):
-                return self._m_summary_section
+                return self._m_summary_section if hasattr(self, '_m_summary_section') else None
 
             if self.ofs_summary_section != 0:
                 io = self._root._io
@@ -742,12 +743,12 @@ class Mcap(KaitaiStruct):
                 self._debug['_m_summary_section']['end'] = io.pos()
                 io.seek(_pos)
 
-            return getattr(self, '_m_summary_section', None)
+            return self._m_summary_section if hasattr(self, '_m_summary_section') else None
 
         @property
         def summary_offset_section(self):
             if hasattr(self, '_m_summary_offset_section'):
-                return self._m_summary_offset_section
+                return self._m_summary_offset_section if hasattr(self, '_m_summary_offset_section') else None
 
             if self.ofs_summary_offset_section != 0:
                 io = self._root._io
@@ -761,20 +762,20 @@ class Mcap(KaitaiStruct):
                 self._debug['_m_summary_offset_section']['end'] = io.pos()
                 io.seek(_pos)
 
-            return getattr(self, '_m_summary_offset_section', None)
+            return self._m_summary_offset_section if hasattr(self, '_m_summary_offset_section') else None
 
         @property
         def ofs_summary_crc32_input(self):
             if hasattr(self, '_m_ofs_summary_crc32_input'):
-                return self._m_ofs_summary_crc32_input
+                return self._m_ofs_summary_crc32_input if hasattr(self, '_m_ofs_summary_crc32_input') else None
 
             self._m_ofs_summary_crc32_input = (self.ofs_summary_section if self.ofs_summary_section != 0 else self._root.ofs_footer)
-            return getattr(self, '_m_ofs_summary_crc32_input', None)
+            return self._m_ofs_summary_crc32_input if hasattr(self, '_m_ofs_summary_crc32_input') else None
 
         @property
         def summary_crc32_input(self):
             if hasattr(self, '_m_summary_crc32_input'):
-                return self._m_summary_crc32_input
+                return self._m_summary_crc32_input if hasattr(self, '_m_summary_crc32_input') else None
 
             io = self._root._io
             _pos = io.pos()
@@ -783,7 +784,7 @@ class Mcap(KaitaiStruct):
             self._m_summary_crc32_input = io.read_bytes((((self._root._io.size() - self.ofs_summary_crc32_input) - 8) - 4))
             self._debug['_m_summary_crc32_input']['end'] = io.pos()
             io.seek(_pos)
-            return getattr(self, '_m_summary_crc32_input', None)
+            return self._m_summary_crc32_input if hasattr(self, '_m_summary_crc32_input') else None
 
 
     class Record(KaitaiStruct):
@@ -972,7 +973,7 @@ class Mcap(KaitaiStruct):
         @property
         def chunk(self):
             if hasattr(self, '_m_chunk'):
-                return self._m_chunk
+                return self._m_chunk if hasattr(self, '_m_chunk') else None
 
             io = self._root._io
             _pos = io.pos()
@@ -984,13 +985,13 @@ class Mcap(KaitaiStruct):
             self._m_chunk._read()
             self._debug['_m_chunk']['end'] = io.pos()
             io.seek(_pos)
-            return getattr(self, '_m_chunk', None)
+            return self._m_chunk if hasattr(self, '_m_chunk') else None
 
 
     @property
     def footer(self):
         if hasattr(self, '_m_footer'):
-            return self._m_footer
+            return self._m_footer if hasattr(self, '_m_footer') else None
 
         _pos = self._io.pos()
         self._io.seek(self.ofs_footer)
@@ -1001,14 +1002,14 @@ class Mcap(KaitaiStruct):
         self._m_footer._read()
         self._debug['_m_footer']['end'] = self._io.pos()
         self._io.seek(_pos)
-        return getattr(self, '_m_footer', None)
+        return self._m_footer if hasattr(self, '_m_footer') else None
 
     @property
     def ofs_footer(self):
         if hasattr(self, '_m_ofs_footer'):
-            return self._m_ofs_footer
+            return self._m_ofs_footer if hasattr(self, '_m_ofs_footer') else None
 
         self._m_ofs_footer = ((((self._io.size() - 1) - 8) - 20) - 8)
-        return getattr(self, '_m_ofs_footer', None)
+        return self._m_ofs_footer if hasattr(self, '_m_ofs_footer') else None
 
 

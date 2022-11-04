@@ -1,12 +1,13 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
+from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
 from enum import Enum
 
 
-if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
+if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class Regf(KaitaiStruct):
@@ -257,14 +258,14 @@ class Regf(KaitaiStruct):
                 self.count = self._io.read_u2le()
                 self._debug['count']['end'] = self._io.pos()
                 self._debug['items']['start'] = self._io.pos()
-                self.items = []
+                self.items = [None] * (self.count)
                 for i in range(self.count):
                     if not 'arr' in self._debug['items']:
                         self._debug['items']['arr'] = []
                     self._debug['items']['arr'].append({'start': self._io.pos()})
                     _t_items = Regf.HiveBinCell.SubKeyListLhLf.Item(self._io, self, self._root)
                     _t_items._read()
-                    self.items.append(_t_items)
+                    self.items[i] = _t_items
                     self._debug['items']['arr'][i]['end'] = self._io.pos()
 
                 self._debug['items']['end'] = self._io.pos()
@@ -323,14 +324,14 @@ class Regf(KaitaiStruct):
                 self.count = self._io.read_u2le()
                 self._debug['count']['end'] = self._io.pos()
                 self._debug['items']['start'] = self._io.pos()
-                self.items = []
+                self.items = [None] * (self.count)
                 for i in range(self.count):
                     if not 'arr' in self._debug['items']:
                         self._debug['items']['arr'] = []
                     self._debug['items']['arr'].append({'start': self._io.pos()})
                     _t_items = Regf.HiveBinCell.SubKeyListLi.Item(self._io, self, self._root)
                     _t_items._read()
-                    self.items.append(_t_items)
+                    self.items[i] = _t_items
                     self._debug['items']['arr'][i]['end'] = self._io.pos()
 
                 self._debug['items']['end'] = self._io.pos()
@@ -449,14 +450,14 @@ class Regf(KaitaiStruct):
                 self.count = self._io.read_u2le()
                 self._debug['count']['end'] = self._io.pos()
                 self._debug['items']['start'] = self._io.pos()
-                self.items = []
+                self.items = [None] * (self.count)
                 for i in range(self.count):
                     if not 'arr' in self._debug['items']:
                         self._debug['items']['arr'] = []
                     self._debug['items']['arr'].append({'start': self._io.pos()})
                     _t_items = Regf.HiveBinCell.SubKeyListRi.Item(self._io, self, self._root)
                     _t_items._read()
-                    self.items.append(_t_items)
+                    self.items[i] = _t_items
                     self._debug['items']['arr'][i]['end'] = self._io.pos()
 
                 self._debug['items']['end'] = self._io.pos()
@@ -479,18 +480,18 @@ class Regf(KaitaiStruct):
         @property
         def cell_size(self):
             if hasattr(self, '_m_cell_size'):
-                return self._m_cell_size
+                return self._m_cell_size if hasattr(self, '_m_cell_size') else None
 
             self._m_cell_size = ((-1 if self.cell_size_raw < 0 else 1) * self.cell_size_raw)
-            return getattr(self, '_m_cell_size', None)
+            return self._m_cell_size if hasattr(self, '_m_cell_size') else None
 
         @property
         def is_allocated(self):
             if hasattr(self, '_m_is_allocated'):
-                return self._m_is_allocated
+                return self._m_is_allocated if hasattr(self, '_m_is_allocated') else None
 
             self._m_is_allocated = self.cell_size_raw < 0
-            return getattr(self, '_m_is_allocated', None)
+            return self._m_is_allocated if hasattr(self, '_m_is_allocated') else None
 
 
     class FileHeader(KaitaiStruct):

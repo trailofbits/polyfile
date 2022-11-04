@@ -1,12 +1,13 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
+from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
 from enum import Enum
 
 
-if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
+if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 from polyfile.kaitai.parsers import dcmp_variable_length_integer
@@ -151,10 +152,10 @@ class Dcmp0(KaitaiStruct):
                 See the documentation of the `backreference_body` type for details about backreference chunks.
                 """
                 if hasattr(self, '_m_do_store'):
-                    return self._m_do_store
+                    return self._m_do_store if hasattr(self, '_m_do_store') else None
 
                 self._m_do_store = (self.tag & 16) != 0
-                return getattr(self, '_m_do_store', None)
+                return self._m_do_store if hasattr(self, '_m_do_store') else None
 
             @property
             def len_literal_div2(self):
@@ -166,10 +167,10 @@ class Dcmp0(KaitaiStruct):
                 as there is no use in storing a zero-length literal.
                 """
                 if hasattr(self, '_m_len_literal_div2'):
-                    return self._m_len_literal_div2
+                    return self._m_len_literal_div2 if hasattr(self, '_m_len_literal_div2') else None
 
                 self._m_len_literal_div2 = (self.len_literal_div2_separate if self.is_len_literal_div2_separate else self.len_literal_div2_in_tag)
-                return getattr(self, '_m_len_literal_div2', None)
+                return self._m_len_literal_div2 if hasattr(self, '_m_len_literal_div2') else None
 
             @property
             def len_literal(self):
@@ -177,10 +178,10 @@ class Dcmp0(KaitaiStruct):
                 in bytes.
                 """
                 if hasattr(self, '_m_len_literal'):
-                    return self._m_len_literal
+                    return self._m_len_literal if hasattr(self, '_m_len_literal') else None
 
                 self._m_len_literal = (self.len_literal_div2 * 2)
-                return getattr(self, '_m_len_literal', None)
+                return self._m_len_literal if hasattr(self, '_m_len_literal') else None
 
             @property
             def len_literal_div2_in_tag(self):
@@ -190,20 +191,20 @@ class Dcmp0(KaitaiStruct):
                 the length is stored in a separate byte after the tag byte and before the literal data.
                 """
                 if hasattr(self, '_m_len_literal_div2_in_tag'):
-                    return self._m_len_literal_div2_in_tag
+                    return self._m_len_literal_div2_in_tag if hasattr(self, '_m_len_literal_div2_in_tag') else None
 
                 self._m_len_literal_div2_in_tag = (self.tag & 15)
-                return getattr(self, '_m_len_literal_div2_in_tag', None)
+                return self._m_len_literal_div2_in_tag if hasattr(self, '_m_len_literal_div2_in_tag') else None
 
             @property
             def is_len_literal_div2_separate(self):
                 """Whether the length of the literal is stored separately from the tag.
                 """
                 if hasattr(self, '_m_is_len_literal_div2_separate'):
-                    return self._m_is_len_literal_div2_separate
+                    return self._m_is_len_literal_div2_separate if hasattr(self, '_m_is_len_literal_div2_separate') else None
 
                 self._m_is_len_literal_div2_separate = self.len_literal_div2_in_tag == 0
-                return getattr(self, '_m_is_len_literal_div2_separate', None)
+                return self._m_is_len_literal_div2_separate if hasattr(self, '_m_is_len_literal_div2_separate') else None
 
 
         class BackreferenceBody(KaitaiStruct):
@@ -238,10 +239,10 @@ class Dcmp0(KaitaiStruct):
                 """Whether the index is stored separately from the tag.
                 """
                 if hasattr(self, '_m_is_index_separate'):
-                    return self._m_is_index_separate
+                    return self._m_is_index_separate if hasattr(self, '_m_is_index_separate') else None
 
                 self._m_is_index_separate =  ((self.tag >= 32) and (self.tag <= 34)) 
-                return getattr(self, '_m_is_index_separate', None)
+                return self._m_is_index_separate if hasattr(self, '_m_is_index_separate') else None
 
             @property
             def index_in_tag(self):
@@ -249,10 +250,10 @@ class Dcmp0(KaitaiStruct):
                 as stored in the tag byte.
                 """
                 if hasattr(self, '_m_index_in_tag'):
-                    return self._m_index_in_tag
+                    return self._m_index_in_tag if hasattr(self, '_m_index_in_tag') else None
 
                 self._m_index_in_tag = (self.tag - 35)
-                return getattr(self, '_m_index_in_tag', None)
+                return self._m_index_in_tag if hasattr(self, '_m_index_in_tag') else None
 
             @property
             def index_separate(self):
@@ -261,12 +262,12 @@ class Dcmp0(KaitaiStruct):
                 with the implicit offset corrected for.
                 """
                 if hasattr(self, '_m_index_separate'):
-                    return self._m_index_separate
+                    return self._m_index_separate if hasattr(self, '_m_index_separate') else None
 
                 if self.is_index_separate:
                     self._m_index_separate = ((self.index_separate_minus + 40) + (256 if self.tag == 33 else 0))
 
-                return getattr(self, '_m_index_separate', None)
+                return self._m_index_separate if hasattr(self, '_m_index_separate') else None
 
             @property
             def index(self):
@@ -283,10 +284,10 @@ class Dcmp0(KaitaiStruct):
                 not ones that come after it.
                 """
                 if hasattr(self, '_m_index'):
-                    return self._m_index
+                    return self._m_index if hasattr(self, '_m_index') else None
 
                 self._m_index = (self.index_separate if self.is_index_separate else self.index_in_tag)
-                return getattr(self, '_m_index', None)
+                return self._m_index if hasattr(self, '_m_index') else None
 
 
         class TableLookupBody(KaitaiStruct):
@@ -316,10 +317,10 @@ class Dcmp0(KaitaiStruct):
                 index 0 stands for tag 0x4b, 1 for 0x4c, etc.
                 """
                 if hasattr(self, '_m_lookup_table'):
-                    return self._m_lookup_table
+                    return self._m_lookup_table if hasattr(self, '_m_lookup_table') else None
 
                 self._m_lookup_table = [b"\x00\x00", b"\x4E\xBA", b"\x00\x08", b"\x4E\x75", b"\x00\x0C", b"\x4E\xAD", b"\x20\x53", b"\x2F\x0B", b"\x61\x00", b"\x00\x10", b"\x70\x00", b"\x2F\x00", b"\x48\x6E", b"\x20\x50", b"\x20\x6E", b"\x2F\x2E", b"\xFF\xFC", b"\x48\xE7", b"\x3F\x3C", b"\x00\x04", b"\xFF\xF8", b"\x2F\x0C", b"\x20\x06", b"\x4E\xED", b"\x4E\x56", b"\x20\x68", b"\x4E\x5E", b"\x00\x01", b"\x58\x8F", b"\x4F\xEF", b"\x00\x02", b"\x00\x18", b"\x60\x00", b"\xFF\xFF", b"\x50\x8F", b"\x4E\x90", b"\x00\x06", b"\x26\x6E", b"\x00\x14", b"\xFF\xF4", b"\x4C\xEE", b"\x00\x0A", b"\x00\x0E", b"\x41\xEE", b"\x4C\xDF", b"\x48\xC0", b"\xFF\xF0", b"\x2D\x40", b"\x00\x12", b"\x30\x2E", b"\x70\x01", b"\x2F\x28", b"\x20\x54", b"\x67\x00", b"\x00\x20", b"\x00\x1C", b"\x20\x5F", b"\x18\x00", b"\x26\x6F", b"\x48\x78", b"\x00\x16", b"\x41\xFA", b"\x30\x3C", b"\x28\x40", b"\x72\x00", b"\x28\x6E", b"\x20\x0C", b"\x66\x00", b"\x20\x6B", b"\x2F\x07", b"\x55\x8F", b"\x00\x28", b"\xFF\xFE", b"\xFF\xEC", b"\x22\xD8", b"\x20\x0B", b"\x00\x0F", b"\x59\x8F", b"\x2F\x3C", b"\xFF\x00", b"\x01\x18", b"\x81\xE1", b"\x4A\x00", b"\x4E\xB0", b"\xFF\xE8", b"\x48\xC7", b"\x00\x03", b"\x00\x22", b"\x00\x07", b"\x00\x1A", b"\x67\x06", b"\x67\x08", b"\x4E\xF9", b"\x00\x24", b"\x20\x78", b"\x08\x00", b"\x66\x04", b"\x00\x2A", b"\x4E\xD0", b"\x30\x28", b"\x26\x5F", b"\x67\x04", b"\x00\x30", b"\x43\xEE", b"\x3F\x00", b"\x20\x1F", b"\x00\x1E", b"\xFF\xF6", b"\x20\x2E", b"\x42\xA7", b"\x20\x07", b"\xFF\xFA", b"\x60\x02", b"\x3D\x40", b"\x0C\x40", b"\x66\x06", b"\x00\x26", b"\x2D\x48", b"\x2F\x01", b"\x70\xFF", b"\x60\x04", b"\x18\x80", b"\x4A\x40", b"\x00\x40", b"\x00\x2C", b"\x2F\x08", b"\x00\x11", b"\xFF\xE4", b"\x21\x40", b"\x26\x40", b"\xFF\xF2", b"\x42\x6E", b"\x4E\xB9", b"\x3D\x7C", b"\x00\x38", b"\x00\x0D", b"\x60\x06", b"\x42\x2E", b"\x20\x3C", b"\x67\x0C", b"\x2D\x68", b"\x66\x08", b"\x4A\x2E", b"\x4A\xAE", b"\x00\x2E", b"\x48\x40", b"\x22\x5F", b"\x22\x00", b"\x67\x0A", b"\x30\x07", b"\x42\x67", b"\x00\x32", b"\x20\x28", b"\x00\x09", b"\x48\x7A", b"\x02\x00", b"\x2F\x2B", b"\x00\x05", b"\x22\x6E", b"\x66\x02", b"\xE5\x80", b"\x67\x0E", b"\x66\x0A", b"\x00\x50", b"\x3E\x00", b"\x66\x0C", b"\x2E\x00", b"\xFF\xEE", b"\x20\x6D", b"\x20\x40", b"\xFF\xE0", b"\x53\x40", b"\x60\x08", b"\x04\x80", b"\x00\x68", b"\x0B\x7C", b"\x44\x00", b"\x41\xE8", b"\x48\x41"]
-                return getattr(self, '_m_lookup_table', None)
+                return self._m_lookup_table if hasattr(self, '_m_lookup_table') else None
 
             @property
             def value(self):
@@ -327,10 +328,10 @@ class Dcmp0(KaitaiStruct):
                 based on the fixed lookup table.
                 """
                 if hasattr(self, '_m_value'):
-                    return self._m_value
+                    return self._m_value if hasattr(self, '_m_value') else None
 
                 self._m_value = self.lookup_table[(self.tag - 75)]
-                return getattr(self, '_m_value', None)
+                return self._m_value if hasattr(self, '_m_value') else None
 
 
         class EndBody(KaitaiStruct):
@@ -423,14 +424,14 @@ class Dcmp0(KaitaiStruct):
                     self.num_addresses_raw._read()
                     self._debug['num_addresses_raw']['end'] = self._io.pos()
                     self._debug['addresses_raw']['start'] = self._io.pos()
-                    self.addresses_raw = []
+                    self.addresses_raw = [None] * (self.num_addresses)
                     for i in range(self.num_addresses):
                         if not 'arr' in self._debug['addresses_raw']:
                             self._debug['addresses_raw']['arr'] = []
                         self._debug['addresses_raw']['arr'].append({'start': self._io.pos()})
                         _t_addresses_raw = dcmp_variable_length_integer.DcmpVariableLengthInteger(self._io)
                         _t_addresses_raw._read()
-                        self.addresses_raw.append(_t_addresses_raw)
+                        self.addresses_raw[i] = _t_addresses_raw
                         self._debug['addresses_raw']['arr'][i]['end'] = self._io.pos()
 
                     self._debug['addresses_raw']['end'] = self._io.pos()
@@ -444,10 +445,10 @@ class Dcmp0(KaitaiStruct):
                     i. e. an unsigned 16-bit integer.
                     """
                     if hasattr(self, '_m_segment_number'):
-                        return self._m_segment_number
+                        return self._m_segment_number if hasattr(self, '_m_segment_number') else None
 
                     self._m_segment_number = self.segment_number_raw.value
-                    return getattr(self, '_m_segment_number', None)
+                    return self._m_segment_number if hasattr(self, '_m_segment_number') else None
 
                 @property
                 def num_addresses(self):
@@ -456,10 +457,10 @@ class Dcmp0(KaitaiStruct):
                     This number must be greater than 0.
                     """
                     if hasattr(self, '_m_num_addresses'):
-                        return self._m_num_addresses
+                        return self._m_num_addresses if hasattr(self, '_m_num_addresses') else None
 
                     self._m_num_addresses = self.num_addresses_raw.value
-                    return getattr(self, '_m_num_addresses', None)
+                    return self._m_num_addresses if hasattr(self, '_m_num_addresses') else None
 
 
             class RepeatBody(KaitaiStruct):
@@ -493,10 +494,10 @@ class Dcmp0(KaitaiStruct):
                     the value to be repeated is stored as a variable-length integer.
                     """
                     if hasattr(self, '_m_byte_count'):
-                        return self._m_byte_count
+                        return self._m_byte_count if hasattr(self, '_m_byte_count') else None
 
                     self._m_byte_count = (1 if self.tag == 2 else (2 if self.tag == 3 else -1))
-                    return getattr(self, '_m_byte_count', None)
+                    return self._m_byte_count if hasattr(self, '_m_byte_count') else None
 
                 @property
                 def to_repeat(self):
@@ -507,10 +508,10 @@ class Dcmp0(KaitaiStruct):
                     i. e. either 8 or 16 bits.
                     """
                     if hasattr(self, '_m_to_repeat'):
-                        return self._m_to_repeat
+                        return self._m_to_repeat if hasattr(self, '_m_to_repeat') else None
 
                     self._m_to_repeat = self.to_repeat_raw.value
-                    return getattr(self, '_m_to_repeat', None)
+                    return self._m_to_repeat if hasattr(self, '_m_to_repeat') else None
 
                 @property
                 def repeat_count_m1(self):
@@ -520,10 +521,10 @@ class Dcmp0(KaitaiStruct):
                     This value must not be negative.
                     """
                     if hasattr(self, '_m_repeat_count_m1'):
-                        return self._m_repeat_count_m1
+                        return self._m_repeat_count_m1 if hasattr(self, '_m_repeat_count_m1') else None
 
                     self._m_repeat_count_m1 = self.repeat_count_m1_raw.value
-                    return getattr(self, '_m_repeat_count_m1', None)
+                    return self._m_repeat_count_m1 if hasattr(self, '_m_repeat_count_m1') else None
 
                 @property
                 def repeat_count(self):
@@ -532,10 +533,10 @@ class Dcmp0(KaitaiStruct):
                     This value must be positive.
                     """
                     if hasattr(self, '_m_repeat_count'):
-                        return self._m_repeat_count
+                        return self._m_repeat_count if hasattr(self, '_m_repeat_count') else None
 
                     self._m_repeat_count = (self.repeat_count_m1 + 1)
-                    return getattr(self, '_m_repeat_count', None)
+                    return self._m_repeat_count if hasattr(self, '_m_repeat_count') else None
 
 
             class DeltaEncoding16BitBody(KaitaiStruct):
@@ -562,12 +563,12 @@ class Dcmp0(KaitaiStruct):
                     self.num_deltas_raw._read()
                     self._debug['num_deltas_raw']['end'] = self._io.pos()
                     self._debug['deltas']['start'] = self._io.pos()
-                    self.deltas = []
+                    self.deltas = [None] * (self.num_deltas)
                     for i in range(self.num_deltas):
                         if not 'arr' in self._debug['deltas']:
                             self._debug['deltas']['arr'] = []
                         self._debug['deltas']['arr'].append({'start': self._io.pos()})
-                        self.deltas.append(self._io.read_s1())
+                        self.deltas[i] = self._io.read_s1()
                         self._debug['deltas']['arr'][i]['end'] = self._io.pos()
 
                     self._debug['deltas']['end'] = self._io.pos()
@@ -581,10 +582,10 @@ class Dcmp0(KaitaiStruct):
                     i. e. a signed 16-bit integer.
                     """
                     if hasattr(self, '_m_first_value'):
-                        return self._m_first_value
+                        return self._m_first_value if hasattr(self, '_m_first_value') else None
 
                     self._m_first_value = self.first_value_raw.value
-                    return getattr(self, '_m_first_value', None)
+                    return self._m_first_value if hasattr(self, '_m_first_value') else None
 
                 @property
                 def num_deltas(self):
@@ -593,10 +594,10 @@ class Dcmp0(KaitaiStruct):
                     This number must not be negative.
                     """
                     if hasattr(self, '_m_num_deltas'):
-                        return self._m_num_deltas
+                        return self._m_num_deltas if hasattr(self, '_m_num_deltas') else None
 
                     self._m_num_deltas = self.num_deltas_raw.value
-                    return getattr(self, '_m_num_deltas', None)
+                    return self._m_num_deltas if hasattr(self, '_m_num_deltas') else None
 
 
             class DeltaEncoding32BitBody(KaitaiStruct):
@@ -623,14 +624,14 @@ class Dcmp0(KaitaiStruct):
                     self.num_deltas_raw._read()
                     self._debug['num_deltas_raw']['end'] = self._io.pos()
                     self._debug['deltas_raw']['start'] = self._io.pos()
-                    self.deltas_raw = []
+                    self.deltas_raw = [None] * (self.num_deltas)
                     for i in range(self.num_deltas):
                         if not 'arr' in self._debug['deltas_raw']:
                             self._debug['deltas_raw']['arr'] = []
                         self._debug['deltas_raw']['arr'].append({'start': self._io.pos()})
                         _t_deltas_raw = dcmp_variable_length_integer.DcmpVariableLengthInteger(self._io)
                         _t_deltas_raw._read()
-                        self.deltas_raw.append(_t_deltas_raw)
+                        self.deltas_raw[i] = _t_deltas_raw
                         self._debug['deltas_raw']['arr'][i]['end'] = self._io.pos()
 
                     self._debug['deltas_raw']['end'] = self._io.pos()
@@ -640,10 +641,10 @@ class Dcmp0(KaitaiStruct):
                     """The first value in the sequence.
                     """
                     if hasattr(self, '_m_first_value'):
-                        return self._m_first_value
+                        return self._m_first_value if hasattr(self, '_m_first_value') else None
 
                     self._m_first_value = self.first_value_raw.value
-                    return getattr(self, '_m_first_value', None)
+                    return self._m_first_value if hasattr(self, '_m_first_value') else None
 
                 @property
                 def num_deltas(self):
@@ -652,10 +653,10 @@ class Dcmp0(KaitaiStruct):
                     This number must not be negative.
                     """
                     if hasattr(self, '_m_num_deltas'):
-                        return self._m_num_deltas
+                        return self._m_num_deltas if hasattr(self, '_m_num_deltas') else None
 
                     self._m_num_deltas = self.num_deltas_raw.value
-                    return getattr(self, '_m_num_deltas', None)
+                    return self._m_num_deltas if hasattr(self, '_m_num_deltas') else None
 
 
 

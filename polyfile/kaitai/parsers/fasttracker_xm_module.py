@@ -1,12 +1,13 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
+from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
 from enum import Enum
 
 
-if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
+if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class FasttrackerXmModule(KaitaiStruct):
@@ -41,26 +42,26 @@ class FasttrackerXmModule(KaitaiStruct):
         self.header._read()
         self._debug['header']['end'] = self._io.pos()
         self._debug['patterns']['start'] = self._io.pos()
-        self.patterns = []
+        self.patterns = [None] * (self.header.num_patterns)
         for i in range(self.header.num_patterns):
             if not 'arr' in self._debug['patterns']:
                 self._debug['patterns']['arr'] = []
             self._debug['patterns']['arr'].append({'start': self._io.pos()})
             _t_patterns = FasttrackerXmModule.Pattern(self._io, self, self._root)
             _t_patterns._read()
-            self.patterns.append(_t_patterns)
+            self.patterns[i] = _t_patterns
             self._debug['patterns']['arr'][i]['end'] = self._io.pos()
 
         self._debug['patterns']['end'] = self._io.pos()
         self._debug['instruments']['start'] = self._io.pos()
-        self.instruments = []
+        self.instruments = [None] * (self.header.num_instruments)
         for i in range(self.header.num_instruments):
             if not 'arr' in self._debug['instruments']:
                 self._debug['instruments']['arr'] = []
             self._debug['instruments']['arr'].append({'start': self._io.pos()})
             _t_instruments = FasttrackerXmModule.Instrument(self._io, self, self._root)
             _t_instruments._read()
-            self.instruments.append(_t_instruments)
+            self.instruments[i] = _t_instruments
             self._debug['instruments']['arr'][i]['end'] = self._io.pos()
 
         self._debug['instruments']['end'] = self._io.pos()
@@ -117,10 +118,10 @@ class FasttrackerXmModule(KaitaiStruct):
             @property
             def value(self):
                 if hasattr(self, '_m_value'):
-                    return self._m_value
+                    return self._m_value if hasattr(self, '_m_value') else None
 
                 self._m_value = ((self.major << 8) | self.minor)
-                return getattr(self, '_m_value', None)
+                return self._m_value if hasattr(self, '_m_value') else None
 
 
 
@@ -186,10 +187,10 @@ class FasttrackerXmModule(KaitaiStruct):
                 @property
                 def num_rows(self):
                     if hasattr(self, '_m_num_rows'):
-                        return self._m_num_rows
+                        return self._m_num_rows if hasattr(self, '_m_num_rows') else None
 
                     self._m_num_rows = (self.num_rows_raw + (1 if self._root.preheader.version_number.value == 258 else 0))
-                    return getattr(self, '_m_num_rows', None)
+                    return self._m_num_rows if hasattr(self, '_m_num_rows') else None
 
 
 
@@ -246,12 +247,12 @@ class FasttrackerXmModule(KaitaiStruct):
             self.default_bpm = self._io.read_u2le()
             self._debug['default_bpm']['end'] = self._io.pos()
             self._debug['pattern_order_table']['start'] = self._io.pos()
-            self.pattern_order_table = []
+            self.pattern_order_table = [None] * (256)
             for i in range(256):
                 if not 'arr' in self._debug['pattern_order_table']:
                     self._debug['pattern_order_table']['arr'] = []
                 self._debug['pattern_order_table']['arr'].append({'start': self._io.pos()})
-                self.pattern_order_table.append(self._io.read_u1())
+                self.pattern_order_table[i] = self._io.read_u1()
                 self._debug['pattern_order_table']['arr'][i]['end'] = self._io.pos()
 
             self._debug['pattern_order_table']['end'] = self._io.pos()
@@ -285,26 +286,26 @@ class FasttrackerXmModule(KaitaiStruct):
             self.header._read()
             self._debug['header']['end'] = self._io.pos()
             self._debug['samples_headers']['start'] = self._io.pos()
-            self.samples_headers = []
+            self.samples_headers = [None] * (self.header.num_samples)
             for i in range(self.header.num_samples):
                 if not 'arr' in self._debug['samples_headers']:
                     self._debug['samples_headers']['arr'] = []
                 self._debug['samples_headers']['arr'].append({'start': self._io.pos()})
                 _t_samples_headers = FasttrackerXmModule.Instrument.SampleHeader(self._io, self, self._root)
                 _t_samples_headers._read()
-                self.samples_headers.append(_t_samples_headers)
+                self.samples_headers[i] = _t_samples_headers
                 self._debug['samples_headers']['arr'][i]['end'] = self._io.pos()
 
             self._debug['samples_headers']['end'] = self._io.pos()
             self._debug['samples']['start'] = self._io.pos()
-            self.samples = []
+            self.samples = [None] * (self.header.num_samples)
             for i in range(self.header.num_samples):
                 if not 'arr' in self._debug['samples']:
                     self._debug['samples']['arr'] = []
                 self._debug['samples']['arr'].append({'start': self._io.pos()})
                 _t_samples = FasttrackerXmModule.Instrument.SamplesData(self.samples_headers[i], self._io, self, self._root)
                 _t_samples._read()
-                self.samples.append(_t_samples)
+                self.samples[i] = _t_samples
                 self._debug['samples']['arr'][i]['end'] = self._io.pos()
 
             self._debug['samples']['end'] = self._io.pos()
@@ -353,36 +354,36 @@ class FasttrackerXmModule(KaitaiStruct):
                 self.len_sample_header = self._io.read_u4le()
                 self._debug['len_sample_header']['end'] = self._io.pos()
                 self._debug['idx_sample_per_note']['start'] = self._io.pos()
-                self.idx_sample_per_note = []
+                self.idx_sample_per_note = [None] * (96)
                 for i in range(96):
                     if not 'arr' in self._debug['idx_sample_per_note']:
                         self._debug['idx_sample_per_note']['arr'] = []
                     self._debug['idx_sample_per_note']['arr'].append({'start': self._io.pos()})
-                    self.idx_sample_per_note.append(self._io.read_u1())
+                    self.idx_sample_per_note[i] = self._io.read_u1()
                     self._debug['idx_sample_per_note']['arr'][i]['end'] = self._io.pos()
 
                 self._debug['idx_sample_per_note']['end'] = self._io.pos()
                 self._debug['volume_points']['start'] = self._io.pos()
-                self.volume_points = []
+                self.volume_points = [None] * (12)
                 for i in range(12):
                     if not 'arr' in self._debug['volume_points']:
                         self._debug['volume_points']['arr'] = []
                     self._debug['volume_points']['arr'].append({'start': self._io.pos()})
                     _t_volume_points = FasttrackerXmModule.Instrument.ExtraHeader.EnvelopePoint(self._io, self, self._root)
                     _t_volume_points._read()
-                    self.volume_points.append(_t_volume_points)
+                    self.volume_points[i] = _t_volume_points
                     self._debug['volume_points']['arr'][i]['end'] = self._io.pos()
 
                 self._debug['volume_points']['end'] = self._io.pos()
                 self._debug['panning_points']['start'] = self._io.pos()
-                self.panning_points = []
+                self.panning_points = [None] * (12)
                 for i in range(12):
                     if not 'arr' in self._debug['panning_points']:
                         self._debug['panning_points']['arr'] = []
                     self._debug['panning_points']['arr'].append({'start': self._io.pos()})
                     _t_panning_points = FasttrackerXmModule.Instrument.ExtraHeader.EnvelopePoint(self._io, self, self._root)
                     _t_panning_points._read()
-                    self.panning_points.append(_t_panning_points)
+                    self.panning_points[i] = _t_panning_points
                     self._debug['panning_points']['arr'][i]['end'] = self._io.pos()
 
                 self._debug['panning_points']['end'] = self._io.pos()

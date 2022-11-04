@@ -1,12 +1,13 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
+from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 from enum import Enum
 import collections
 
 
-if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
+if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class AllegroDat(KaitaiStruct):
@@ -48,14 +49,14 @@ class AllegroDat(KaitaiStruct):
         self.num_objects = self._io.read_u4be()
         self._debug['num_objects']['end'] = self._io.pos()
         self._debug['objects']['start'] = self._io.pos()
-        self.objects = []
+        self.objects = [None] * (self.num_objects)
         for i in range(self.num_objects):
             if not 'arr' in self._debug['objects']:
                 self._debug['objects']['arr'] = []
             self._debug['objects']['arr'].append({'start': self._io.pos()})
             _t_objects = AllegroDat.DatObject(self._io, self, self._root)
             _t_objects._read()
-            self.objects.append(_t_objects)
+            self.objects[i] = _t_objects
             self._debug['objects']['arr'][i]['end'] = self._io.pos()
 
         self._debug['objects']['end'] = self._io.pos()
@@ -73,12 +74,12 @@ class AllegroDat(KaitaiStruct):
 
         def _read(self):
             self._debug['chars']['start'] = self._io.pos()
-            self.chars = []
+            self.chars = [None] * (95)
             for i in range(95):
                 if not 'arr' in self._debug['chars']:
                     self._debug['chars']['arr'] = []
                 self._debug['chars']['arr'].append({'start': self._io.pos()})
-                self.chars.append(self._io.read_bytes(16))
+                self.chars[i] = self._io.read_bytes(16)
                 self._debug['chars']['arr'][i]['end'] = self._io.pos()
 
             self._debug['chars']['end'] = self._io.pos()
@@ -146,12 +147,12 @@ class AllegroDat(KaitaiStruct):
 
         def _read(self):
             self._debug['chars']['start'] = self._io.pos()
-            self.chars = []
+            self.chars = [None] * (95)
             for i in range(95):
                 if not 'arr' in self._debug['chars']:
                     self._debug['chars']['arr'] = []
                 self._debug['chars']['arr'].append({'start': self._io.pos()})
-                self.chars.append(self._io.read_bytes(8))
+                self.chars[i] = self._io.read_bytes(8)
                 self._debug['chars']['arr'][i]['end'] = self._io.pos()
 
             self._debug['chars']['end'] = self._io.pos()
@@ -212,10 +213,10 @@ class AllegroDat(KaitaiStruct):
         @property
         def type(self):
             if hasattr(self, '_m_type'):
-                return self._m_type
+                return self._m_type if hasattr(self, '_m_type') else None
 
             self._m_type = self.properties[-1].magic
-            return getattr(self, '_m_type', None)
+            return self._m_type if hasattr(self, '_m_type') else None
 
 
     class DatFont39(KaitaiStruct):
@@ -235,14 +236,14 @@ class AllegroDat(KaitaiStruct):
             self.num_ranges = self._io.read_s2be()
             self._debug['num_ranges']['end'] = self._io.pos()
             self._debug['ranges']['start'] = self._io.pos()
-            self.ranges = []
+            self.ranges = [None] * (self.num_ranges)
             for i in range(self.num_ranges):
                 if not 'arr' in self._debug['ranges']:
                     self._debug['ranges']['arr'] = []
                 self._debug['ranges']['arr'].append({'start': self._io.pos()})
                 _t_ranges = AllegroDat.DatFont39.Range(self._io, self, self._root)
                 _t_ranges._read()
-                self.ranges.append(_t_ranges)
+                self.ranges[i] = _t_ranges
                 self._debug['ranges']['arr'][i]['end'] = self._io.pos()
 
             self._debug['ranges']['end'] = self._io.pos()
@@ -266,14 +267,14 @@ class AllegroDat(KaitaiStruct):
                 self.end_char = self._io.read_u4be()
                 self._debug['end_char']['end'] = self._io.pos()
                 self._debug['chars']['start'] = self._io.pos()
-                self.chars = []
+                self.chars = [None] * (((self.end_char - self.start_char) + 1))
                 for i in range(((self.end_char - self.start_char) + 1)):
                     if not 'arr' in self._debug['chars']:
                         self._debug['chars']['arr'] = []
                     self._debug['chars']['arr'].append({'start': self._io.pos()})
                     _t_chars = AllegroDat.DatFont39.FontChar(self._io, self, self._root)
                     _t_chars._read()
-                    self.chars.append(_t_chars)
+                    self.chars[i] = _t_chars
                     self._debug['chars']['arr'][i]['end'] = self._io.pos()
 
                 self._debug['chars']['end'] = self._io.pos()
@@ -331,10 +332,10 @@ class AllegroDat(KaitaiStruct):
         @property
         def is_valid(self):
             if hasattr(self, '_m_is_valid'):
-                return self._m_is_valid
+                return self._m_is_valid if hasattr(self, '_m_is_valid') else None
 
             self._m_is_valid = self.magic == u"prop"
-            return getattr(self, '_m_is_valid', None)
+            return self._m_is_valid if hasattr(self, '_m_is_valid') else None
 
 
     class DatRleSprite(KaitaiStruct):
