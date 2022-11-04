@@ -1,13 +1,12 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
-from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 from enum import Enum
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class MicrosoftPe(KaitaiStruct):
@@ -315,15 +314,15 @@ class MicrosoftPe(KaitaiStruct):
         @property
         def section(self):
             if hasattr(self, '_m_section'):
-                return self._m_section if hasattr(self, '_m_section') else None
+                return self._m_section
 
             self._m_section = self._root.pe.sections[(self.section_number - 1)]
-            return self._m_section if hasattr(self, '_m_section') else None
+            return getattr(self, '_m_section', None)
 
         @property
         def data(self):
             if hasattr(self, '_m_data'):
-                return self._m_data if hasattr(self, '_m_data') else None
+                return self._m_data
 
             _pos = self._io.pos()
             self._io.seek((self.section.pointer_to_raw_data + self.value))
@@ -331,7 +330,7 @@ class MicrosoftPe(KaitaiStruct):
             self._m_data = self._io.read_bytes(1)
             self._debug['_m_data']['end'] = self._io.pos()
             self._io.seek(_pos)
-            return self._m_data if hasattr(self, '_m_data') else None
+            return getattr(self, '_m_data', None)
 
 
     class PeHeader(KaitaiStruct):
@@ -359,14 +358,14 @@ class MicrosoftPe(KaitaiStruct):
             self.optional_hdr._read()
             self._debug['optional_hdr']['end'] = self._io.pos()
             self._debug['sections']['start'] = self._io.pos()
-            self.sections = [None] * (self.coff_hdr.number_of_sections)
+            self.sections = []
             for i in range(self.coff_hdr.number_of_sections):
                 if not 'arr' in self._debug['sections']:
                     self._debug['sections']['arr'] = []
                 self._debug['sections']['arr'].append({'start': self._io.pos()})
                 _t_sections = MicrosoftPe.Section(self._io, self, self._root)
                 _t_sections._read()
-                self.sections[i] = _t_sections
+                self.sections.append(_t_sections)
                 self._debug['sections']['arr'][i]['end'] = self._io.pos()
 
             self._debug['sections']['end'] = self._io.pos()
@@ -374,7 +373,7 @@ class MicrosoftPe(KaitaiStruct):
         @property
         def certificate_table(self):
             if hasattr(self, '_m_certificate_table'):
-                return self._m_certificate_table if hasattr(self, '_m_certificate_table') else None
+                return self._m_certificate_table
 
             if self.optional_hdr.data_dirs.certificate_table.virtual_address != 0:
                 _pos = self._io.pos()
@@ -387,7 +386,7 @@ class MicrosoftPe(KaitaiStruct):
                 self._debug['_m_certificate_table']['end'] = self._io.pos()
                 self._io.seek(_pos)
 
-            return self._m_certificate_table if hasattr(self, '_m_certificate_table') else None
+            return getattr(self, '_m_certificate_table', None)
 
 
     class OptionalHeader(KaitaiStruct):
@@ -456,7 +455,7 @@ class MicrosoftPe(KaitaiStruct):
         @property
         def body(self):
             if hasattr(self, '_m_body'):
-                return self._m_body if hasattr(self, '_m_body') else None
+                return self._m_body
 
             _pos = self._io.pos()
             self._io.seek(self.pointer_to_raw_data)
@@ -464,7 +463,7 @@ class MicrosoftPe(KaitaiStruct):
             self._m_body = self._io.read_bytes(self.size_of_raw_data)
             self._debug['_m_body']['end'] = self._io.pos()
             self._io.seek(_pos)
-            return self._m_body if hasattr(self, '_m_body') else None
+            return getattr(self, '_m_body', None)
 
 
     class CertificateTable(KaitaiStruct):
@@ -622,23 +621,23 @@ class MicrosoftPe(KaitaiStruct):
         @property
         def symbol_table_size(self):
             if hasattr(self, '_m_symbol_table_size'):
-                return self._m_symbol_table_size if hasattr(self, '_m_symbol_table_size') else None
+                return self._m_symbol_table_size
 
             self._m_symbol_table_size = (self.number_of_symbols * 18)
-            return self._m_symbol_table_size if hasattr(self, '_m_symbol_table_size') else None
+            return getattr(self, '_m_symbol_table_size', None)
 
         @property
         def symbol_name_table_offset(self):
             if hasattr(self, '_m_symbol_name_table_offset'):
-                return self._m_symbol_name_table_offset if hasattr(self, '_m_symbol_name_table_offset') else None
+                return self._m_symbol_name_table_offset
 
             self._m_symbol_name_table_offset = (self.pointer_to_symbol_table + self.symbol_table_size)
-            return self._m_symbol_name_table_offset if hasattr(self, '_m_symbol_name_table_offset') else None
+            return getattr(self, '_m_symbol_name_table_offset', None)
 
         @property
         def symbol_name_table_size(self):
             if hasattr(self, '_m_symbol_name_table_size'):
-                return self._m_symbol_name_table_size if hasattr(self, '_m_symbol_name_table_size') else None
+                return self._m_symbol_name_table_size
 
             _pos = self._io.pos()
             self._io.seek(self.symbol_name_table_offset)
@@ -646,29 +645,29 @@ class MicrosoftPe(KaitaiStruct):
             self._m_symbol_name_table_size = self._io.read_u4le()
             self._debug['_m_symbol_name_table_size']['end'] = self._io.pos()
             self._io.seek(_pos)
-            return self._m_symbol_name_table_size if hasattr(self, '_m_symbol_name_table_size') else None
+            return getattr(self, '_m_symbol_name_table_size', None)
 
         @property
         def symbol_table(self):
             if hasattr(self, '_m_symbol_table'):
-                return self._m_symbol_table if hasattr(self, '_m_symbol_table') else None
+                return self._m_symbol_table
 
             _pos = self._io.pos()
             self._io.seek(self.pointer_to_symbol_table)
             self._debug['_m_symbol_table']['start'] = self._io.pos()
-            self._m_symbol_table = [None] * (self.number_of_symbols)
+            self._m_symbol_table = []
             for i in range(self.number_of_symbols):
                 if not 'arr' in self._debug['_m_symbol_table']:
                     self._debug['_m_symbol_table']['arr'] = []
                 self._debug['_m_symbol_table']['arr'].append({'start': self._io.pos()})
                 _t__m_symbol_table = MicrosoftPe.CoffSymbol(self._io, self, self._root)
                 _t__m_symbol_table._read()
-                self._m_symbol_table[i] = _t__m_symbol_table
+                self._m_symbol_table.append(_t__m_symbol_table)
                 self._debug['_m_symbol_table']['arr'][i]['end'] = self._io.pos()
 
             self._debug['_m_symbol_table']['end'] = self._io.pos()
             self._io.seek(_pos)
-            return self._m_symbol_table if hasattr(self, '_m_symbol_table') else None
+            return getattr(self, '_m_symbol_table', None)
 
 
     class Annoyingstring(KaitaiStruct):
@@ -685,7 +684,7 @@ class MicrosoftPe(KaitaiStruct):
         @property
         def name_from_offset(self):
             if hasattr(self, '_m_name_from_offset'):
-                return self._m_name_from_offset if hasattr(self, '_m_name_from_offset') else None
+                return self._m_name_from_offset
 
             if self.name_zeroes == 0:
                 io = self._root._io
@@ -696,12 +695,12 @@ class MicrosoftPe(KaitaiStruct):
                 self._debug['_m_name_from_offset']['end'] = io.pos()
                 io.seek(_pos)
 
-            return self._m_name_from_offset if hasattr(self, '_m_name_from_offset') else None
+            return getattr(self, '_m_name_from_offset', None)
 
         @property
         def name_offset(self):
             if hasattr(self, '_m_name_offset'):
-                return self._m_name_offset if hasattr(self, '_m_name_offset') else None
+                return self._m_name_offset
 
             _pos = self._io.pos()
             self._io.seek(4)
@@ -709,20 +708,20 @@ class MicrosoftPe(KaitaiStruct):
             self._m_name_offset = self._io.read_u4le()
             self._debug['_m_name_offset']['end'] = self._io.pos()
             self._io.seek(_pos)
-            return self._m_name_offset if hasattr(self, '_m_name_offset') else None
+            return getattr(self, '_m_name_offset', None)
 
         @property
         def name(self):
             if hasattr(self, '_m_name'):
-                return self._m_name if hasattr(self, '_m_name') else None
+                return self._m_name
 
             self._m_name = (self.name_from_offset if self.name_zeroes == 0 else self.name_from_short)
-            return self._m_name if hasattr(self, '_m_name') else None
+            return getattr(self, '_m_name', None)
 
         @property
         def name_zeroes(self):
             if hasattr(self, '_m_name_zeroes'):
-                return self._m_name_zeroes if hasattr(self, '_m_name_zeroes') else None
+                return self._m_name_zeroes
 
             _pos = self._io.pos()
             self._io.seek(0)
@@ -730,12 +729,12 @@ class MicrosoftPe(KaitaiStruct):
             self._m_name_zeroes = self._io.read_u4le()
             self._debug['_m_name_zeroes']['end'] = self._io.pos()
             self._io.seek(_pos)
-            return self._m_name_zeroes if hasattr(self, '_m_name_zeroes') else None
+            return getattr(self, '_m_name_zeroes', None)
 
         @property
         def name_from_short(self):
             if hasattr(self, '_m_name_from_short'):
-                return self._m_name_from_short if hasattr(self, '_m_name_from_short') else None
+                return self._m_name_from_short
 
             if self.name_zeroes != 0:
                 _pos = self._io.pos()
@@ -745,13 +744,13 @@ class MicrosoftPe(KaitaiStruct):
                 self._debug['_m_name_from_short']['end'] = self._io.pos()
                 self._io.seek(_pos)
 
-            return self._m_name_from_short if hasattr(self, '_m_name_from_short') else None
+            return getattr(self, '_m_name_from_short', None)
 
 
     @property
     def pe(self):
         if hasattr(self, '_m_pe'):
-            return self._m_pe if hasattr(self, '_m_pe') else None
+            return self._m_pe
 
         _pos = self._io.pos()
         self._io.seek(self.mz.ofs_pe)
@@ -760,6 +759,6 @@ class MicrosoftPe(KaitaiStruct):
         self._m_pe._read()
         self._debug['_m_pe']['end'] = self._io.pos()
         self._io.seek(_pos)
-        return self._m_pe if hasattr(self, '_m_pe') else None
+        return getattr(self, '_m_pe', None)
 
 

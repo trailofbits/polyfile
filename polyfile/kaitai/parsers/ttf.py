@@ -1,13 +1,12 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
-from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
 from enum import Enum
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class Ttf(KaitaiStruct):
@@ -30,14 +29,14 @@ class Ttf(KaitaiStruct):
         self.offset_table._read()
         self._debug['offset_table']['end'] = self._io.pos()
         self._debug['directory_table']['start'] = self._io.pos()
-        self.directory_table = [None] * (self.offset_table.num_tables)
+        self.directory_table = []
         for i in range(self.offset_table.num_tables):
             if not 'arr' in self._debug['directory_table']:
                 self._debug['directory_table']['arr'] = []
             self._debug['directory_table']['arr'].append({'start': self._io.pos()})
             _t_directory_table = Ttf.DirTableEntry(self._io, self, self._root)
             _t_directory_table._read()
-            self.directory_table[i] = _t_directory_table
+            self.directory_table.append(_t_directory_table)
             self._debug['directory_table']['arr'][i]['end'] = self._io.pos()
 
         self._debug['directory_table']['end'] = self._io.pos()
@@ -100,12 +99,12 @@ class Ttf(KaitaiStruct):
                 self.number_of_glyphs = self._io.read_u2be()
                 self._debug['number_of_glyphs']['end'] = self._io.pos()
                 self._debug['glyph_name_index']['start'] = self._io.pos()
-                self.glyph_name_index = [None] * (self.number_of_glyphs)
+                self.glyph_name_index = []
                 for i in range(self.number_of_glyphs):
                     if not 'arr' in self._debug['glyph_name_index']:
                         self._debug['glyph_name_index']['arr'] = []
                     self._debug['glyph_name_index']['arr'].append({'start': self._io.pos()})
-                    self.glyph_name_index[i] = self._io.read_u2be()
+                    self.glyph_name_index.append(self._io.read_u2be())
                     self._debug['glyph_name_index']['arr'][i]['end'] = self._io.pos()
 
                 self._debug['glyph_name_index']['end'] = self._io.pos()
@@ -204,14 +203,14 @@ class Ttf(KaitaiStruct):
             self.ofs_strings = self._io.read_u2be()
             self._debug['ofs_strings']['end'] = self._io.pos()
             self._debug['name_records']['start'] = self._io.pos()
-            self.name_records = [None] * (self.num_name_records)
+            self.name_records = []
             for i in range(self.num_name_records):
                 if not 'arr' in self._debug['name_records']:
                     self._debug['name_records']['arr'] = []
                 self._debug['name_records']['arr'].append({'start': self._io.pos()})
                 _t_name_records = Ttf.Name.NameRecord(self._io, self, self._root)
                 _t_name_records._read()
-                self.name_records[i] = _t_name_records
+                self.name_records.append(_t_name_records)
                 self._debug['name_records']['arr'][i]['end'] = self._io.pos()
 
             self._debug['name_records']['end'] = self._io.pos()
@@ -247,7 +246,7 @@ class Ttf(KaitaiStruct):
             @property
             def ascii_value(self):
                 if hasattr(self, '_m_ascii_value'):
-                    return self._m_ascii_value if hasattr(self, '_m_ascii_value') else None
+                    return self._m_ascii_value
 
                 io = self._parent._io
                 _pos = io.pos()
@@ -256,12 +255,12 @@ class Ttf(KaitaiStruct):
                 self._m_ascii_value = (io.read_bytes(self.len_str)).decode(u"ascii")
                 self._debug['_m_ascii_value']['end'] = io.pos()
                 io.seek(_pos)
-                return self._m_ascii_value if hasattr(self, '_m_ascii_value') else None
+                return getattr(self, '_m_ascii_value', None)
 
             @property
             def unicode_value(self):
                 if hasattr(self, '_m_unicode_value'):
-                    return self._m_unicode_value if hasattr(self, '_m_unicode_value') else None
+                    return self._m_unicode_value
 
                 io = self._parent._io
                 _pos = io.pos()
@@ -270,7 +269,7 @@ class Ttf(KaitaiStruct):
                 self._m_unicode_value = (io.read_bytes(self.len_str)).decode(u"utf-16be")
                 self._debug['_m_unicode_value']['end'] = io.pos()
                 io.seek(_pos)
-                return self._m_unicode_value if hasattr(self, '_m_unicode_value') else None
+                return getattr(self, '_m_unicode_value', None)
 
 
 
@@ -449,14 +448,14 @@ class Ttf(KaitaiStruct):
             self.subtable_count = self._io.read_u2be()
             self._debug['subtable_count']['end'] = self._io.pos()
             self._debug['subtables']['start'] = self._io.pos()
-            self.subtables = [None] * (self.subtable_count)
+            self.subtables = []
             for i in range(self.subtable_count):
                 if not 'arr' in self._debug['subtables']:
                     self._debug['subtables']['arr'] = []
                 self._debug['subtables']['arr'].append({'start': self._io.pos()})
                 _t_subtables = Ttf.Kern.Subtable(self._io, self, self._root)
                 _t_subtables._read()
-                self.subtables[i] = _t_subtables
+                self.subtables.append(_t_subtables)
                 self._debug['subtables']['arr'][i]['end'] = self._io.pos()
 
             self._debug['subtables']['end'] = self._io.pos()
@@ -524,14 +523,14 @@ class Ttf(KaitaiStruct):
                     self.range_shift = self._io.read_u2be()
                     self._debug['range_shift']['end'] = self._io.pos()
                     self._debug['kerning_pairs']['start'] = self._io.pos()
-                    self.kerning_pairs = [None] * (self.pair_count)
+                    self.kerning_pairs = []
                     for i in range(self.pair_count):
                         if not 'arr' in self._debug['kerning_pairs']:
                             self._debug['kerning_pairs']['arr'] = []
                         self._debug['kerning_pairs']['arr'].append({'start': self._io.pos()})
                         _t_kerning_pairs = Ttf.Kern.Subtable.Format0.KerningPair(self._io, self, self._root)
                         _t_kerning_pairs._read()
-                        self.kerning_pairs[i] = _t_kerning_pairs
+                        self.kerning_pairs.append(_t_kerning_pairs)
                         self._debug['kerning_pairs']['arr'][i]['end'] = self._io.pos()
 
                     self._debug['kerning_pairs']['end'] = self._io.pos()
@@ -584,7 +583,7 @@ class Ttf(KaitaiStruct):
         @property
         def value(self):
             if hasattr(self, '_m_value'):
-                return self._m_value if hasattr(self, '_m_value') else None
+                return self._m_value
 
             io = self._root._io
             _pos = io.pos()
@@ -655,7 +654,7 @@ class Ttf(KaitaiStruct):
                 self._m_value = io.read_bytes(self.length)
             self._debug['_m_value']['end'] = io.pos()
             io.seek(_pos)
-            return self._m_value if hasattr(self, '_m_value') else None
+            return getattr(self, '_m_value', None)
 
 
     class Os2(KaitaiStruct):
@@ -1369,12 +1368,12 @@ class Ttf(KaitaiStruct):
 
             def _read(self):
                 self._debug['end_pts_of_contours']['start'] = self._io.pos()
-                self.end_pts_of_contours = [None] * (self._parent.number_of_contours)
+                self.end_pts_of_contours = []
                 for i in range(self._parent.number_of_contours):
                     if not 'arr' in self._debug['end_pts_of_contours']:
                         self._debug['end_pts_of_contours']['arr'] = []
                     self._debug['end_pts_of_contours']['arr'].append({'start': self._io.pos()})
-                    self.end_pts_of_contours[i] = self._io.read_u2be()
+                    self.end_pts_of_contours.append(self._io.read_u2be())
                     self._debug['end_pts_of_contours']['arr'][i]['end'] = self._io.pos()
 
                 self._debug['end_pts_of_contours']['end'] = self._io.pos()
@@ -1385,14 +1384,14 @@ class Ttf(KaitaiStruct):
                 self.instructions = self._io.read_bytes(self.instruction_length)
                 self._debug['instructions']['end'] = self._io.pos()
                 self._debug['flags']['start'] = self._io.pos()
-                self.flags = [None] * (self.point_count)
+                self.flags = []
                 for i in range(self.point_count):
                     if not 'arr' in self._debug['flags']:
                         self._debug['flags']['arr'] = []
                     self._debug['flags']['arr'].append({'start': self._io.pos()})
                     _t_flags = Ttf.Glyf.SimpleGlyph.Flag(self._io, self, self._root)
                     _t_flags._read()
-                    self.flags[i] = _t_flags
+                    self.flags.append(_t_flags)
                     self._debug['flags']['arr'][i]['end'] = self._io.pos()
 
                 self._debug['flags']['end'] = self._io.pos()
@@ -1438,10 +1437,10 @@ class Ttf(KaitaiStruct):
             @property
             def point_count(self):
                 if hasattr(self, '_m_point_count'):
-                    return self._m_point_count if hasattr(self, '_m_point_count') else None
+                    return self._m_point_count
 
                 self._m_point_count = (max(self.end_pts_of_contours) + 1)
-                return self._m_point_count if hasattr(self, '_m_point_count') else None
+                return getattr(self, '_m_point_count', None)
 
 
 
@@ -1496,10 +1495,10 @@ class Ttf(KaitaiStruct):
         @property
         def is_version10(self):
             if hasattr(self, '_m_is_version10'):
-                return self._m_is_version10 if hasattr(self, '_m_is_version10') else None
+                return self._m_is_version10
 
             self._m_is_version10 =  ((self.table_version_number.major == 1) and (self.table_version_number.minor == 0)) 
-            return self._m_is_version10 if hasattr(self, '_m_is_version10') else None
+            return getattr(self, '_m_is_version10', None)
 
 
     class MaxpVersion10Body(KaitaiStruct):
@@ -1597,14 +1596,14 @@ class Ttf(KaitaiStruct):
             self.number_of_encoding_tables = self._io.read_u2be()
             self._debug['number_of_encoding_tables']['end'] = self._io.pos()
             self._debug['tables']['start'] = self._io.pos()
-            self.tables = [None] * (self.number_of_encoding_tables)
+            self.tables = []
             for i in range(self.number_of_encoding_tables):
                 if not 'arr' in self._debug['tables']:
                     self._debug['tables']['arr'] = []
                 self._debug['tables']['arr'].append({'start': self._io.pos()})
                 _t_tables = Ttf.Cmap.SubtableHeader(self._io, self, self._root)
                 _t_tables._read()
-                self.tables[i] = _t_tables
+                self.tables.append(_t_tables)
                 self._debug['tables']['arr'][i]['end'] = self._io.pos()
 
             self._debug['tables']['end'] = self._io.pos()
@@ -1631,7 +1630,7 @@ class Ttf(KaitaiStruct):
             @property
             def table(self):
                 if hasattr(self, '_m_table'):
-                    return self._m_table if hasattr(self, '_m_table') else None
+                    return self._m_table
 
                 io = self._parent._io
                 _pos = io.pos()
@@ -1641,7 +1640,7 @@ class Ttf(KaitaiStruct):
                 self._m_table._read()
                 self._debug['_m_table']['end'] = io.pos()
                 io.seek(_pos)
-                return self._m_table if hasattr(self, '_m_table') else None
+                return getattr(self, '_m_table', None)
 
 
         class Subtable(KaitaiStruct):
@@ -1718,12 +1717,12 @@ class Ttf(KaitaiStruct):
 
                 def _read(self):
                     self._debug['sub_header_keys']['start'] = self._io.pos()
-                    self.sub_header_keys = [None] * (256)
+                    self.sub_header_keys = []
                     for i in range(256):
                         if not 'arr' in self._debug['sub_header_keys']:
                             self._debug['sub_header_keys']['arr'] = []
                         self._debug['sub_header_keys']['arr'].append({'start': self._io.pos()})
-                        self.sub_header_keys[i] = self._io.read_u2be()
+                        self.sub_header_keys.append(self._io.read_u2be())
                         self._debug['sub_header_keys']['arr'][i]['end'] = self._io.pos()
 
                     self._debug['sub_header_keys']['end'] = self._io.pos()
@@ -1751,12 +1750,12 @@ class Ttf(KaitaiStruct):
                     self.range_shift = self._io.read_u2be()
                     self._debug['range_shift']['end'] = self._io.pos()
                     self._debug['end_count']['start'] = self._io.pos()
-                    self.end_count = [None] * (self.seg_count)
+                    self.end_count = []
                     for i in range(self.seg_count):
                         if not 'arr' in self._debug['end_count']:
                             self._debug['end_count']['arr'] = []
                         self._debug['end_count']['arr'].append({'start': self._io.pos()})
-                        self.end_count[i] = self._io.read_u2be()
+                        self.end_count.append(self._io.read_u2be())
                         self._debug['end_count']['arr'][i]['end'] = self._io.pos()
 
                     self._debug['end_count']['end'] = self._io.pos()
@@ -1764,32 +1763,32 @@ class Ttf(KaitaiStruct):
                     self.reserved_pad = self._io.read_u2be()
                     self._debug['reserved_pad']['end'] = self._io.pos()
                     self._debug['start_count']['start'] = self._io.pos()
-                    self.start_count = [None] * (self.seg_count)
+                    self.start_count = []
                     for i in range(self.seg_count):
                         if not 'arr' in self._debug['start_count']:
                             self._debug['start_count']['arr'] = []
                         self._debug['start_count']['arr'].append({'start': self._io.pos()})
-                        self.start_count[i] = self._io.read_u2be()
+                        self.start_count.append(self._io.read_u2be())
                         self._debug['start_count']['arr'][i]['end'] = self._io.pos()
 
                     self._debug['start_count']['end'] = self._io.pos()
                     self._debug['id_delta']['start'] = self._io.pos()
-                    self.id_delta = [None] * (self.seg_count)
+                    self.id_delta = []
                     for i in range(self.seg_count):
                         if not 'arr' in self._debug['id_delta']:
                             self._debug['id_delta']['arr'] = []
                         self._debug['id_delta']['arr'].append({'start': self._io.pos()})
-                        self.id_delta[i] = self._io.read_u2be()
+                        self.id_delta.append(self._io.read_u2be())
                         self._debug['id_delta']['arr'][i]['end'] = self._io.pos()
 
                     self._debug['id_delta']['end'] = self._io.pos()
                     self._debug['id_range_offset']['start'] = self._io.pos()
-                    self.id_range_offset = [None] * (self.seg_count)
+                    self.id_range_offset = []
                     for i in range(self.seg_count):
                         if not 'arr' in self._debug['id_range_offset']:
                             self._debug['id_range_offset']['arr'] = []
                         self._debug['id_range_offset']['arr'].append({'start': self._io.pos()})
-                        self.id_range_offset[i] = self._io.read_u2be()
+                        self.id_range_offset.append(self._io.read_u2be())
                         self._debug['id_range_offset']['arr'][i]['end'] = self._io.pos()
 
                     self._debug['id_range_offset']['end'] = self._io.pos()
@@ -1809,10 +1808,10 @@ class Ttf(KaitaiStruct):
                 @property
                 def seg_count(self):
                     if hasattr(self, '_m_seg_count'):
-                        return self._m_seg_count if hasattr(self, '_m_seg_count') else None
+                        return self._m_seg_count
 
                     self._m_seg_count = self.seg_count_x2 // 2
-                    return self._m_seg_count if hasattr(self, '_m_seg_count') else None
+                    return getattr(self, '_m_seg_count', None)
 
 
             class TrimmedTableMapping(KaitaiStruct):
@@ -1831,12 +1830,12 @@ class Ttf(KaitaiStruct):
                     self.entry_count = self._io.read_u2be()
                     self._debug['entry_count']['end'] = self._io.pos()
                     self._debug['glyph_id_array']['start'] = self._io.pos()
-                    self.glyph_id_array = [None] * (self.entry_count)
+                    self.glyph_id_array = []
                     for i in range(self.entry_count):
                         if not 'arr' in self._debug['glyph_id_array']:
                             self._debug['glyph_id_array']['arr'] = []
                         self._debug['glyph_id_array']['arr'].append({'start': self._io.pos()})
-                        self.glyph_id_array[i] = self._io.read_u2be()
+                        self.glyph_id_array.append(self._io.read_u2be())
                         self._debug['glyph_id_array']['arr'][i]['end'] = self._io.pos()
 
                     self._debug['glyph_id_array']['end'] = self._io.pos()

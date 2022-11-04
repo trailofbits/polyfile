@@ -1,13 +1,12 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
-from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 from enum import Enum
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 from polyfile.kaitai.parsers import ethernet_frame
@@ -405,22 +404,22 @@ class PacketPpi(KaitaiStruct):
             self.rssi_combined = self._io.read_u1()
             self._debug['rssi_combined']['end'] = self._io.pos()
             self._debug['rssi_ant_ctl']['start'] = self._io.pos()
-            self.rssi_ant_ctl = [None] * (4)
+            self.rssi_ant_ctl = []
             for i in range(4):
                 if not 'arr' in self._debug['rssi_ant_ctl']:
                     self._debug['rssi_ant_ctl']['arr'] = []
                 self._debug['rssi_ant_ctl']['arr'].append({'start': self._io.pos()})
-                self.rssi_ant_ctl[i] = self._io.read_u1()
+                self.rssi_ant_ctl.append(self._io.read_u1())
                 self._debug['rssi_ant_ctl']['arr'][i]['end'] = self._io.pos()
 
             self._debug['rssi_ant_ctl']['end'] = self._io.pos()
             self._debug['rssi_ant_ext']['start'] = self._io.pos()
-            self.rssi_ant_ext = [None] * (4)
+            self.rssi_ant_ext = []
             for i in range(4):
                 if not 'arr' in self._debug['rssi_ant_ext']:
                     self._debug['rssi_ant_ext']['arr'] = []
                 self._debug['rssi_ant_ext']['arr'].append({'start': self._io.pos()})
-                self.rssi_ant_ext[i] = self._io.read_u1()
+                self.rssi_ant_ext.append(self._io.read_u1())
                 self._debug['rssi_ant_ext']['arr'][i]['end'] = self._io.pos()
 
             self._debug['rssi_ant_ext']['end'] = self._io.pos()
@@ -432,24 +431,24 @@ class PacketPpi(KaitaiStruct):
             self.ext_channel_flags._read()
             self._debug['ext_channel_flags']['end'] = self._io.pos()
             self._debug['rf_signal_noise']['start'] = self._io.pos()
-            self.rf_signal_noise = [None] * (4)
+            self.rf_signal_noise = []
             for i in range(4):
                 if not 'arr' in self._debug['rf_signal_noise']:
                     self._debug['rf_signal_noise']['arr'] = []
                 self._debug['rf_signal_noise']['arr'].append({'start': self._io.pos()})
                 _t_rf_signal_noise = PacketPpi.Radio80211nMacPhyExtBody.SignalNoise(self._io, self, self._root)
                 _t_rf_signal_noise._read()
-                self.rf_signal_noise[i] = _t_rf_signal_noise
+                self.rf_signal_noise.append(_t_rf_signal_noise)
                 self._debug['rf_signal_noise']['arr'][i]['end'] = self._io.pos()
 
             self._debug['rf_signal_noise']['end'] = self._io.pos()
             self._debug['evm']['start'] = self._io.pos()
-            self.evm = [None] * (4)
+            self.evm = []
             for i in range(4):
                 if not 'arr' in self._debug['evm']:
                     self._debug['evm']['arr'] = []
                 self._debug['evm']['arr'].append({'start': self._io.pos()})
-                self.evm[i] = self._io.read_u4le()
+                self.evm.append(self._io.read_u4le())
                 self._debug['evm']['arr'][i]['end'] = self._io.pos()
 
             self._debug['evm']['end'] = self._io.pos()

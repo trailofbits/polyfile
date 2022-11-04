@@ -10,6 +10,8 @@ import sys
 from typing import Any, Dict, List, Optional, Tuple
 
 
+ONLY_REBUILD_KAITAI = len(sys.argv) == 2 and sys.argv[1] == "--only-rebuild-kaitai"
+
 # Build the entire Kaitai struct format library:
 POLYFILE_DIR: Path = Path(__file__).absolute().parent
 COMPILE_SCRIPT: Path = POLYFILE_DIR / "polyfile" / "kaitai" / "compiler.py"
@@ -23,6 +25,11 @@ README_PATH: Path = POLYFILE_DIR / "README.md"
 if not (KAITAI_FORMAT_LIBRARY / "README.md").exists():
     subprocess.check_call(["git", "submodule", "init"], cwd=str(POLYFILE_DIR))
     subprocess.check_call(["git", "submodule", "update"], cwd=str(POLYFILE_DIR))
+
+if ONLY_REBUILD_KAITAI:
+    # Remove the manifest file to force a rebuild:
+    if MANIFEST_PATH.exists():
+        MANIFEST_PATH.unlink()
 
 
 def compile_ksy(path: Path) -> List[Tuple[str, str]]:
@@ -107,6 +114,10 @@ if not MANIFEST_PATH.exists() or newest_definition > MANIFEST_PATH.stat().st_mti
 
     with open(MANIFEST_PATH, "w") as f:
         json.dump(ksy_manifest, f)
+
+
+if ONLY_REBUILD_KAITAI:
+    exit(0)
 
 
 with open(README_PATH, "r", encoding="utf8") as readme:

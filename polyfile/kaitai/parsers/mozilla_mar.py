@@ -1,13 +1,12 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
-from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 from enum import Enum
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class MozillaMar(KaitaiStruct):
@@ -49,14 +48,14 @@ class MozillaMar(KaitaiStruct):
         self.len_signatures = self._io.read_u4be()
         self._debug['len_signatures']['end'] = self._io.pos()
         self._debug['signatures']['start'] = self._io.pos()
-        self.signatures = [None] * (self.len_signatures)
+        self.signatures = []
         for i in range(self.len_signatures):
             if not 'arr' in self._debug['signatures']:
                 self._debug['signatures']['arr'] = []
             self._debug['signatures']['arr'].append({'start': self._io.pos()})
             _t_signatures = MozillaMar.Signature(self._io, self, self._root)
             _t_signatures._read()
-            self.signatures[i] = _t_signatures
+            self.signatures.append(_t_signatures)
             self._debug['signatures']['arr'][i]['end'] = self._io.pos()
 
         self._debug['signatures']['end'] = self._io.pos()
@@ -64,14 +63,14 @@ class MozillaMar(KaitaiStruct):
         self.len_additional_sections = self._io.read_u4be()
         self._debug['len_additional_sections']['end'] = self._io.pos()
         self._debug['additional_sections']['start'] = self._io.pos()
-        self.additional_sections = [None] * (self.len_additional_sections)
+        self.additional_sections = []
         for i in range(self.len_additional_sections):
             if not 'arr' in self._debug['additional_sections']:
                 self._debug['additional_sections']['arr'] = []
             self._debug['additional_sections']['arr'].append({'start': self._io.pos()})
             _t_additional_sections = MozillaMar.AdditionalSection(self._io, self, self._root)
             _t_additional_sections._read()
-            self.additional_sections[i] = _t_additional_sections
+            self.additional_sections.append(_t_additional_sections)
             self._debug['additional_sections']['arr'][i]['end'] = self._io.pos()
 
         self._debug['additional_sections']['end'] = self._io.pos()
@@ -183,7 +182,7 @@ class MozillaMar(KaitaiStruct):
         @property
         def body(self):
             if hasattr(self, '_m_body'):
-                return self._m_body if hasattr(self, '_m_body') else None
+                return self._m_body
 
             io = self._root._io
             _pos = io.pos()
@@ -192,7 +191,7 @@ class MozillaMar(KaitaiStruct):
             self._m_body = io.read_bytes(self.len_content)
             self._debug['_m_body']['end'] = io.pos()
             io.seek(_pos)
-            return self._m_body if hasattr(self, '_m_body') else None
+            return getattr(self, '_m_body', None)
 
 
     class AdditionalSection(KaitaiStruct):
@@ -225,7 +224,7 @@ class MozillaMar(KaitaiStruct):
     @property
     def index(self):
         if hasattr(self, '_m_index'):
-            return self._m_index if hasattr(self, '_m_index') else None
+            return self._m_index
 
         _pos = self._io.pos()
         self._io.seek(self.ofs_index)
@@ -234,6 +233,6 @@ class MozillaMar(KaitaiStruct):
         self._m_index._read()
         self._debug['_m_index']['end'] = self._io.pos()
         self._io.seek(_pos)
-        return self._m_index if hasattr(self, '_m_index') else None
+        return getattr(self, '_m_index', None)
 
 

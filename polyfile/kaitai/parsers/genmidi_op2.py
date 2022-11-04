@@ -1,12 +1,11 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
-from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class GenmidiOp2(KaitaiStruct):
@@ -45,24 +44,24 @@ class GenmidiOp2(KaitaiStruct):
         if not self.magic == b"\x23\x4F\x50\x4C\x5F\x49\x49\x23":
             raise kaitaistruct.ValidationNotEqualError(b"\x23\x4F\x50\x4C\x5F\x49\x49\x23", self.magic, self._io, u"/seq/0")
         self._debug['instruments']['start'] = self._io.pos()
-        self.instruments = [None] * (175)
+        self.instruments = []
         for i in range(175):
             if not 'arr' in self._debug['instruments']:
                 self._debug['instruments']['arr'] = []
             self._debug['instruments']['arr'].append({'start': self._io.pos()})
             _t_instruments = GenmidiOp2.InstrumentEntry(self._io, self, self._root)
             _t_instruments._read()
-            self.instruments[i] = _t_instruments
+            self.instruments.append(_t_instruments)
             self._debug['instruments']['arr'][i]['end'] = self._io.pos()
 
         self._debug['instruments']['end'] = self._io.pos()
         self._debug['instrument_names']['start'] = self._io.pos()
-        self.instrument_names = [None] * (175)
+        self.instrument_names = []
         for i in range(175):
             if not 'arr' in self._debug['instrument_names']:
                 self._debug['instrument_names']['arr'] = []
             self._debug['instrument_names']['arr'].append({'start': self._io.pos()})
-            self.instrument_names[i] = (KaitaiStream.bytes_terminate(KaitaiStream.bytes_strip_right(self._io.read_bytes(32), 0), 0, False)).decode(u"ASCII")
+            self.instrument_names.append((KaitaiStream.bytes_terminate(KaitaiStream.bytes_strip_right(self._io.read_bytes(32), 0), 0, False)).decode(u"ASCII"))
             self._debug['instrument_names']['arr'][i]['end'] = self._io.pos()
 
         self._debug['instrument_names']['end'] = self._io.pos()
@@ -86,14 +85,14 @@ class GenmidiOp2(KaitaiStruct):
             self.note = self._io.read_u1()
             self._debug['note']['end'] = self._io.pos()
             self._debug['instruments']['start'] = self._io.pos()
-            self.instruments = [None] * (2)
+            self.instruments = []
             for i in range(2):
                 if not 'arr' in self._debug['instruments']:
                     self._debug['instruments']['arr'] = []
                 self._debug['instruments']['arr'].append({'start': self._io.pos()})
                 _t_instruments = GenmidiOp2.Instrument(self._io, self, self._root)
                 _t_instruments._read()
-                self.instruments[i] = _t_instruments
+                self.instruments.append(_t_instruments)
                 self._debug['instruments']['arr'][i]['end'] = self._io.pos()
 
             self._debug['instruments']['end'] = self._io.pos()

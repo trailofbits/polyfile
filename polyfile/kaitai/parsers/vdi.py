@@ -1,13 +1,12 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
-from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 from enum import Enum
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class Vdi(KaitaiStruct):
@@ -239,50 +238,50 @@ class Vdi(KaitaiStruct):
         @property
         def header_size(self):
             if hasattr(self, '_m_header_size'):
-                return self._m_header_size if hasattr(self, '_m_header_size') else None
+                return self._m_header_size
 
             self._m_header_size = (self.header_size_optional if self.subheader_size_is_dynamic else 336)
-            return self._m_header_size if hasattr(self, '_m_header_size') else None
+            return getattr(self, '_m_header_size', None)
 
         @property
         def blocks_map_offset(self):
             if hasattr(self, '_m_blocks_map_offset'):
-                return self._m_blocks_map_offset if hasattr(self, '_m_blocks_map_offset') else None
+                return self._m_blocks_map_offset
 
             self._m_blocks_map_offset = self.header_main.blocks_map_offset
-            return self._m_blocks_map_offset if hasattr(self, '_m_blocks_map_offset') else None
+            return getattr(self, '_m_blocks_map_offset', None)
 
         @property
         def subheader_size_is_dynamic(self):
             if hasattr(self, '_m_subheader_size_is_dynamic'):
-                return self._m_subheader_size_is_dynamic if hasattr(self, '_m_subheader_size_is_dynamic') else None
+                return self._m_subheader_size_is_dynamic
 
             self._m_subheader_size_is_dynamic = self.version.major >= 1
-            return self._m_subheader_size_is_dynamic if hasattr(self, '_m_subheader_size_is_dynamic') else None
+            return getattr(self, '_m_subheader_size_is_dynamic', None)
 
         @property
         def blocks_offset(self):
             if hasattr(self, '_m_blocks_offset'):
-                return self._m_blocks_offset if hasattr(self, '_m_blocks_offset') else None
+                return self._m_blocks_offset
 
             self._m_blocks_offset = self.header_main.offset_data
-            return self._m_blocks_offset if hasattr(self, '_m_blocks_offset') else None
+            return getattr(self, '_m_blocks_offset', None)
 
         @property
         def block_size(self):
             if hasattr(self, '_m_block_size'):
-                return self._m_block_size if hasattr(self, '_m_block_size') else None
+                return self._m_block_size
 
             self._m_block_size = (self.header_main.block_metadata_size + self.header_main.block_data_size)
-            return self._m_block_size if hasattr(self, '_m_block_size') else None
+            return getattr(self, '_m_block_size', None)
 
         @property
         def blocks_map_size(self):
             if hasattr(self, '_m_blocks_map_size'):
-                return self._m_blocks_map_size if hasattr(self, '_m_blocks_map_size') else None
+                return self._m_blocks_map_size
 
             self._m_blocks_map_size = ((((self.header_main.blocks_in_image * 4) + self.header_main.geometry.sector_size) - 1) // self.header_main.geometry.sector_size * self.header_main.geometry.sector_size)
-            return self._m_blocks_map_size if hasattr(self, '_m_blocks_map_size') else None
+            return getattr(self, '_m_blocks_map_size', None)
 
 
     class BlocksMap(KaitaiStruct):
@@ -295,14 +294,14 @@ class Vdi(KaitaiStruct):
 
         def _read(self):
             self._debug['index']['start'] = self._io.pos()
-            self.index = [None] * (self._root.header.header_main.blocks_in_image)
+            self.index = []
             for i in range(self._root.header.header_main.blocks_in_image):
                 if not 'arr' in self._debug['index']:
                     self._debug['index']['arr'] = []
                 self._debug['index']['arr'].append({'start': self._io.pos()})
                 _t_index = Vdi.BlocksMap.BlockIndex(self._io, self, self._root)
                 _t_index._read()
-                self.index[i] = _t_index
+                self.index.append(_t_index)
                 self._debug['index']['arr'][i]['end'] = self._io.pos()
 
             self._debug['index']['end'] = self._io.pos()
@@ -323,20 +322,20 @@ class Vdi(KaitaiStruct):
             @property
             def is_allocated(self):
                 if hasattr(self, '_m_is_allocated'):
-                    return self._m_is_allocated if hasattr(self, '_m_is_allocated') else None
+                    return self._m_is_allocated
 
                 self._m_is_allocated = self.index < self._root.block_discarded
-                return self._m_is_allocated if hasattr(self, '_m_is_allocated') else None
+                return getattr(self, '_m_is_allocated', None)
 
             @property
             def block(self):
                 if hasattr(self, '_m_block'):
-                    return self._m_block if hasattr(self, '_m_block') else None
+                    return self._m_block
 
                 if self.is_allocated:
                     self._m_block = self._root.disk.blocks[self.index]
 
-                return self._m_block if hasattr(self, '_m_block') else None
+                return getattr(self, '_m_block', None)
 
 
 
@@ -350,14 +349,14 @@ class Vdi(KaitaiStruct):
 
         def _read(self):
             self._debug['blocks']['start'] = self._io.pos()
-            self.blocks = [None] * (self._root.header.header_main.blocks_in_image)
+            self.blocks = []
             for i in range(self._root.header.header_main.blocks_in_image):
                 if not 'arr' in self._debug['blocks']:
                     self._debug['blocks']['arr'] = []
                 self._debug['blocks']['arr'].append({'start': self._io.pos()})
                 _t_blocks = Vdi.Disk.Block(self._io, self, self._root)
                 _t_blocks._read()
-                self.blocks[i] = _t_blocks
+                self.blocks.append(_t_blocks)
                 self._debug['blocks']['arr'][i]['end'] = self._io.pos()
 
             self._debug['blocks']['end'] = self._io.pos()
@@ -411,18 +410,18 @@ class Vdi(KaitaiStruct):
     @property
     def block_discarded(self):
         if hasattr(self, '_m_block_discarded'):
-            return self._m_block_discarded if hasattr(self, '_m_block_discarded') else None
+            return self._m_block_discarded
 
         self._m_block_discarded = 4294967294
-        return self._m_block_discarded if hasattr(self, '_m_block_discarded') else None
+        return getattr(self, '_m_block_discarded', None)
 
     @property
     def block_unallocated(self):
         if hasattr(self, '_m_block_unallocated'):
-            return self._m_block_unallocated if hasattr(self, '_m_block_unallocated') else None
+            return self._m_block_unallocated
 
         self._m_block_unallocated = 4294967295
-        return self._m_block_unallocated if hasattr(self, '_m_block_unallocated') else None
+        return getattr(self, '_m_block_unallocated', None)
 
     @property
     def blocks_map(self):
@@ -430,7 +429,7 @@ class Vdi(KaitaiStruct):
         The blocks_map will take up blocks_in_image_max * sizeof(uint32_t) bytes; since the blocks_map is read and written in a single operation, its size needs to be limited to INT_MAX; furthermore, when opening an image, the blocks_map size is rounded up to be aligned on BDRV_SECTOR_SIZE. Therefore this should satisfy the following: blocks_in_image_max * sizeof(uint32_t) + BDRV_SECTOR_SIZE == INT_MAX + 1 (INT_MAX + 1 is the first value not representable as an int) This guarantees that any value below or equal to the constant will, when multiplied by sizeof(uint32_t) and rounded up to a BDRV_SECTOR_SIZE boundary, still be below or equal to INT_MAX.
         """
         if hasattr(self, '_m_blocks_map'):
-            return self._m_blocks_map if hasattr(self, '_m_blocks_map') else None
+            return self._m_blocks_map
 
         _pos = self._io.pos()
         self._io.seek(self.header.blocks_map_offset)
@@ -441,12 +440,12 @@ class Vdi(KaitaiStruct):
         self._m_blocks_map._read()
         self._debug['_m_blocks_map']['end'] = self._io.pos()
         self._io.seek(_pos)
-        return self._m_blocks_map if hasattr(self, '_m_blocks_map') else None
+        return getattr(self, '_m_blocks_map', None)
 
     @property
     def disk(self):
         if hasattr(self, '_m_disk'):
-            return self._m_disk if hasattr(self, '_m_disk') else None
+            return self._m_disk
 
         _pos = self._io.pos()
         self._io.seek(self.header.blocks_offset)
@@ -455,6 +454,6 @@ class Vdi(KaitaiStruct):
         self._m_disk._read()
         self._debug['_m_disk']['end'] = self._io.pos()
         self._io.seek(_pos)
-        return self._m_disk if hasattr(self, '_m_disk') else None
+        return getattr(self, '_m_disk', None)
 
 

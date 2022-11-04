@@ -1,13 +1,12 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
-from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 from enum import Enum
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class BlenderBlend(KaitaiStruct):
@@ -78,14 +77,14 @@ class BlenderBlend(KaitaiStruct):
             self.num_fields = self._io.read_u2le()
             self._debug['num_fields']['end'] = self._io.pos()
             self._debug['fields']['start'] = self._io.pos()
-            self.fields = [None] * (self.num_fields)
+            self.fields = []
             for i in range(self.num_fields):
                 if not 'arr' in self._debug['fields']:
                     self._debug['fields']['arr'] = []
                 self._debug['fields']['arr'].append({'start': self._io.pos()})
                 _t_fields = BlenderBlend.DnaField(self._io, self, self._root)
                 _t_fields._read()
-                self.fields[i] = _t_fields
+                self.fields.append(_t_fields)
                 self._debug['fields']['arr'][i]['end'] = self._io.pos()
 
             self._debug['fields']['end'] = self._io.pos()
@@ -93,10 +92,10 @@ class BlenderBlend(KaitaiStruct):
         @property
         def type(self):
             if hasattr(self, '_m_type'):
-                return self._m_type if hasattr(self, '_m_type') else None
+                return self._m_type
 
             self._m_type = self._parent.types[self.idx_type]
-            return self._m_type if hasattr(self, '_m_type') else None
+            return getattr(self, '_m_type', None)
 
 
     class FileBlock(KaitaiStruct):
@@ -137,12 +136,12 @@ class BlenderBlend(KaitaiStruct):
         @property
         def sdna_struct(self):
             if hasattr(self, '_m_sdna_struct'):
-                return self._m_sdna_struct if hasattr(self, '_m_sdna_struct') else None
+                return self._m_sdna_struct
 
             if self.sdna_index != 0:
                 self._m_sdna_struct = self._root.sdna_structs[self.sdna_index]
 
-            return self._m_sdna_struct if hasattr(self, '_m_sdna_struct') else None
+            return getattr(self, '_m_sdna_struct', None)
 
 
     class Dna1Body(KaitaiStruct):
@@ -183,12 +182,12 @@ class BlenderBlend(KaitaiStruct):
             self.num_names = self._io.read_u4le()
             self._debug['num_names']['end'] = self._io.pos()
             self._debug['names']['start'] = self._io.pos()
-            self.names = [None] * (self.num_names)
+            self.names = []
             for i in range(self.num_names):
                 if not 'arr' in self._debug['names']:
                     self._debug['names']['arr'] = []
                 self._debug['names']['arr'].append({'start': self._io.pos()})
-                self.names[i] = (self._io.read_bytes_term(0, False, True, True)).decode(u"UTF-8")
+                self.names.append((self._io.read_bytes_term(0, False, True, True)).decode(u"UTF-8"))
                 self._debug['names']['arr'][i]['end'] = self._io.pos()
 
             self._debug['names']['end'] = self._io.pos()
@@ -204,12 +203,12 @@ class BlenderBlend(KaitaiStruct):
             self.num_types = self._io.read_u4le()
             self._debug['num_types']['end'] = self._io.pos()
             self._debug['types']['start'] = self._io.pos()
-            self.types = [None] * (self.num_types)
+            self.types = []
             for i in range(self.num_types):
                 if not 'arr' in self._debug['types']:
                     self._debug['types']['arr'] = []
                 self._debug['types']['arr'].append({'start': self._io.pos()})
-                self.types[i] = (self._io.read_bytes_term(0, False, True, True)).decode(u"UTF-8")
+                self.types.append((self._io.read_bytes_term(0, False, True, True)).decode(u"UTF-8"))
                 self._debug['types']['arr'][i]['end'] = self._io.pos()
 
             self._debug['types']['end'] = self._io.pos()
@@ -222,12 +221,12 @@ class BlenderBlend(KaitaiStruct):
             if not self.tlen_magic == b"\x54\x4C\x45\x4E":
                 raise kaitaistruct.ValidationNotEqualError(b"\x54\x4C\x45\x4E", self.tlen_magic, self._io, u"/types/dna1_body/seq/9")
             self._debug['lengths']['start'] = self._io.pos()
-            self.lengths = [None] * (self.num_types)
+            self.lengths = []
             for i in range(self.num_types):
                 if not 'arr' in self._debug['lengths']:
                     self._debug['lengths']['arr'] = []
                 self._debug['lengths']['arr'].append({'start': self._io.pos()})
-                self.lengths[i] = self._io.read_u2le()
+                self.lengths.append(self._io.read_u2le())
                 self._debug['lengths']['arr'][i]['end'] = self._io.pos()
 
             self._debug['lengths']['end'] = self._io.pos()
@@ -243,14 +242,14 @@ class BlenderBlend(KaitaiStruct):
             self.num_structs = self._io.read_u4le()
             self._debug['num_structs']['end'] = self._io.pos()
             self._debug['structs']['start'] = self._io.pos()
-            self.structs = [None] * (self.num_structs)
+            self.structs = []
             for i in range(self.num_structs):
                 if not 'arr' in self._debug['structs']:
                     self._debug['structs']['arr'] = []
                 self._debug['structs']['arr'].append({'start': self._io.pos()})
                 _t_structs = BlenderBlend.DnaStruct(self._io, self, self._root)
                 _t_structs._read()
-                self.structs[i] = _t_structs
+                self.structs.append(_t_structs)
                 self._debug['structs']['arr'][i]['end'] = self._io.pos()
 
             self._debug['structs']['end'] = self._io.pos()
@@ -284,10 +283,10 @@ class BlenderBlend(KaitaiStruct):
         def psize(self):
             """Number of bytes that a pointer occupies."""
             if hasattr(self, '_m_psize'):
-                return self._m_psize if hasattr(self, '_m_psize') else None
+                return self._m_psize
 
             self._m_psize = (8 if self.ptr_size_id == BlenderBlend.PtrSize.bits_64 else 4)
-            return self._m_psize if hasattr(self, '_m_psize') else None
+            return getattr(self, '_m_psize', None)
 
 
     class DnaField(KaitaiStruct):
@@ -309,26 +308,26 @@ class BlenderBlend(KaitaiStruct):
         @property
         def type(self):
             if hasattr(self, '_m_type'):
-                return self._m_type if hasattr(self, '_m_type') else None
+                return self._m_type
 
             self._m_type = self._parent._parent.types[self.idx_type]
-            return self._m_type if hasattr(self, '_m_type') else None
+            return getattr(self, '_m_type', None)
 
         @property
         def name(self):
             if hasattr(self, '_m_name'):
-                return self._m_name if hasattr(self, '_m_name') else None
+                return self._m_name
 
             self._m_name = self._parent._parent.names[self.idx_name]
-            return self._m_name if hasattr(self, '_m_name') else None
+            return getattr(self, '_m_name', None)
 
 
     @property
     def sdna_structs(self):
         if hasattr(self, '_m_sdna_structs'):
-            return self._m_sdna_structs if hasattr(self, '_m_sdna_structs') else None
+            return self._m_sdna_structs
 
         self._m_sdna_structs = self.blocks[(len(self.blocks) - 2)].body.structs
-        return self._m_sdna_structs if hasattr(self, '_m_sdna_structs') else None
+        return getattr(self, '_m_sdna_structs', None)
 
 

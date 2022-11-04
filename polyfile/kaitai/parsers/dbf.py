@@ -1,13 +1,12 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
-from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 from enum import Enum
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class Dbf(KaitaiStruct):
@@ -48,17 +47,17 @@ class Dbf(KaitaiStruct):
         if not self.header_terminator == b"\x0D":
             raise kaitaistruct.ValidationNotEqualError(b"\x0D", self.header_terminator, self._io, u"/seq/2")
         self._debug['records']['start'] = self._io.pos()
-        self._raw_records = [None] * (self.header1.num_records)
-        self.records = [None] * (self.header1.num_records)
+        self._raw_records = []
+        self.records = []
         for i in range(self.header1.num_records):
             if not 'arr' in self._debug['records']:
                 self._debug['records']['arr'] = []
             self._debug['records']['arr'].append({'start': self._io.pos()})
-            self._raw_records[i] = self._io.read_bytes(self.header1.len_record)
+            self._raw_records.append(self._io.read_bytes(self.header1.len_record))
             _io__raw_records = KaitaiStream(BytesIO(self._raw_records[i]))
             _t_records = Dbf.Record(_io__raw_records, self, self._root)
             _t_records._read()
-            self.records[i] = _t_records
+            self.records.append(_t_records)
             self._debug['records']['arr'][i]['end'] = self._io.pos()
 
         self._debug['records']['end'] = self._io.pos()
@@ -179,10 +178,10 @@ class Dbf(KaitaiStruct):
         @property
         def dbase_level(self):
             if hasattr(self, '_m_dbase_level'):
-                return self._m_dbase_level if hasattr(self, '_m_dbase_level') else None
+                return self._m_dbase_level
 
             self._m_dbase_level = (self.version & 7)
-            return self._m_dbase_level if hasattr(self, '_m_dbase_level') else None
+            return getattr(self, '_m_dbase_level', None)
 
 
     class HeaderDbase3(KaitaiStruct):
@@ -260,12 +259,12 @@ class Dbf(KaitaiStruct):
             self.deleted = KaitaiStream.resolve_enum(Dbf.DeleteState, self._io.read_u1())
             self._debug['deleted']['end'] = self._io.pos()
             self._debug['record_fields']['start'] = self._io.pos()
-            self.record_fields = [None] * (len(self._root.header2.fields))
+            self.record_fields = []
             for i in range(len(self._root.header2.fields)):
                 if not 'arr' in self._debug['record_fields']:
                     self._debug['record_fields']['arr'] = []
                 self._debug['record_fields']['arr'].append({'start': self._io.pos()})
-                self.record_fields[i] = self._io.read_bytes(self._root.header2.fields[i].length)
+                self.record_fields.append(self._io.read_bytes(self._root.header2.fields[i].length))
                 self._debug['record_fields']['arr'][i]['end'] = self._io.pos()
 
             self._debug['record_fields']['end'] = self._io.pos()

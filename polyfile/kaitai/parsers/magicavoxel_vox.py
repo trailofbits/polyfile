@@ -1,13 +1,12 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
-from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 from enum import Enum
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class MagicavoxelVox(KaitaiStruct):
@@ -162,14 +161,14 @@ class MagicavoxelVox(KaitaiStruct):
 
         def _read(self):
             self._debug['colors']['start'] = self._io.pos()
-            self.colors = [None] * (256)
+            self.colors = []
             for i in range(256):
                 if not 'arr' in self._debug['colors']:
                     self._debug['colors']['arr'] = []
                 self._debug['colors']['arr'].append({'start': self._io.pos()})
                 _t_colors = MagicavoxelVox.Color(self._io, self, self._root)
                 _t_colors._read()
-                self.colors[i] = _t_colors
+                self.colors.append(_t_colors)
                 self._debug['colors']['arr'][i]['end'] = self._io.pos()
 
             self._debug['colors']['end'] = self._io.pos()
@@ -254,66 +253,66 @@ class MagicavoxelVox(KaitaiStruct):
         @property
         def has_is_total_power(self):
             if hasattr(self, '_m_has_is_total_power'):
-                return self._m_has_is_total_power if hasattr(self, '_m_has_is_total_power') else None
+                return self._m_has_is_total_power
 
             self._m_has_is_total_power = (self.property_bits & 128) != 0
-            return self._m_has_is_total_power if hasattr(self, '_m_has_is_total_power') else None
+            return getattr(self, '_m_has_is_total_power', None)
 
         @property
         def has_plastic(self):
             if hasattr(self, '_m_has_plastic'):
-                return self._m_has_plastic if hasattr(self, '_m_has_plastic') else None
+                return self._m_has_plastic
 
             self._m_has_plastic = (self.property_bits & 1) != 0
-            return self._m_has_plastic if hasattr(self, '_m_has_plastic') else None
+            return getattr(self, '_m_has_plastic', None)
 
         @property
         def has_attenuation(self):
             if hasattr(self, '_m_has_attenuation'):
-                return self._m_has_attenuation if hasattr(self, '_m_has_attenuation') else None
+                return self._m_has_attenuation
 
             self._m_has_attenuation = (self.property_bits & 16) != 0
-            return self._m_has_attenuation if hasattr(self, '_m_has_attenuation') else None
+            return getattr(self, '_m_has_attenuation', None)
 
         @property
         def has_power(self):
             if hasattr(self, '_m_has_power'):
-                return self._m_has_power if hasattr(self, '_m_has_power') else None
+                return self._m_has_power
 
             self._m_has_power = (self.property_bits & 32) != 0
-            return self._m_has_power if hasattr(self, '_m_has_power') else None
+            return getattr(self, '_m_has_power', None)
 
         @property
         def has_roughness(self):
             if hasattr(self, '_m_has_roughness'):
-                return self._m_has_roughness if hasattr(self, '_m_has_roughness') else None
+                return self._m_has_roughness
 
             self._m_has_roughness = (self.property_bits & 2) != 0
-            return self._m_has_roughness if hasattr(self, '_m_has_roughness') else None
+            return getattr(self, '_m_has_roughness', None)
 
         @property
         def has_specular(self):
             if hasattr(self, '_m_has_specular'):
-                return self._m_has_specular if hasattr(self, '_m_has_specular') else None
+                return self._m_has_specular
 
             self._m_has_specular = (self.property_bits & 4) != 0
-            return self._m_has_specular if hasattr(self, '_m_has_specular') else None
+            return getattr(self, '_m_has_specular', None)
 
         @property
         def has_ior(self):
             if hasattr(self, '_m_has_ior'):
-                return self._m_has_ior if hasattr(self, '_m_has_ior') else None
+                return self._m_has_ior
 
             self._m_has_ior = (self.property_bits & 8) != 0
-            return self._m_has_ior if hasattr(self, '_m_has_ior') else None
+            return getattr(self, '_m_has_ior', None)
 
         @property
         def has_glow(self):
             if hasattr(self, '_m_has_glow'):
-                return self._m_has_glow if hasattr(self, '_m_has_glow') else None
+                return self._m_has_glow
 
             self._m_has_glow = (self.property_bits & 64) != 0
-            return self._m_has_glow if hasattr(self, '_m_has_glow') else None
+            return getattr(self, '_m_has_glow', None)
 
 
     class Xyzi(KaitaiStruct):
@@ -329,14 +328,14 @@ class MagicavoxelVox(KaitaiStruct):
             self.num_voxels = self._io.read_u4le()
             self._debug['num_voxels']['end'] = self._io.pos()
             self._debug['voxels']['start'] = self._io.pos()
-            self.voxels = [None] * (self.num_voxels)
+            self.voxels = []
             for i in range(self.num_voxels):
                 if not 'arr' in self._debug['voxels']:
                     self._debug['voxels']['arr'] = []
                 self._debug['voxels']['arr'].append({'start': self._io.pos()})
                 _t_voxels = MagicavoxelVox.Voxel(self._io, self, self._root)
                 _t_voxels._read()
-                self.voxels[i] = _t_voxels
+                self.voxels.append(_t_voxels)
                 self._debug['voxels']['arr'][i]['end'] = self._io.pos()
 
             self._debug['voxels']['end'] = self._io.pos()

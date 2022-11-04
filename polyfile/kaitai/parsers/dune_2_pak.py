@@ -1,12 +1,11 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
-from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class Dune2Pak(KaitaiStruct):
@@ -76,27 +75,27 @@ class Dune2Pak(KaitaiStruct):
         @property
         def next_ofs0(self):
             if hasattr(self, '_m_next_ofs0'):
-                return self._m_next_ofs0 if hasattr(self, '_m_next_ofs0') else None
+                return self._m_next_ofs0
 
             if self.ofs != 0:
                 self._m_next_ofs0 = self._root.dir.files[(self.idx + 1)].ofs
 
-            return self._m_next_ofs0 if hasattr(self, '_m_next_ofs0') else None
+            return getattr(self, '_m_next_ofs0', None)
 
         @property
         def next_ofs(self):
             if hasattr(self, '_m_next_ofs'):
-                return self._m_next_ofs if hasattr(self, '_m_next_ofs') else None
+                return self._m_next_ofs
 
             if self.ofs != 0:
                 self._m_next_ofs = (self._root._io.size() if self.next_ofs0 == 0 else self.next_ofs0)
 
-            return self._m_next_ofs if hasattr(self, '_m_next_ofs') else None
+            return getattr(self, '_m_next_ofs', None)
 
         @property
         def body(self):
             if hasattr(self, '_m_body'):
-                return self._m_body if hasattr(self, '_m_body') else None
+                return self._m_body
 
             if self.ofs != 0:
                 io = self._root._io
@@ -107,13 +106,13 @@ class Dune2Pak(KaitaiStruct):
                 self._debug['_m_body']['end'] = io.pos()
                 io.seek(_pos)
 
-            return self._m_body if hasattr(self, '_m_body') else None
+            return getattr(self, '_m_body', None)
 
 
     @property
     def dir_size(self):
         if hasattr(self, '_m_dir_size'):
-            return self._m_dir_size if hasattr(self, '_m_dir_size') else None
+            return self._m_dir_size
 
         _pos = self._io.pos()
         self._io.seek(0)
@@ -121,6 +120,6 @@ class Dune2Pak(KaitaiStruct):
         self._m_dir_size = self._io.read_u4le()
         self._debug['_m_dir_size']['end'] = self._io.pos()
         self._io.seek(_pos)
-        return self._m_dir_size if hasattr(self, '_m_dir_size') else None
+        return getattr(self, '_m_dir_size', None)
 
 

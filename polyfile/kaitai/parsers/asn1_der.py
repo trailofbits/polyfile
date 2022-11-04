@@ -1,13 +1,12 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
-from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 from enum import Enum
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class Asn1Der(KaitaiStruct):
@@ -172,18 +171,18 @@ class Asn1Der(KaitaiStruct):
         @property
         def first(self):
             if hasattr(self, '_m_first'):
-                return self._m_first if hasattr(self, '_m_first') else None
+                return self._m_first
 
             self._m_first = self.first_and_second // 40
-            return self._m_first if hasattr(self, '_m_first') else None
+            return getattr(self, '_m_first', None)
 
         @property
         def second(self):
             if hasattr(self, '_m_second'):
-                return self._m_second if hasattr(self, '_m_second') else None
+                return self._m_second
 
             self._m_second = (self.first_and_second % 40)
-            return self._m_second if hasattr(self, '_m_second') else None
+            return getattr(self, '_m_second', None)
 
 
     class LenEncoded(KaitaiStruct):
@@ -212,10 +211,10 @@ class Asn1Der(KaitaiStruct):
         @property
         def result(self):
             if hasattr(self, '_m_result'):
-                return self._m_result if hasattr(self, '_m_result') else None
+                return self._m_result
 
             self._m_result = (self.int1 if self.b1 == 129 else (self.int2 if self.b1 == 130 else self.b1))
-            return self._m_result if hasattr(self, '_m_result') else None
+            return getattr(self, '_m_result', None)
 
 
     class BodyPrintableString(KaitaiStruct):

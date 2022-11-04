@@ -1,12 +1,11 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
-from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class DosMz(KaitaiStruct):
@@ -58,10 +57,10 @@ class DosMz(KaitaiStruct):
         @property
         def len_body(self):
             if hasattr(self, '_m_len_body'):
-                return self._m_len_body if hasattr(self, '_m_len_body') else None
+                return self._m_len_body
 
             self._m_len_body = (((self.mz.num_pages * 512) if self.mz.last_page_extra_bytes == 0 else (((self.mz.num_pages - 1) * 512) + self.mz.last_page_extra_bytes)) - self.mz.len_header)
-            return self._m_len_body if hasattr(self, '_m_len_body') else None
+            return getattr(self, '_m_len_body', None)
 
 
     class MzHeader(KaitaiStruct):
@@ -121,10 +120,10 @@ class DosMz(KaitaiStruct):
         @property
         def len_header(self):
             if hasattr(self, '_m_len_header'):
-                return self._m_len_header if hasattr(self, '_m_len_header') else None
+                return self._m_len_header
 
             self._m_len_header = (self.header_size * 16)
-            return self._m_len_header if hasattr(self, '_m_len_header') else None
+            return getattr(self, '_m_len_header', None)
 
 
     class Relocation(KaitaiStruct):
@@ -147,26 +146,26 @@ class DosMz(KaitaiStruct):
     @property
     def relocations(self):
         if hasattr(self, '_m_relocations'):
-            return self._m_relocations if hasattr(self, '_m_relocations') else None
+            return self._m_relocations
 
         if self.header.mz.ofs_relocations != 0:
             io = self.header._io
             _pos = io.pos()
             io.seek(self.header.mz.ofs_relocations)
             self._debug['_m_relocations']['start'] = io.pos()
-            self._m_relocations = [None] * (self.header.mz.num_relocations)
+            self._m_relocations = []
             for i in range(self.header.mz.num_relocations):
                 if not 'arr' in self._debug['_m_relocations']:
                     self._debug['_m_relocations']['arr'] = []
                 self._debug['_m_relocations']['arr'].append({'start': io.pos()})
                 _t__m_relocations = DosMz.Relocation(io, self, self._root)
                 _t__m_relocations._read()
-                self._m_relocations[i] = _t__m_relocations
+                self._m_relocations.append(_t__m_relocations)
                 self._debug['_m_relocations']['arr'][i]['end'] = io.pos()
 
             self._debug['_m_relocations']['end'] = io.pos()
             io.seek(_pos)
 
-        return self._m_relocations if hasattr(self, '_m_relocations') else None
+        return getattr(self, '_m_relocations', None)
 
 

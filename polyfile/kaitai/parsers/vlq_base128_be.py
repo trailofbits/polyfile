@@ -1,12 +1,11 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
-from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class VlqBase128Be(KaitaiStruct):
@@ -69,36 +68,36 @@ class VlqBase128Be(KaitaiStruct):
         def has_next(self):
             """If true, then we have more bytes to read."""
             if hasattr(self, '_m_has_next'):
-                return self._m_has_next if hasattr(self, '_m_has_next') else None
+                return self._m_has_next
 
             self._m_has_next = (self.b & 128) != 0
-            return self._m_has_next if hasattr(self, '_m_has_next') else None
+            return getattr(self, '_m_has_next', None)
 
         @property
         def value(self):
             """The 7-bit (base128) numeric value chunk of this group."""
             if hasattr(self, '_m_value'):
-                return self._m_value if hasattr(self, '_m_value') else None
+                return self._m_value
 
             self._m_value = (self.b & 127)
-            return self._m_value if hasattr(self, '_m_value') else None
+            return getattr(self, '_m_value', None)
 
 
     @property
     def last(self):
         if hasattr(self, '_m_last'):
-            return self._m_last if hasattr(self, '_m_last') else None
+            return self._m_last
 
         self._m_last = (len(self.groups) - 1)
-        return self._m_last if hasattr(self, '_m_last') else None
+        return getattr(self, '_m_last', None)
 
     @property
     def value(self):
         """Resulting value as normal integer."""
         if hasattr(self, '_m_value'):
-            return self._m_value if hasattr(self, '_m_value') else None
+            return self._m_value
 
         self._m_value = (((((((self.groups[self.last].value + ((self.groups[(self.last - 1)].value << 7) if self.last >= 1 else 0)) + ((self.groups[(self.last - 2)].value << 14) if self.last >= 2 else 0)) + ((self.groups[(self.last - 3)].value << 21) if self.last >= 3 else 0)) + ((self.groups[(self.last - 4)].value << 28) if self.last >= 4 else 0)) + ((self.groups[(self.last - 5)].value << 35) if self.last >= 5 else 0)) + ((self.groups[(self.last - 6)].value << 42) if self.last >= 6 else 0)) + ((self.groups[(self.last - 7)].value << 49) if self.last >= 7 else 0))
-        return self._m_value if hasattr(self, '_m_value') else None
+        return getattr(self, '_m_value', None)
 
 

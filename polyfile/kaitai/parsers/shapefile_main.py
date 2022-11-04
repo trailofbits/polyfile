@@ -1,13 +1,12 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
-from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 from enum import Enum
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class ShapefileMain(KaitaiStruct):
@@ -79,14 +78,14 @@ class ShapefileMain(KaitaiStruct):
             self.number_of_points = self._io.read_s4le()
             self._debug['number_of_points']['end'] = self._io.pos()
             self._debug['points']['start'] = self._io.pos()
-            self.points = [None] * (self.number_of_points)
+            self.points = []
             for i in range(self.number_of_points):
                 if not 'arr' in self._debug['points']:
                     self._debug['points']['arr'] = []
                 self._debug['points']['arr'].append({'start': self._io.pos()})
                 _t_points = ShapefileMain.Point(self._io, self, self._root)
                 _t_points._read()
-                self.points[i] = _t_points
+                self.points.append(_t_points)
                 self._debug['points']['arr'][i]['end'] = self._io.pos()
 
             self._debug['points']['end'] = self._io.pos()
@@ -95,12 +94,12 @@ class ShapefileMain(KaitaiStruct):
             self.m_range._read()
             self._debug['m_range']['end'] = self._io.pos()
             self._debug['m_values']['start'] = self._io.pos()
-            self.m_values = [None] * (self.number_of_points)
+            self.m_values = []
             for i in range(self.number_of_points):
                 if not 'arr' in self._debug['m_values']:
                     self._debug['m_values']['arr'] = []
                 self._debug['m_values']['arr'].append({'start': self._io.pos()})
-                self.m_values[i] = self._io.read_f8le()
+                self.m_values.append(self._io.read_f8le())
                 self._debug['m_values']['arr'][i]['end'] = self._io.pos()
 
             self._debug['m_values']['end'] = self._io.pos()
@@ -170,24 +169,24 @@ class ShapefileMain(KaitaiStruct):
             self.number_of_points = self._io.read_s4le()
             self._debug['number_of_points']['end'] = self._io.pos()
             self._debug['parts']['start'] = self._io.pos()
-            self.parts = [None] * (self.number_of_parts)
+            self.parts = []
             for i in range(self.number_of_parts):
                 if not 'arr' in self._debug['parts']:
                     self._debug['parts']['arr'] = []
                 self._debug['parts']['arr'].append({'start': self._io.pos()})
-                self.parts[i] = self._io.read_s4le()
+                self.parts.append(self._io.read_s4le())
                 self._debug['parts']['arr'][i]['end'] = self._io.pos()
 
             self._debug['parts']['end'] = self._io.pos()
             self._debug['points']['start'] = self._io.pos()
-            self.points = [None] * (self.number_of_points)
+            self.points = []
             for i in range(self.number_of_points):
                 if not 'arr' in self._debug['points']:
                     self._debug['points']['arr'] = []
                 self._debug['points']['arr'].append({'start': self._io.pos()})
                 _t_points = ShapefileMain.Point(self._io, self, self._root)
                 _t_points._read()
-                self.points[i] = _t_points
+                self.points.append(_t_points)
                 self._debug['points']['arr'][i]['end'] = self._io.pos()
 
             self._debug['points']['end'] = self._io.pos()
@@ -230,24 +229,24 @@ class ShapefileMain(KaitaiStruct):
             self.number_of_points = self._io.read_s4le()
             self._debug['number_of_points']['end'] = self._io.pos()
             self._debug['parts']['start'] = self._io.pos()
-            self.parts = [None] * (self.number_of_parts)
+            self.parts = []
             for i in range(self.number_of_parts):
                 if not 'arr' in self._debug['parts']:
                     self._debug['parts']['arr'] = []
                 self._debug['parts']['arr'].append({'start': self._io.pos()})
-                self.parts[i] = self._io.read_s4le()
+                self.parts.append(self._io.read_s4le())
                 self._debug['parts']['arr'][i]['end'] = self._io.pos()
 
             self._debug['parts']['end'] = self._io.pos()
             self._debug['points']['start'] = self._io.pos()
-            self.points = [None] * (self.number_of_points)
+            self.points = []
             for i in range(self.number_of_points):
                 if not 'arr' in self._debug['points']:
                     self._debug['points']['arr'] = []
                 self._debug['points']['arr'].append({'start': self._io.pos()})
                 _t_points = ShapefileMain.Point(self._io, self, self._root)
                 _t_points._read()
-                self.points[i] = _t_points
+                self.points.append(_t_points)
                 self._debug['points']['arr'][i]['end'] = self._io.pos()
 
             self._debug['points']['end'] = self._io.pos()
@@ -270,14 +269,14 @@ class ShapefileMain(KaitaiStruct):
             self.number_of_points = self._io.read_s4le()
             self._debug['number_of_points']['end'] = self._io.pos()
             self._debug['points']['start'] = self._io.pos()
-            self.points = [None] * (self.number_of_points)
+            self.points = []
             for i in range(self.number_of_points):
                 if not 'arr' in self._debug['points']:
                     self._debug['points']['arr'] = []
                 self._debug['points']['arr'].append({'start': self._io.pos()})
                 _t_points = ShapefileMain.Point(self._io, self, self._root)
                 _t_points._read()
-                self.points[i] = _t_points
+                self.points.append(_t_points)
                 self._debug['points']['arr'][i]['end'] = self._io.pos()
 
             self._debug['points']['end'] = self._io.pos()
@@ -286,12 +285,12 @@ class ShapefileMain(KaitaiStruct):
             self.z_range._read()
             self._debug['z_range']['end'] = self._io.pos()
             self._debug['z_values']['start'] = self._io.pos()
-            self.z_values = [None] * (self.number_of_points)
+            self.z_values = []
             for i in range(self.number_of_points):
                 if not 'arr' in self._debug['z_values']:
                     self._debug['z_values']['arr'] = []
                 self._debug['z_values']['arr'].append({'start': self._io.pos()})
-                self.z_values[i] = self._io.read_f8le()
+                self.z_values.append(self._io.read_f8le())
                 self._debug['z_values']['arr'][i]['end'] = self._io.pos()
 
             self._debug['z_values']['end'] = self._io.pos()
@@ -300,12 +299,12 @@ class ShapefileMain(KaitaiStruct):
             self.m_range._read()
             self._debug['m_range']['end'] = self._io.pos()
             self._debug['m_values']['start'] = self._io.pos()
-            self.m_values = [None] * (self.number_of_points)
+            self.m_values = []
             for i in range(self.number_of_points):
                 if not 'arr' in self._debug['m_values']:
                     self._debug['m_values']['arr'] = []
                 self._debug['m_values']['arr'].append({'start': self._io.pos()})
-                self.m_values[i] = self._io.read_f8le()
+                self.m_values.append(self._io.read_f8le())
                 self._debug['m_values']['arr'][i]['end'] = self._io.pos()
 
             self._debug['m_values']['end'] = self._io.pos()
@@ -331,24 +330,24 @@ class ShapefileMain(KaitaiStruct):
             self.number_of_points = self._io.read_s4le()
             self._debug['number_of_points']['end'] = self._io.pos()
             self._debug['parts']['start'] = self._io.pos()
-            self.parts = [None] * (self.number_of_parts)
+            self.parts = []
             for i in range(self.number_of_parts):
                 if not 'arr' in self._debug['parts']:
                     self._debug['parts']['arr'] = []
                 self._debug['parts']['arr'].append({'start': self._io.pos()})
-                self.parts[i] = self._io.read_s4le()
+                self.parts.append(self._io.read_s4le())
                 self._debug['parts']['arr'][i]['end'] = self._io.pos()
 
             self._debug['parts']['end'] = self._io.pos()
             self._debug['points']['start'] = self._io.pos()
-            self.points = [None] * (self.number_of_points)
+            self.points = []
             for i in range(self.number_of_points):
                 if not 'arr' in self._debug['points']:
                     self._debug['points']['arr'] = []
                 self._debug['points']['arr'].append({'start': self._io.pos()})
                 _t_points = ShapefileMain.Point(self._io, self, self._root)
                 _t_points._read()
-                self.points[i] = _t_points
+                self.points.append(_t_points)
                 self._debug['points']['arr'][i]['end'] = self._io.pos()
 
             self._debug['points']['end'] = self._io.pos()
@@ -357,12 +356,12 @@ class ShapefileMain(KaitaiStruct):
             self.z_range._read()
             self._debug['z_range']['end'] = self._io.pos()
             self._debug['z_values']['start'] = self._io.pos()
-            self.z_values = [None] * (self.number_of_points)
+            self.z_values = []
             for i in range(self.number_of_points):
                 if not 'arr' in self._debug['z_values']:
                     self._debug['z_values']['arr'] = []
                 self._debug['z_values']['arr'].append({'start': self._io.pos()})
-                self.z_values[i] = self._io.read_f8le()
+                self.z_values.append(self._io.read_f8le())
                 self._debug['z_values']['arr'][i]['end'] = self._io.pos()
 
             self._debug['z_values']['end'] = self._io.pos()
@@ -371,12 +370,12 @@ class ShapefileMain(KaitaiStruct):
             self.m_range._read()
             self._debug['m_range']['end'] = self._io.pos()
             self._debug['m_values']['start'] = self._io.pos()
-            self.m_values = [None] * (self.number_of_points)
+            self.m_values = []
             for i in range(self.number_of_points):
                 if not 'arr' in self._debug['m_values']:
                     self._debug['m_values']['arr'] = []
                 self._debug['m_values']['arr'].append({'start': self._io.pos()})
-                self.m_values[i] = self._io.read_f8le()
+                self.m_values.append(self._io.read_f8le())
                 self._debug['m_values']['arr'][i]['end'] = self._io.pos()
 
             self._debug['m_values']['end'] = self._io.pos()
@@ -402,24 +401,24 @@ class ShapefileMain(KaitaiStruct):
             self.number_of_points = self._io.read_s4le()
             self._debug['number_of_points']['end'] = self._io.pos()
             self._debug['parts']['start'] = self._io.pos()
-            self.parts = [None] * (self.number_of_parts)
+            self.parts = []
             for i in range(self.number_of_parts):
                 if not 'arr' in self._debug['parts']:
                     self._debug['parts']['arr'] = []
                 self._debug['parts']['arr'].append({'start': self._io.pos()})
-                self.parts[i] = self._io.read_s4le()
+                self.parts.append(self._io.read_s4le())
                 self._debug['parts']['arr'][i]['end'] = self._io.pos()
 
             self._debug['parts']['end'] = self._io.pos()
             self._debug['points']['start'] = self._io.pos()
-            self.points = [None] * (self.number_of_points)
+            self.points = []
             for i in range(self.number_of_points):
                 if not 'arr' in self._debug['points']:
                     self._debug['points']['arr'] = []
                 self._debug['points']['arr'].append({'start': self._io.pos()})
                 _t_points = ShapefileMain.Point(self._io, self, self._root)
                 _t_points._read()
-                self.points[i] = _t_points
+                self.points.append(_t_points)
                 self._debug['points']['arr'][i]['end'] = self._io.pos()
 
             self._debug['points']['end'] = self._io.pos()
@@ -428,12 +427,12 @@ class ShapefileMain(KaitaiStruct):
             self.z_range._read()
             self._debug['z_range']['end'] = self._io.pos()
             self._debug['z_values']['start'] = self._io.pos()
-            self.z_values = [None] * (self.number_of_points)
+            self.z_values = []
             for i in range(self.number_of_points):
                 if not 'arr' in self._debug['z_values']:
                     self._debug['z_values']['arr'] = []
                 self._debug['z_values']['arr'].append({'start': self._io.pos()})
-                self.z_values[i] = self._io.read_f8le()
+                self.z_values.append(self._io.read_f8le())
                 self._debug['z_values']['arr'][i]['end'] = self._io.pos()
 
             self._debug['z_values']['end'] = self._io.pos()
@@ -442,12 +441,12 @@ class ShapefileMain(KaitaiStruct):
             self.m_range._read()
             self._debug['m_range']['end'] = self._io.pos()
             self._debug['m_values']['start'] = self._io.pos()
-            self.m_values = [None] * (self.number_of_points)
+            self.m_values = []
             for i in range(self.number_of_points):
                 if not 'arr' in self._debug['m_values']:
                     self._debug['m_values']['arr'] = []
                 self._debug['m_values']['arr'].append({'start': self._io.pos()})
-                self.m_values[i] = self._io.read_f8le()
+                self.m_values.append(self._io.read_f8le())
                 self._debug['m_values']['arr'][i]['end'] = self._io.pos()
 
             self._debug['m_values']['end'] = self._io.pos()
@@ -512,24 +511,24 @@ class ShapefileMain(KaitaiStruct):
             self.number_of_points = self._io.read_s4le()
             self._debug['number_of_points']['end'] = self._io.pos()
             self._debug['parts']['start'] = self._io.pos()
-            self.parts = [None] * (self.number_of_parts)
+            self.parts = []
             for i in range(self.number_of_parts):
                 if not 'arr' in self._debug['parts']:
                     self._debug['parts']['arr'] = []
                 self._debug['parts']['arr'].append({'start': self._io.pos()})
-                self.parts[i] = self._io.read_s4le()
+                self.parts.append(self._io.read_s4le())
                 self._debug['parts']['arr'][i]['end'] = self._io.pos()
 
             self._debug['parts']['end'] = self._io.pos()
             self._debug['points']['start'] = self._io.pos()
-            self.points = [None] * (self.number_of_points)
+            self.points = []
             for i in range(self.number_of_points):
                 if not 'arr' in self._debug['points']:
                     self._debug['points']['arr'] = []
                 self._debug['points']['arr'].append({'start': self._io.pos()})
                 _t_points = ShapefileMain.Point(self._io, self, self._root)
                 _t_points._read()
-                self.points[i] = _t_points
+                self.points.append(_t_points)
                 self._debug['points']['arr'][i]['end'] = self._io.pos()
 
             self._debug['points']['end'] = self._io.pos()
@@ -538,12 +537,12 @@ class ShapefileMain(KaitaiStruct):
             self.m_range._read()
             self._debug['m_range']['end'] = self._io.pos()
             self._debug['m_values']['start'] = self._io.pos()
-            self.m_values = [None] * (self.number_of_points)
+            self.m_values = []
             for i in range(self.number_of_points):
                 if not 'arr' in self._debug['m_values']:
                     self._debug['m_values']['arr'] = []
                 self._debug['m_values']['arr'].append({'start': self._io.pos()})
-                self.m_values[i] = self._io.read_f8le()
+                self.m_values.append(self._io.read_f8le())
                 self._debug['m_values']['arr'][i]['end'] = self._io.pos()
 
             self._debug['m_values']['end'] = self._io.pos()
@@ -583,14 +582,14 @@ class ShapefileMain(KaitaiStruct):
             self.number_of_points = self._io.read_s4le()
             self._debug['number_of_points']['end'] = self._io.pos()
             self._debug['points']['start'] = self._io.pos()
-            self.points = [None] * (self.number_of_points)
+            self.points = []
             for i in range(self.number_of_points):
                 if not 'arr' in self._debug['points']:
                     self._debug['points']['arr'] = []
                 self._debug['points']['arr'].append({'start': self._io.pos()})
                 _t_points = ShapefileMain.Point(self._io, self, self._root)
                 _t_points._read()
-                self.points[i] = _t_points
+                self.points.append(_t_points)
                 self._debug['points']['arr'][i]['end'] = self._io.pos()
 
             self._debug['points']['end'] = self._io.pos()
@@ -772,34 +771,34 @@ class ShapefileMain(KaitaiStruct):
             self.number_of_points = self._io.read_s4le()
             self._debug['number_of_points']['end'] = self._io.pos()
             self._debug['parts']['start'] = self._io.pos()
-            self.parts = [None] * (self.number_of_parts)
+            self.parts = []
             for i in range(self.number_of_parts):
                 if not 'arr' in self._debug['parts']:
                     self._debug['parts']['arr'] = []
                 self._debug['parts']['arr'].append({'start': self._io.pos()})
-                self.parts[i] = self._io.read_s4le()
+                self.parts.append(self._io.read_s4le())
                 self._debug['parts']['arr'][i]['end'] = self._io.pos()
 
             self._debug['parts']['end'] = self._io.pos()
             self._debug['part_types']['start'] = self._io.pos()
-            self.part_types = [None] * (self.number_of_parts)
+            self.part_types = []
             for i in range(self.number_of_parts):
                 if not 'arr' in self._debug['part_types']:
                     self._debug['part_types']['arr'] = []
                 self._debug['part_types']['arr'].append({'start': self._io.pos()})
-                self.part_types[i] = KaitaiStream.resolve_enum(ShapefileMain.PartType, self._io.read_s4le())
+                self.part_types.append(KaitaiStream.resolve_enum(ShapefileMain.PartType, self._io.read_s4le()))
                 self._debug['part_types']['arr'][i]['end'] = self._io.pos()
 
             self._debug['part_types']['end'] = self._io.pos()
             self._debug['points']['start'] = self._io.pos()
-            self.points = [None] * (self.number_of_points)
+            self.points = []
             for i in range(self.number_of_points):
                 if not 'arr' in self._debug['points']:
                     self._debug['points']['arr'] = []
                 self._debug['points']['arr'].append({'start': self._io.pos()})
                 _t_points = ShapefileMain.Point(self._io, self, self._root)
                 _t_points._read()
-                self.points[i] = _t_points
+                self.points.append(_t_points)
                 self._debug['points']['arr'][i]['end'] = self._io.pos()
 
             self._debug['points']['end'] = self._io.pos()
@@ -808,12 +807,12 @@ class ShapefileMain(KaitaiStruct):
             self.z_range._read()
             self._debug['z_range']['end'] = self._io.pos()
             self._debug['z_values']['start'] = self._io.pos()
-            self.z_values = [None] * (self.number_of_points)
+            self.z_values = []
             for i in range(self.number_of_points):
                 if not 'arr' in self._debug['z_values']:
                     self._debug['z_values']['arr'] = []
                 self._debug['z_values']['arr'].append({'start': self._io.pos()})
-                self.z_values[i] = self._io.read_f8le()
+                self.z_values.append(self._io.read_f8le())
                 self._debug['z_values']['arr'][i]['end'] = self._io.pos()
 
             self._debug['z_values']['end'] = self._io.pos()
@@ -822,12 +821,12 @@ class ShapefileMain(KaitaiStruct):
             self.m_range._read()
             self._debug['m_range']['end'] = self._io.pos()
             self._debug['m_values']['start'] = self._io.pos()
-            self.m_values = [None] * (self.number_of_points)
+            self.m_values = []
             for i in range(self.number_of_points):
                 if not 'arr' in self._debug['m_values']:
                     self._debug['m_values']['arr'] = []
                 self._debug['m_values']['arr'].append({'start': self._io.pos()})
-                self.m_values[i] = self._io.read_f8le()
+                self.m_values.append(self._io.read_f8le())
                 self._debug['m_values']['arr'][i]['end'] = self._io.pos()
 
             self._debug['m_values']['end'] = self._io.pos()
@@ -853,24 +852,24 @@ class ShapefileMain(KaitaiStruct):
             self.number_of_points = self._io.read_s4le()
             self._debug['number_of_points']['end'] = self._io.pos()
             self._debug['parts']['start'] = self._io.pos()
-            self.parts = [None] * (self.number_of_parts)
+            self.parts = []
             for i in range(self.number_of_parts):
                 if not 'arr' in self._debug['parts']:
                     self._debug['parts']['arr'] = []
                 self._debug['parts']['arr'].append({'start': self._io.pos()})
-                self.parts[i] = self._io.read_s4le()
+                self.parts.append(self._io.read_s4le())
                 self._debug['parts']['arr'][i]['end'] = self._io.pos()
 
             self._debug['parts']['end'] = self._io.pos()
             self._debug['points']['start'] = self._io.pos()
-            self.points = [None] * (self.number_of_points)
+            self.points = []
             for i in range(self.number_of_points):
                 if not 'arr' in self._debug['points']:
                     self._debug['points']['arr'] = []
                 self._debug['points']['arr'].append({'start': self._io.pos()})
                 _t_points = ShapefileMain.Point(self._io, self, self._root)
                 _t_points._read()
-                self.points[i] = _t_points
+                self.points.append(_t_points)
                 self._debug['points']['arr'][i]['end'] = self._io.pos()
 
             self._debug['points']['end'] = self._io.pos()
@@ -879,12 +878,12 @@ class ShapefileMain(KaitaiStruct):
             self.m_range._read()
             self._debug['m_range']['end'] = self._io.pos()
             self._debug['m_values']['start'] = self._io.pos()
-            self.m_values = [None] * (self.number_of_points)
+            self.m_values = []
             for i in range(self.number_of_points):
                 if not 'arr' in self._debug['m_values']:
                     self._debug['m_values']['arr'] = []
                 self._debug['m_values']['arr'].append({'start': self._io.pos()})
-                self.m_values[i] = self._io.read_f8le()
+                self.m_values.append(self._io.read_f8le())
                 self._debug['m_values']['arr'][i]['end'] = self._io.pos()
 
             self._debug['m_values']['end'] = self._io.pos()

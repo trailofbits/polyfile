@@ -1,13 +1,12 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
-from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 from enum import Enum
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class CreativeVoiceFile(KaitaiStruct):
@@ -125,19 +124,19 @@ class CreativeVoiceFile(KaitaiStruct):
         @property
         def sample_rate(self):
             if hasattr(self, '_m_sample_rate'):
-                return self._m_sample_rate if hasattr(self, '_m_sample_rate') else None
+                return self._m_sample_rate
 
             self._m_sample_rate = (1000000.0 / (256 - self.freq_div))
-            return self._m_sample_rate if hasattr(self, '_m_sample_rate') else None
+            return getattr(self, '_m_sample_rate', None)
 
         @property
         def duration_sec(self):
             """Duration of silence, in seconds."""
             if hasattr(self, '_m_duration_sec'):
-                return self._m_duration_sec if hasattr(self, '_m_duration_sec') else None
+                return self._m_duration_sec
 
             self._m_duration_sec = (self.duration_samples / self.sample_rate)
-            return self._m_duration_sec if hasattr(self, '_m_duration_sec') else None
+            return getattr(self, '_m_duration_sec', None)
 
 
     class BlockSoundDataNew(KaitaiStruct):
@@ -240,12 +239,12 @@ class CreativeVoiceFile(KaitaiStruct):
             (body_size1 and body_size2).
             """
             if hasattr(self, '_m_body_size'):
-                return self._m_body_size if hasattr(self, '_m_body_size') else None
+                return self._m_body_size
 
             if self.block_type != CreativeVoiceFile.BlockTypes.terminator:
                 self._m_body_size = (self.body_size1 + (self.body_size2 << 16))
 
-            return self._m_body_size if hasattr(self, '_m_body_size') else None
+            return getattr(self, '_m_body_size', None)
 
 
     class BlockRepeatStart(KaitaiStruct):
@@ -292,10 +291,10 @@ class CreativeVoiceFile(KaitaiStruct):
         @property
         def sample_rate(self):
             if hasattr(self, '_m_sample_rate'):
-                return self._m_sample_rate if hasattr(self, '_m_sample_rate') else None
+                return self._m_sample_rate
 
             self._m_sample_rate = (1000000.0 / (256 - self.freq_div))
-            return self._m_sample_rate if hasattr(self, '_m_sample_rate') else None
+            return getattr(self, '_m_sample_rate', None)
 
 
     class BlockExtraInfo(KaitaiStruct):
@@ -325,18 +324,18 @@ class CreativeVoiceFile(KaitaiStruct):
         def num_channels(self):
             """Number of channels (1 = mono, 2 = stereo)."""
             if hasattr(self, '_m_num_channels'):
-                return self._m_num_channels if hasattr(self, '_m_num_channels') else None
+                return self._m_num_channels
 
             self._m_num_channels = (self.num_channels_1 + 1)
-            return self._m_num_channels if hasattr(self, '_m_num_channels') else None
+            return getattr(self, '_m_num_channels', None)
 
         @property
         def sample_rate(self):
             if hasattr(self, '_m_sample_rate'):
-                return self._m_sample_rate if hasattr(self, '_m_sample_rate') else None
+                return self._m_sample_rate
 
             self._m_sample_rate = (256000000.0 / (self.num_channels * (65536 - self.freq_div)))
-            return self._m_sample_rate if hasattr(self, '_m_sample_rate') else None
+            return getattr(self, '_m_sample_rate', None)
 
 
 

@@ -1,12 +1,11 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
-from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 from polyfile.kaitai.parsers import mach_o
@@ -35,14 +34,14 @@ class MachOFat(KaitaiStruct):
         self.num_fat_arch = self._io.read_u4be()
         self._debug['num_fat_arch']['end'] = self._io.pos()
         self._debug['fat_archs']['start'] = self._io.pos()
-        self.fat_archs = [None] * (self.num_fat_arch)
+        self.fat_archs = []
         for i in range(self.num_fat_arch):
             if not 'arr' in self._debug['fat_archs']:
                 self._debug['fat_archs']['arr'] = []
             self._debug['fat_archs']['arr'].append({'start': self._io.pos()})
             _t_fat_archs = MachOFat.FatArch(self._io, self, self._root)
             _t_fat_archs._read()
-            self.fat_archs[i] = _t_fat_archs
+            self.fat_archs.append(_t_fat_archs)
             self._debug['fat_archs']['arr'][i]['end'] = self._io.pos()
 
         self._debug['fat_archs']['end'] = self._io.pos()
@@ -75,7 +74,7 @@ class MachOFat(KaitaiStruct):
         @property
         def object(self):
             if hasattr(self, '_m_object'):
-                return self._m_object if hasattr(self, '_m_object') else None
+                return self._m_object
 
             _pos = self._io.pos()
             self._io.seek(self.ofs_object)
@@ -86,7 +85,7 @@ class MachOFat(KaitaiStruct):
             self._m_object._read()
             self._debug['_m_object']['end'] = self._io.pos()
             self._io.seek(_pos)
-            return self._m_object if hasattr(self, '_m_object') else None
+            return getattr(self, '_m_object', None)
 
 
 

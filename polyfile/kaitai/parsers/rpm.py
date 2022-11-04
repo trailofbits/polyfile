@@ -1,13 +1,12 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
-from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 from enum import Enum
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class Rpm(KaitaiStruct):
@@ -434,14 +433,14 @@ class Rpm(KaitaiStruct):
             self._debug['_unnamed5']['end'] = self._io.pos()
 
         self._debug['signature_tags_steps']['start'] = self._io.pos()
-        self.signature_tags_steps = [None] * (self.signature.header_record.num_index_records)
+        self.signature_tags_steps = []
         for i in range(self.signature.header_record.num_index_records):
             if not 'arr' in self._debug['signature_tags_steps']:
                 self._debug['signature_tags_steps']['arr'] = []
             self._debug['signature_tags_steps']['arr'].append({'start': self._io.pos()})
             _t_signature_tags_steps = Rpm.SignatureTagsStep(i, (-1 if i < 1 else self.signature_tags_steps[(i - 1)].size_tag_idx), self._io, self, self._root)
             _t_signature_tags_steps._read()
-            self.signature_tags_steps[i] = _t_signature_tags_steps
+            self.signature_tags_steps.append(_t_signature_tags_steps)
             self._debug['signature_tags_steps']['arr'][i]['end'] = self._io.pos()
 
         self._debug['signature_tags_steps']['end'] = self._io.pos()
@@ -457,12 +456,12 @@ class Rpm(KaitaiStruct):
 
         def _read(self):
             self._debug['values']['start'] = self._io.pos()
-            self.values = [None] * (self.num_values)
+            self.values = []
             for i in range(self.num_values):
                 if not 'arr' in self._debug['values']:
                     self._debug['values']['arr'] = []
                 self._debug['values']['arr'].append({'start': self._io.pos()})
-                self.values[i] = (self._io.read_bytes_term(0, False, True, True)).decode(u"UTF-8")
+                self.values.append((self._io.read_bytes_term(0, False, True, True)).decode(u"UTF-8"))
                 self._debug['values']['arr'][i]['end'] = self._io.pos()
 
             self._debug['values']['end'] = self._io.pos()
@@ -532,12 +531,12 @@ class Rpm(KaitaiStruct):
 
         def _read(self):
             self._debug['values']['start'] = self._io.pos()
-            self.values = [None] * (1)
+            self.values = []
             for i in range(1):
                 if not 'arr' in self._debug['values']:
                     self._debug['values']['arr'] = []
                 self._debug['values']['arr'].append({'start': self._io.pos()})
-                self.values[i] = (self._io.read_bytes_term(0, False, True, True)).decode(u"UTF-8")
+                self.values.append((self._io.read_bytes_term(0, False, True, True)).decode(u"UTF-8"))
                 self._debug['values']['arr'][i]['end'] = self._io.pos()
 
             self._debug['values']['end'] = self._io.pos()
@@ -559,10 +558,10 @@ class Rpm(KaitaiStruct):
         @property
         def size_tag_idx(self):
             if hasattr(self, '_m_size_tag_idx'):
-                return self._m_size_tag_idx if hasattr(self, '_m_size_tag_idx') else None
+                return self._m_size_tag_idx
 
             self._m_size_tag_idx = (self.prev_size_tag_idx if self.prev_size_tag_idx != -1 else (self.idx if  ((self._parent.signature.index_records[self.idx].signature_tag == Rpm.SignatureTags.size) and (self._parent.signature.index_records[self.idx].record_type == Rpm.RecordTypes.uint32) and (self._parent.signature.index_records[self.idx].num_values >= 1))  else -1))
-            return self._m_size_tag_idx if hasattr(self, '_m_size_tag_idx') else None
+            return getattr(self, '_m_size_tag_idx', None)
 
 
     class RecordTypeUint32(KaitaiStruct):
@@ -576,12 +575,12 @@ class Rpm(KaitaiStruct):
 
         def _read(self):
             self._debug['values']['start'] = self._io.pos()
-            self.values = [None] * (self.num_values)
+            self.values = []
             for i in range(self.num_values):
                 if not 'arr' in self._debug['values']:
                     self._debug['values']['arr'] = []
                 self._debug['values']['arr'].append({'start': self._io.pos()})
-                self.values[i] = self._io.read_u4be()
+                self.values.append(self._io.read_u4be())
                 self._debug['values']['arr'][i]['end'] = self._io.pos()
 
             self._debug['values']['end'] = self._io.pos()
@@ -598,12 +597,12 @@ class Rpm(KaitaiStruct):
 
         def _read(self):
             self._debug['values']['start'] = self._io.pos()
-            self.values = [None] * (self.num_values)
+            self.values = []
             for i in range(self.num_values):
                 if not 'arr' in self._debug['values']:
                     self._debug['values']['arr'] = []
                 self._debug['values']['arr'].append({'start': self._io.pos()})
-                self.values[i] = self._io.read_u2be()
+                self.values.append(self._io.read_u2be())
                 self._debug['values']['arr'][i]['end'] = self._io.pos()
 
             self._debug['values']['end'] = self._io.pos()
@@ -634,17 +633,17 @@ class Rpm(KaitaiStruct):
         @property
         def num_values(self):
             if hasattr(self, '_m_num_values'):
-                return self._m_num_values if hasattr(self, '_m_num_values') else None
+                return self._m_num_values
 
             if self.record_type != Rpm.RecordTypes.bin:
                 self._m_num_values = self.count
 
-            return self._m_num_values if hasattr(self, '_m_num_values') else None
+            return getattr(self, '_m_num_values', None)
 
         @property
         def body(self):
             if hasattr(self, '_m_body'):
-                return self._m_body if hasattr(self, '_m_body') else None
+                return self._m_body
 
             io = self._parent.storage_section._io
             _pos = io.pos()
@@ -680,37 +679,37 @@ class Rpm(KaitaiStruct):
                 self._m_body._read()
             self._debug['_m_body']['end'] = io.pos()
             io.seek(_pos)
-            return self._m_body if hasattr(self, '_m_body') else None
+            return getattr(self, '_m_body', None)
 
         @property
         def signature_tag(self):
             if hasattr(self, '_m_signature_tag'):
-                return self._m_signature_tag if hasattr(self, '_m_signature_tag') else None
+                return self._m_signature_tag
 
             if self._parent.is_signature:
                 self._m_signature_tag = KaitaiStream.resolve_enum(Rpm.SignatureTags, self.tag_raw)
 
-            return self._m_signature_tag if hasattr(self, '_m_signature_tag') else None
+            return getattr(self, '_m_signature_tag', None)
 
         @property
         def len_value(self):
             if hasattr(self, '_m_len_value'):
-                return self._m_len_value if hasattr(self, '_m_len_value') else None
+                return self._m_len_value
 
             if self.record_type == Rpm.RecordTypes.bin:
                 self._m_len_value = self.count
 
-            return self._m_len_value if hasattr(self, '_m_len_value') else None
+            return getattr(self, '_m_len_value', None)
 
         @property
         def header_tag(self):
             if hasattr(self, '_m_header_tag'):
-                return self._m_header_tag if hasattr(self, '_m_header_tag') else None
+                return self._m_header_tag
 
             if self._parent.is_header:
                 self._m_header_tag = KaitaiStream.resolve_enum(Rpm.HeaderTags, self.tag_raw)
 
-            return self._m_header_tag if hasattr(self, '_m_header_tag') else None
+            return getattr(self, '_m_header_tag', None)
 
 
     class RpmVersion(KaitaiStruct):
@@ -757,12 +756,12 @@ class Rpm(KaitaiStruct):
 
         def _read(self):
             self._debug['values']['start'] = self._io.pos()
-            self.values = [None] * (self.num_values)
+            self.values = []
             for i in range(self.num_values):
                 if not 'arr' in self._debug['values']:
                     self._debug['values']['arr'] = []
                 self._debug['values']['arr'].append({'start': self._io.pos()})
-                self.values[i] = self._io.read_u1()
+                self.values.append(self._io.read_u1())
                 self._debug['values']['arr'][i]['end'] = self._io.pos()
 
             self._debug['values']['end'] = self._io.pos()
@@ -779,12 +778,12 @@ class Rpm(KaitaiStruct):
 
         def _read(self):
             self._debug['values']['start'] = self._io.pos()
-            self.values = [None] * (self.num_values)
+            self.values = []
             for i in range(self.num_values):
                 if not 'arr' in self._debug['values']:
                     self._debug['values']['arr'] = []
                 self._debug['values']['arr'].append({'start': self._io.pos()})
-                self.values[i] = self._io.read_u8be()
+                self.values.append(self._io.read_u8be())
                 self._debug['values']['arr'][i]['end'] = self._io.pos()
 
             self._debug['values']['end'] = self._io.pos()
@@ -801,12 +800,12 @@ class Rpm(KaitaiStruct):
 
         def _read(self):
             self._debug['values']['start'] = self._io.pos()
-            self.values = [None] * (1)
+            self.values = []
             for i in range(1):
                 if not 'arr' in self._debug['values']:
                     self._debug['values']['arr'] = []
                 self._debug['values']['arr'].append({'start': self._io.pos()})
-                self.values[i] = self._io.read_bytes(self.len_value)
+                self.values.append(self._io.read_bytes(self.len_value))
                 self._debug['values']['arr'][i]['end'] = self._io.pos()
 
             self._debug['values']['end'] = self._io.pos()
@@ -860,14 +859,14 @@ class Rpm(KaitaiStruct):
             self.header_record._read()
             self._debug['header_record']['end'] = self._io.pos()
             self._debug['index_records']['start'] = self._io.pos()
-            self.index_records = [None] * (self.header_record.num_index_records)
+            self.index_records = []
             for i in range(self.header_record.num_index_records):
                 if not 'arr' in self._debug['index_records']:
                     self._debug['index_records']['arr'] = []
                 self._debug['index_records']['arr'].append({'start': self._io.pos()})
                 _t_index_records = Rpm.HeaderIndexRecord(self._io, self, self._root)
                 _t_index_records._read()
-                self.index_records[i] = _t_index_records
+                self.index_records.append(_t_index_records)
                 self._debug['index_records']['arr'][i]['end'] = self._io.pos()
 
             self._debug['index_records']['end'] = self._io.pos()
@@ -881,44 +880,44 @@ class Rpm(KaitaiStruct):
         @property
         def is_header(self):
             if hasattr(self, '_m_is_header'):
-                return self._m_is_header if hasattr(self, '_m_is_header') else None
+                return self._m_is_header
 
             self._m_is_header = not (self.is_signature)
-            return self._m_is_header if hasattr(self, '_m_is_header') else None
+            return getattr(self, '_m_is_header', None)
 
 
     @property
     def has_signature_size_tag(self):
         if hasattr(self, '_m_has_signature_size_tag'):
-            return self._m_has_signature_size_tag if hasattr(self, '_m_has_signature_size_tag') else None
+            return self._m_has_signature_size_tag
 
         self._m_has_signature_size_tag = self.signature_tags_steps[-1].size_tag_idx != -1
-        return self._m_has_signature_size_tag if hasattr(self, '_m_has_signature_size_tag') else None
+        return getattr(self, '_m_has_signature_size_tag', None)
 
     @property
     def signature_size_tag(self):
         if hasattr(self, '_m_signature_size_tag'):
-            return self._m_signature_size_tag if hasattr(self, '_m_signature_size_tag') else None
+            return self._m_signature_size_tag
 
         if self.has_signature_size_tag:
             self._m_signature_size_tag = self.signature.index_records[self.signature_tags_steps[-1].size_tag_idx]
 
-        return self._m_signature_size_tag if hasattr(self, '_m_signature_size_tag') else None
+        return getattr(self, '_m_signature_size_tag', None)
 
     @property
     def len_payload(self):
         if hasattr(self, '_m_len_payload'):
-            return self._m_len_payload if hasattr(self, '_m_len_payload') else None
+            return self._m_len_payload
 
         if self.has_signature_size_tag:
             self._m_len_payload = (self.signature_size_tag.body.values[0] - self.len_header)
 
-        return self._m_len_payload if hasattr(self, '_m_len_payload') else None
+        return getattr(self, '_m_len_payload', None)
 
     @property
     def payload(self):
         if hasattr(self, '_m_payload'):
-            return self._m_payload if hasattr(self, '_m_payload') else None
+            return self._m_payload
 
         if self.has_signature_size_tag:
             _pos = self._io.pos()
@@ -928,30 +927,30 @@ class Rpm(KaitaiStruct):
             self._debug['_m_payload']['end'] = self._io.pos()
             self._io.seek(_pos)
 
-        return self._m_payload if hasattr(self, '_m_payload') else None
+        return getattr(self, '_m_payload', None)
 
     @property
     def len_header(self):
         if hasattr(self, '_m_len_header'):
-            return self._m_len_header if hasattr(self, '_m_len_header') else None
+            return self._m_len_header
 
         self._m_len_header = (self.ofs_payload - self.ofs_header)
-        return self._m_len_header if hasattr(self, '_m_len_header') else None
+        return getattr(self, '_m_len_header', None)
 
     @property
     def ofs_header(self):
         if hasattr(self, '_m_ofs_header'):
-            return self._m_ofs_header if hasattr(self, '_m_ofs_header') else None
+            return self._m_ofs_header
 
         self._m_ofs_header = self._io.pos()
-        return self._m_ofs_header if hasattr(self, '_m_ofs_header') else None
+        return getattr(self, '_m_ofs_header', None)
 
     @property
     def ofs_payload(self):
         if hasattr(self, '_m_ofs_payload'):
-            return self._m_ofs_payload if hasattr(self, '_m_ofs_payload') else None
+            return self._m_ofs_payload
 
         self._m_ofs_payload = self._io.pos()
-        return self._m_ofs_payload if hasattr(self, '_m_ofs_payload') else None
+        return getattr(self, '_m_ofs_payload', None)
 
 

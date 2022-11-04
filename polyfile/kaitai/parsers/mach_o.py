@@ -1,13 +1,12 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
-from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 from enum import Enum
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 from polyfile.kaitai.parsers import asn1_der
@@ -122,14 +121,14 @@ class MachO(KaitaiStruct):
         self.header._read()
         self._debug['header']['end'] = self._io.pos()
         self._debug['load_commands']['start'] = self._io.pos()
-        self.load_commands = [None] * (self.header.ncmds)
+        self.load_commands = []
         for i in range(self.header.ncmds):
             if not 'arr' in self._debug['load_commands']:
                 self._debug['load_commands']['arr'] = []
             self._debug['load_commands']['arr'].append({'start': self._io.pos()})
             _t_load_commands = MachO.LoadCommand(self._io, self, self._root)
             _t_load_commands._read()
-            self.load_commands[i] = _t_load_commands
+            self.load_commands.append(_t_load_commands)
             self._debug['load_commands']['arr'][i]['end'] = self._io.pos()
 
         self._debug['load_commands']['end'] = self._io.pos()
@@ -212,10 +211,10 @@ class MachO(KaitaiStruct):
         @property
         def value(self):
             if hasattr(self, '_m_value'):
-                return self._m_value if hasattr(self, '_m_value') else None
+                return self._m_value
 
             self._m_value = (((self.b1 % 128) << 0) + (0 if (self.b1 & 128) == 0 else (((self.b2 % 128) << 7) + (0 if (self.b2 & 128) == 0 else (((self.b3 % 128) << 14) + (0 if (self.b3 & 128) == 0 else (((self.b4 % 128) << 21) + (0 if (self.b4 & 128) == 0 else (((self.b5 % 128) << 28) + (0 if (self.b5 & 128) == 0 else (((self.b6 % 128) << 35) + (0 if (self.b6 & 128) == 0 else (((self.b7 % 128) << 42) + (0 if (self.b7 & 128) == 0 else (((self.b8 % 128) << 49) + (0 if (self.b8 & 128) == 0 else (((self.b9 % 128) << 56) + (0 if (self.b8 & 128) == 0 else ((self.b10 % 128) << 63)))))))))))))))))))
-            return self._m_value if hasattr(self, '_m_value') else None
+            return getattr(self, '_m_value', None)
 
 
     class SourceVersionCommand(KaitaiStruct):
@@ -362,7 +361,7 @@ class MachO(KaitaiStruct):
             @property
             def ident(self):
                 if hasattr(self, '_m_ident'):
-                    return self._m_ident if hasattr(self, '_m_ident') else None
+                    return self._m_ident
 
                 _pos = self._io.pos()
                 self._io.seek((self.ident_offset - 8))
@@ -370,12 +369,12 @@ class MachO(KaitaiStruct):
                 self._m_ident = (self._io.read_bytes_term(0, False, True, True)).decode(u"utf-8")
                 self._debug['_m_ident']['end'] = self._io.pos()
                 self._io.seek(_pos)
-                return self._m_ident if hasattr(self, '_m_ident') else None
+                return getattr(self, '_m_ident', None)
 
             @property
             def team_id(self):
                 if hasattr(self, '_m_team_id'):
-                    return self._m_team_id if hasattr(self, '_m_team_id') else None
+                    return self._m_team_id
 
                 _pos = self._io.pos()
                 self._io.seek((self.team_id_offset - 8))
@@ -383,27 +382,27 @@ class MachO(KaitaiStruct):
                 self._m_team_id = (self._io.read_bytes_term(0, False, True, True)).decode(u"utf-8")
                 self._debug['_m_team_id']['end'] = self._io.pos()
                 self._io.seek(_pos)
-                return self._m_team_id if hasattr(self, '_m_team_id') else None
+                return getattr(self, '_m_team_id', None)
 
             @property
             def hashes(self):
                 if hasattr(self, '_m_hashes'):
-                    return self._m_hashes if hasattr(self, '_m_hashes') else None
+                    return self._m_hashes
 
                 _pos = self._io.pos()
                 self._io.seek(((self.hash_offset - 8) - (self.hash_size * self.n_special_slots)))
                 self._debug['_m_hashes']['start'] = self._io.pos()
-                self._m_hashes = [None] * ((self.n_special_slots + self.n_code_slots))
+                self._m_hashes = []
                 for i in range((self.n_special_slots + self.n_code_slots)):
                     if not 'arr' in self._debug['_m_hashes']:
                         self._debug['_m_hashes']['arr'] = []
                     self._debug['_m_hashes']['arr'].append({'start': self._io.pos()})
-                    self._m_hashes[i] = self._io.read_bytes(self.hash_size)
+                    self._m_hashes.append(self._io.read_bytes(self.hash_size))
                     self._debug['_m_hashes']['arr'][i]['end'] = self._io.pos()
 
                 self._debug['_m_hashes']['end'] = self._io.pos()
                 self._io.seek(_pos)
-                return self._m_hashes if hasattr(self, '_m_hashes') else None
+                return getattr(self, '_m_hashes', None)
 
 
         class Data(KaitaiStruct):
@@ -439,14 +438,14 @@ class MachO(KaitaiStruct):
                 self.count = self._io.read_u4be()
                 self._debug['count']['end'] = self._io.pos()
                 self._debug['blobs']['start'] = self._io.pos()
-                self.blobs = [None] * (self.count)
+                self.blobs = []
                 for i in range(self.count):
                     if not 'arr' in self._debug['blobs']:
                         self._debug['blobs']['arr'] = []
                     self._debug['blobs']['arr'].append({'start': self._io.pos()})
                     _t_blobs = MachO.CsBlob.BlobIndex(self._io, self, self._root)
                     _t_blobs._read()
-                    self.blobs[i] = _t_blobs
+                    self.blobs.append(_t_blobs)
                     self._debug['blobs']['arr'][i]['end'] = self._io.pos()
 
                 self._debug['blobs']['end'] = self._io.pos()
@@ -654,10 +653,10 @@ class MachO(KaitaiStruct):
                 @property
                 def value(self):
                     if hasattr(self, '_m_value'):
-                        return self._m_value if hasattr(self, '_m_value') else None
+                        return self._m_value
 
                     self._m_value = u"anchor apple generic"
-                    return self._m_value if hasattr(self, '_m_value') else None
+                    return getattr(self, '_m_value', None)
 
 
             class EntitlementFieldExpr(KaitaiStruct):
@@ -748,7 +747,7 @@ class MachO(KaitaiStruct):
             @property
             def blob(self):
                 if hasattr(self, '_m_blob'):
-                    return self._m_blob if hasattr(self, '_m_blob') else None
+                    return self._m_blob
 
                 io = self._parent._io
                 _pos = io.pos()
@@ -760,7 +759,7 @@ class MachO(KaitaiStruct):
                 self._m_blob._read()
                 self._debug['_m_blob']['end'] = io.pos()
                 io.seek(_pos)
-                return self._m_blob if hasattr(self, '_m_blob') else None
+                return getattr(self, '_m_blob', None)
 
 
         class Match(KaitaiStruct):
@@ -825,14 +824,14 @@ class MachO(KaitaiStruct):
                 self.count = self._io.read_u4be()
                 self._debug['count']['end'] = self._io.pos()
                 self._debug['items']['start'] = self._io.pos()
-                self.items = [None] * (self.count)
+                self.items = []
                 for i in range(self.count):
                     if not 'arr' in self._debug['items']:
                         self._debug['items']['arr'] = []
                     self._debug['items']['arr'].append({'start': self._io.pos()})
                     _t_items = MachO.CsBlob.RequirementsBlobIndex(self._io, self, self._root)
                     _t_items._read()
-                    self.items[i] = _t_items
+                    self.items.append(_t_items)
                     self._debug['items']['arr'][i]['end'] = self._io.pos()
 
                 self._debug['items']['end'] = self._io.pos()
@@ -891,7 +890,7 @@ class MachO(KaitaiStruct):
             @property
             def value(self):
                 if hasattr(self, '_m_value'):
-                    return self._m_value if hasattr(self, '_m_value') else None
+                    return self._m_value
 
                 _pos = self._io.pos()
                 self._io.seek((self.offset - 8))
@@ -900,7 +899,7 @@ class MachO(KaitaiStruct):
                 self._m_value._read()
                 self._debug['_m_value']['end'] = self._io.pos()
                 self._io.seek(_pos)
-                return self._m_value if hasattr(self, '_m_value') else None
+                return getattr(self, '_m_value', None)
 
 
 
@@ -926,14 +925,14 @@ class MachO(KaitaiStruct):
             self.ntools = self._io.read_u4le()
             self._debug['ntools']['end'] = self._io.pos()
             self._debug['tools']['start'] = self._io.pos()
-            self.tools = [None] * (self.ntools)
+            self.tools = []
             for i in range(self.ntools):
                 if not 'arr' in self._debug['tools']:
                     self._debug['tools']['arr'] = []
                 self._debug['tools']['arr'].append({'start': self._io.pos()})
                 _t_tools = MachO.BuildVersionCommand.BuildToolVersion(self._io, self, self._root)
                 _t_tools._read()
-                self.tools[i] = _t_tools
+                self.tools.append(_t_tools)
                 self._debug['tools']['arr'][i]['end'] = self._io.pos()
 
             self._debug['tools']['end'] = self._io.pos()
@@ -992,231 +991,231 @@ class MachO(KaitaiStruct):
         def subsections_via_symbols(self):
             """safe to divide up the sections into sub-sections via symbols for dead code stripping."""
             if hasattr(self, '_m_subsections_via_symbols'):
-                return self._m_subsections_via_symbols if hasattr(self, '_m_subsections_via_symbols') else None
+                return self._m_subsections_via_symbols
 
             self._m_subsections_via_symbols = (self.value & 8192) != 0
-            return self._m_subsections_via_symbols if hasattr(self, '_m_subsections_via_symbols') else None
+            return getattr(self, '_m_subsections_via_symbols', None)
 
         @property
         def dead_strippable_dylib(self):
             if hasattr(self, '_m_dead_strippable_dylib'):
-                return self._m_dead_strippable_dylib if hasattr(self, '_m_dead_strippable_dylib') else None
+                return self._m_dead_strippable_dylib
 
             self._m_dead_strippable_dylib = (self.value & 4194304) != 0
-            return self._m_dead_strippable_dylib if hasattr(self, '_m_dead_strippable_dylib') else None
+            return getattr(self, '_m_dead_strippable_dylib', None)
 
         @property
         def weak_defines(self):
             """the final linked image contains external weak symbols."""
             if hasattr(self, '_m_weak_defines'):
-                return self._m_weak_defines if hasattr(self, '_m_weak_defines') else None
+                return self._m_weak_defines
 
             self._m_weak_defines = (self.value & 32768) != 0
-            return self._m_weak_defines if hasattr(self, '_m_weak_defines') else None
+            return getattr(self, '_m_weak_defines', None)
 
         @property
         def prebound(self):
             """the file has its dynamic undefined references prebound."""
             if hasattr(self, '_m_prebound'):
-                return self._m_prebound if hasattr(self, '_m_prebound') else None
+                return self._m_prebound
 
             self._m_prebound = (self.value & 16) != 0
-            return self._m_prebound if hasattr(self, '_m_prebound') else None
+            return getattr(self, '_m_prebound', None)
 
         @property
         def all_mods_bound(self):
             """indicates that this binary binds to all two-level namespace modules of its dependent libraries. only used when MH_PREBINDABLE and MH_TWOLEVEL are both set."""
             if hasattr(self, '_m_all_mods_bound'):
-                return self._m_all_mods_bound if hasattr(self, '_m_all_mods_bound') else None
+                return self._m_all_mods_bound
 
             self._m_all_mods_bound = (self.value & 4096) != 0
-            return self._m_all_mods_bound if hasattr(self, '_m_all_mods_bound') else None
+            return getattr(self, '_m_all_mods_bound', None)
 
         @property
         def has_tlv_descriptors(self):
             if hasattr(self, '_m_has_tlv_descriptors'):
-                return self._m_has_tlv_descriptors if hasattr(self, '_m_has_tlv_descriptors') else None
+                return self._m_has_tlv_descriptors
 
             self._m_has_tlv_descriptors = (self.value & 8388608) != 0
-            return self._m_has_tlv_descriptors if hasattr(self, '_m_has_tlv_descriptors') else None
+            return getattr(self, '_m_has_tlv_descriptors', None)
 
         @property
         def force_flat(self):
             """the executable is forcing all images to use flat name space bindings."""
             if hasattr(self, '_m_force_flat'):
-                return self._m_force_flat if hasattr(self, '_m_force_flat') else None
+                return self._m_force_flat
 
             self._m_force_flat = (self.value & 256) != 0
-            return self._m_force_flat if hasattr(self, '_m_force_flat') else None
+            return getattr(self, '_m_force_flat', None)
 
         @property
         def root_safe(self):
             """When this bit is set, the binary declares it is safe for use in processes with uid zero."""
             if hasattr(self, '_m_root_safe'):
-                return self._m_root_safe if hasattr(self, '_m_root_safe') else None
+                return self._m_root_safe
 
             self._m_root_safe = (self.value & 262144) != 0
-            return self._m_root_safe if hasattr(self, '_m_root_safe') else None
+            return getattr(self, '_m_root_safe', None)
 
         @property
         def no_undefs(self):
             """the object file has no undefined references."""
             if hasattr(self, '_m_no_undefs'):
-                return self._m_no_undefs if hasattr(self, '_m_no_undefs') else None
+                return self._m_no_undefs
 
             self._m_no_undefs = (self.value & 1) != 0
-            return self._m_no_undefs if hasattr(self, '_m_no_undefs') else None
+            return getattr(self, '_m_no_undefs', None)
 
         @property
         def setuid_safe(self):
             """When this bit is set, the binary declares it is safe for use in processes when issetugid() is true."""
             if hasattr(self, '_m_setuid_safe'):
-                return self._m_setuid_safe if hasattr(self, '_m_setuid_safe') else None
+                return self._m_setuid_safe
 
             self._m_setuid_safe = (self.value & 524288) != 0
-            return self._m_setuid_safe if hasattr(self, '_m_setuid_safe') else None
+            return getattr(self, '_m_setuid_safe', None)
 
         @property
         def no_heap_execution(self):
             if hasattr(self, '_m_no_heap_execution'):
-                return self._m_no_heap_execution if hasattr(self, '_m_no_heap_execution') else None
+                return self._m_no_heap_execution
 
             self._m_no_heap_execution = (self.value & 16777216) != 0
-            return self._m_no_heap_execution if hasattr(self, '_m_no_heap_execution') else None
+            return getattr(self, '_m_no_heap_execution', None)
 
         @property
         def no_reexported_dylibs(self):
             """When this bit is set on a dylib, the static linker does not need to examine dependent dylibs to see if any are re-exported."""
             if hasattr(self, '_m_no_reexported_dylibs'):
-                return self._m_no_reexported_dylibs if hasattr(self, '_m_no_reexported_dylibs') else None
+                return self._m_no_reexported_dylibs
 
             self._m_no_reexported_dylibs = (self.value & 1048576) != 0
-            return self._m_no_reexported_dylibs if hasattr(self, '_m_no_reexported_dylibs') else None
+            return getattr(self, '_m_no_reexported_dylibs', None)
 
         @property
         def no_multi_defs(self):
             """this umbrella guarantees no multiple defintions of symbols in its sub-images so the two-level namespace hints can always be used."""
             if hasattr(self, '_m_no_multi_defs'):
-                return self._m_no_multi_defs if hasattr(self, '_m_no_multi_defs') else None
+                return self._m_no_multi_defs
 
             self._m_no_multi_defs = (self.value & 512) != 0
-            return self._m_no_multi_defs if hasattr(self, '_m_no_multi_defs') else None
+            return getattr(self, '_m_no_multi_defs', None)
 
         @property
         def app_extension_safe(self):
             if hasattr(self, '_m_app_extension_safe'):
-                return self._m_app_extension_safe if hasattr(self, '_m_app_extension_safe') else None
+                return self._m_app_extension_safe
 
             self._m_app_extension_safe = (self.value & 33554432) != 0
-            return self._m_app_extension_safe if hasattr(self, '_m_app_extension_safe') else None
+            return getattr(self, '_m_app_extension_safe', None)
 
         @property
         def prebindable(self):
             """the binary is not prebound but can have its prebinding redone. only used when MH_PREBOUND is not set."""
             if hasattr(self, '_m_prebindable'):
-                return self._m_prebindable if hasattr(self, '_m_prebindable') else None
+                return self._m_prebindable
 
             self._m_prebindable = (self.value & 2048) != 0
-            return self._m_prebindable if hasattr(self, '_m_prebindable') else None
+            return getattr(self, '_m_prebindable', None)
 
         @property
         def incr_link(self):
             """the object file is the output of an incremental link against a base file and can't be link edited again."""
             if hasattr(self, '_m_incr_link'):
-                return self._m_incr_link if hasattr(self, '_m_incr_link') else None
+                return self._m_incr_link
 
             self._m_incr_link = (self.value & 2) != 0
-            return self._m_incr_link if hasattr(self, '_m_incr_link') else None
+            return getattr(self, '_m_incr_link', None)
 
         @property
         def bind_at_load(self):
             """the object file's undefined references are bound by the dynamic linker when loaded."""
             if hasattr(self, '_m_bind_at_load'):
-                return self._m_bind_at_load if hasattr(self, '_m_bind_at_load') else None
+                return self._m_bind_at_load
 
             self._m_bind_at_load = (self.value & 8) != 0
-            return self._m_bind_at_load if hasattr(self, '_m_bind_at_load') else None
+            return getattr(self, '_m_bind_at_load', None)
 
         @property
         def canonical(self):
             """the binary has been canonicalized via the unprebind operation."""
             if hasattr(self, '_m_canonical'):
-                return self._m_canonical if hasattr(self, '_m_canonical') else None
+                return self._m_canonical
 
             self._m_canonical = (self.value & 16384) != 0
-            return self._m_canonical if hasattr(self, '_m_canonical') else None
+            return getattr(self, '_m_canonical', None)
 
         @property
         def two_level(self):
             """the image is using two-level name space bindings."""
             if hasattr(self, '_m_two_level'):
-                return self._m_two_level if hasattr(self, '_m_two_level') else None
+                return self._m_two_level
 
             self._m_two_level = (self.value & 128) != 0
-            return self._m_two_level if hasattr(self, '_m_two_level') else None
+            return getattr(self, '_m_two_level', None)
 
         @property
         def split_segs(self):
             """the file has its read-only and read-write segments split."""
             if hasattr(self, '_m_split_segs'):
-                return self._m_split_segs if hasattr(self, '_m_split_segs') else None
+                return self._m_split_segs
 
             self._m_split_segs = (self.value & 32) != 0
-            return self._m_split_segs if hasattr(self, '_m_split_segs') else None
+            return getattr(self, '_m_split_segs', None)
 
         @property
         def lazy_init(self):
             """the shared library init routine is to be run lazily via catching memory faults to its writeable segments (obsolete)."""
             if hasattr(self, '_m_lazy_init'):
-                return self._m_lazy_init if hasattr(self, '_m_lazy_init') else None
+                return self._m_lazy_init
 
             self._m_lazy_init = (self.value & 64) != 0
-            return self._m_lazy_init if hasattr(self, '_m_lazy_init') else None
+            return getattr(self, '_m_lazy_init', None)
 
         @property
         def allow_stack_execution(self):
             """When this bit is set, all stacks in the task will be given stack execution privilege.  Only used in MH_EXECUTE filetypes."""
             if hasattr(self, '_m_allow_stack_execution'):
-                return self._m_allow_stack_execution if hasattr(self, '_m_allow_stack_execution') else None
+                return self._m_allow_stack_execution
 
             self._m_allow_stack_execution = (self.value & 131072) != 0
-            return self._m_allow_stack_execution if hasattr(self, '_m_allow_stack_execution') else None
+            return getattr(self, '_m_allow_stack_execution', None)
 
         @property
         def binds_to_weak(self):
             """the final linked image uses weak symbols."""
             if hasattr(self, '_m_binds_to_weak'):
-                return self._m_binds_to_weak if hasattr(self, '_m_binds_to_weak') else None
+                return self._m_binds_to_weak
 
             self._m_binds_to_weak = (self.value & 65536) != 0
-            return self._m_binds_to_weak if hasattr(self, '_m_binds_to_weak') else None
+            return getattr(self, '_m_binds_to_weak', None)
 
         @property
         def no_fix_prebinding(self):
             """do not have dyld notify the prebinding agent about this executable."""
             if hasattr(self, '_m_no_fix_prebinding'):
-                return self._m_no_fix_prebinding if hasattr(self, '_m_no_fix_prebinding') else None
+                return self._m_no_fix_prebinding
 
             self._m_no_fix_prebinding = (self.value & 1024) != 0
-            return self._m_no_fix_prebinding if hasattr(self, '_m_no_fix_prebinding') else None
+            return getattr(self, '_m_no_fix_prebinding', None)
 
         @property
         def dyld_link(self):
             """the object file is input for the dynamic linker and can't be staticly link edited again."""
             if hasattr(self, '_m_dyld_link'):
-                return self._m_dyld_link if hasattr(self, '_m_dyld_link') else None
+                return self._m_dyld_link
 
             self._m_dyld_link = (self.value & 4) != 0
-            return self._m_dyld_link if hasattr(self, '_m_dyld_link') else None
+            return getattr(self, '_m_dyld_link', None)
 
         @property
         def pie(self):
             """When this bit is set, the OS will load the main executable at a random address. Only used in MH_EXECUTE filetypes."""
             if hasattr(self, '_m_pie'):
-                return self._m_pie if hasattr(self, '_m_pie') else None
+                return self._m_pie
 
             self._m_pie = (self.value & 2097152) != 0
-            return self._m_pie if hasattr(self, '_m_pie') else None
+            return getattr(self, '_m_pie', None)
 
 
     class RoutinesCommand64(KaitaiStruct):
@@ -1252,12 +1251,12 @@ class MachO(KaitaiStruct):
             self.num_strings = self._io.read_u4le()
             self._debug['num_strings']['end'] = self._io.pos()
             self._debug['strings']['start'] = self._io.pos()
-            self.strings = [None] * (self.num_strings)
+            self.strings = []
             for i in range(self.num_strings):
                 if not 'arr' in self._debug['strings']:
                     self._debug['strings']['arr'] = []
                 self._debug['strings']['arr'].append({'start': self._io.pos()})
-                self.strings[i] = (self._io.read_bytes_term(0, False, True, True)).decode(u"utf-8")
+                self.strings.append((self._io.read_bytes_term(0, False, True, True)).decode(u"utf-8"))
                 self._debug['strings']['arr'][i]['end'] = self._io.pos()
 
             self._debug['strings']['end'] = self._io.pos()
@@ -1302,14 +1301,14 @@ class MachO(KaitaiStruct):
             self.flags = self._io.read_u4le()
             self._debug['flags']['end'] = self._io.pos()
             self._debug['sections']['start'] = self._io.pos()
-            self.sections = [None] * (self.nsects)
+            self.sections = []
             for i in range(self.nsects):
                 if not 'arr' in self._debug['sections']:
                     self._debug['sections']['arr'] = []
                 self._debug['sections']['arr'].append({'start': self._io.pos()})
                 _t_sections = MachO.SegmentCommand64.Section64(self._io, self, self._root)
                 _t_sections._read()
-                self.sections[i] = _t_sections
+                self.sections.append(_t_sections)
                 self._debug['sections']['arr'][i]['end'] = self._io.pos()
 
             self._debug['sections']['end'] = self._io.pos()
@@ -1591,7 +1590,7 @@ class MachO(KaitaiStruct):
             @property
             def data(self):
                 if hasattr(self, '_m_data'):
-                    return self._m_data if hasattr(self, '_m_data') else None
+                    return self._m_data
 
                 io = self._root._io
                 _pos = io.pos()
@@ -1687,7 +1686,7 @@ class MachO(KaitaiStruct):
                     self._m_data = io.read_bytes(self.size)
                 self._debug['_m_data']['end'] = io.pos()
                 io.seek(_pos)
-                return self._m_data if hasattr(self, '_m_data') else None
+                return getattr(self, '_m_data', None)
 
 
 
@@ -1796,23 +1795,23 @@ class MachO(KaitaiStruct):
         @property
         def indirect_symbols(self):
             if hasattr(self, '_m_indirect_symbols'):
-                return self._m_indirect_symbols if hasattr(self, '_m_indirect_symbols') else None
+                return self._m_indirect_symbols
 
             io = self._root._io
             _pos = io.pos()
             io.seek(self.indirect_sym_off)
             self._debug['_m_indirect_symbols']['start'] = io.pos()
-            self._m_indirect_symbols = [None] * (self.n_indirect_syms)
+            self._m_indirect_symbols = []
             for i in range(self.n_indirect_syms):
                 if not 'arr' in self._debug['_m_indirect_symbols']:
                     self._debug['_m_indirect_symbols']['arr'] = []
                 self._debug['_m_indirect_symbols']['arr'].append({'start': io.pos()})
-                self._m_indirect_symbols[i] = io.read_u4le()
+                self._m_indirect_symbols.append(io.read_u4le())
                 self._debug['_m_indirect_symbols']['arr'][i]['end'] = io.pos()
 
             self._debug['_m_indirect_symbols']['end'] = io.pos()
             io.seek(_pos)
-            return self._m_indirect_symbols if hasattr(self, '_m_indirect_symbols') else None
+            return getattr(self, '_m_indirect_symbols', None)
 
 
     class MachHeader(KaitaiStruct):
@@ -1851,13 +1850,13 @@ class MachO(KaitaiStruct):
         @property
         def flags_obj(self):
             if hasattr(self, '_m_flags_obj'):
-                return self._m_flags_obj if hasattr(self, '_m_flags_obj') else None
+                return self._m_flags_obj
 
             self._debug['_m_flags_obj']['start'] = self._io.pos()
             self._m_flags_obj = MachO.MachoFlags(self.flags, self._io, self, self._root)
             self._m_flags_obj._read()
             self._debug['_m_flags_obj']['end'] = self._io.pos()
-            return self._m_flags_obj if hasattr(self, '_m_flags_obj') else None
+            return getattr(self, '_m_flags_obj', None)
 
 
     class LinkeditDataCommand(KaitaiStruct):
@@ -1976,7 +1975,7 @@ class MachO(KaitaiStruct):
         @property
         def code_signature(self):
             if hasattr(self, '_m_code_signature'):
-                return self._m_code_signature if hasattr(self, '_m_code_signature') else None
+                return self._m_code_signature
 
             io = self._root._io
             _pos = io.pos()
@@ -1988,7 +1987,7 @@ class MachO(KaitaiStruct):
             self._m_code_signature._read()
             self._debug['_m_code_signature']['end'] = io.pos()
             io.seek(_pos)
-            return self._m_code_signature if hasattr(self, '_m_code_signature') else None
+            return getattr(self, '_m_code_signature', None)
 
 
     class DyldInfoCommand(KaitaiStruct):
@@ -2079,18 +2078,18 @@ class MachO(KaitaiStruct):
             @property
             def opcode(self):
                 if hasattr(self, '_m_opcode'):
-                    return self._m_opcode if hasattr(self, '_m_opcode') else None
+                    return self._m_opcode
 
                 self._m_opcode = KaitaiStream.resolve_enum(MachO.DyldInfoCommand.BindOpcode, (self.opcode_and_immediate & 240))
-                return self._m_opcode if hasattr(self, '_m_opcode') else None
+                return getattr(self, '_m_opcode', None)
 
             @property
             def immediate(self):
                 if hasattr(self, '_m_immediate'):
-                    return self._m_immediate if hasattr(self, '_m_immediate') else None
+                    return self._m_immediate
 
                 self._m_immediate = (self.opcode_and_immediate & 15)
-                return self._m_immediate if hasattr(self, '_m_immediate') else None
+                return getattr(self, '_m_immediate', None)
 
 
         class RebaseData(KaitaiStruct):
@@ -2158,18 +2157,18 @@ class MachO(KaitaiStruct):
                 @property
                 def opcode(self):
                     if hasattr(self, '_m_opcode'):
-                        return self._m_opcode if hasattr(self, '_m_opcode') else None
+                        return self._m_opcode
 
                     self._m_opcode = KaitaiStream.resolve_enum(MachO.DyldInfoCommand.RebaseData.Opcode, (self.opcode_and_immediate & 240))
-                    return self._m_opcode if hasattr(self, '_m_opcode') else None
+                    return getattr(self, '_m_opcode', None)
 
                 @property
                 def immediate(self):
                     if hasattr(self, '_m_immediate'):
-                        return self._m_immediate if hasattr(self, '_m_immediate') else None
+                        return self._m_immediate
 
                     self._m_immediate = (self.opcode_and_immediate & 15)
-                    return self._m_immediate if hasattr(self, '_m_immediate') else None
+                    return getattr(self, '_m_immediate', None)
 
 
 
@@ -2190,14 +2189,14 @@ class MachO(KaitaiStruct):
                 self.children_count = self._io.read_u1()
                 self._debug['children_count']['end'] = self._io.pos()
                 self._debug['children']['start'] = self._io.pos()
-                self.children = [None] * (self.children_count)
+                self.children = []
                 for i in range(self.children_count):
                     if not 'arr' in self._debug['children']:
                         self._debug['children']['arr'] = []
                     self._debug['children']['arr'].append({'start': self._io.pos()})
                     _t_children = MachO.DyldInfoCommand.ExportNode.Child(self._io, self, self._root)
                     _t_children._read()
-                    self.children[i] = _t_children
+                    self.children.append(_t_children)
                     self._debug['children']['arr'][i]['end'] = self._io.pos()
 
                 self._debug['children']['end'] = self._io.pos()
@@ -2225,7 +2224,7 @@ class MachO(KaitaiStruct):
                 @property
                 def value(self):
                     if hasattr(self, '_m_value'):
-                        return self._m_value if hasattr(self, '_m_value') else None
+                        return self._m_value
 
                     _pos = self._io.pos()
                     self._io.seek(self.node_offset.value)
@@ -2234,7 +2233,7 @@ class MachO(KaitaiStruct):
                     self._m_value._read()
                     self._debug['_m_value']['end'] = self._io.pos()
                     self._io.seek(_pos)
-                    return self._m_value if hasattr(self, '_m_value') else None
+                    return getattr(self, '_m_value', None)
 
 
 
@@ -2293,7 +2292,7 @@ class MachO(KaitaiStruct):
         @property
         def rebase(self):
             if hasattr(self, '_m_rebase'):
-                return self._m_rebase if hasattr(self, '_m_rebase') else None
+                return self._m_rebase
 
             io = self._root._io
             _pos = io.pos()
@@ -2305,12 +2304,12 @@ class MachO(KaitaiStruct):
             self._m_rebase._read()
             self._debug['_m_rebase']['end'] = io.pos()
             io.seek(_pos)
-            return self._m_rebase if hasattr(self, '_m_rebase') else None
+            return getattr(self, '_m_rebase', None)
 
         @property
         def bind(self):
             if hasattr(self, '_m_bind'):
-                return self._m_bind if hasattr(self, '_m_bind') else None
+                return self._m_bind
 
             io = self._root._io
             _pos = io.pos()
@@ -2322,12 +2321,12 @@ class MachO(KaitaiStruct):
             self._m_bind._read()
             self._debug['_m_bind']['end'] = io.pos()
             io.seek(_pos)
-            return self._m_bind if hasattr(self, '_m_bind') else None
+            return getattr(self, '_m_bind', None)
 
         @property
         def lazy_bind(self):
             if hasattr(self, '_m_lazy_bind'):
-                return self._m_lazy_bind if hasattr(self, '_m_lazy_bind') else None
+                return self._m_lazy_bind
 
             io = self._root._io
             _pos = io.pos()
@@ -2339,12 +2338,12 @@ class MachO(KaitaiStruct):
             self._m_lazy_bind._read()
             self._debug['_m_lazy_bind']['end'] = io.pos()
             io.seek(_pos)
-            return self._m_lazy_bind if hasattr(self, '_m_lazy_bind') else None
+            return getattr(self, '_m_lazy_bind', None)
 
         @property
         def exports(self):
             if hasattr(self, '_m_exports'):
-                return self._m_exports if hasattr(self, '_m_exports') else None
+                return self._m_exports
 
             io = self._root._io
             _pos = io.pos()
@@ -2356,7 +2355,7 @@ class MachO(KaitaiStruct):
             self._m_exports._read()
             self._debug['_m_exports']['end'] = io.pos()
             io.seek(_pos)
-            return self._m_exports if hasattr(self, '_m_exports') else None
+            return getattr(self, '_m_exports', None)
 
 
     class DylinkerCommand(KaitaiStruct):
@@ -2439,14 +2438,14 @@ class MachO(KaitaiStruct):
             self.flags = self._io.read_u4le()
             self._debug['flags']['end'] = self._io.pos()
             self._debug['sections']['start'] = self._io.pos()
-            self.sections = [None] * (self.nsects)
+            self.sections = []
             for i in range(self.nsects):
                 if not 'arr' in self._debug['sections']:
                     self._debug['sections']['arr'] = []
                 self._debug['sections']['arr'].append({'start': self._io.pos()})
                 _t_sections = MachO.SegmentCommand.Section(self._io, self, self._root)
                 _t_sections._read()
-                self.sections[i] = _t_sections
+                self.sections.append(_t_sections)
                 self._debug['sections']['arr'][i]['end'] = self._io.pos()
 
             self._debug['sections']['end'] = self._io.pos()
@@ -2497,7 +2496,7 @@ class MachO(KaitaiStruct):
             @property
             def data(self):
                 if hasattr(self, '_m_data'):
-                    return self._m_data if hasattr(self, '_m_data') else None
+                    return self._m_data
 
                 io = self._root._io
                 _pos = io.pos()
@@ -2506,7 +2505,7 @@ class MachO(KaitaiStruct):
                 self._m_data = io.read_bytes(self.size)
                 self._debug['_m_data']['end'] = io.pos()
                 io.seek(_pos)
-                return self._m_data if hasattr(self, '_m_data') else None
+                return getattr(self, '_m_data', None)
 
 
 
@@ -2841,7 +2840,7 @@ class MachO(KaitaiStruct):
             @property
             def name(self):
                 if hasattr(self, '_m_name'):
-                    return self._m_name if hasattr(self, '_m_name') else None
+                    return self._m_name
 
                 if self.un != 0:
                     _pos = self._io.pos()
@@ -2851,7 +2850,7 @@ class MachO(KaitaiStruct):
                     self._debug['_m_name']['end'] = self._io.pos()
                     self._io.seek(_pos)
 
-                return self._m_name if hasattr(self, '_m_name') else None
+                return getattr(self, '_m_name', None)
 
 
         class Nlist(KaitaiStruct):
@@ -2882,7 +2881,7 @@ class MachO(KaitaiStruct):
             @property
             def name(self):
                 if hasattr(self, '_m_name'):
-                    return self._m_name if hasattr(self, '_m_name') else None
+                    return self._m_name
 
                 if self.un != 0:
                     _pos = self._io.pos()
@@ -2892,19 +2891,19 @@ class MachO(KaitaiStruct):
                     self._debug['_m_name']['end'] = self._io.pos()
                     self._io.seek(_pos)
 
-                return self._m_name if hasattr(self, '_m_name') else None
+                return getattr(self, '_m_name', None)
 
 
         @property
         def symbols(self):
             if hasattr(self, '_m_symbols'):
-                return self._m_symbols if hasattr(self, '_m_symbols') else None
+                return self._m_symbols
 
             io = self._root._io
             _pos = io.pos()
             io.seek(self.sym_off)
             self._debug['_m_symbols']['start'] = io.pos()
-            self._m_symbols = [None] * (self.n_syms)
+            self._m_symbols = []
             for i in range(self.n_syms):
                 if not 'arr' in self._debug['_m_symbols']:
                     self._debug['_m_symbols']['arr'] = []
@@ -2916,7 +2915,7 @@ class MachO(KaitaiStruct):
                     self._debug['_m_symbols']['arr'].append({'start': io.pos()})
                     _t__m_symbols = MachO.SymtabCommand.Nlist64(io, self, self._root)
                     _t__m_symbols._read()
-                    self._m_symbols[i] = _t__m_symbols
+                    self._m_symbols.append(_t__m_symbols)
                     self._debug['_m_symbols']['arr'][i]['end'] = io.pos()
                 elif _on == MachO.MagicType.macho_be_x64:
                     if not 'arr' in self._debug['_m_symbols']:
@@ -2924,7 +2923,7 @@ class MachO(KaitaiStruct):
                     self._debug['_m_symbols']['arr'].append({'start': io.pos()})
                     _t__m_symbols = MachO.SymtabCommand.Nlist64(io, self, self._root)
                     _t__m_symbols._read()
-                    self._m_symbols[i] = _t__m_symbols
+                    self._m_symbols.append(_t__m_symbols)
                     self._debug['_m_symbols']['arr'][i]['end'] = io.pos()
                 elif _on == MachO.MagicType.macho_le_x86:
                     if not 'arr' in self._debug['_m_symbols']:
@@ -2932,7 +2931,7 @@ class MachO(KaitaiStruct):
                     self._debug['_m_symbols']['arr'].append({'start': io.pos()})
                     _t__m_symbols = MachO.SymtabCommand.Nlist(io, self, self._root)
                     _t__m_symbols._read()
-                    self._m_symbols[i] = _t__m_symbols
+                    self._m_symbols.append(_t__m_symbols)
                     self._debug['_m_symbols']['arr'][i]['end'] = io.pos()
                 elif _on == MachO.MagicType.macho_be_x86:
                     if not 'arr' in self._debug['_m_symbols']:
@@ -2940,18 +2939,18 @@ class MachO(KaitaiStruct):
                     self._debug['_m_symbols']['arr'].append({'start': io.pos()})
                     _t__m_symbols = MachO.SymtabCommand.Nlist(io, self, self._root)
                     _t__m_symbols._read()
-                    self._m_symbols[i] = _t__m_symbols
+                    self._m_symbols.append(_t__m_symbols)
                     self._debug['_m_symbols']['arr'][i]['end'] = io.pos()
                 self._debug['_m_symbols']['arr'][i]['end'] = io.pos()
 
             self._debug['_m_symbols']['end'] = io.pos()
             io.seek(_pos)
-            return self._m_symbols if hasattr(self, '_m_symbols') else None
+            return getattr(self, '_m_symbols', None)
 
         @property
         def strs(self):
             if hasattr(self, '_m_strs'):
-                return self._m_strs if hasattr(self, '_m_strs') else None
+                return self._m_strs
 
             io = self._root._io
             _pos = io.pos()
@@ -2963,7 +2962,7 @@ class MachO(KaitaiStruct):
             self._m_strs._read()
             self._debug['_m_strs']['end'] = io.pos()
             io.seek(_pos)
-            return self._m_strs if hasattr(self, '_m_strs') else None
+            return getattr(self, '_m_strs', None)
 
 
     class VersionMinCommand(KaitaiStruct):

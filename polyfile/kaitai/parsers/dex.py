@@ -1,13 +1,12 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
-from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 from enum import Enum
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 from polyfile.kaitai.parsers import vlq_base128_le
@@ -150,14 +149,14 @@ class Dex(KaitaiStruct):
             self.size = self._io.read_u4le()
             self._debug['size']['end'] = self._io.pos()
             self._debug['list']['start'] = self._io.pos()
-            self.list = [None] * (self.size)
+            self.list = []
             for i in range(self.size):
                 if not 'arr' in self._debug['list']:
                     self._debug['list']['arr'] = []
                 self._debug['list']['arr'].append({'start': self._io.pos()})
                 _t_list = Dex.MapItem(self._io, self, self._root)
                 _t_list._read()
-                self.list[i] = _t_list
+                self.list.append(_t_list)
                 self._debug['list']['arr'][i]['end'] = self._io.pos()
 
             self._debug['list']['end'] = self._io.pos()
@@ -275,28 +274,28 @@ class Dex(KaitaiStruct):
         def class_name(self):
             """the definer of this method."""
             if hasattr(self, '_m_class_name'):
-                return self._m_class_name if hasattr(self, '_m_class_name') else None
+                return self._m_class_name
 
             self._m_class_name = self._root.type_ids[self.class_idx].type_name
-            return self._m_class_name if hasattr(self, '_m_class_name') else None
+            return getattr(self, '_m_class_name', None)
 
         @property
         def proto_desc(self):
             """the short-form descriptor of the prototype of this method."""
             if hasattr(self, '_m_proto_desc'):
-                return self._m_proto_desc if hasattr(self, '_m_proto_desc') else None
+                return self._m_proto_desc
 
             self._m_proto_desc = self._root.proto_ids[self.proto_idx].shorty_desc
-            return self._m_proto_desc if hasattr(self, '_m_proto_desc') else None
+            return getattr(self, '_m_proto_desc', None)
 
         @property
         def method_name(self):
             """the name of this method."""
             if hasattr(self, '_m_method_name'):
-                return self._m_method_name if hasattr(self, '_m_method_name') else None
+                return self._m_method_name
 
             self._m_method_name = self._root.string_ids[self.name_idx].value.data
-            return self._m_method_name if hasattr(self, '_m_method_name') else None
+            return getattr(self, '_m_method_name', None)
 
 
     class TypeItem(KaitaiStruct):
@@ -315,10 +314,10 @@ class Dex(KaitaiStruct):
         @property
         def value(self):
             if hasattr(self, '_m_value'):
-                return self._m_value if hasattr(self, '_m_value') else None
+                return self._m_value
 
             self._m_value = self._root.type_ids[self.type_idx].type_name
-            return self._m_value if hasattr(self, '_m_value') else None
+            return getattr(self, '_m_value', None)
 
 
     class TypeIdItem(KaitaiStruct):
@@ -337,10 +336,10 @@ class Dex(KaitaiStruct):
         @property
         def type_name(self):
             if hasattr(self, '_m_type_name'):
-                return self._m_type_name if hasattr(self, '_m_type_name') else None
+                return self._m_type_name
 
             self._m_type_name = self._root.string_ids[self.descriptor_idx].value.data
-            return self._m_type_name if hasattr(self, '_m_type_name') else None
+            return getattr(self, '_m_type_name', None)
 
 
     class AnnotationElement(KaitaiStruct):
@@ -422,50 +421,50 @@ class Dex(KaitaiStruct):
             self.virtual_methods_size._read()
             self._debug['virtual_methods_size']['end'] = self._io.pos()
             self._debug['static_fields']['start'] = self._io.pos()
-            self.static_fields = [None] * (self.static_fields_size.value)
+            self.static_fields = []
             for i in range(self.static_fields_size.value):
                 if not 'arr' in self._debug['static_fields']:
                     self._debug['static_fields']['arr'] = []
                 self._debug['static_fields']['arr'].append({'start': self._io.pos()})
                 _t_static_fields = Dex.EncodedField(self._io, self, self._root)
                 _t_static_fields._read()
-                self.static_fields[i] = _t_static_fields
+                self.static_fields.append(_t_static_fields)
                 self._debug['static_fields']['arr'][i]['end'] = self._io.pos()
 
             self._debug['static_fields']['end'] = self._io.pos()
             self._debug['instance_fields']['start'] = self._io.pos()
-            self.instance_fields = [None] * (self.instance_fields_size.value)
+            self.instance_fields = []
             for i in range(self.instance_fields_size.value):
                 if not 'arr' in self._debug['instance_fields']:
                     self._debug['instance_fields']['arr'] = []
                 self._debug['instance_fields']['arr'].append({'start': self._io.pos()})
                 _t_instance_fields = Dex.EncodedField(self._io, self, self._root)
                 _t_instance_fields._read()
-                self.instance_fields[i] = _t_instance_fields
+                self.instance_fields.append(_t_instance_fields)
                 self._debug['instance_fields']['arr'][i]['end'] = self._io.pos()
 
             self._debug['instance_fields']['end'] = self._io.pos()
             self._debug['direct_methods']['start'] = self._io.pos()
-            self.direct_methods = [None] * (self.direct_methods_size.value)
+            self.direct_methods = []
             for i in range(self.direct_methods_size.value):
                 if not 'arr' in self._debug['direct_methods']:
                     self._debug['direct_methods']['arr'] = []
                 self._debug['direct_methods']['arr'].append({'start': self._io.pos()})
                 _t_direct_methods = Dex.EncodedMethod(self._io, self, self._root)
                 _t_direct_methods._read()
-                self.direct_methods[i] = _t_direct_methods
+                self.direct_methods.append(_t_direct_methods)
                 self._debug['direct_methods']['arr'][i]['end'] = self._io.pos()
 
             self._debug['direct_methods']['end'] = self._io.pos()
             self._debug['virtual_methods']['start'] = self._io.pos()
-            self.virtual_methods = [None] * (self.virtual_methods_size.value)
+            self.virtual_methods = []
             for i in range(self.virtual_methods_size.value):
                 if not 'arr' in self._debug['virtual_methods']:
                     self._debug['virtual_methods']['arr'] = []
                 self._debug['virtual_methods']['arr'].append({'start': self._io.pos()})
                 _t_virtual_methods = Dex.EncodedMethod(self._io, self, self._root)
                 _t_virtual_methods._read()
-                self.virtual_methods[i] = _t_virtual_methods
+                self.virtual_methods.append(_t_virtual_methods)
                 self._debug['virtual_methods']['arr'][i]['end'] = self._io.pos()
 
             self._debug['virtual_methods']['end'] = self._io.pos()
@@ -494,28 +493,28 @@ class Dex(KaitaiStruct):
         def class_name(self):
             """the definer of this field."""
             if hasattr(self, '_m_class_name'):
-                return self._m_class_name if hasattr(self, '_m_class_name') else None
+                return self._m_class_name
 
             self._m_class_name = self._root.type_ids[self.class_idx].type_name
-            return self._m_class_name if hasattr(self, '_m_class_name') else None
+            return getattr(self, '_m_class_name', None)
 
         @property
         def type_name(self):
             """the type of this field."""
             if hasattr(self, '_m_type_name'):
-                return self._m_type_name if hasattr(self, '_m_type_name') else None
+                return self._m_type_name
 
             self._m_type_name = self._root.type_ids[self.type_idx].type_name
-            return self._m_type_name if hasattr(self, '_m_type_name') else None
+            return getattr(self, '_m_type_name', None)
 
         @property
         def field_name(self):
             """the name of this field."""
             if hasattr(self, '_m_field_name'):
-                return self._m_field_name if hasattr(self, '_m_field_name') else None
+                return self._m_field_name
 
             self._m_field_name = self._root.string_ids[self.name_idx].value.data
-            return self._m_field_name if hasattr(self, '_m_field_name') else None
+            return getattr(self, '_m_field_name', None)
 
 
     class EncodedAnnotation(KaitaiStruct):
@@ -536,14 +535,14 @@ class Dex(KaitaiStruct):
             self.size._read()
             self._debug['size']['end'] = self._io.pos()
             self._debug['elements']['start'] = self._io.pos()
-            self.elements = [None] * (self.size.value)
+            self.elements = []
             for i in range(self.size.value):
                 if not 'arr' in self._debug['elements']:
                     self._debug['elements']['arr'] = []
                 self._debug['elements']['arr'].append({'start': self._io.pos()})
                 _t_elements = Dex.AnnotationElement(self._io, self, self._root)
                 _t_elements._read()
-                self.elements[i] = _t_elements
+                self.elements.append(_t_elements)
                 self._debug['elements']['arr'][i]['end'] = self._io.pos()
 
             self._debug['elements']['end'] = self._io.pos()
@@ -586,15 +585,15 @@ class Dex(KaitaiStruct):
         @property
         def type_name(self):
             if hasattr(self, '_m_type_name'):
-                return self._m_type_name if hasattr(self, '_m_type_name') else None
+                return self._m_type_name
 
             self._m_type_name = self._root.type_ids[self.class_idx].type_name
-            return self._m_type_name if hasattr(self, '_m_type_name') else None
+            return getattr(self, '_m_type_name', None)
 
         @property
         def class_data(self):
             if hasattr(self, '_m_class_data'):
-                return self._m_class_data if hasattr(self, '_m_class_data') else None
+                return self._m_class_data
 
             if self.class_data_off != 0:
                 _pos = self._io.pos()
@@ -605,12 +604,12 @@ class Dex(KaitaiStruct):
                 self._debug['_m_class_data']['end'] = self._io.pos()
                 self._io.seek(_pos)
 
-            return self._m_class_data if hasattr(self, '_m_class_data') else None
+            return getattr(self, '_m_class_data', None)
 
         @property
         def static_values(self):
             if hasattr(self, '_m_static_values'):
-                return self._m_static_values if hasattr(self, '_m_static_values') else None
+                return self._m_static_values
 
             if self.static_values_off != 0:
                 _pos = self._io.pos()
@@ -621,7 +620,7 @@ class Dex(KaitaiStruct):
                 self._debug['_m_static_values']['end'] = self._io.pos()
                 self._io.seek(_pos)
 
-            return self._m_static_values if hasattr(self, '_m_static_values') else None
+            return getattr(self, '_m_static_values', None)
 
 
     class TypeList(KaitaiStruct):
@@ -637,14 +636,14 @@ class Dex(KaitaiStruct):
             self.size = self._io.read_u4le()
             self._debug['size']['end'] = self._io.pos()
             self._debug['list']['start'] = self._io.pos()
-            self.list = [None] * (self.size)
+            self.list = []
             for i in range(self.size):
                 if not 'arr' in self._debug['list']:
                     self._debug['list']['arr'] = []
                 self._debug['list']['arr'].append({'start': self._io.pos()})
                 _t_list = Dex.TypeItem(self._io, self, self._root)
                 _t_list._read()
-                self.list[i] = _t_list
+                self.list.append(_t_list)
                 self._debug['list']['arr'][i]['end'] = self._io.pos()
 
             self._debug['list']['end'] = self._io.pos()
@@ -684,7 +683,7 @@ class Dex(KaitaiStruct):
         @property
         def value(self):
             if hasattr(self, '_m_value'):
-                return self._m_value if hasattr(self, '_m_value') else None
+                return self._m_value
 
             _pos = self._io.pos()
             self._io.seek(self.string_data_off)
@@ -693,7 +692,7 @@ class Dex(KaitaiStruct):
             self._m_value._read()
             self._debug['_m_value']['end'] = self._io.pos()
             self._io.seek(_pos)
-            return self._m_value if hasattr(self, '_m_value') else None
+            return getattr(self, '_m_value', None)
 
 
     class ProtoIdItem(KaitaiStruct):
@@ -719,16 +718,16 @@ class Dex(KaitaiStruct):
         def shorty_desc(self):
             """short-form descriptor string of this prototype, as pointed to by shorty_idx."""
             if hasattr(self, '_m_shorty_desc'):
-                return self._m_shorty_desc if hasattr(self, '_m_shorty_desc') else None
+                return self._m_shorty_desc
 
             self._m_shorty_desc = self._root.string_ids[self.shorty_idx].value.data
-            return self._m_shorty_desc if hasattr(self, '_m_shorty_desc') else None
+            return getattr(self, '_m_shorty_desc', None)
 
         @property
         def params_types(self):
             """list of parameter types for this prototype."""
             if hasattr(self, '_m_params_types'):
-                return self._m_params_types if hasattr(self, '_m_params_types') else None
+                return self._m_params_types
 
             if self.parameters_off != 0:
                 io = self._root._io
@@ -740,16 +739,16 @@ class Dex(KaitaiStruct):
                 self._debug['_m_params_types']['end'] = io.pos()
                 io.seek(_pos)
 
-            return self._m_params_types if hasattr(self, '_m_params_types') else None
+            return getattr(self, '_m_params_types', None)
 
         @property
         def return_type(self):
             """return type of this prototype."""
             if hasattr(self, '_m_return_type'):
-                return self._m_return_type if hasattr(self, '_m_return_type') else None
+                return self._m_return_type
 
             self._m_return_type = self._root.type_ids[self.return_type_idx].type_name
-            return self._m_return_type if hasattr(self, '_m_return_type') else None
+            return getattr(self, '_m_return_type', None)
 
 
     class EncodedMethod(KaitaiStruct):
@@ -834,14 +833,14 @@ class Dex(KaitaiStruct):
             self.size._read()
             self._debug['size']['end'] = self._io.pos()
             self._debug['values']['start'] = self._io.pos()
-            self.values = [None] * (self.size.value)
+            self.values = []
             for i in range(self.size.value):
                 if not 'arr' in self._debug['values']:
                     self._debug['values']['arr'] = []
                 self._debug['values']['arr'].append({'start': self._io.pos()})
                 _t_values = Dex.EncodedValue(self._io, self, self._root)
                 _t_values._read()
-                self.values[i] = _t_values
+                self.values.append(_t_values)
                 self._debug['values']['arr'][i]['end'] = self._io.pos()
 
             self._debug['values']['end'] = self._io.pos()
@@ -858,24 +857,24 @@ class Dex(KaitaiStruct):
         (not in a locale-sensitive manner), and it must not contain any duplicate entries.
         """
         if hasattr(self, '_m_string_ids'):
-            return self._m_string_ids if hasattr(self, '_m_string_ids') else None
+            return self._m_string_ids
 
         _pos = self._io.pos()
         self._io.seek(self.header.string_ids_off)
         self._debug['_m_string_ids']['start'] = self._io.pos()
-        self._m_string_ids = [None] * (self.header.string_ids_size)
+        self._m_string_ids = []
         for i in range(self.header.string_ids_size):
             if not 'arr' in self._debug['_m_string_ids']:
                 self._debug['_m_string_ids']['arr'] = []
             self._debug['_m_string_ids']['arr'].append({'start': self._io.pos()})
             _t__m_string_ids = Dex.StringIdItem(self._io, self, self._root)
             _t__m_string_ids._read()
-            self._m_string_ids[i] = _t__m_string_ids
+            self._m_string_ids.append(_t__m_string_ids)
             self._debug['_m_string_ids']['arr'][i]['end'] = self._io.pos()
 
         self._debug['_m_string_ids']['end'] = self._io.pos()
         self._io.seek(_pos)
-        return self._m_string_ids if hasattr(self, '_m_string_ids') else None
+        return getattr(self, '_m_string_ids', None)
 
     @property
     def method_ids(self):
@@ -891,24 +890,24 @@ class Dex(KaitaiStruct):
         The list must not contain any duplicate entries.
         """
         if hasattr(self, '_m_method_ids'):
-            return self._m_method_ids if hasattr(self, '_m_method_ids') else None
+            return self._m_method_ids
 
         _pos = self._io.pos()
         self._io.seek(self.header.method_ids_off)
         self._debug['_m_method_ids']['start'] = self._io.pos()
-        self._m_method_ids = [None] * (self.header.method_ids_size)
+        self._m_method_ids = []
         for i in range(self.header.method_ids_size):
             if not 'arr' in self._debug['_m_method_ids']:
                 self._debug['_m_method_ids']['arr'] = []
             self._debug['_m_method_ids']['arr'].append({'start': self._io.pos()})
             _t__m_method_ids = Dex.MethodIdItem(self._io, self, self._root)
             _t__m_method_ids._read()
-            self._m_method_ids[i] = _t__m_method_ids
+            self._m_method_ids.append(_t__m_method_ids)
             self._debug['_m_method_ids']['arr'][i]['end'] = self._io.pos()
 
         self._debug['_m_method_ids']['end'] = self._io.pos()
         self._io.seek(_pos)
-        return self._m_method_ids if hasattr(self, '_m_method_ids') else None
+        return getattr(self, '_m_method_ids', None)
 
     @property
     def link_data(self):
@@ -920,7 +919,7 @@ class Dex(KaitaiStruct):
         use it as they see fit.
         """
         if hasattr(self, '_m_link_data'):
-            return self._m_link_data if hasattr(self, '_m_link_data') else None
+            return self._m_link_data
 
         _pos = self._io.pos()
         self._io.seek(self.header.link_off)
@@ -928,12 +927,12 @@ class Dex(KaitaiStruct):
         self._m_link_data = self._io.read_bytes(self.header.link_size)
         self._debug['_m_link_data']['end'] = self._io.pos()
         self._io.seek(_pos)
-        return self._m_link_data if hasattr(self, '_m_link_data') else None
+        return getattr(self, '_m_link_data', None)
 
     @property
     def map(self):
         if hasattr(self, '_m_map'):
-            return self._m_map if hasattr(self, '_m_map') else None
+            return self._m_map
 
         _pos = self._io.pos()
         self._io.seek(self.header.map_off)
@@ -942,7 +941,7 @@ class Dex(KaitaiStruct):
         self._m_map._read()
         self._debug['_m_map']['end'] = self._io.pos()
         self._io.seek(_pos)
-        return self._m_map if hasattr(self, '_m_map') else None
+        return getattr(self, '_m_map', None)
 
     @property
     def class_defs(self):
@@ -955,24 +954,24 @@ class Dex(KaitaiStruct):
         appear more than once in the list.
         """
         if hasattr(self, '_m_class_defs'):
-            return self._m_class_defs if hasattr(self, '_m_class_defs') else None
+            return self._m_class_defs
 
         _pos = self._io.pos()
         self._io.seek(self.header.class_defs_off)
         self._debug['_m_class_defs']['start'] = self._io.pos()
-        self._m_class_defs = [None] * (self.header.class_defs_size)
+        self._m_class_defs = []
         for i in range(self.header.class_defs_size):
             if not 'arr' in self._debug['_m_class_defs']:
                 self._debug['_m_class_defs']['arr'] = []
             self._debug['_m_class_defs']['arr'].append({'start': self._io.pos()})
             _t__m_class_defs = Dex.ClassDefItem(self._io, self, self._root)
             _t__m_class_defs._read()
-            self._m_class_defs[i] = _t__m_class_defs
+            self._m_class_defs.append(_t__m_class_defs)
             self._debug['_m_class_defs']['arr'][i]['end'] = self._io.pos()
 
         self._debug['_m_class_defs']['end'] = self._io.pos()
         self._io.seek(_pos)
-        return self._m_class_defs if hasattr(self, '_m_class_defs') else None
+        return getattr(self, '_m_class_defs', None)
 
     @property
     def data(self):
@@ -982,7 +981,7 @@ class Dex(KaitaiStruct):
         are inserted before each item if necessary to achieve proper alignment.
         """
         if hasattr(self, '_m_data'):
-            return self._m_data if hasattr(self, '_m_data') else None
+            return self._m_data
 
         _pos = self._io.pos()
         self._io.seek(self.header.data_off)
@@ -990,7 +989,7 @@ class Dex(KaitaiStruct):
         self._m_data = self._io.read_bytes(self.header.data_size)
         self._debug['_m_data']['end'] = self._io.pos()
         self._io.seek(_pos)
-        return self._m_data if hasattr(self, '_m_data') else None
+        return getattr(self, '_m_data', None)
 
     @property
     def type_ids(self):
@@ -1002,24 +1001,24 @@ class Dex(KaitaiStruct):
         This list must be sorted by string_id index, and it must not contain any duplicate entries.
         """
         if hasattr(self, '_m_type_ids'):
-            return self._m_type_ids if hasattr(self, '_m_type_ids') else None
+            return self._m_type_ids
 
         _pos = self._io.pos()
         self._io.seek(self.header.type_ids_off)
         self._debug['_m_type_ids']['start'] = self._io.pos()
-        self._m_type_ids = [None] * (self.header.type_ids_size)
+        self._m_type_ids = []
         for i in range(self.header.type_ids_size):
             if not 'arr' in self._debug['_m_type_ids']:
                 self._debug['_m_type_ids']['arr'] = []
             self._debug['_m_type_ids']['arr'].append({'start': self._io.pos()})
             _t__m_type_ids = Dex.TypeIdItem(self._io, self, self._root)
             _t__m_type_ids._read()
-            self._m_type_ids[i] = _t__m_type_ids
+            self._m_type_ids.append(_t__m_type_ids)
             self._debug['_m_type_ids']['arr'][i]['end'] = self._io.pos()
 
         self._debug['_m_type_ids']['end'] = self._io.pos()
         self._io.seek(_pos)
-        return self._m_type_ids if hasattr(self, '_m_type_ids') else None
+        return getattr(self, '_m_type_ids', None)
 
     @property
     def proto_ids(self):
@@ -1032,24 +1031,24 @@ class Dex(KaitaiStruct):
         ordered by type_id index). The list must not contain any duplicate entries.
         """
         if hasattr(self, '_m_proto_ids'):
-            return self._m_proto_ids if hasattr(self, '_m_proto_ids') else None
+            return self._m_proto_ids
 
         _pos = self._io.pos()
         self._io.seek(self.header.proto_ids_off)
         self._debug['_m_proto_ids']['start'] = self._io.pos()
-        self._m_proto_ids = [None] * (self.header.proto_ids_size)
+        self._m_proto_ids = []
         for i in range(self.header.proto_ids_size):
             if not 'arr' in self._debug['_m_proto_ids']:
                 self._debug['_m_proto_ids']['arr'] = []
             self._debug['_m_proto_ids']['arr'].append({'start': self._io.pos()})
             _t__m_proto_ids = Dex.ProtoIdItem(self._io, self, self._root)
             _t__m_proto_ids._read()
-            self._m_proto_ids[i] = _t__m_proto_ids
+            self._m_proto_ids.append(_t__m_proto_ids)
             self._debug['_m_proto_ids']['arr'][i]['end'] = self._io.pos()
 
         self._debug['_m_proto_ids']['end'] = self._io.pos()
         self._io.seek(_pos)
-        return self._m_proto_ids if hasattr(self, '_m_proto_ids') else None
+        return getattr(self, '_m_proto_ids', None)
 
     @property
     def field_ids(self):
@@ -1064,23 +1063,23 @@ class Dex(KaitaiStruct):
         The list must not contain any duplicate entries.
         """
         if hasattr(self, '_m_field_ids'):
-            return self._m_field_ids if hasattr(self, '_m_field_ids') else None
+            return self._m_field_ids
 
         _pos = self._io.pos()
         self._io.seek(self.header.field_ids_off)
         self._debug['_m_field_ids']['start'] = self._io.pos()
-        self._m_field_ids = [None] * (self.header.field_ids_size)
+        self._m_field_ids = []
         for i in range(self.header.field_ids_size):
             if not 'arr' in self._debug['_m_field_ids']:
                 self._debug['_m_field_ids']['arr'] = []
             self._debug['_m_field_ids']['arr'].append({'start': self._io.pos()})
             _t__m_field_ids = Dex.FieldIdItem(self._io, self, self._root)
             _t__m_field_ids._read()
-            self._m_field_ids[i] = _t__m_field_ids
+            self._m_field_ids.append(_t__m_field_ids)
             self._debug['_m_field_ids']['arr'][i]['end'] = self._io.pos()
 
         self._debug['_m_field_ids']['end'] = self._io.pos()
         self._io.seek(_pos)
-        return self._m_field_ids if hasattr(self, '_m_field_ids') else None
+        return getattr(self, '_m_field_ids', None)
 
 
