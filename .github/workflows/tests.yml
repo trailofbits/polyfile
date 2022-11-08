@@ -33,7 +33,7 @@ jobs:
         pip install setuptools
         pip install .[dev]
     - name: Scan with pip-audit
-      uses: trailofbits/gh-action-pip-audit@v1.0.0
+      uses: trailofbits/gh-action-pip-audit@v1.0.1
     - name: Lint with flake8
       run: |
         # stop the build if there are Python syntax errors or undefined names
