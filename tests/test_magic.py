@@ -31,6 +31,14 @@ class MagicTest(TestCase):
         print(f"# MIME Types:      {len(matcher.mimetypes)}")
         print(f"# File Extensions: {len(matcher.extensions)}")
 
+    def test_text_tests(self):
+        matcher = MagicMatcher.parse(*MAGIC_DEFS)
+        self.assertEqual(len(matcher.text_tests & matcher.non_text_tests), 0)
+        num_text_tests = len(matcher.text_tests)
+        num_non_text_tests = len(matcher.non_text_tests)
+        self.assertEqual(num_text_tests, 285)
+        self.assertEqual(num_non_text_tests, 3151)
+
     def test_only_matching(self):
         matcher = MagicMatcher.parse(*MAGIC_DEFS)
         self.assertIs(matcher, matcher.only_match())
