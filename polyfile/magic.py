@@ -1146,7 +1146,7 @@ class StringTest(ABC):
             if specification.startswith("="):
                 specification = specification[1:]
             test = StringMatch(
-                to_match=unescape(specification),
+                to_match=specification,
                 trim=trim,
                 compact_whitespace=compact_whitespace,
                 case_insensitive_lower=case_insensitive_lower,
@@ -1243,7 +1243,7 @@ class StringLengthTest(StringWildcard):
 
 class StringMatch(StringTest):
     def __init__(self,
-                 to_match: bytes,
+                 to_match: str,
                  trim: bool = False,
                  compact_whitespace: bool = False,
                  case_insensitive_lower: bool = False,
@@ -1252,13 +1252,15 @@ class StringMatch(StringTest):
                  full_word_match: bool = False
     ):
         super().__init__(trim=trim, compact_whitespace=compact_whitespace)
-        self.string: bytes = to_match
+        self.raw_pattern: str = to_match
+        self.string: bytes = unescape(to_match)
         self.case_insensitive_lower: bool = case_insensitive_lower
         self.case_insensitive_upper: bool = case_insensitive_upper
         self.optional_blanks: bool = optional_blanks
         self.full_word_match: bool = full_word_match
         if optional_blanks and compact_whitespace:
             raise ValueError("Optional blanks `w` and compacting whitespace `W` cannot be selected at the same time")
+        self._is_always_text: Optional[bool] = None
         self._pattern: Optional[re.Pattern] = None
         _ = self.pattern
 
@@ -1321,11 +1323,17 @@ class StringMatch(StringTest):
         return self._pattern
 
     def is_always_text(self) -> bool:
-        try:
-            _ = self.pattern.pattern.decode("ascii")
-            return True
-        except UnicodeDecodeError:
-            return False
+        if self._is_always_text is None:
+            if "\\x" in self.raw_pattern:
+                # the string has hex escapes, so do not treat it as text
+                self._is_always_text = False
+            else:
+                try:
+                    _ = self.pattern.pattern.decode("ascii")
+                    self._is_always_text = True
+                except UnicodeDecodeError:
+                    self._is_always_text = False
+        return self._is_always_text
 
     def matches(self, data: bytes) -> DataTypeMatch:
         m = self.pattern.match(data)
