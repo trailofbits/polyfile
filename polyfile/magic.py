@@ -1212,6 +1212,7 @@ class NegatedStringTest(StringWildcard):
 class StringLengthTest(StringWildcard):
     def __init__(self, to_match: str, test_smaller: bool, trim: bool = False, compact_whitespace: bool = False,
                  num_bytes: Optional[int] = None):
+        super().__init__(trim=trim, compact_whitespace=compact_whitespace, num_bytes=num_bytes)
         self.raw_pattern: str = to_match
         self.to_match: bytes = unescape(to_match)
         null_termination_index = self.to_match.find(0)
@@ -1219,11 +1220,6 @@ class StringLengthTest(StringWildcard):
             self.to_match = self.to_match[:null_termination_index]
         self.desired_length: int = len(self.to_match)
         self.test_smaller: bool = test_smaller
-        if num_bytes is None:
-            num_bytes = self.desired_length
-        else:
-            num_bytes = min(num_bytes, self.desired_length)
-        super().__init__(trim=trim, compact_whitespace=compact_whitespace, num_bytes=num_bytes)
 
     def matches(self, data: bytes) -> DataTypeMatch:
         match = super().matches(data)
