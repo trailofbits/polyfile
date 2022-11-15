@@ -24,7 +24,7 @@ setup(
     packages=find_packages(exclude=("tests",)),
     python_requires='>=3.7',
     install_requires=[
-        "chardet>=3.0.4",
+        "chardet~=5.0.0",
         "cint>=1.0.0",
         "graphviz>=0.20.1",
         "intervaltree>=2.4.0",
