@@ -36,8 +36,8 @@ class MagicTest(TestCase):
         self.assertEqual(len(matcher.text_tests & matcher.non_text_tests), 0)
         num_text_tests = len(matcher.text_tests)
         num_non_text_tests = len(matcher.non_text_tests)
-        self.assertEqual(num_text_tests, 285)
-        self.assertEqual(num_non_text_tests, 3151)
+        self.assertEqual(num_text_tests, 287)
+        self.assertEqual(num_non_text_tests, 3149)
 
     def test_only_matching(self):
         matcher = MagicMatcher.parse(*MAGIC_DEFS)

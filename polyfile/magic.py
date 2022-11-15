@@ -1189,7 +1189,7 @@ class NegatedStringTest(StringWildcard):
         self.parent: StringTest = parent_test
 
     def is_always_text(self) -> bool:
-        return False
+        return self.parent.is_always_text()
 
     def matches(self, data: bytes) -> DataTypeMatch:
         result = self.parent.matches(data)
