@@ -1212,7 +1212,6 @@ class NegatedStringTest(StringWildcard):
 class StringLengthTest(StringWildcard):
     def __init__(self, to_match: str, test_smaller: bool, trim: bool = False, compact_whitespace: bool = False,
                  num_bytes: Optional[int] = None):
-        super().__init__(trim=trim, compact_whitespace=compact_whitespace, num_bytes=num_bytes)
         self.raw_pattern: str = to_match
         self.to_match: bytes = unescape(to_match)
         null_termination_index = self.to_match.find(0)
@@ -1220,12 +1219,17 @@ class StringLengthTest(StringWildcard):
             self.to_match = self.to_match[:null_termination_index]
         self.desired_length: int = len(self.to_match)
         self.test_smaller: bool = test_smaller
+        if num_bytes is None:
+            num_bytes = self.desired_length
+        else:
+            num_bytes = min(num_bytes, self.desired_length)
+        super().__init__(trim=trim, compact_whitespace=compact_whitespace, num_bytes=num_bytes)
 
     def matches(self, data: bytes) -> DataTypeMatch:
         match = super().matches(data)
-        if self.test_smaller and len(match.raw_match) < self.desired_length:
+        if self.test_smaller and match.raw_match[:self.desired_length] < self.to_match:
             return match
-        elif not self.test_smaller and len(match.raw_match) > self.desired_length:
+        elif not self.test_smaller and match.raw_match[:self.desired_length] > self.to_match:
             return match
         else:
             return DataTypeMatch.INVALID
@@ -1247,7 +1251,7 @@ class StringLengthTest(StringWildcard):
                f"trim={self.trim!r}, compact_whitespace={self.compact_whitespace!r}, num_bytes={self.num_bytes!r})"
 
     def __str__(self):
-        return f"{['>', '<'][self.test_smaller]}len({repr(self.to_match)})"
+        return f"{['>', '<'][self.test_smaller]}{repr(self.to_match)}"
 
 
 class StringMatch(StringTest):
