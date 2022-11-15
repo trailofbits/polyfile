@@ -256,6 +256,23 @@ class Matcher:
                     log.warning(f"Parser {parser!s} for MIME type {mimetype} raised an exception while "
                                 f"parsing {match_obj!s} in {file_stream!s}: {e!s}")
 
+    def identify(
+            self, file_stream: Union[str, Path, IO, FileStream], parent: Optional[Match] = None
+    ) -> Iterator[MagicMatch]:
+        with FileStream(file_stream) as f:
+            matched_mimetypes: Set[str] = set()
+            context = MatchContext.load(f, only_match_mime=False)
+            for magic_match in self.magic_matcher.match(context):
+                yield magic_match
+                for result in magic_match:
+                    if result.test.mime is None:
+                        continue
+                    mimetype = result.test.mime.resolve(context)
+                    if mimetype in matched_mimetypes:
+                        continue
+                    matched_mimetypes.add(mimetype)
+                    yield from self.handle_mimetype(mimetype, result, context.data, file_stream, parent)
+
     def match(self, file_stream: Union[str, Path, IO, FileStream], parent: Optional[Match] = None) -> Iterator[Match]:
         with FileStream(file_stream) as f:
             matched_mimetypes: Set[str] = set()
@@ -281,6 +298,8 @@ class Analyzer:
         self._matcher: Optional[Matcher] = None
         self._matches: Optional[List[Match]] = None
         self._match_iterator: Optional[Iterator[Match]] = None
+        self._magic_matches: Optional[List[MagicMatch]] = None
+        self._magic_match_iterator: Optional[Iterator[MagicMatch]] = None
 
     @property
     def magic_matcher(self) -> MagicMatcher:
@@ -311,6 +330,10 @@ class Analyzer:
     def matches_so_far(self) -> List[Match]:
         return self._matches
 
+    @property
+    def magic_matches_so_far(self) -> List[MagicMatch]:
+        return self._magic_matches
+
     def matches(self) -> Iterator[Match]:
         if self._matches is None or self._match_iterator is not None:
             if self._matches is None:
@@ -338,6 +361,23 @@ class Analyzer:
                     log.info(f"Found an embedded file of type {filetype} at byte offset {match.offset}")
         else:
             yield from self._matches
+
+    def magic_matches(self) -> Iterator[Match]:
+        if self._magic_matches is None or self._magic_match_iterator is not None:
+            if self._magic_matches is None:
+                self._magic_matches = []
+                self._magic_match_iterator = iter(self.matcher.identify(self.path))
+            else:
+                yield from self._matches
+            while True:
+                try:
+                    match = next(self._magic_match_iterator)
+                    yield match
+                except StopIteration:
+                    self._magic_match_iterator = None
+                    break
+        else:
+            yield from self._magic_matches
 
     def sbud(self, matches: Optional[Iterable[Match]] = None) -> Dict[str, Any]:
         if matches is None:

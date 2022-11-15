@@ -121,12 +121,14 @@ def main(argv=None):
                         help='the file to analyze; pass \'-\' or omit to read from STDIN')
 
     parser.add_argument('--format', '-r', type=FormatOutput, action="append", choices=[
-        FormatOutput(f) for f in ("mime", "html", "json", "sbud")
+        FormatOutput(f) for f in ("file", "mime", "html", "json", "sbud")
     ], help=dedent("""PolyFile's output format
 
 Output formats are:
-mime ...... the detected MIME types associated with the file,
+file ...... the detected formats associated with the file,
             like the output of the `file` command
+mime ...... the detected MIME types associated with the file,
+            like the output of the `file --mime-type` command
 explain ... like 'mime', but adds a human-readable explanation
             for why each MIME type matched
 html ...... an interactive HTML-based hex viewer
@@ -143,7 +145,7 @@ they occur in the arguments.
 To save each format to a separate file, see the `--output` argument.
 
 If no format is specified, PolyFile defaults to `--format sbud`,
-but this will change to `--format mime` in v0.5.0"""))
+but this will change to `--format file` in v0.5.0"""))
 
     parser.add_argument('--output', '-o', action=ValidateOutput, type=str, # nargs=2,
                         # metavar=(f"{{{','.join(ValidateOutput.valid_outputs)}}}", "PATH"),
@@ -304,7 +306,7 @@ equivalent to `--format mime`"""))
 !!!!!!!
 The default output format for PolyFile will be changing in forthcoming release v0.5.0!
 Currently, the default output format is SBUD/JSON.
-In release v0.5.0, it will switch to the equivalent of the current `--only-match-mime` option.
+In release v0.5.0, it will switch to the equivalent of the current `--format file` option.
 To preserve the original behavior, add the `--format sbud` command line option.
 Please update your scripts!
 
@@ -332,7 +334,17 @@ Please update your scripts!
 
         for output_format in args.format:
             with output_format.output_stream as output:
-                if output_format.output_format == "mime" or output_format.output_format == "explain":
+                if output_format.output_format == "file":
+                    istty = sys.stderr.isatty() and output.isatty() and logging.root.level <= logging.INFO
+                    with KeyboardInterruptHandler():
+                        for match in analyzer.magic_matches():
+                            if istty:
+                                log.clear_status()
+                                output.write(f"{match!s}\n")
+                                output.flush()
+                            else:
+                                output.write(f"{match!s}\n")
+                elif output_format.output_format in ("mime", "explain"):
                     omm = sys.stderr.isatty() and output.isatty() and logging.root.level <= logging.INFO
                     if omm:
                         # figure out the longest MIME type so we can make sure the columns are aligned

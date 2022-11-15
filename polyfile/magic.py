@@ -1133,7 +1133,7 @@ class StringTest(ABC):
             negate = False
         if specification.startswith(">") or specification.startswith("<"):
             test = StringLengthTest(
-                to_match=unescape(specification[1:]),
+                to_match=specification[1:],
                 test_smaller=specification.startswith("<"),
                 trim=trim,
                 compact_whitespace=compact_whitespace,
@@ -1210,17 +1210,22 @@ class NegatedStringTest(StringWildcard):
 
 
 class StringLengthTest(StringWildcard):
-    def __init__(self, to_match: bytes, test_smaller: bool, trim: bool = False, compact_whitespace: bool = False,
+    def __init__(self, to_match: str, test_smaller: bool, trim: bool = False, compact_whitespace: bool = False,
                  num_bytes: Optional[int] = None):
         super().__init__(trim=trim, compact_whitespace=compact_whitespace, num_bytes=num_bytes)
-        self.to_match: bytes = to_match
+        self.raw_pattern: str = to_match
+        self.to_match: bytes = unescape(to_match)
+        null_termination_index = self.to_match.find(0)
+        if null_termination_index >= 0:
+            self.to_match = self.to_match[:null_termination_index]
+        self.desired_length: int = len(self.to_match)
         self.test_smaller: bool = test_smaller
 
     def matches(self, data: bytes) -> DataTypeMatch:
         match = super().matches(data)
-        if self.test_smaller and match.raw_match < self.to_match:
+        if self.test_smaller and len(match.raw_match) < self.desired_length:
             return match
-        elif not self.test_smaller and match.raw_match > self.to_match:
+        elif not self.test_smaller and len(match.raw_match) > self.desired_length:
             return match
         else:
             return DataTypeMatch.INVALID
@@ -1237,8 +1242,12 @@ class StringLengthTest(StringWildcard):
         else:
             return DataTypeMatch.INVALID
 
+    def __repr__(self):
+        return f"{self.__class__.__name__}(to_match={self.raw_pattern!r}, test_smaller={self.test_smaller!r}, " \
+               f"trim={self.trim!r}, compact_whitespace={self.compact_whitespace!r}, num_bytes={self.num_bytes!r})"
+
     def __str__(self):
-        return repr(self.to_match)
+        return f"{['>', '<'][self.test_smaller]}len({repr(self.to_match)})"
 
 
 class StringMatch(StringTest):
@@ -2495,7 +2504,9 @@ class DefaultMagicMatcher:
 
     def __get__(self, instance, owner) -> "MagicMatcher":
         if DefaultMagicMatcher._DEFAULT_INSTANCE is None:
-            DefaultMagicMatcher._DEFAULT_INSTANCE = MagicMatcher.parse(*MAGIC_DEFS)
+            # DefaultMagicMatcher._DEFAULT_INSTANCE = MagicMatcher.parse(*MAGIC_DEFS)
+            # FIXME: skip the DER definition for now because we don't yet support it
+            DefaultMagicMatcher._DEFAULT_INSTANCE = MagicMatcher.parse(*(d for d in MAGIC_DEFS if d.name != "der"))
         return DefaultMagicMatcher._DEFAULT_INSTANCE
 
     def __set__(self, instance, value: Optional["MagicMatcher"]):
