@@ -723,14 +723,18 @@ class MagicTest(ABC):
     @property
     def test_type(self) -> TestType:
         if self._type == TestType.UNKNOWN:
-            self._type = self.subtest_type()
-            if self._type == TestType.UNKNOWN or (self._type & TestType.TEXT and self.level == 0):
-                # A top-level pattern is considered to be a test text when all its patterns are text patterns;
-                # otherwise, it is considered to be a binary pattern.
-                if all(not bool(child.test_type & TestType.BINARY) for child in self.children):
-                    self._type = TestType.TEXT
-                else:
-                    self._type = TestType.BINARY
+            if self.can_be_indirect:
+                # indirect tests can execute any other (binary) test, so classify ourselves as binary
+                self._type = TestType.BINARY
+            else:
+                self._type = self.subtest_type()
+                if self._type == TestType.UNKNOWN or (self._type & TestType.TEXT and self.level == 0):
+                    # A top-level pattern is considered to be a test text when all its patterns are text patterns;
+                    # otherwise, it is considered to be a binary pattern.
+                    if all(not bool(child.test_type & TestType.BINARY) for child in self.children):
+                        self._type = TestType.TEXT
+                    else:
+                        self._type = TestType.BINARY
         return self._type
 
     @test_type.setter
@@ -1333,7 +1337,7 @@ class StringMatch(StringTest):
 
     def is_always_text(self) -> bool:
         if self._is_always_text is None:
-            if "\\x" in self.raw_pattern:
+            if "\\x" in self.raw_pattern or "\\0" in self.raw_pattern:
                 # the string has hex escapes, so do not treat it as text
                 self._is_always_text = False
             else:
@@ -2098,10 +2102,12 @@ class IndirectTest(MagicTest):
         self.relative: bool = relative
         self.can_match_mime = True
         self.can_be_indirect = True
+        self._type = TestType.BINARY
         p = parent
         while p is not None:
             p.can_be_indirect = True
             p.can_match_mime = True
+            p._type = TestType.BINARY
             p = p.parent
 
     def subtest_type(self) -> TestType:

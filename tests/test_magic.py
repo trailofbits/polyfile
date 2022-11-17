@@ -53,8 +53,8 @@ class MagicTest(TestCase):
                     new_tests = [c for c in test.children if c not in history]
                     history |= set(new_tests)
                     queue.extend(reversed(new_tests))
-        self.assertEqual(num_text_tests, 287)
-        self.assertEqual(num_non_text_tests, 3149)
+        self.assertEqual(num_text_tests, 272)
+        self.assertEqual(num_non_text_tests, 3170)
 
     def test_only_matching(self):
         matcher = MagicMatcher.parse(*MAGIC_DEFS)
