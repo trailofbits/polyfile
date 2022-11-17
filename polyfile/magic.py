@@ -1393,7 +1393,7 @@ class StringType(DataType[StringTest]):
         self.num_bytes: Optional[int] = num_bytes
 
     def is_text(self, value: StringTest) -> bool:
-        return self.force_text or value.is_always_text()
+        return self.force_text
 
     def allows_invalid_offsets(self, expected: StringTest) -> bool:
         return isinstance(expected, NegatedStringTest)
