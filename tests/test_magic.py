@@ -34,6 +34,10 @@ class MagicTest(TestCase):
     def test_text_tests(self):
         matcher = MagicMatcher.parse(*MAGIC_DEFS)
         self.assertEqual(len(matcher.text_tests & matcher.non_text_tests), 0)
+        for test in matcher.text_tests:
+            self.assertEqual(test.test_type, polyfile.magic.TestType.TEXT)
+        for test in matcher.non_text_tests:
+            self.assertNotEqual(test.test_type, polyfile.magic.TestType.TEXT)
         num_text_tests = len(matcher.text_tests)
         num_non_text_tests = len(matcher.non_text_tests)
         if num_text_tests > 287:
