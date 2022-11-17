@@ -2528,13 +2528,39 @@ class MagicMatcher:
     def __init__(self, tests: Iterable[MagicTest] = ()):
         self._tests: List[MagicTest] = []
         self.named_tests: Dict[str, NamedTest] = {}
-        self.tests_by_mime: Dict[str, Set[MagicTest]] = defaultdict(set)
-        self.tests_by_ext: Dict[str, Set[MagicTest]] = defaultdict(set)
-        self.tests_that_can_be_indirect: Set[MagicTest] = set()
-        self.non_text_tests: Set[MagicTest] = set()
-        self.text_tests: Set[MagicTest] = set()
+        self._tests_by_mime: Dict[str, Set[MagicTest]] = defaultdict(set)
+        self._tests_by_ext: Dict[str, Set[MagicTest]] = defaultdict(set)
+        self._tests_that_can_be_indirect: Set[MagicTest] = set()
+        self._non_text_tests: Set[MagicTest] = set()
+        self._text_tests: Set[MagicTest] = set()
+        self._dirty: bool = True
         for test in tests:
             self.add(test)
+
+    @property
+    def tests_by_mime(self) -> Dict[str, Set[MagicTest]]:
+        self._reassign_test_types()
+        return self._tests_by_mime
+
+    @property
+    def tests_by_ext(self) -> Dict[str, Set[MagicTest]]:
+        self._reassign_test_types()
+        return self._tests_by_ext
+
+    @property
+    def tests_that_can_be_indirect(self) -> Set[MagicTest]:
+        self._reassign_test_types()
+        return self._tests_that_can_be_indirect
+
+    @property
+    def non_text_tests(self) -> Set[MagicTest]:
+        self._reassign_test_types()
+        return self._non_text_tests
+
+    @property
+    def text_tests(self) -> Set[MagicTest]:
+        self._reassign_test_types()
+        return self._text_tests
 
     def add(self, test: Union[MagicTest, Path], test_type: TestType = TestType.UNKNOWN) -> List[MagicTest]:
         if not isinstance(test, MagicTest):
@@ -2555,24 +2581,37 @@ class MagicMatcher:
         if test_type != TestType.UNKNOWN:
             test.test_type = test_type
 
+        self._dirty = True
+
         if isinstance(test, NamedTest):
             if test.name in self.named_tests:
                 raise ValueError(f"A test named {test.name} already exists in this matcher!")
             self.named_tests[test.name] = test
         else:
             self._tests.append(test)
-            for mime in test.mimetypes():
-                self.tests_by_mime[mime].add(test)
-            for ext in test.all_extensions():
-                self.tests_by_ext[ext].add(test)
-            if test.test_type == TestType.TEXT:
-                self.text_tests.add(test)
-            else:
-                self.non_text_tests.add(test)
-            if test.can_be_indirect:
-                self.tests_that_can_be_indirect.add(test)
 
         return [test]
+
+    def _reassign_test_types(self):
+        if not self._dirty:
+            return
+        self._dirty = False
+        self._text_tests = set()
+        self._non_text_tests = set()
+        self._tests_that_can_be_indirect = set()
+        self._tests_by_ext = defaultdict(set)
+        self._tests_by_mime = defaultdict(set)
+        for test in self._tests:
+            if test.test_type == TestType.TEXT:
+                self._text_tests.add(test)
+            else:
+                self._non_text_tests.add(test)
+            if test.can_be_indirect:
+                self._tests_that_can_be_indirect.add(test)
+            for mime in test.mimetypes():
+                self._tests_by_mime[mime].add(test)
+            for ext in test.all_extensions():
+                self._tests_by_ext[ext].add(test)
 
     def only_match(
             self,
