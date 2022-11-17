@@ -732,6 +732,7 @@ class MagicTest(ABC):
                     # A top-level pattern is considered to be a test text when all its patterns are text patterns;
                     # otherwise, it is considered to be a binary pattern.
                     if all(not bool(child.test_type & TestType.BINARY) for child in self.children):
+                        # This is the problem line!
                         self._type = TestType.TEXT
                     else:
                         self._type = TestType.BINARY
@@ -2601,6 +2602,8 @@ class MagicMatcher:
         self._tests_that_can_be_indirect = set()
         self._tests_by_ext = defaultdict(set)
         self._tests_by_mime = defaultdict(set)
+        for test in self._tests:
+            test.test_type = TestType.UNKNOWN
         for test in self._tests:
             if test.test_type == TestType.TEXT:
                 self._text_tests.add(test)
