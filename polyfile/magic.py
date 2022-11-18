@@ -1383,10 +1383,15 @@ class StringType(DataType[StringTest]):
             force_text: bool = False,
             num_bytes: Optional[int] = None
     ):
-        if not all((case_insensitive_lower, case_insensitive_upper, compact_whitespace, optional_blanks, trim)):
+        if not any((num_bytes is not None, case_insensitive_lower, case_insensitive_upper, compact_whitespace,
+                    optional_blanks, trim)):
             name = "string"
         else:
-            name = f"string/{['', 'W'][compact_whitespace]}{['', 'w'][optional_blanks]}"\
+            if num_bytes is not None:
+                name = f"{num_bytes}/"
+            else:
+                name = ""
+            name = f"string/{name}{['', 'W'][compact_whitespace]}{['', 'w'][optional_blanks]}"\
                    f"{['', 'C'][case_insensitive_upper]}{['', 'c'][case_insensitive_lower]}"\
                    f"{['', 'T'][trim]}{['', 'f'][full_word_match]}{['', 't'][force_text]}"
         super().__init__(name)
