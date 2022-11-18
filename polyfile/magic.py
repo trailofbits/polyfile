@@ -731,10 +731,10 @@ class MagicTest(ABC):
                 if self._type == TestType.UNKNOWN or bool(self._type & TestType.TEXT):
                     # A pattern is considered to be a text test when all its patterns are text patterns;
                     # otherwise, it is considered to be a binary pattern.
-                    if any(not bool(child.test_type & TestType.TEXT) for child in self.children):
-                        self._type = TestType.BINARY
-                    else:
+                    if all(bool(child.test_type & TestType.TEXT) for child in self.children):
                         self._type = TestType.TEXT
+                    else:
+                        self._type = TestType.BINARY
         return self._type
 
     @test_type.setter
