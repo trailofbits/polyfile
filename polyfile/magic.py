@@ -723,18 +723,25 @@ class MagicTest(ABC):
     @property
     def test_type(self) -> TestType:
         if self._type == TestType.UNKNOWN:
+            if hasattr(self, "__calculating_test_type") and getattr(self, "__calculating_test_type"):
+                return TestType.UNKNOWN
+            setattr(self, "__calculating_test_type", True)
             if self.can_be_indirect:
                 # indirect tests can execute any other (binary) test, so classify ourselves as binary
                 self._type = TestType.BINARY
             else:
-                self._type = self.subtest_type()
-                if self._type == TestType.UNKNOWN or bool(self._type & TestType.TEXT):
-                    # A pattern is considered to be a text test when all its patterns are text patterns;
-                    # otherwise, it is considered to be a binary pattern.
-                    if all(bool(child.test_type & TestType.TEXT) for child in self.children):
-                        self._type = TestType.TEXT
-                    else:
-                        self._type = TestType.BINARY
+                if any(bool(child.test_type & TestType.BINARY) for child in self.children):
+                    self._type = TestType.BINARY
+                else:
+                    self._type = self.subtest_type()
+                    if (self._type == TestType.UNKNOWN and self.children) or bool(self._type & TestType.TEXT):
+                        # A pattern is considered to be a text test when all its patterns are text patterns;
+                        # otherwise, it is considered to be a binary pattern.
+                        if all(bool(child.test_type & TestType.TEXT) for child in self.children):
+                            self._type = TestType.TEXT
+                        else:
+                            self._type = TestType.UNKNOWN
+            delattr(self, "__calculating_test_type")
         return self._type
 
     @test_type.setter

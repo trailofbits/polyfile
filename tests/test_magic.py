@@ -39,9 +39,44 @@ class MagicTest(TestCase):
         for test in matcher.non_text_tests:
             self.assertNotEqual(test.test_type, polyfile.magic.TestType.TEXT)
         num_text_tests = len(matcher.text_tests)
-        num_non_text_tests = len(matcher.non_text_tests)
-        if num_text_tests > 264:
-            expected_text_tests = {'audio:633', 'c-lang:29', 'assembler:5', 'lua:15', 'c-lang:86', 'misctools:44', 'fonts:6', 'c-lang:90', 'tex:90', 'sisu:14', 'misctools:6', 'algol68:20', 'assembler:11', 'lisp:26', 'python:256', 'tex:52', 'sgml:89', 'lisp:24', 'sgml:86', 'cad:333', 'clojure:26', 'tex:64', 'c-lang:48', 'm4:8', 'windows:325', 'sgml:120', 'tcl:25', 'c-lang:69', 'c-lang:36', 'perl:18', 'tex:92', 'troff:9', 'sgml:74', 'games:286', 'sgml:49', 'lua:11', 'lex:10', 'c-lang:78', 'linux:174', 'sgml:83', 'audio:631', 'c-lang:82', 'terminfo:48', 'commands:102', 'tex:116', 'ruby:15', 'tex:98', 'sgml:134', 'tex:46', 'perl:49', 'algol68:22', 'tex:67', 'tex:94', 'clojure:29', 'sgml:71', 'c-lang:73', 'sgml:92', 'tex:21', 'algol68:24', 'sgml:136', 'ringdove:25', 'python:263', 'c-lang:39', 'perl:54', 'c-lang:45', 'commands:139', 'ringdove:27', 'sgml:80', 'archive:360', 'ringdove:15', 'tex:86', 'commands:159', 'tex:91', 'troff:21', 'tex:58', 'tex:55', 'lisp:18', 'tcl:13', 'python:287', 'c-lang:10', 'python:293', 'sketch:6', 'ctags:6', 'troff:11', 'tex:89', 'ringdove:28', 'ruby:12', 'lisp:20', 'tex:93', 'ruby:18', 'ringdove:26', 'psl:9', 'ruby:25', 'tcl:11', 'commands:132', 'tcl:28', 'tex:34', 'tex:76', 'perl:53', 'tex:95', 'sgml:59', 'troff:13', 'tex:122', 'sisu:5', 'perl:8', 'ringdove:17', 'assembler:15', 'make:15', 'cad:309', 'python:250', 'assembler:7', 'tex:106', 'perl:48', 'perl:10', 'ringdove:20', 'perl:16', 'gnu:170', 'tex:138', 'tex:75', 'perl:47', 'ruby:31', 'c-lang:15', 'lisp:16', 'sgml:102', 'tex:36', 'inform:9', 'tex:71', 'sisu:8', 'sgml:68', 'tex:40', 'ruby:37', 'bioinformatics:156', 'forth:16', 'commands:137', 'tcl:17', 'ringdove:18', 'make:19', 'ringdove:29', 'ringdove:19', 'tcl:7', 'sgml:65', 'perl:12', 'securitycerts:4', 'tex:104', 'fortran:6', 'ringdove:12', 'c-lang:22', 'ringdove:21', 'sgml:135', 'tex:114', 'csv:6', 'rst:5', 'apple:6', 'misctools:39', 'algol68:26', 'assembler:9', 'tex:88', 'c-lang:96', 'ruby:53', 'linux:507', 'perl:36', 'ringdove:32', 'c-lang:25', 'troff:19', 'assembler:17', 'perl:50', 'lisp:22', 'nim-lang:7', 'commands:108', 'tcl:19', 'perl:52', 'sgml:96', 'tex:132', 'perl:24', 'c-lang:8', 'make:6', 'lua:9', 'tex:124', 'perl:20', 'assembler:13', 'commands:105', 'json:6', 'sgml:128', 'c-lang:51', 'tex:96', 'securitycerts:5', 'm4:5', 'tex:43', 'ringdove:6', 'tcl:15', 'msdos:26', 'tex:134', 'softquad:26', 'tex:78', 'pascal:5', 'clojure:23', 'linux:173', 'linux:170', 'windows:671', 'forth:10', 'sgml:77', 'tex:61', 'uuencode:26', 'commands:142', 'tex:100', 'tex:20', 'ringdove:22', 'ringdove:16', 'c-lang:60', 'tex:126', 'troff:25', 'python:244', 'gentoo:44', 'ringdove:8', 'troff:15', 'tex:77', 'perl:14', 'fonts:132', 'sisu:11', 'c-lang:33', 'tex:120', 'tex:74', 'ruby:9', 'sgml:126', 'algol68:9', 'msdos:28', 'linux:54', 'sgml:62', 'sgml:127', 'tex:102', 'commands:68', 'subtitle:19', 'commands:135', 'tcl:21', 'python:279', 'lua:13', 'perl:22', 'diff:16', 'c-lang:42', 'tex:87', 'ringdove:9', 'perl:51', 'lisp:77', 'lex:12', 'tex:49', 'ringdove:7', 'ruby:44', 'c-lang:65', 'ringdove:14', 'commands:111', 'msx:78', 'perl:40', 'tcl:9', 'tex:128', 'sisu:17', 'ringdove:13', 'tex:112', 'tex:136', 'tex:118', 'java:19', 'ruby:50', 'tex:130', 'sgml:55', 'uuencode:18'}
+        expected_text_tests = {'sgml:128', 'c-lang:73', 'misctools:39', 'tex:128', 'commands:137', 'forth:10',
+                               'commands:132', 'tex:74', 'ruby:15', 'tex:91', 'c-lang:90', 'misctools:6', 'sgml:96',
+                               'sisu:8', 'tex:21', 'tex:138', 'tcl:19', 'tex:98', 'tex:134', 'commands:108', 'troff:21',
+                               'tex:116', 'tex:124', 'python:256', 'tex:55', 'tex:87', 'sgml:65', 'tex:88', 'msdos:26',
+                               'ruby:50', 'tex:136', 'c-lang:82', 'ringdove:27', 'c-lang:8', 'python:293', 'gentoo:44',
+                               'sgml:126', 'python:279', 'assembler:15', 'c-lang:69', 'make:15', 'tex:49', 'python:244',
+                               'perl:18', 'tcl:15', 'assembler:9', 'commands:135', 'pascal:5', 'c-lang:60', 'tex:102',
+                               'ringdove:8', 'commands:105', 'ringdove:28', 'sgml:102', 'msx:78', 'sgml:62',
+                               'ringdove:7', 'commands:68', 'linux:507', 'tex:122', 'perl:53', 'c-lang:10',
+                               'commands:102', 'tex:77', 'tex:64', 'linux:54', 'perl:36', 'ringdove:19', 'sisu:14',
+                               'ringdove:22', 'c-lang:33', 'tcl:13', 'inform:9', 'perl:22', 'clojure:26', 'c-lang:25',
+                               'troff:13', 'archive:360', 'tex:106', 'tex:43', 'json:6', 'tex:93', 'fonts:6', 'ruby:37',
+                               'c-lang:51', 'tcl:7', 'windows:325', 'sgml:55', 'tex:71', 'securitycerts:5', 'tcl:25',
+                               'm4:5', 'c-lang:48', 'assembler:5', 'ruby:9', 'c-lang:86', 'tcl:17', 'ruby:25', 'rst:5',
+                               'ringdove:17', 'tex:90', 'commands:111', 'lex:10', 'windows:671', 'ringdove:18',
+                               'lex:12', 'c-lang:29', 'tex:75', 'troff:15', 'make:19', 'troff:19', 'ringdove:32',
+                               'tex:126', 'tex:89', 'sgml:89', 'ringdove:14', 'sisu:17', 'ringdove:25', 'lisp:20',
+                               'tcl:21', 'tex:94', 'ringdove:29', 'uuencode:18', 'tex:46', 'c-lang:78', 'c-lang:65',
+                               'assembler:13', 'sgml:86', 'c-lang:36', 'tex:34', 'm4:8', 'ringdove:12', 'ringdove:9',
+                               'python:263', 'tex:95', 'perl:8', 'tex:76', 'ctags:6', 'audio:631', 'assembler:11',
+                               'make:6', 'securitycerts:4', 'assembler:17', 'sgml:120', 'tex:86', 'perl:12', 'ruby:53',
+                               'lisp:16', 'tex:92', 'fortran:6', 'ringdove:13', 'c-lang:96', 'sgml:127', 'perl:54',
+                               'troff:9', 'nim-lang:7', 'python:250', 'perl:52', 'python:287', 'c-lang:45', 'sgml:74',
+                               'c-lang:39', 'lisp:22', 'lua:11', 'tex:104', 'cad:333', 'ringdove:15', 'sgml:92',
+                               'assembler:7', 'ruby:44', 'tex:118', 'sgml:68', 'linux:174', 'lisp:26', 'fonts:132',
+                               'perl:51', 'perl:40', 'games:286', 'sgml:59', 'tex:132', 'uuencode:26', 'lua:15',
+                               'linux:173', 'sgml:134', 'clojure:23', 'tex:96', 'sisu:5', 'tcl:11', 'tex:36',
+                               'troff:25', 'msdos:28', 'ruby:18', 'tex:58', 'audio:633', 'sgml:49', 'lisp:18',
+                               'perl:49', 'cad:309', 'perl:14', 'lisp:24', 'sketch:6', 'tex:114', 'softquad:26',
+                               'clojure:29', 'lua:13', 'forth:16', 'tex:78', 'lua:9', 'sgml:77', 'ringdove:16',
+                               'tex:112', 'tex:20', 'misctools:44', 'commands:139', 'troff:11', 'tex:67', 'perl:50',
+                               'tex:120', 'sgml:135', 'sgml:136', 'perl:10', 'tex:130', 'ringdove:21', 'ringdove:20',
+                               'tex:100', 'csv:6', 'linux:170', 'perl:48', 'perl:16', 'commands:142', 'sgml:71',
+                               'tex:52', 'c-lang:22', 'ruby:31', 'perl:24', 'bioinformatics:156', 'gnu:170', 'sgml:80',
+                               'terminfo:48', 'tcl:9', 'commands:159', 'ringdove:6', 'ruby:12', 'diff:16',
+                               'subtitle:19', 'psl:9', 'c-lang:42', 'lisp:77', 'perl:20', 'tex:61', 'apple:6', 'tcl:28',
+                               'tex:40', 'sisu:11', 'perl:47', 'ringdove:26', 'sgml:83', 'java:19'}
+        if num_text_tests > len(expected_text_tests):
             actual_text_tests = {
                 f"{test.source_info.path.name}:{test.source_info.line}": test
                 for test in matcher.text_tests if test.source_info is not None
@@ -57,8 +92,7 @@ class MagicTest(TestCase):
                     new_tests = [c for c in test.children if c not in history]
                     history |= set(new_tests)
                     queue.extend(reversed(new_tests))
-        self.assertEqual(num_text_tests, 264)
-        self.assertEqual(num_non_text_tests, 3178)
+        self.assertEqual(num_text_tests, len(expected_text_tests))
 
     def test_only_matching(self):
         matcher = MagicMatcher.parse(*MAGIC_DEFS)
