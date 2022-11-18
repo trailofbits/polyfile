@@ -728,14 +728,13 @@ class MagicTest(ABC):
                 self._type = TestType.BINARY
             else:
                 self._type = self.subtest_type()
-                if self._type == TestType.UNKNOWN or (self._type & TestType.TEXT and self.level == 0):
-                    # A top-level pattern is considered to be a test text when all its patterns are text patterns;
+                if self._type == TestType.UNKNOWN or bool(self._type & TestType.TEXT):
+                    # A pattern is considered to be a text test when all its patterns are text patterns;
                     # otherwise, it is considered to be a binary pattern.
-                    if all(not bool(child.test_type & TestType.BINARY) for child in self.children):
-                        # This is the problem line!
-                        self._type = TestType.TEXT
-                    else:
+                    if any(not bool(child.test_type & TestType.TEXT) for child in self.children):
                         self._type = TestType.BINARY
+                    else:
+                        self._type = TestType.TEXT
         return self._type
 
     @test_type.setter
