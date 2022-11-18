@@ -723,6 +723,8 @@ class MagicTest(ABC):
     @property
     def test_type(self) -> TestType:
         if self._type == TestType.UNKNOWN:
+            if self.source_info is not None and self.source_info.path.name == "archive" and self.source_info.line == 410:
+                breakpoint()
             if hasattr(self, "__calculating_test_type") and getattr(self, "__calculating_test_type"):
                 return TestType.UNKNOWN
             setattr(self, "__calculating_test_type", True)
