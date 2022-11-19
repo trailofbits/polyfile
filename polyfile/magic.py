@@ -1384,7 +1384,7 @@ class StringType(DataType[StringTest]):
             num_bytes: Optional[int] = None
     ):
         if not any((num_bytes is not None, case_insensitive_lower, case_insensitive_upper, compact_whitespace,
-                    optional_blanks, trim)):
+                    optional_blanks, trim, force_text)):
             name = "string"
         else:
             if num_bytes is not None:
