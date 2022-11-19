@@ -1234,7 +1234,9 @@ class StringLengthTest(StringWildcard):
 
     def matches(self, data: bytes) -> DataTypeMatch:
         match = super().matches(data)
-        if self.test_smaller and match.raw_match[:self.desired_length] < self.to_match:
+        if self.desired_length == 0:
+            return match
+        elif self.test_smaller and match.raw_match[:self.desired_length] < self.to_match:
             return match
         elif not self.test_smaller and match.raw_match[:self.desired_length] > self.to_match:
             return match
