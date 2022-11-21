@@ -1,11 +1,12 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
+from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
 
 
-if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
+if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class AndroidOpenglShadersCache(KaitaiStruct):
@@ -107,14 +108,14 @@ class AndroidOpenglShadersCache(KaitaiStruct):
                 self._debug['build_id']['end'] = self._io.pos()
 
             self._debug['entries']['start'] = self._io.pos()
-            self.entries = []
+            self.entries = [None] * (self.num_entries)
             for i in range(self.num_entries):
                 if not 'arr' in self._debug['entries']:
                     self._debug['entries']['arr'] = []
                 self._debug['entries']['arr'].append({'start': self._io.pos()})
                 _t_entries = AndroidOpenglShadersCache.Cache.Entry(self._io, self, self._root)
                 _t_entries._read()
-                self.entries.append(_t_entries)
+                self.entries[i] = _t_entries
                 self._debug['entries']['arr'][i]['end'] = self._io.pos()
 
             self._debug['entries']['end'] = self._io.pos()

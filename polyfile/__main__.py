@@ -57,7 +57,7 @@ class KeyboardInterruptHandler:
 
 
 class FormatOutput:
-    valid_formats = ("mime", "html", "json", "sbud")
+    valid_formats = ("mime", "html", "json", "sbud", "explain")
     # TODO: Change this from "sbud" to "mime" in v0.5.0:
     default_format = "sbud"
 
@@ -121,15 +121,19 @@ def main(argv=None):
                         help='the file to analyze; pass \'-\' or omit to read from STDIN')
 
     parser.add_argument('--format', '-r', type=FormatOutput, action="append", choices=[
-        FormatOutput(f) for f in ("mime", "html", "json", "sbud")
+        FormatOutput(f) for f in ("file", "mime", "html", "json", "sbud")
     ], help=dedent("""PolyFile's output format
 
 Output formats are:
-mime ... the detected MIME types associated with the file,
-         like the output of the `file` command
-html ... an interactive HTML-based hex viewer
-json ... a modified version of the SBUD format in JSON syntax
-sbud ... equivalent to 'json'
+file ...... the detected formats associated with the file,
+            like the output of the `file` command
+mime ...... the detected MIME types associated with the file,
+            like the output of the `file --mime-type` command
+explain ... like 'mime', but adds a human-readable explanation
+            for why each MIME type matched
+html ...... an interactive HTML-based hex viewer
+json ...... a modified version of the SBUD format in JSON syntax
+sbud ...... equivalent to 'json'
 
 Multiple formats can be output at once:
 
@@ -141,7 +145,7 @@ they occur in the arguments.
 To save each format to a separate file, see the `--output` argument.
 
 If no format is specified, PolyFile defaults to `--format sbud`,
-but this will change to `--format mime` in v0.5.0"""))
+but this will change to `--format file` in v0.5.0"""))
 
     parser.add_argument('--output', '-o', action=ValidateOutput, type=str, # nargs=2,
                         # metavar=(f"{{{','.join(ValidateOutput.valid_outputs)}}}", "PATH"),
@@ -173,6 +177,7 @@ then it will implicitly be printed to STDOUT.
     group.add_argument('--html', '-t', action="append",
                        help=dedent("""path to write an interactive HTML file for exploring the PDF;
 equivalent to `--format html --output HTML`"""))
+    group.add_argument("--explain", action="store_true", help="equivalent to `--format explain")
     # parser.add_argument('--try-all-offsets', '-a', action='store_true',
     #                     help='Search for a file match at every possible offset; this can be very slow for larger '
     #                     'files')
@@ -240,6 +245,9 @@ equivalent to `--format mime`"""))
             args.format.append(FormatOutput(output_format="html"))
             ValidateOutput.add_output(args, html_path)
 
+    if hasattr(args, "explain") and args.explain:
+        args.format.append(FormatOutput(output_format="explain"))
+
     if args.only_match_mime:
         args.format.append(FormatOutput(output_format="mime"))
 
@@ -271,6 +279,9 @@ equivalent to `--format mime`"""))
 
     try:
         path_or_stdin = PathOrStdin(args.FILE)
+    except FileNotFoundError:
+        log.error(f"Cannot open {args.FILE!r} (No such file or directory)")
+        exit(1)
     except KeyboardInterrupt:
         # this will happen if the user presses ^C wile reading from STDIN
         exit(1)
@@ -298,7 +309,7 @@ equivalent to `--format mime`"""))
 !!!!!!!
 The default output format for PolyFile will be changing in forthcoming release v0.5.0!
 Currently, the default output format is SBUD/JSON.
-In release v0.5.0, it will switch to the equivalent of the current `--only-match-mime` option.
+In release v0.5.0, it will switch to the equivalent of the current `--format file` option.
 To preserve the original behavior, add the `--format sbud` command line option.
 Please update your scripts!
 
@@ -326,7 +337,19 @@ Please update your scripts!
 
         for output_format in args.format:
             with output_format.output_stream as output:
-                if output_format.output_format == "mime":
+                if output_format.output_format == "file":
+                    istty = sys.stderr.isatty() and output.isatty() and logging.root.level <= logging.INFO
+                    with KeyboardInterruptHandler():
+                        for match in analyzer.magic_matches():
+                            if istty:
+                                log.clear_status()
+                                output.write(f"{match!s}\n")
+                                output.flush()
+                            else:
+                                output.write(f"{match!s}\n")
+                    if istty:
+                        log.clear_status()
+                elif output_format.output_format in ("mime", "explain"):
                     omm = sys.stderr.isatty() and output.isatty() and logging.root.level <= logging.INFO
                     if omm:
                         # figure out the longest MIME type so we can make sure the columns are aligned
@@ -347,6 +370,8 @@ Please update your scripts!
                             else:
                                 output.write(mimetype)
                                 output.write("\n")
+                            if output_format.output_format == "explain":
+                                output.write(match.explain(ansi_color=output.isatty(), file=file_path))
                     if args.require_match and not found_match and not needs_sbud:
                         log.info("No matches found, exiting")
                         exit(127)

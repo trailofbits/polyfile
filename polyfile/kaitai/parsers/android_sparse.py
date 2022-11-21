@@ -1,12 +1,13 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
+from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 from enum import Enum
 import collections
 
 
-if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
+if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class AndroidSparse(KaitaiStruct):
@@ -52,14 +53,14 @@ class AndroidSparse(KaitaiStruct):
         self.header._read()
         self._debug['header']['end'] = self._io.pos()
         self._debug['chunks']['start'] = self._io.pos()
-        self.chunks = []
+        self.chunks = [None] * (self.header.num_chunks)
         for i in range(self.header.num_chunks):
             if not 'arr' in self._debug['chunks']:
                 self._debug['chunks']['arr'] = []
             self._debug['chunks']['arr'].append({'start': self._io.pos()})
             _t_chunks = AndroidSparse.Chunk(self._io, self, self._root)
             _t_chunks._read()
-            self.chunks.append(_t_chunks)
+            self.chunks[i] = _t_chunks
             self._debug['chunks']['arr'][i]['end'] = self._io.pos()
 
         self._debug['chunks']['end'] = self._io.pos()
@@ -118,19 +119,19 @@ class AndroidSparse(KaitaiStruct):
         @property
         def version(self):
             if hasattr(self, '_m_version'):
-                return self._m_version
+                return self._m_version if hasattr(self, '_m_version') else None
 
             self._m_version = self._root.header_prefix.version
-            return getattr(self, '_m_version', None)
+            return self._m_version if hasattr(self, '_m_version') else None
 
         @property
         def len_header(self):
             """size of file header, should be 28."""
             if hasattr(self, '_m_len_header'):
-                return self._m_len_header
+                return self._m_len_header if hasattr(self, '_m_len_header') else None
 
             self._m_len_header = self._root.header_prefix.len_header
-            return getattr(self, '_m_len_header', None)
+            return self._m_len_header if hasattr(self, '_m_len_header') else None
 
 
     class Chunk(KaitaiStruct):
@@ -183,10 +184,10 @@ class AndroidSparse(KaitaiStruct):
             @property
             def len_body(self):
                 if hasattr(self, '_m_len_body'):
-                    return self._m_len_body
+                    return self._m_len_body if hasattr(self, '_m_len_body') else None
 
                 self._m_len_body = (self.len_chunk - self._root.header.len_chunk_header)
-                return getattr(self, '_m_len_body', None)
+                return self._m_len_body if hasattr(self, '_m_len_body') else None
 
             @property
             def len_body_expected(self):
@@ -207,10 +208,10 @@ class AndroidSparse(KaitaiStruct):
                    Source - https://android.googlesource.com/platform/system/core/+/e8d02c50d7/libsparse/sparse_read.cpp#270
                 """
                 if hasattr(self, '_m_len_body_expected'):
-                    return self._m_len_body_expected
+                    return self._m_len_body_expected if hasattr(self, '_m_len_body_expected') else None
 
                 self._m_len_body_expected = ((self._root.header.block_size * self.num_body_blocks) if self.chunk_type == AndroidSparse.ChunkTypes.raw else (4 if self.chunk_type == AndroidSparse.ChunkTypes.fill else (0 if self.chunk_type == AndroidSparse.ChunkTypes.dont_care else (4 if self.chunk_type == AndroidSparse.ChunkTypes.crc32 else -1))))
-                return getattr(self, '_m_len_body_expected', None)
+                return self._m_len_body_expected if hasattr(self, '_m_len_body_expected') else None
 
 
 

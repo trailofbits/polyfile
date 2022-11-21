@@ -1,12 +1,13 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
+from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 from enum import Enum
 import collections
 
 
-if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
+if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class RtcpPayload(KaitaiStruct):
@@ -101,12 +102,12 @@ class RtcpPayload(KaitaiStruct):
             self._debug['br_mantissa']['end'] = self._io.pos()
             self._io.align_to_byte()
             self._debug['ssrc_list']['start'] = self._io.pos()
-            self.ssrc_list = []
+            self.ssrc_list = [None] * (self.num_ssrc)
             for i in range(self.num_ssrc):
                 if not 'arr' in self._debug['ssrc_list']:
                     self._debug['ssrc_list']['arr'] = []
                 self._debug['ssrc_list']['arr'].append({'start': self._io.pos()})
-                self.ssrc_list.append(self._io.read_u4be())
+                self.ssrc_list[i] = self._io.read_u4be()
                 self._debug['ssrc_list']['arr'][i]['end'] = self._io.pos()
 
             self._debug['ssrc_list']['end'] = self._io.pos()
@@ -114,10 +115,10 @@ class RtcpPayload(KaitaiStruct):
         @property
         def max_total_bitrate(self):
             if hasattr(self, '_m_max_total_bitrate'):
-                return self._m_max_total_bitrate
+                return self._m_max_total_bitrate if hasattr(self, '_m_max_total_bitrate') else None
 
             self._m_max_total_bitrate = (self.br_mantissa * (1 << self.br_exp))
-            return getattr(self, '_m_max_total_bitrate', None)
+            return self._m_max_total_bitrate if hasattr(self, '_m_max_total_bitrate') else None
 
 
     class SrPacket(KaitaiStruct):
@@ -148,14 +149,14 @@ class RtcpPayload(KaitaiStruct):
             self.sender_octet_count = self._io.read_u4be()
             self._debug['sender_octet_count']['end'] = self._io.pos()
             self._debug['report_block']['start'] = self._io.pos()
-            self.report_block = []
+            self.report_block = [None] * (self._parent.subtype)
             for i in range(self._parent.subtype):
                 if not 'arr' in self._debug['report_block']:
                     self._debug['report_block']['arr'] = []
                 self._debug['report_block']['arr'].append({'start': self._io.pos()})
                 _t_report_block = RtcpPayload.ReportBlock(self._io, self, self._root)
                 _t_report_block._read()
-                self.report_block.append(_t_report_block)
+                self.report_block[i] = _t_report_block
                 self._debug['report_block']['arr'][i]['end'] = self._io.pos()
 
             self._debug['report_block']['end'] = self._io.pos()
@@ -163,10 +164,10 @@ class RtcpPayload(KaitaiStruct):
         @property
         def ntp(self):
             if hasattr(self, '_m_ntp'):
-                return self._m_ntp
+                return self._m_ntp if hasattr(self, '_m_ntp') else None
 
             self._m_ntp = ((self.ntp_msw << 32) & self.ntp_lsw)
-            return getattr(self, '_m_ntp', None)
+            return self._m_ntp if hasattr(self, '_m_ntp') else None
 
 
     class RrPacket(KaitaiStruct):
@@ -182,14 +183,14 @@ class RtcpPayload(KaitaiStruct):
             self.ssrc = self._io.read_u4be()
             self._debug['ssrc']['end'] = self._io.pos()
             self._debug['report_block']['start'] = self._io.pos()
-            self.report_block = []
+            self.report_block = [None] * (self._parent.subtype)
             for i in range(self._parent.subtype):
                 if not 'arr' in self._debug['report_block']:
                     self._debug['report_block']['arr'] = []
                 self._debug['report_block']['arr'].append({'start': self._io.pos()})
                 _t_report_block = RtcpPayload.ReportBlock(self._io, self, self._root)
                 _t_report_block._read()
-                self.report_block.append(_t_report_block)
+                self.report_block[i] = _t_report_block
                 self._debug['report_block']['arr'][i]['end'] = self._io.pos()
 
             self._debug['report_block']['end'] = self._io.pos()
@@ -307,18 +308,18 @@ class RtcpPayload(KaitaiStruct):
         @property
         def fraction_lost(self):
             if hasattr(self, '_m_fraction_lost'):
-                return self._m_fraction_lost
+                return self._m_fraction_lost if hasattr(self, '_m_fraction_lost') else None
 
             self._m_fraction_lost = (self.lost_val >> 24)
-            return getattr(self, '_m_fraction_lost', None)
+            return self._m_fraction_lost if hasattr(self, '_m_fraction_lost') else None
 
         @property
         def cumulative_packets_lost(self):
             if hasattr(self, '_m_cumulative_packets_lost'):
-                return self._m_cumulative_packets_lost
+                return self._m_cumulative_packets_lost if hasattr(self, '_m_cumulative_packets_lost') else None
 
             self._m_cumulative_packets_lost = (self.lost_val & 16777215)
-            return getattr(self, '_m_cumulative_packets_lost', None)
+            return self._m_cumulative_packets_lost if hasattr(self, '_m_cumulative_packets_lost') else None
 
 
     class RtpfbTransportFeedbackPacket(KaitaiStruct):
@@ -346,38 +347,38 @@ class RtcpPayload(KaitaiStruct):
         @property
         def reference_time(self):
             if hasattr(self, '_m_reference_time'):
-                return self._m_reference_time
+                return self._m_reference_time if hasattr(self, '_m_reference_time') else None
 
             self._m_reference_time = (self.b4 >> 8)
-            return getattr(self, '_m_reference_time', None)
+            return self._m_reference_time if hasattr(self, '_m_reference_time') else None
 
         @property
         def fb_pkt_count(self):
             if hasattr(self, '_m_fb_pkt_count'):
-                return self._m_fb_pkt_count
+                return self._m_fb_pkt_count if hasattr(self, '_m_fb_pkt_count') else None
 
             self._m_fb_pkt_count = (self.b4 & 255)
-            return getattr(self, '_m_fb_pkt_count', None)
+            return self._m_fb_pkt_count if hasattr(self, '_m_fb_pkt_count') else None
 
         @property
         def packet_status(self):
             if hasattr(self, '_m_packet_status'):
-                return self._m_packet_status
+                return self._m_packet_status if hasattr(self, '_m_packet_status') else None
 
             self._debug['_m_packet_status']['start'] = self._io.pos()
             self._m_packet_status = self._io.read_bytes(0)
             self._debug['_m_packet_status']['end'] = self._io.pos()
-            return getattr(self, '_m_packet_status', None)
+            return self._m_packet_status if hasattr(self, '_m_packet_status') else None
 
         @property
         def recv_delta(self):
             if hasattr(self, '_m_recv_delta'):
-                return self._m_recv_delta
+                return self._m_recv_delta if hasattr(self, '_m_recv_delta') else None
 
             self._debug['_m_recv_delta']['start'] = self._io.pos()
             self._m_recv_delta = self._io.read_bytes(0)
             self._debug['_m_recv_delta']['end'] = self._io.pos()
-            return getattr(self, '_m_recv_delta', None)
+            return self._m_recv_delta if hasattr(self, '_m_recv_delta') else None
 
 
     class PsfbPacket(KaitaiStruct):
@@ -409,10 +410,10 @@ class RtcpPayload(KaitaiStruct):
         @property
         def fmt(self):
             if hasattr(self, '_m_fmt'):
-                return self._m_fmt
+                return self._m_fmt if hasattr(self, '_m_fmt') else None
 
             self._m_fmt = KaitaiStream.resolve_enum(RtcpPayload.PsfbSubtype, self._parent.subtype)
-            return getattr(self, '_m_fmt', None)
+            return self._m_fmt if hasattr(self, '_m_fmt') else None
 
 
     class SourceChunk(KaitaiStruct):
@@ -453,14 +454,14 @@ class RtcpPayload(KaitaiStruct):
 
         def _read(self):
             self._debug['source_chunk']['start'] = self._io.pos()
-            self.source_chunk = []
+            self.source_chunk = [None] * (self.source_count)
             for i in range(self.source_count):
                 if not 'arr' in self._debug['source_chunk']:
                     self._debug['source_chunk']['arr'] = []
                 self._debug['source_chunk']['arr'].append({'start': self._io.pos()})
                 _t_source_chunk = RtcpPayload.SourceChunk(self._io, self, self._root)
                 _t_source_chunk._read()
-                self.source_chunk.append(_t_source_chunk)
+                self.source_chunk[i] = _t_source_chunk
                 self._debug['source_chunk']['arr'][i]['end'] = self._io.pos()
 
             self._debug['source_chunk']['end'] = self._io.pos()
@@ -468,10 +469,10 @@ class RtcpPayload(KaitaiStruct):
         @property
         def source_count(self):
             if hasattr(self, '_m_source_count'):
-                return self._m_source_count
+                return self._m_source_count if hasattr(self, '_m_source_count') else None
 
             self._m_source_count = self._parent.subtype
-            return getattr(self, '_m_source_count', None)
+            return self._m_source_count if hasattr(self, '_m_source_count') else None
 
 
     class RtpfbPacket(KaitaiStruct):
@@ -503,10 +504,10 @@ class RtcpPayload(KaitaiStruct):
         @property
         def fmt(self):
             if hasattr(self, '_m_fmt'):
-                return self._m_fmt
+                return self._m_fmt if hasattr(self, '_m_fmt') else None
 
             self._m_fmt = KaitaiStream.resolve_enum(RtcpPayload.RtpfbSubtype, self._parent.subtype)
-            return getattr(self, '_m_fmt', None)
+            return self._m_fmt if hasattr(self, '_m_fmt') else None
 
 
     class PacketStatusChunk(KaitaiStruct):
@@ -545,10 +546,10 @@ class RtcpPayload(KaitaiStruct):
         @property
         def s(self):
             if hasattr(self, '_m_s'):
-                return self._m_s
+                return self._m_s if hasattr(self, '_m_s') else None
 
             self._m_s = (self.s2 if int(self.t) == 0 else (1 if int(self.s1) == 0 else 0))
-            return getattr(self, '_m_s', None)
+            return self._m_s if hasattr(self, '_m_s') else None
 
 
     class PsfbAfbPacket(KaitaiStruct):

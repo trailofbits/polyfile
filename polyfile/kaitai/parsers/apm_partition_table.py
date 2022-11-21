@@ -1,11 +1,12 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
+from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
 
 
-if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
+if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class ApmPartitionTable(KaitaiStruct):
@@ -92,7 +93,7 @@ class ApmPartitionTable(KaitaiStruct):
         @property
         def partition(self):
             if hasattr(self, '_m_partition'):
-                return self._m_partition
+                return self._m_partition if hasattr(self, '_m_partition') else None
 
             if (self.partition_status & 1) != 0:
                 io = self._root._io
@@ -103,12 +104,12 @@ class ApmPartitionTable(KaitaiStruct):
                 self._debug['_m_partition']['end'] = io.pos()
                 io.seek(_pos)
 
-            return getattr(self, '_m_partition', None)
+            return self._m_partition if hasattr(self, '_m_partition') else None
 
         @property
         def data(self):
             if hasattr(self, '_m_data'):
-                return self._m_data
+                return self._m_data if hasattr(self, '_m_data') else None
 
             io = self._root._io
             _pos = io.pos()
@@ -117,12 +118,12 @@ class ApmPartitionTable(KaitaiStruct):
             self._m_data = io.read_bytes((self.data_size * self._root.sector_size))
             self._debug['_m_data']['end'] = io.pos()
             io.seek(_pos)
-            return getattr(self, '_m_data', None)
+            return self._m_data if hasattr(self, '_m_data') else None
 
         @property
         def boot_code(self):
             if hasattr(self, '_m_boot_code'):
-                return self._m_boot_code
+                return self._m_boot_code if hasattr(self, '_m_boot_code') else None
 
             io = self._root._io
             _pos = io.pos()
@@ -131,7 +132,7 @@ class ApmPartitionTable(KaitaiStruct):
             self._m_boot_code = io.read_bytes(self.boot_code_size)
             self._debug['_m_boot_code']['end'] = io.pos()
             io.seek(_pos)
-            return getattr(self, '_m_boot_code', None)
+            return self._m_boot_code if hasattr(self, '_m_boot_code') else None
 
 
     @property
@@ -140,10 +141,10 @@ class ApmPartitionTable(KaitaiStruct):
         0x800 (2048) bytes for CDROM
         """
         if hasattr(self, '_m_sector_size'):
-            return self._m_sector_size
+            return self._m_sector_size if hasattr(self, '_m_sector_size') else None
 
         self._m_sector_size = 512
-        return getattr(self, '_m_sector_size', None)
+        return self._m_sector_size if hasattr(self, '_m_sector_size') else None
 
     @property
     def partition_lookup(self):
@@ -152,7 +153,7 @@ class ApmPartitionTable(KaitaiStruct):
         No logic is given what to do if other entries have a different number.
         """
         if hasattr(self, '_m_partition_lookup'):
-            return self._m_partition_lookup
+            return self._m_partition_lookup if hasattr(self, '_m_partition_lookup') else None
 
         io = self._root._io
         _pos = io.pos()
@@ -164,32 +165,32 @@ class ApmPartitionTable(KaitaiStruct):
         self._m_partition_lookup._read()
         self._debug['_m_partition_lookup']['end'] = io.pos()
         io.seek(_pos)
-        return getattr(self, '_m_partition_lookup', None)
+        return self._m_partition_lookup if hasattr(self, '_m_partition_lookup') else None
 
     @property
     def partition_entries(self):
         if hasattr(self, '_m_partition_entries'):
-            return self._m_partition_entries
+            return self._m_partition_entries if hasattr(self, '_m_partition_entries') else None
 
         io = self._root._io
         _pos = io.pos()
         io.seek(self._root.sector_size)
         self._debug['_m_partition_entries']['start'] = io.pos()
-        self._raw__m_partition_entries = []
-        self._m_partition_entries = []
+        self._raw__m_partition_entries = [None] * (self._root.partition_lookup.number_of_partitions)
+        self._m_partition_entries = [None] * (self._root.partition_lookup.number_of_partitions)
         for i in range(self._root.partition_lookup.number_of_partitions):
             if not 'arr' in self._debug['_m_partition_entries']:
                 self._debug['_m_partition_entries']['arr'] = []
             self._debug['_m_partition_entries']['arr'].append({'start': io.pos()})
-            self._raw__m_partition_entries.append(io.read_bytes(self.sector_size))
+            self._raw__m_partition_entries[i] = io.read_bytes(self.sector_size)
             _io__raw__m_partition_entries = KaitaiStream(BytesIO(self._raw__m_partition_entries[i]))
             _t__m_partition_entries = ApmPartitionTable.PartitionEntry(_io__raw__m_partition_entries, self, self._root)
             _t__m_partition_entries._read()
-            self._m_partition_entries.append(_t__m_partition_entries)
+            self._m_partition_entries[i] = _t__m_partition_entries
             self._debug['_m_partition_entries']['arr'][i]['end'] = io.pos()
 
         self._debug['_m_partition_entries']['end'] = io.pos()
         io.seek(_pos)
-        return getattr(self, '_m_partition_entries', None)
+        return self._m_partition_entries if hasattr(self, '_m_partition_entries') else None
 
 

@@ -1,11 +1,12 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
+from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
 
 
-if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
+if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class AndroidImg(KaitaiStruct):
@@ -148,48 +149,48 @@ class AndroidImg(KaitaiStruct):
         @property
         def month(self):
             if hasattr(self, '_m_month'):
-                return self._m_month
+                return self._m_month if hasattr(self, '_m_month') else None
 
             self._m_month = (self.version & 15)
-            return getattr(self, '_m_month', None)
+            return self._m_month if hasattr(self, '_m_month') else None
 
         @property
         def patch(self):
             if hasattr(self, '_m_patch'):
-                return self._m_patch
+                return self._m_patch if hasattr(self, '_m_patch') else None
 
             self._m_patch = ((self.version >> 11) & 127)
-            return getattr(self, '_m_patch', None)
+            return self._m_patch if hasattr(self, '_m_patch') else None
 
         @property
         def year(self):
             if hasattr(self, '_m_year'):
-                return self._m_year
+                return self._m_year if hasattr(self, '_m_year') else None
 
             self._m_year = (((self.version >> 4) & 127) + 2000)
-            return getattr(self, '_m_year', None)
+            return self._m_year if hasattr(self, '_m_year') else None
 
         @property
         def major(self):
             if hasattr(self, '_m_major'):
-                return self._m_major
+                return self._m_major if hasattr(self, '_m_major') else None
 
             self._m_major = ((self.version >> 25) & 127)
-            return getattr(self, '_m_major', None)
+            return self._m_major if hasattr(self, '_m_major') else None
 
         @property
         def minor(self):
             if hasattr(self, '_m_minor'):
-                return self._m_minor
+                return self._m_minor if hasattr(self, '_m_minor') else None
 
             self._m_minor = ((self.version >> 18) & 127)
-            return getattr(self, '_m_minor', None)
+            return self._m_minor if hasattr(self, '_m_minor') else None
 
 
     @property
     def kernel_img(self):
         if hasattr(self, '_m_kernel_img'):
-            return self._m_kernel_img
+            return self._m_kernel_img if hasattr(self, '_m_kernel_img') else None
 
         _pos = self._io.pos()
         self._io.seek(self.page_size)
@@ -197,59 +198,59 @@ class AndroidImg(KaitaiStruct):
         self._m_kernel_img = self._io.read_bytes(self.kernel.size)
         self._debug['_m_kernel_img']['end'] = self._io.pos()
         self._io.seek(_pos)
-        return getattr(self, '_m_kernel_img', None)
+        return self._m_kernel_img if hasattr(self, '_m_kernel_img') else None
 
     @property
     def tags_offset(self):
         """tags offset from base."""
         if hasattr(self, '_m_tags_offset'):
-            return self._m_tags_offset
+            return self._m_tags_offset if hasattr(self, '_m_tags_offset') else None
 
         self._m_tags_offset = (self.tags_load - self.base)
-        return getattr(self, '_m_tags_offset', None)
+        return self._m_tags_offset if hasattr(self, '_m_tags_offset') else None
 
     @property
     def ramdisk_offset(self):
         """ramdisk offset from base."""
         if hasattr(self, '_m_ramdisk_offset'):
-            return self._m_ramdisk_offset
+            return self._m_ramdisk_offset if hasattr(self, '_m_ramdisk_offset') else None
 
         self._m_ramdisk_offset = ((self.ramdisk.addr - self.base) if self.ramdisk.addr > 0 else 0)
-        return getattr(self, '_m_ramdisk_offset', None)
+        return self._m_ramdisk_offset if hasattr(self, '_m_ramdisk_offset') else None
 
     @property
     def second_offset(self):
         """2nd bootloader offset from base."""
         if hasattr(self, '_m_second_offset'):
-            return self._m_second_offset
+            return self._m_second_offset if hasattr(self, '_m_second_offset') else None
 
         self._m_second_offset = ((self.second.addr - self.base) if self.second.addr > 0 else 0)
-        return getattr(self, '_m_second_offset', None)
+        return self._m_second_offset if hasattr(self, '_m_second_offset') else None
 
     @property
     def kernel_offset(self):
         """kernel offset from base."""
         if hasattr(self, '_m_kernel_offset'):
-            return self._m_kernel_offset
+            return self._m_kernel_offset if hasattr(self, '_m_kernel_offset') else None
 
         self._m_kernel_offset = (self.kernel.addr - self.base)
-        return getattr(self, '_m_kernel_offset', None)
+        return self._m_kernel_offset if hasattr(self, '_m_kernel_offset') else None
 
     @property
     def dtb_offset(self):
         """dtb offset from base."""
         if hasattr(self, '_m_dtb_offset'):
-            return self._m_dtb_offset
+            return self._m_dtb_offset if hasattr(self, '_m_dtb_offset') else None
 
         if self.header_version > 1:
             self._m_dtb_offset = ((self.dtb.addr - self.base) if self.dtb.addr > 0 else 0)
 
-        return getattr(self, '_m_dtb_offset', None)
+        return self._m_dtb_offset if hasattr(self, '_m_dtb_offset') else None
 
     @property
     def dtb_img(self):
         if hasattr(self, '_m_dtb_img'):
-            return self._m_dtb_img
+            return self._m_dtb_img if hasattr(self, '_m_dtb_img') else None
 
         if  ((self.header_version > 1) and (self.dtb.size > 0)) :
             _pos = self._io.pos()
@@ -259,12 +260,12 @@ class AndroidImg(KaitaiStruct):
             self._debug['_m_dtb_img']['end'] = self._io.pos()
             self._io.seek(_pos)
 
-        return getattr(self, '_m_dtb_img', None)
+        return self._m_dtb_img if hasattr(self, '_m_dtb_img') else None
 
     @property
     def ramdisk_img(self):
         if hasattr(self, '_m_ramdisk_img'):
-            return self._m_ramdisk_img
+            return self._m_ramdisk_img if hasattr(self, '_m_ramdisk_img') else None
 
         if self.ramdisk.size > 0:
             _pos = self._io.pos()
@@ -274,12 +275,12 @@ class AndroidImg(KaitaiStruct):
             self._debug['_m_ramdisk_img']['end'] = self._io.pos()
             self._io.seek(_pos)
 
-        return getattr(self, '_m_ramdisk_img', None)
+        return self._m_ramdisk_img if hasattr(self, '_m_ramdisk_img') else None
 
     @property
     def recovery_dtbo_img(self):
         if hasattr(self, '_m_recovery_dtbo_img'):
-            return self._m_recovery_dtbo_img
+            return self._m_recovery_dtbo_img if hasattr(self, '_m_recovery_dtbo_img') else None
 
         if  ((self.header_version > 0) and (self.recovery_dtbo.size > 0)) :
             _pos = self._io.pos()
@@ -289,12 +290,12 @@ class AndroidImg(KaitaiStruct):
             self._debug['_m_recovery_dtbo_img']['end'] = self._io.pos()
             self._io.seek(_pos)
 
-        return getattr(self, '_m_recovery_dtbo_img', None)
+        return self._m_recovery_dtbo_img if hasattr(self, '_m_recovery_dtbo_img') else None
 
     @property
     def second_img(self):
         if hasattr(self, '_m_second_img'):
-            return self._m_second_img
+            return self._m_second_img if hasattr(self, '_m_second_img') else None
 
         if self.second.size > 0:
             _pos = self._io.pos()
@@ -304,15 +305,15 @@ class AndroidImg(KaitaiStruct):
             self._debug['_m_second_img']['end'] = self._io.pos()
             self._io.seek(_pos)
 
-        return getattr(self, '_m_second_img', None)
+        return self._m_second_img if hasattr(self, '_m_second_img') else None
 
     @property
     def base(self):
         """base loading address."""
         if hasattr(self, '_m_base'):
-            return self._m_base
+            return self._m_base if hasattr(self, '_m_base') else None
 
         self._m_base = (self.kernel.addr - 32768)
-        return getattr(self, '_m_base', None)
+        return self._m_base if hasattr(self, '_m_base') else None
 
 

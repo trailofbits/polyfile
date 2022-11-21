@@ -1,11 +1,12 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
+from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
 
 
-if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
+if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class Stl(KaitaiStruct):
@@ -41,14 +42,14 @@ class Stl(KaitaiStruct):
         self.num_triangles = self._io.read_u4le()
         self._debug['num_triangles']['end'] = self._io.pos()
         self._debug['triangles']['start'] = self._io.pos()
-        self.triangles = []
+        self.triangles = [None] * (self.num_triangles)
         for i in range(self.num_triangles):
             if not 'arr' in self._debug['triangles']:
                 self._debug['triangles']['arr'] = []
             self._debug['triangles']['arr'].append({'start': self._io.pos()})
             _t_triangles = Stl.Triangle(self._io, self, self._root)
             _t_triangles._read()
-            self.triangles.append(_t_triangles)
+            self.triangles[i] = _t_triangles
             self._debug['triangles']['arr'][i]['end'] = self._io.pos()
 
         self._debug['triangles']['end'] = self._io.pos()
@@ -71,14 +72,14 @@ class Stl(KaitaiStruct):
             self.normal._read()
             self._debug['normal']['end'] = self._io.pos()
             self._debug['vertices']['start'] = self._io.pos()
-            self.vertices = []
+            self.vertices = [None] * (3)
             for i in range(3):
                 if not 'arr' in self._debug['vertices']:
                     self._debug['vertices']['arr'] = []
                 self._debug['vertices']['arr'].append({'start': self._io.pos()})
                 _t_vertices = Stl.Vec3d(self._io, self, self._root)
                 _t_vertices._read()
-                self.vertices.append(_t_vertices)
+                self.vertices[i] = _t_vertices
                 self._debug['vertices']['arr'][i]['end'] = self._io.pos()
 
             self._debug['vertices']['end'] = self._io.pos()

@@ -1,5 +1,6 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
+from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 from enum import Enum
@@ -7,7 +8,7 @@ import collections
 import zlib
 
 
-if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
+if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class Png(KaitaiStruct):
@@ -230,18 +231,18 @@ class Png(KaitaiStruct):
         @property
         def x(self):
             if hasattr(self, '_m_x'):
-                return self._m_x
+                return self._m_x if hasattr(self, '_m_x') else None
 
             self._m_x = (self.x_int / 100000.0)
-            return getattr(self, '_m_x', None)
+            return self._m_x if hasattr(self, '_m_x') else None
 
         @property
         def y(self):
             if hasattr(self, '_m_y'):
-                return self._m_y
+                return self._m_y if hasattr(self, '_m_y') else None
 
             self._m_y = (self.y_int / 100000.0)
-            return getattr(self, '_m_y', None)
+            return self._m_y if hasattr(self, '_m_y') else None
 
 
     class BkgdGreyscale(KaitaiStruct):
@@ -469,10 +470,10 @@ class Png(KaitaiStruct):
         @property
         def gamma_ratio(self):
             if hasattr(self, '_m_gamma_ratio'):
-                return self._m_gamma_ratio
+                return self._m_gamma_ratio if hasattr(self, '_m_gamma_ratio') else None
 
             self._m_gamma_ratio = (100000.0 / self.gamma_int)
-            return getattr(self, '_m_gamma_ratio', None)
+            return self._m_gamma_ratio if hasattr(self, '_m_gamma_ratio') else None
 
 
     class BkgdChunk(KaitaiStruct):
@@ -593,10 +594,10 @@ class Png(KaitaiStruct):
         def delay(self):
             """Time to display this frame, in seconds."""
             if hasattr(self, '_m_delay'):
-                return self._m_delay
+                return self._m_delay if hasattr(self, '_m_delay') else None
 
             self._m_delay = (self.delay_num / (100.0 if self.delay_den == 0 else self.delay_den))
-            return getattr(self, '_m_delay', None)
+            return self._m_delay if hasattr(self, '_m_delay') else None
 
 
     class InternationalTextChunk(KaitaiStruct):

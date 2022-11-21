@@ -1,11 +1,12 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
+from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
 
 
-if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
+if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class Vp8Ivf(KaitaiStruct):
@@ -61,14 +62,14 @@ class Vp8Ivf(KaitaiStruct):
         self.unused = self._io.read_u4le()
         self._debug['unused']['end'] = self._io.pos()
         self._debug['image_data']['start'] = self._io.pos()
-        self.image_data = []
+        self.image_data = [None] * (self.num_frames)
         for i in range(self.num_frames):
             if not 'arr' in self._debug['image_data']:
                 self._debug['image_data']['arr'] = []
             self._debug['image_data']['arr'].append({'start': self._io.pos()})
             _t_image_data = Vp8Ivf.Blocks(self._io, self, self._root)
             _t_image_data._read()
-            self.image_data.append(_t_image_data)
+            self.image_data[i] = _t_image_data
             self._debug['image_data']['arr'][i]['end'] = self._io.pos()
 
         self._debug['image_data']['end'] = self._io.pos()

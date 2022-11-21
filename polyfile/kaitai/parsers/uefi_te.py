@@ -1,12 +1,13 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
+from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
 from enum import Enum
 
 
-if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
+if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class UefiTe(KaitaiStruct):
@@ -47,14 +48,14 @@ class UefiTe(KaitaiStruct):
         self.te_hdr._read()
         self._debug['te_hdr']['end'] = self._io.pos()
         self._debug['sections']['start'] = self._io.pos()
-        self.sections = []
+        self.sections = [None] * (self.te_hdr.num_sections)
         for i in range(self.te_hdr.num_sections):
             if not 'arr' in self._debug['sections']:
                 self._debug['sections']['arr'] = []
             self._debug['sections']['arr'].append({'start': self._io.pos()})
             _t_sections = UefiTe.Section(self._io, self, self._root)
             _t_sections._read()
-            self.sections.append(_t_sections)
+            self.sections[i] = _t_sections
             self._debug['sections']['arr'][i]['end'] = self._io.pos()
 
         self._debug['sections']['end'] = self._io.pos()
@@ -221,7 +222,7 @@ class UefiTe(KaitaiStruct):
         @property
         def body(self):
             if hasattr(self, '_m_body'):
-                return self._m_body
+                return self._m_body if hasattr(self, '_m_body') else None
 
             _pos = self._io.pos()
             self._io.seek(((self.pointer_to_raw_data - self._root.te_hdr.stripped_size) + self._root.te_hdr._io.size()))
@@ -229,7 +230,7 @@ class UefiTe(KaitaiStruct):
             self._m_body = self._io.read_bytes(self.size_of_raw_data)
             self._debug['_m_body']['end'] = self._io.pos()
             self._io.seek(_pos)
-            return getattr(self, '_m_body', None)
+            return self._m_body if hasattr(self, '_m_body') else None
 
 
 

@@ -1,11 +1,12 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
+from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
 
 
-if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
+if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class Ico(KaitaiStruct):
@@ -34,14 +35,14 @@ class Ico(KaitaiStruct):
         self.num_images = self._io.read_u2le()
         self._debug['num_images']['end'] = self._io.pos()
         self._debug['images']['start'] = self._io.pos()
-        self.images = []
+        self.images = [None] * (self.num_images)
         for i in range(self.num_images):
             if not 'arr' in self._debug['images']:
                 self._debug['images']['arr'] = []
             self._debug['images']['arr'].append({'start': self._io.pos()})
             _t_images = Ico.IconDirEntry(self._io, self, self._root)
             _t_images._read()
-            self.images.append(_t_images)
+            self.images[i] = _t_images
             self._debug['images']['arr'][i]['end'] = self._io.pos()
 
         self._debug['images']['end'] = self._io.pos()
@@ -89,7 +90,7 @@ class Ico(KaitaiStruct):
             relevant parser, if needed to parse image data further.
             """
             if hasattr(self, '_m_img'):
-                return self._m_img
+                return self._m_img if hasattr(self, '_m_img') else None
 
             _pos = self._io.pos()
             self._io.seek(self.ofs_img)
@@ -97,7 +98,7 @@ class Ico(KaitaiStruct):
             self._m_img = self._io.read_bytes(self.len_img)
             self._debug['_m_img']['end'] = self._io.pos()
             self._io.seek(_pos)
-            return getattr(self, '_m_img', None)
+            return self._m_img if hasattr(self, '_m_img') else None
 
         @property
         def png_header(self):
@@ -105,7 +106,7 @@ class Ico(KaitaiStruct):
             embedded PNG file.
             """
             if hasattr(self, '_m_png_header'):
-                return self._m_png_header
+                return self._m_png_header if hasattr(self, '_m_png_header') else None
 
             _pos = self._io.pos()
             self._io.seek(self.ofs_img)
@@ -113,16 +114,16 @@ class Ico(KaitaiStruct):
             self._m_png_header = self._io.read_bytes(8)
             self._debug['_m_png_header']['end'] = self._io.pos()
             self._io.seek(_pos)
-            return getattr(self, '_m_png_header', None)
+            return self._m_png_header if hasattr(self, '_m_png_header') else None
 
         @property
         def is_png(self):
             """True if this image is in PNG format."""
             if hasattr(self, '_m_is_png'):
-                return self._m_is_png
+                return self._m_is_png if hasattr(self, '_m_is_png') else None
 
             self._m_is_png = self.png_header == b"\x89\x50\x4E\x47\x0D\x0A\x1A\x0A"
-            return getattr(self, '_m_is_png', None)
+            return self._m_is_png if hasattr(self, '_m_is_png') else None
 
 
 

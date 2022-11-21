@@ -1,12 +1,13 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
+from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
 from enum import Enum
 
 
-if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
+if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class Ines(KaitaiStruct):
@@ -233,10 +234,10 @@ class Ines(KaitaiStruct):
                Source - https://wiki.nesdev.com/w/index.php/Mapper
             """
             if hasattr(self, '_m_mapper'):
-                return self._m_mapper
+                return self._m_mapper if hasattr(self, '_m_mapper') else None
 
             self._m_mapper = (self.f6.lower_mapper | (self.f7.upper_mapper << 4))
-            return getattr(self, '_m_mapper', None)
+            return self._m_mapper if hasattr(self, '_m_mapper') else None
 
 
     class Playchoice10(KaitaiStruct):

@@ -1,16 +1,17 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
+from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 from enum import Enum
 import collections
 
 
-if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
+if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
-from polyfile.kaitai.parsers import windows_systemtime
 from polyfile.kaitai.parsers import ethernet_frame
+from polyfile.kaitai.parsers import windows_systemtime
 class MicrosoftNetworkMonitorV2(KaitaiStruct):
     """Microsoft Network Monitor (AKA Netmon) is a proprietary Microsoft's
     network packet sniffing and analysis tool. It can save captured
@@ -238,7 +239,7 @@ class MicrosoftNetworkMonitorV2(KaitaiStruct):
         def body(self):
             """Frame body itself."""
             if hasattr(self, '_m_body'):
-                return self._m_body
+                return self._m_body if hasattr(self, '_m_body') else None
 
             io = self._root._io
             _pos = io.pos()
@@ -248,7 +249,7 @@ class MicrosoftNetworkMonitorV2(KaitaiStruct):
             self._m_body._read()
             self._debug['_m_body']['end'] = io.pos()
             io.seek(_pos)
-            return getattr(self, '_m_body', None)
+            return self._m_body if hasattr(self, '_m_body') else None
 
 
     class Frame(KaitaiStruct):
@@ -292,7 +293,7 @@ class MicrosoftNetworkMonitorV2(KaitaiStruct):
     def frame_table(self):
         """Index that is used to access individual captured frames."""
         if hasattr(self, '_m_frame_table'):
-            return self._m_frame_table
+            return self._m_frame_table if hasattr(self, '_m_frame_table') else None
 
         _pos = self._io.pos()
         self._io.seek(self.frame_table_ofs)
@@ -303,6 +304,6 @@ class MicrosoftNetworkMonitorV2(KaitaiStruct):
         self._m_frame_table._read()
         self._debug['_m_frame_table']['end'] = self._io.pos()
         self._io.seek(_pos)
-        return getattr(self, '_m_frame_table', None)
+        return self._m_frame_table if hasattr(self, '_m_frame_table') else None
 
 

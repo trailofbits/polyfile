@@ -1,12 +1,13 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
+from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 from enum import Enum
 import collections
 
 
-if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
+if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 from polyfile.kaitai.parsers import exif
@@ -162,14 +163,14 @@ class Jpeg(KaitaiStruct):
             self.num_components = self._io.read_u1()
             self._debug['num_components']['end'] = self._io.pos()
             self._debug['components']['start'] = self._io.pos()
-            self.components = []
+            self.components = [None] * (self.num_components)
             for i in range(self.num_components):
                 if not 'arr' in self._debug['components']:
                     self._debug['components']['arr'] = []
                 self._debug['components']['arr'].append({'start': self._io.pos()})
                 _t_components = Jpeg.SegmentSos.Component(self._io, self, self._root)
                 _t_components._read()
-                self.components.append(_t_components)
+                self.components[i] = _t_components
                 self._debug['components']['arr'][i]['end'] = self._io.pos()
 
             self._debug['components']['end'] = self._io.pos()
@@ -243,14 +244,14 @@ class Jpeg(KaitaiStruct):
             self.num_components = self._io.read_u1()
             self._debug['num_components']['end'] = self._io.pos()
             self._debug['components']['start'] = self._io.pos()
-            self.components = []
+            self.components = [None] * (self.num_components)
             for i in range(self.num_components):
                 if not 'arr' in self._debug['components']:
                     self._debug['components']['arr'] = []
                 self._debug['components']['arr'].append({'start': self._io.pos()})
                 _t_components = Jpeg.SegmentSof0.Component(self._io, self, self._root)
                 _t_components._read()
-                self.components.append(_t_components)
+                self.components[i] = _t_components
                 self._debug['components']['arr'][i]['end'] = self._io.pos()
 
             self._debug['components']['end'] = self._io.pos()
@@ -277,18 +278,18 @@ class Jpeg(KaitaiStruct):
             @property
             def sampling_x(self):
                 if hasattr(self, '_m_sampling_x'):
-                    return self._m_sampling_x
+                    return self._m_sampling_x if hasattr(self, '_m_sampling_x') else None
 
                 self._m_sampling_x = ((self.sampling_factors & 240) >> 4)
-                return getattr(self, '_m_sampling_x', None)
+                return self._m_sampling_x if hasattr(self, '_m_sampling_x') else None
 
             @property
             def sampling_y(self):
                 if hasattr(self, '_m_sampling_y'):
-                    return self._m_sampling_y
+                    return self._m_sampling_y if hasattr(self, '_m_sampling_y') else None
 
                 self._m_sampling_y = (self.sampling_factors & 15)
-                return getattr(self, '_m_sampling_y', None)
+                return self._m_sampling_y if hasattr(self, '_m_sampling_y') else None
 
 
 

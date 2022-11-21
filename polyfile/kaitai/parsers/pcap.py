@@ -1,12 +1,13 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
+from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 from enum import Enum
 import collections
 
 
-if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
+if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 from polyfile.kaitai.parsers import ethernet_frame
@@ -154,6 +155,10 @@ class Pcap(KaitaiStruct):
         atsc_alp = 289
         etw = 290
         zboss_ncp = 292
+        usb_2_0_low_speed = 293
+        usb_2_0_full_speed = 294
+        usb_2_0_high_speed = 295
+        auerswald_log = 296
     SEQ_FIELDS = ["hdr", "packets"]
     def __init__(self, _io, _parent=None, _root=None):
         self._io = _io

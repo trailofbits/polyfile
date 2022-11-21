@@ -1,12 +1,13 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
+from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 from enum import Enum
 import collections
 
 
-if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
+if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 from polyfile.kaitai.parsers import vlq_base128_be
@@ -138,28 +139,28 @@ class Sqlite3(KaitaiStruct):
         @property
         def is_blob(self):
             if hasattr(self, '_m_is_blob'):
-                return self._m_is_blob
+                return self._m_is_blob if hasattr(self, '_m_is_blob') else None
 
             self._m_is_blob =  ((self.code.value >= 12) and ((self.code.value % 2) == 0)) 
-            return getattr(self, '_m_is_blob', None)
+            return self._m_is_blob if hasattr(self, '_m_is_blob') else None
 
         @property
         def is_string(self):
             if hasattr(self, '_m_is_string'):
-                return self._m_is_string
+                return self._m_is_string if hasattr(self, '_m_is_string') else None
 
             self._m_is_string =  ((self.code.value >= 13) and ((self.code.value % 2) == 1)) 
-            return getattr(self, '_m_is_string', None)
+            return self._m_is_string if hasattr(self, '_m_is_string') else None
 
         @property
         def len_content(self):
             if hasattr(self, '_m_len_content'):
-                return self._m_len_content
+                return self._m_len_content if hasattr(self, '_m_len_content') else None
 
             if self.code.value >= 12:
                 self._m_len_content = (self.code.value - 12) // 2
 
-            return getattr(self, '_m_len_content', None)
+            return self._m_len_content if hasattr(self, '_m_len_content') else None
 
 
     class BtreePage(KaitaiStruct):
@@ -192,14 +193,14 @@ class Sqlite3(KaitaiStruct):
                 self._debug['right_ptr']['end'] = self._io.pos()
 
             self._debug['cells']['start'] = self._io.pos()
-            self.cells = []
+            self.cells = [None] * (self.num_cells)
             for i in range(self.num_cells):
                 if not 'arr' in self._debug['cells']:
                     self._debug['cells']['arr'] = []
                 self._debug['cells']['arr'].append({'start': self._io.pos()})
                 _t_cells = Sqlite3.RefCell(self._io, self, self._root)
                 _t_cells._read()
-                self.cells.append(_t_cells)
+                self.cells[i] = _t_cells
                 self._debug['cells']['arr'][i]['end'] = self._io.pos()
 
             self._debug['cells']['end'] = self._io.pos()
@@ -308,14 +309,14 @@ class Sqlite3(KaitaiStruct):
             self.column_serials._read()
             self._debug['column_serials']['end'] = self._io.pos()
             self._debug['column_contents']['start'] = self._io.pos()
-            self.column_contents = []
+            self.column_contents = [None] * (len(self.column_serials.entries))
             for i in range(len(self.column_serials.entries)):
                 if not 'arr' in self._debug['column_contents']:
                     self._debug['column_contents']['arr'] = []
                 self._debug['column_contents']['arr'].append({'start': self._io.pos()})
                 _t_column_contents = Sqlite3.ColumnContent(self.column_serials.entries[i], self._io, self, self._root)
                 _t_column_contents._read()
-                self.column_contents.append(_t_column_contents)
+                self.column_contents[i] = _t_column_contents
                 self._debug['column_contents']['arr'][i]['end'] = self._io.pos()
 
             self._debug['column_contents']['end'] = self._io.pos()
@@ -415,10 +416,10 @@ class Sqlite3(KaitaiStruct):
         @property
         def serial_type(self):
             if hasattr(self, '_m_serial_type'):
-                return self._m_serial_type
+                return self._m_serial_type if hasattr(self, '_m_serial_type') else None
 
             self._m_serial_type = self.ser
-            return getattr(self, '_m_serial_type', None)
+            return self._m_serial_type if hasattr(self, '_m_serial_type') else None
 
 
     class RefCell(KaitaiStruct):
@@ -437,7 +438,7 @@ class Sqlite3(KaitaiStruct):
         @property
         def body(self):
             if hasattr(self, '_m_body'):
-                return self._m_body
+                return self._m_body if hasattr(self, '_m_body') else None
 
             _pos = self._io.pos()
             self._io.seek(self.ofs_body)
@@ -457,15 +458,15 @@ class Sqlite3(KaitaiStruct):
                 self._m_body._read()
             self._debug['_m_body']['end'] = self._io.pos()
             self._io.seek(_pos)
-            return getattr(self, '_m_body', None)
+            return self._m_body if hasattr(self, '_m_body') else None
 
 
     @property
     def len_page(self):
         if hasattr(self, '_m_len_page'):
-            return self._m_len_page
+            return self._m_len_page if hasattr(self, '_m_len_page') else None
 
         self._m_len_page = (65536 if self.len_page_mod == 1 else self.len_page_mod)
-        return getattr(self, '_m_len_page', None)
+        return self._m_len_page if hasattr(self, '_m_len_page') else None
 
 

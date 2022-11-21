@@ -1,11 +1,12 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
+from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
 
 
-if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
+if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class DosDatetime(KaitaiStruct):
@@ -98,34 +99,34 @@ class DosDatetime(KaitaiStruct):
         @property
         def second(self):
             if hasattr(self, '_m_second'):
-                return self._m_second
+                return self._m_second if hasattr(self, '_m_second') else None
 
             self._m_second = (2 * self.second_div_2)
-            return getattr(self, '_m_second', None)
+            return self._m_second if hasattr(self, '_m_second') else None
 
         @property
         def padded_second(self):
             if hasattr(self, '_m_padded_second'):
-                return self._m_padded_second
+                return self._m_padded_second if hasattr(self, '_m_padded_second') else None
 
             self._m_padded_second = (u"0" if self.second <= 9 else u"") + str(self.second)
-            return getattr(self, '_m_padded_second', None)
+            return self._m_padded_second if hasattr(self, '_m_padded_second') else None
 
         @property
         def padded_minute(self):
             if hasattr(self, '_m_padded_minute'):
-                return self._m_padded_minute
+                return self._m_padded_minute if hasattr(self, '_m_padded_minute') else None
 
             self._m_padded_minute = (u"0" if self.minute <= 9 else u"") + str(self.minute)
-            return getattr(self, '_m_padded_minute', None)
+            return self._m_padded_minute if hasattr(self, '_m_padded_minute') else None
 
         @property
         def padded_hour(self):
             if hasattr(self, '_m_padded_hour'):
-                return self._m_padded_hour
+                return self._m_padded_hour if hasattr(self, '_m_padded_hour') else None
 
             self._m_padded_hour = (u"0" if self.hour <= 9 else u"") + str(self.hour)
-            return getattr(self, '_m_padded_hour', None)
+            return self._m_padded_hour if hasattr(self, '_m_padded_hour') else None
 
 
     class Date(KaitaiStruct):
@@ -157,34 +158,34 @@ class DosDatetime(KaitaiStruct):
         def year(self):
             """only years from 1980 to 2107 (1980 + 127) can be represented."""
             if hasattr(self, '_m_year'):
-                return self._m_year
+                return self._m_year if hasattr(self, '_m_year') else None
 
             self._m_year = (1980 + self.year_minus_1980)
-            return getattr(self, '_m_year', None)
+            return self._m_year if hasattr(self, '_m_year') else None
 
         @property
         def padded_day(self):
             if hasattr(self, '_m_padded_day'):
-                return self._m_padded_day
+                return self._m_padded_day if hasattr(self, '_m_padded_day') else None
 
             self._m_padded_day = (u"0" if self.day <= 9 else u"") + str(self.day)
-            return getattr(self, '_m_padded_day', None)
+            return self._m_padded_day if hasattr(self, '_m_padded_day') else None
 
         @property
         def padded_month(self):
             if hasattr(self, '_m_padded_month'):
-                return self._m_padded_month
+                return self._m_padded_month if hasattr(self, '_m_padded_month') else None
 
             self._m_padded_month = (u"0" if self.month <= 9 else u"") + str(self.month)
-            return getattr(self, '_m_padded_month', None)
+            return self._m_padded_month if hasattr(self, '_m_padded_month') else None
 
         @property
         def padded_year(self):
             if hasattr(self, '_m_padded_year'):
-                return self._m_padded_year
+                return self._m_padded_year if hasattr(self, '_m_padded_year') else None
 
             self._m_padded_year = (u"0" + (u"0" + (u"0" if self.year <= 9 else u"") if self.year <= 99 else u"") if self.year <= 999 else u"") + str(self.year)
-            return getattr(self, '_m_padded_year', None)
+            return self._m_padded_year if hasattr(self, '_m_padded_year') else None
 
 
 

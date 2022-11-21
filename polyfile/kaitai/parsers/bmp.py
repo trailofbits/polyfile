@@ -1,12 +1,13 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
+from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 from enum import Enum
 import collections
 
 
-if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
+if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class Bmp(KaitaiStruct):
@@ -233,10 +234,10 @@ class Bmp(KaitaiStruct):
         @property
         def has_profile(self):
             if hasattr(self, '_m_has_profile'):
-                return self._m_has_profile
+                return self._m_has_profile if hasattr(self, '_m_has_profile') else None
 
             self._m_has_profile =  ((self._parent.bitmap_v4_ext.color_space_type == Bmp.ColorSpace.profile_linked) or (self._parent.bitmap_v4_ext.color_space_type == Bmp.ColorSpace.profile_embedded)) 
-            return getattr(self, '_m_has_profile', None)
+            return self._m_has_profile if hasattr(self, '_m_has_profile') else None
 
         @property
         def profile_data(self):
@@ -245,7 +246,7 @@ class Bmp(KaitaiStruct):
                "If the profile is embedded, profile data is the actual profile, and if it is linked, the profile data is the null-terminated file name of the profile. This cannot be a Unicode string. It must be composed exclusively of characters from the Windows character set (code page 1252)." - https://docs.microsoft.com/en-us/windows/win32/wcs/using-structures-in-wcs-1-0
             """
             if hasattr(self, '_m_profile_data'):
-                return self._m_profile_data
+                return self._m_profile_data if hasattr(self, '_m_profile_data') else None
 
             if self.has_profile:
                 io = self._root._io
@@ -260,7 +261,7 @@ class Bmp(KaitaiStruct):
                 self._debug['_m_profile_data']['end'] = io.pos()
                 io.seek(_pos)
 
-            return getattr(self, '_m_profile_data', None)
+            return self._m_profile_data if hasattr(self, '_m_profile_data') else None
 
 
     class ColorMask(KaitaiStruct):
@@ -387,10 +388,10 @@ class Bmp(KaitaiStruct):
         @property
         def value(self):
             if hasattr(self, '_m_value'):
-                return self._m_value
+                return self._m_value if hasattr(self, '_m_value') else None
 
             self._m_value = ((self.raw + 0.0) / (1 << 30))
-            return getattr(self, '_m_value', None)
+            return self._m_value if hasattr(self, '_m_value') else None
 
 
     class Bitmap(KaitaiStruct):
@@ -482,74 +483,74 @@ class Bmp(KaitaiStruct):
         @property
         def extends_bitmap_v4(self):
             if hasattr(self, '_m_extends_bitmap_v4'):
-                return self._m_extends_bitmap_v4
+                return self._m_extends_bitmap_v4 if hasattr(self, '_m_extends_bitmap_v4') else None
 
             self._m_extends_bitmap_v4 = self.len_header >= Bmp.HeaderType.bitmap_v4_header.value
-            return getattr(self, '_m_extends_bitmap_v4', None)
+            return self._m_extends_bitmap_v4 if hasattr(self, '_m_extends_bitmap_v4') else None
 
         @property
         def extends_os2_2x_bitmap(self):
             if hasattr(self, '_m_extends_os2_2x_bitmap'):
-                return self._m_extends_os2_2x_bitmap
+                return self._m_extends_os2_2x_bitmap if hasattr(self, '_m_extends_os2_2x_bitmap') else None
 
             self._m_extends_os2_2x_bitmap = self.len_header == Bmp.HeaderType.os2_2x_bitmap_header.value
-            return getattr(self, '_m_extends_os2_2x_bitmap', None)
+            return self._m_extends_os2_2x_bitmap if hasattr(self, '_m_extends_os2_2x_bitmap') else None
 
         @property
         def uses_fixed_palette(self):
             if hasattr(self, '_m_uses_fixed_palette'):
-                return self._m_uses_fixed_palette
+                return self._m_uses_fixed_palette if hasattr(self, '_m_uses_fixed_palette') else None
 
             self._m_uses_fixed_palette =  ((not ( ((self.bits_per_pixel == 16) or (self.bits_per_pixel == 24) or (self.bits_per_pixel == 32)) )) and (not ( ((self.extends_bitmap_info) and (not (self.extends_os2_2x_bitmap)) and ( ((self.bitmap_info_ext.compression == Bmp.Compressions.jpeg) or (self.bitmap_info_ext.compression == Bmp.Compressions.png)) )) ))) 
-            return getattr(self, '_m_uses_fixed_palette', None)
+            return self._m_uses_fixed_palette if hasattr(self, '_m_uses_fixed_palette') else None
 
         @property
         def extends_bitmap_info(self):
             if hasattr(self, '_m_extends_bitmap_info'):
-                return self._m_extends_bitmap_info
+                return self._m_extends_bitmap_info if hasattr(self, '_m_extends_bitmap_info') else None
 
             self._m_extends_bitmap_info = self.len_header >= Bmp.HeaderType.bitmap_info_header.value
-            return getattr(self, '_m_extends_bitmap_info', None)
+            return self._m_extends_bitmap_info if hasattr(self, '_m_extends_bitmap_info') else None
 
         @property
         def image_height(self):
             if hasattr(self, '_m_image_height'):
-                return self._m_image_height
+                return self._m_image_height if hasattr(self, '_m_image_height') else None
 
             self._m_image_height = (-(self.image_height_raw) if self.image_height_raw < 0 else self.image_height_raw)
-            return getattr(self, '_m_image_height', None)
+            return self._m_image_height if hasattr(self, '_m_image_height') else None
 
         @property
         def is_core_header(self):
             if hasattr(self, '_m_is_core_header'):
-                return self._m_is_core_header
+                return self._m_is_core_header if hasattr(self, '_m_is_core_header') else None
 
             self._m_is_core_header = self.len_header == Bmp.HeaderType.bitmap_core_header.value
-            return getattr(self, '_m_is_core_header', None)
+            return self._m_is_core_header if hasattr(self, '_m_is_core_header') else None
 
         @property
         def extends_bitmap_v5(self):
             if hasattr(self, '_m_extends_bitmap_v5'):
-                return self._m_extends_bitmap_v5
+                return self._m_extends_bitmap_v5 if hasattr(self, '_m_extends_bitmap_v5') else None
 
             self._m_extends_bitmap_v5 = self.len_header >= Bmp.HeaderType.bitmap_v5_header.value
-            return getattr(self, '_m_extends_bitmap_v5', None)
+            return self._m_extends_bitmap_v5 if hasattr(self, '_m_extends_bitmap_v5') else None
 
         @property
         def is_color_mask_here(self):
             if hasattr(self, '_m_is_color_mask_here'):
-                return self._m_is_color_mask_here
+                return self._m_is_color_mask_here if hasattr(self, '_m_is_color_mask_here') else None
 
             self._m_is_color_mask_here =  ((self.len_header == Bmp.HeaderType.bitmap_v2_info_header.value) or (self.len_header == Bmp.HeaderType.bitmap_v3_info_header.value) or (self.extends_bitmap_v4)) 
-            return getattr(self, '_m_is_color_mask_here', None)
+            return self._m_is_color_mask_here if hasattr(self, '_m_is_color_mask_here') else None
 
         @property
         def bottom_up(self):
             if hasattr(self, '_m_bottom_up'):
-                return self._m_bottom_up
+                return self._m_bottom_up if hasattr(self, '_m_bottom_up') else None
 
             self._m_bottom_up = self.image_height_raw > 0
-            return getattr(self, '_m_bottom_up', None)
+            return self._m_bottom_up if hasattr(self, '_m_bottom_up') else None
 
 
     class Os22xBitmapExtension(KaitaiStruct):
@@ -607,10 +608,10 @@ class Bmp(KaitaiStruct):
         @property
         def value(self):
             if hasattr(self, '_m_value'):
-                return self._m_value
+                return self._m_value if hasattr(self, '_m_value') else None
 
             self._m_value = ((self.raw + 0.0) / (1 << 16))
-            return getattr(self, '_m_value', None)
+            return self._m_value if hasattr(self, '_m_value') else None
 
 
     class ColorTable(KaitaiStruct):
@@ -625,14 +626,14 @@ class Bmp(KaitaiStruct):
 
         def _read(self):
             self._debug['colors']['start'] = self._io.pos()
-            self.colors = []
+            self.colors = [None] * ((self.num_colors if  ((self.num_colors > 0) and (self.num_colors < self.num_colors_present))  else self.num_colors_present))
             for i in range((self.num_colors if  ((self.num_colors > 0) and (self.num_colors < self.num_colors_present))  else self.num_colors_present)):
                 if not 'arr' in self._debug['colors']:
                     self._debug['colors']['arr'] = []
                 self._debug['colors']['arr'].append({'start': self._io.pos()})
                 _t_colors = Bmp.RgbRecord(self.has_reserved_field, self._io, self, self._root)
                 _t_colors._read()
-                self.colors.append(_t_colors)
+                self.colors[i] = _t_colors
                 self._debug['colors']['arr'][i]['end'] = self._io.pos()
 
             self._debug['colors']['end'] = self._io.pos()
@@ -640,10 +641,10 @@ class Bmp(KaitaiStruct):
         @property
         def num_colors_present(self):
             if hasattr(self, '_m_num_colors_present'):
-                return self._m_num_colors_present
+                return self._m_num_colors_present if hasattr(self, '_m_num_colors_present') else None
 
             self._m_num_colors_present = self._io.size() // (4 if self.has_reserved_field else 3)
-            return getattr(self, '_m_num_colors_present', None)
+            return self._m_num_colors_present if hasattr(self, '_m_num_colors_present') else None
 
 
     class FileHeader(KaitaiStruct):
@@ -718,60 +719,60 @@ class Bmp(KaitaiStruct):
         @property
         def is_color_mask_given(self):
             if hasattr(self, '_m_is_color_mask_given'):
-                return self._m_is_color_mask_given
+                return self._m_is_color_mask_given if hasattr(self, '_m_is_color_mask_given') else None
 
             self._m_is_color_mask_given =  ((self.header.extends_bitmap_info) and ( ((self.header.bitmap_info_ext.compression == Bmp.Compressions.bitfields) or (self.header.bitmap_info_ext.compression == Bmp.Compressions.alpha_bitfields)) ) and ( ((self.is_color_mask_here) or (self.header.is_color_mask_here)) )) 
-            return getattr(self, '_m_is_color_mask_given', None)
+            return self._m_is_color_mask_given if hasattr(self, '_m_is_color_mask_given') else None
 
         @property
         def color_mask_given(self):
             if hasattr(self, '_m_color_mask_given'):
-                return self._m_color_mask_given
+                return self._m_color_mask_given if hasattr(self, '_m_color_mask_given') else None
 
             if self.is_color_mask_given:
                 self._m_color_mask_given = (self.color_mask if self.is_color_mask_here else self.header.color_mask)
 
-            return getattr(self, '_m_color_mask_given', None)
+            return self._m_color_mask_given if hasattr(self, '_m_color_mask_given') else None
 
         @property
         def color_mask_blue(self):
             if hasattr(self, '_m_color_mask_blue'):
-                return self._m_color_mask_blue
+                return self._m_color_mask_blue if hasattr(self, '_m_color_mask_blue') else None
 
             self._m_color_mask_blue = (self.color_mask_given.blue_mask if self.is_color_mask_given else (31 if self.header.bits_per_pixel == 16 else (255 if  ((self.header.bits_per_pixel == 24) or (self.header.bits_per_pixel == 32))  else 0)))
-            return getattr(self, '_m_color_mask_blue', None)
+            return self._m_color_mask_blue if hasattr(self, '_m_color_mask_blue') else None
 
         @property
         def color_mask_alpha(self):
             if hasattr(self, '_m_color_mask_alpha'):
-                return self._m_color_mask_alpha
+                return self._m_color_mask_alpha if hasattr(self, '_m_color_mask_alpha') else None
 
             self._m_color_mask_alpha = (self.color_mask_given.alpha_mask if  ((self.is_color_mask_given) and (self.color_mask_given.has_alpha_mask))  else 0)
-            return getattr(self, '_m_color_mask_alpha', None)
+            return self._m_color_mask_alpha if hasattr(self, '_m_color_mask_alpha') else None
 
         @property
         def color_mask_green(self):
             if hasattr(self, '_m_color_mask_green'):
-                return self._m_color_mask_green
+                return self._m_color_mask_green if hasattr(self, '_m_color_mask_green') else None
 
             self._m_color_mask_green = (self.color_mask_given.green_mask if self.is_color_mask_given else (992 if self.header.bits_per_pixel == 16 else (65280 if  ((self.header.bits_per_pixel == 24) or (self.header.bits_per_pixel == 32))  else 0)))
-            return getattr(self, '_m_color_mask_green', None)
+            return self._m_color_mask_green if hasattr(self, '_m_color_mask_green') else None
 
         @property
         def is_color_mask_here(self):
             if hasattr(self, '_m_is_color_mask_here'):
-                return self._m_is_color_mask_here
+                return self._m_is_color_mask_here if hasattr(self, '_m_is_color_mask_here') else None
 
             self._m_is_color_mask_here =  ((not (self._io.is_eof())) and (self.header.len_header == Bmp.HeaderType.bitmap_info_header.value) and ( ((self.header.bitmap_info_ext.compression == Bmp.Compressions.bitfields) or (self.header.bitmap_info_ext.compression == Bmp.Compressions.alpha_bitfields)) )) 
-            return getattr(self, '_m_is_color_mask_here', None)
+            return self._m_is_color_mask_here if hasattr(self, '_m_is_color_mask_here') else None
 
         @property
         def color_mask_red(self):
             if hasattr(self, '_m_color_mask_red'):
-                return self._m_color_mask_red
+                return self._m_color_mask_red if hasattr(self, '_m_color_mask_red') else None
 
             self._m_color_mask_red = (self.color_mask_given.red_mask if self.is_color_mask_given else (31744 if self.header.bits_per_pixel == 16 else (16711680 if  ((self.header.bits_per_pixel == 24) or (self.header.bits_per_pixel == 32))  else 0)))
-            return getattr(self, '_m_color_mask_red', None)
+            return self._m_color_mask_red if hasattr(self, '_m_color_mask_red') else None
 
 
 

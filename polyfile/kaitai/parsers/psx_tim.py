@@ -1,12 +1,13 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
+from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 from enum import Enum
 import collections
 
 
-if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
+if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class PsxTim(KaitaiStruct):
@@ -87,17 +88,17 @@ class PsxTim(KaitaiStruct):
     @property
     def has_clut(self):
         if hasattr(self, '_m_has_clut'):
-            return self._m_has_clut
+            return self._m_has_clut if hasattr(self, '_m_has_clut') else None
 
         self._m_has_clut = (self.flags & 8) != 0
-        return getattr(self, '_m_has_clut', None)
+        return self._m_has_clut if hasattr(self, '_m_has_clut') else None
 
     @property
     def bpp(self):
         if hasattr(self, '_m_bpp'):
-            return self._m_bpp
+            return self._m_bpp if hasattr(self, '_m_bpp') else None
 
         self._m_bpp = (self.flags & 3)
-        return getattr(self, '_m_bpp', None)
+        return self._m_bpp if hasattr(self, '_m_bpp') else None
 
 

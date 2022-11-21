@@ -1,11 +1,12 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
+from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
 
 
-if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
+if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class EfivarSignatureList(KaitaiStruct):
@@ -81,17 +82,17 @@ class EfivarSignatureList(KaitaiStruct):
             self._debug['header']['end'] = self._io.pos()
             if self.len_signature > 0:
                 self._debug['signatures']['start'] = self._io.pos()
-                self._raw_signatures = []
-                self.signatures = []
+                self._raw_signatures = [None] * (((self.len_signature_list - self.len_signature_header) - 28) // self.len_signature)
+                self.signatures = [None] * (((self.len_signature_list - self.len_signature_header) - 28) // self.len_signature)
                 for i in range(((self.len_signature_list - self.len_signature_header) - 28) // self.len_signature):
                     if not 'arr' in self._debug['signatures']:
                         self._debug['signatures']['arr'] = []
                     self._debug['signatures']['arr'].append({'start': self._io.pos()})
-                    self._raw_signatures.append(self._io.read_bytes(self.len_signature))
+                    self._raw_signatures[i] = self._io.read_bytes(self.len_signature)
                     _io__raw_signatures = KaitaiStream(BytesIO(self._raw_signatures[i]))
                     _t_signatures = EfivarSignatureList.SignatureData(_io__raw_signatures, self, self._root)
                     _t_signatures._read()
-                    self.signatures.append(_t_signatures)
+                    self.signatures[i] = _t_signatures
                     self._debug['signatures']['arr'][i]['end'] = self._io.pos()
 
                 self._debug['signatures']['end'] = self._io.pos()
@@ -105,10 +106,10 @@ class EfivarSignatureList(KaitaiStruct):
                EFI_CERT_X509_SHA512_GUID
             """
             if hasattr(self, '_m_is_cert_sha512_x509'):
-                return self._m_is_cert_sha512_x509
+                return self._m_is_cert_sha512_x509 if hasattr(self, '_m_is_cert_sha512_x509') else None
 
             self._m_is_cert_sha512_x509 = self.signature_type == b"\x63\xBF\x6D\x44\x02\x25\xDA\x4C\xBC\xFA\x24\x65\xD2\xB0\xFE\x9D"
-            return getattr(self, '_m_is_cert_sha512_x509', None)
+            return self._m_is_cert_sha512_x509 if hasattr(self, '_m_is_cert_sha512_x509') else None
 
         @property
         def is_cert_sha224(self):
@@ -118,10 +119,10 @@ class EfivarSignatureList(KaitaiStruct):
                EFI_CERT_SHA224_GUID
             """
             if hasattr(self, '_m_is_cert_sha224'):
-                return self._m_is_cert_sha224
+                return self._m_is_cert_sha224 if hasattr(self, '_m_is_cert_sha224') else None
 
             self._m_is_cert_sha224 = self.signature_type == b"\x33\x52\x6E\x0B\x5C\xA6\xC9\x44\x94\x07\xD9\xAB\x83\xBF\xC8\xBD"
-            return getattr(self, '_m_is_cert_sha224', None)
+            return self._m_is_cert_sha224 if hasattr(self, '_m_is_cert_sha224') else None
 
         @property
         def is_cert_x509(self):
@@ -131,10 +132,10 @@ class EfivarSignatureList(KaitaiStruct):
                EFI_CERT_X509_GUID
             """
             if hasattr(self, '_m_is_cert_x509'):
-                return self._m_is_cert_x509
+                return self._m_is_cert_x509 if hasattr(self, '_m_is_cert_x509') else None
 
             self._m_is_cert_x509 = self.signature_type == b"\xA1\x59\xC0\xA5\xE4\x94\xA7\x4A\x87\xB5\xAB\x15\x5C\x2B\xF0\x72"
-            return getattr(self, '_m_is_cert_x509', None)
+            return self._m_is_cert_x509 if hasattr(self, '_m_is_cert_x509') else None
 
         @property
         def is_cert_sha256_x509(self):
@@ -144,10 +145,10 @@ class EfivarSignatureList(KaitaiStruct):
                EFI_CERT_X509_SHA256_GUID
             """
             if hasattr(self, '_m_is_cert_sha256_x509'):
-                return self._m_is_cert_sha256_x509
+                return self._m_is_cert_sha256_x509 if hasattr(self, '_m_is_cert_sha256_x509') else None
 
             self._m_is_cert_sha256_x509 = self.signature_type == b"\x92\xA4\xD2\x3B\xC0\x96\x79\x40\xB4\x20\xFC\xF9\x8E\xF1\x03\xED"
-            return getattr(self, '_m_is_cert_sha256_x509', None)
+            return self._m_is_cert_sha256_x509 if hasattr(self, '_m_is_cert_sha256_x509') else None
 
         @property
         def is_cert_rsa2048_key(self):
@@ -157,10 +158,10 @@ class EfivarSignatureList(KaitaiStruct):
                EFI_CERT_RSA2048_GUID
             """
             if hasattr(self, '_m_is_cert_rsa2048_key'):
-                return self._m_is_cert_rsa2048_key
+                return self._m_is_cert_rsa2048_key if hasattr(self, '_m_is_cert_rsa2048_key') else None
 
             self._m_is_cert_rsa2048_key = self.signature_type == b"\xE8\x66\x57\x3C\x9C\x26\x34\x4E\xAA\x14\xED\x77\x6E\x85\xB3\xB6"
-            return getattr(self, '_m_is_cert_rsa2048_key', None)
+            return self._m_is_cert_rsa2048_key if hasattr(self, '_m_is_cert_rsa2048_key') else None
 
         @property
         def is_cert_sha512(self):
@@ -170,10 +171,10 @@ class EfivarSignatureList(KaitaiStruct):
                EFI_CERT_SHA512_GUID
             """
             if hasattr(self, '_m_is_cert_sha512'):
-                return self._m_is_cert_sha512
+                return self._m_is_cert_sha512 if hasattr(self, '_m_is_cert_sha512') else None
 
             self._m_is_cert_sha512 = self.signature_type == b"\xAE\x0F\x3E\x09\xC4\xA6\x50\x4F\x9F\x1B\xD4\x1E\x2B\x89\xC1\x9A"
-            return getattr(self, '_m_is_cert_sha512', None)
+            return self._m_is_cert_sha512 if hasattr(self, '_m_is_cert_sha512') else None
 
         @property
         def is_cert_sha384(self):
@@ -183,10 +184,10 @@ class EfivarSignatureList(KaitaiStruct):
                EFI_CERT_SHA384_GUID
             """
             if hasattr(self, '_m_is_cert_sha384'):
-                return self._m_is_cert_sha384
+                return self._m_is_cert_sha384 if hasattr(self, '_m_is_cert_sha384') else None
 
             self._m_is_cert_sha384 = self.signature_type == b"\x07\x53\x3E\xFF\xD0\x9F\xC9\x48\x85\xF1\x8A\xD5\x6C\x70\x1E\x01"
-            return getattr(self, '_m_is_cert_sha384', None)
+            return self._m_is_cert_sha384 if hasattr(self, '_m_is_cert_sha384') else None
 
         @property
         def is_cert_sha1(self):
@@ -196,10 +197,10 @@ class EfivarSignatureList(KaitaiStruct):
                EFI_CERT_SHA1_GUID
             """
             if hasattr(self, '_m_is_cert_sha1'):
-                return self._m_is_cert_sha1
+                return self._m_is_cert_sha1 if hasattr(self, '_m_is_cert_sha1') else None
 
             self._m_is_cert_sha1 = self.signature_type == b"\x12\xA5\x6C\x82\x10\xCF\xC9\x4A\xB1\x87\xBE\x01\x49\x66\x31\xBD"
-            return getattr(self, '_m_is_cert_sha1', None)
+            return self._m_is_cert_sha1 if hasattr(self, '_m_is_cert_sha1') else None
 
         @property
         def is_cert_rsa2048_sha1(self):
@@ -209,10 +210,10 @@ class EfivarSignatureList(KaitaiStruct):
                EFI_CERT_RSA2048_SHA1_GUID
             """
             if hasattr(self, '_m_is_cert_rsa2048_sha1'):
-                return self._m_is_cert_rsa2048_sha1
+                return self._m_is_cert_rsa2048_sha1 if hasattr(self, '_m_is_cert_rsa2048_sha1') else None
 
             self._m_is_cert_rsa2048_sha1 = self.signature_type == b"\x4F\x44\xF8\x67\x43\x87\xF1\x48\xA3\x28\x1E\xAA\xB8\x73\x60\x80"
-            return getattr(self, '_m_is_cert_rsa2048_sha1', None)
+            return self._m_is_cert_rsa2048_sha1 if hasattr(self, '_m_is_cert_rsa2048_sha1') else None
 
         @property
         def is_cert_sha256(self):
@@ -222,10 +223,10 @@ class EfivarSignatureList(KaitaiStruct):
                EFI_CERT_SHA256_GUID
             """
             if hasattr(self, '_m_is_cert_sha256'):
-                return self._m_is_cert_sha256
+                return self._m_is_cert_sha256 if hasattr(self, '_m_is_cert_sha256') else None
 
             self._m_is_cert_sha256 = self.signature_type == b"\x26\x16\xC4\xC1\x4C\x50\x92\x40\xAC\xA9\x41\xF9\x36\x93\x43\x28"
-            return getattr(self, '_m_is_cert_sha256', None)
+            return self._m_is_cert_sha256 if hasattr(self, '_m_is_cert_sha256') else None
 
         @property
         def is_cert_sha384_x509(self):
@@ -235,10 +236,10 @@ class EfivarSignatureList(KaitaiStruct):
                EFI_CERT_X509_SHA384_GUID
             """
             if hasattr(self, '_m_is_cert_sha384_x509'):
-                return self._m_is_cert_sha384_x509
+                return self._m_is_cert_sha384_x509 if hasattr(self, '_m_is_cert_sha384_x509') else None
 
             self._m_is_cert_sha384_x509 = self.signature_type == b"\x6E\x87\x76\x70\xC2\x80\xE6\x4E\xAA\xD2\x28\xB3\x49\xA6\x86\x5B"
-            return getattr(self, '_m_is_cert_sha384_x509', None)
+            return self._m_is_cert_sha384_x509 if hasattr(self, '_m_is_cert_sha384_x509') else None
 
         @property
         def is_cert_rsa2048_sha256(self):
@@ -248,10 +249,10 @@ class EfivarSignatureList(KaitaiStruct):
                EFI_CERT_RSA2048_SHA256_GUID
             """
             if hasattr(self, '_m_is_cert_rsa2048_sha256'):
-                return self._m_is_cert_rsa2048_sha256
+                return self._m_is_cert_rsa2048_sha256 if hasattr(self, '_m_is_cert_rsa2048_sha256') else None
 
             self._m_is_cert_rsa2048_sha256 = self.signature_type == b"\x90\x61\xB3\xE2\x9B\x87\x3D\x4A\xAD\x8D\xF2\xE7\xBB\xA3\x27\x84"
-            return getattr(self, '_m_is_cert_rsa2048_sha256', None)
+            return self._m_is_cert_rsa2048_sha256 if hasattr(self, '_m_is_cert_rsa2048_sha256') else None
 
         @property
         def is_cert_der_pkcs7(self):
@@ -261,10 +262,10 @@ class EfivarSignatureList(KaitaiStruct):
                EFI_CERT_TYPE_PKCS7_GUID
             """
             if hasattr(self, '_m_is_cert_der_pkcs7'):
-                return self._m_is_cert_der_pkcs7
+                return self._m_is_cert_der_pkcs7 if hasattr(self, '_m_is_cert_der_pkcs7') else None
 
             self._m_is_cert_der_pkcs7 = self.signature_type == b"\x9D\xD2\xAF\x4A\xDF\x68\xEE\x49\x8A\xA9\x34\x7D\x37\x56\x65\xA7"
-            return getattr(self, '_m_is_cert_der_pkcs7', None)
+            return self._m_is_cert_der_pkcs7 if hasattr(self, '_m_is_cert_der_pkcs7') else None
 
 
     class SignatureData(KaitaiStruct):

@@ -20,6 +20,7 @@ KAITAI_MIME_MAPPING: Dict[str, str] = {
     "image/jpeg": "image/jpeg.ksy",
     "image/vnd.microsoft.icon": "image/ico.ksy",
 #    "image/wmf": "image/wmf.ksy",  # there is currently a problem with this parser in Python
+    "application/vnd.nitf": "image/nitf.ksy",
     "application/vnd.tcpdump.pcap": "network/pcap.ksy",
     "application/x-sqlite3": "database/sqlite3.ksy",
     "application/x-rar": "archive/rar.ksy",

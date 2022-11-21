@@ -1,11 +1,12 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
+from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
 
 
-if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
+if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 from polyfile.kaitai.parsers import protocol_body
@@ -108,50 +109,50 @@ class Ipv4Packet(KaitaiStruct):
         @property
         def copy(self):
             if hasattr(self, '_m_copy'):
-                return self._m_copy
+                return self._m_copy if hasattr(self, '_m_copy') else None
 
             self._m_copy = ((self.b1 & 128) >> 7)
-            return getattr(self, '_m_copy', None)
+            return self._m_copy if hasattr(self, '_m_copy') else None
 
         @property
         def opt_class(self):
             if hasattr(self, '_m_opt_class'):
-                return self._m_opt_class
+                return self._m_opt_class if hasattr(self, '_m_opt_class') else None
 
             self._m_opt_class = ((self.b1 & 96) >> 5)
-            return getattr(self, '_m_opt_class', None)
+            return self._m_opt_class if hasattr(self, '_m_opt_class') else None
 
         @property
         def number(self):
             if hasattr(self, '_m_number'):
-                return self._m_number
+                return self._m_number if hasattr(self, '_m_number') else None
 
             self._m_number = (self.b1 & 31)
-            return getattr(self, '_m_number', None)
+            return self._m_number if hasattr(self, '_m_number') else None
 
 
     @property
     def version(self):
         if hasattr(self, '_m_version'):
-            return self._m_version
+            return self._m_version if hasattr(self, '_m_version') else None
 
         self._m_version = ((self.b1 & 240) >> 4)
-        return getattr(self, '_m_version', None)
+        return self._m_version if hasattr(self, '_m_version') else None
 
     @property
     def ihl(self):
         if hasattr(self, '_m_ihl'):
-            return self._m_ihl
+            return self._m_ihl if hasattr(self, '_m_ihl') else None
 
         self._m_ihl = (self.b1 & 15)
-        return getattr(self, '_m_ihl', None)
+        return self._m_ihl if hasattr(self, '_m_ihl') else None
 
     @property
     def ihl_bytes(self):
         if hasattr(self, '_m_ihl_bytes'):
-            return self._m_ihl_bytes
+            return self._m_ihl_bytes if hasattr(self, '_m_ihl_bytes') else None
 
         self._m_ihl_bytes = (self.ihl * 4)
-        return getattr(self, '_m_ihl_bytes', None)
+        return self._m_ihl_bytes if hasattr(self, '_m_ihl_bytes') else None
 
 

@@ -11,7 +11,7 @@ from .magic import (
     AbsoluteOffset, FailedTest, InvalidOffsetError, MagicMatcher, MagicTest, Offset, TestResult, TEST_TYPES
 )
 from .profiling import Profiler, Unprofiled, unprofiled
-from .repl import ANSIColor, ANSIWriter, arg_completer, command, ExitREPL, log, REPL, SetCompleter
+from .repl import ANSIColor, ANSIWriter, arg_completer, command, ExitREPL, log, REPL, SetCompleter, string_escape
 from .wildcards import Wildcard
 
 
@@ -296,25 +296,6 @@ class InstrumentedParser:
         self.original_parser = None
 
 
-def string_escape(data: Union[bytes, int]) -> str:
-    if not isinstance(data, int):
-        return "".join(string_escape(d) for d in data)
-    elif data == ord('\n'):
-        return "\\n"
-    elif data == ord('\t'):
-        return "\\t"
-    elif data == ord('\r'):
-        return "\\r"
-    elif data == 0:
-        return "\\0"
-    elif data == ord('\\'):
-        return "\\\\"
-    elif 32 <= data <= 126:
-        return chr(data)
-    else:
-        return f"\\x{data:02X}"
-
-
 class StepMode(Enum):
     RUNNING = 0
     SINGLE_STEPPING = 1
@@ -503,40 +484,13 @@ class Debugger(REPL):
         )
 
     def write_test(self, test: MagicTest, is_current_test: bool = False):
-        for comment in test.comments:
-            if comment.source_info is not None and comment.source_info.original_line is not None:
-                self.write(f"  {comment.source_info.path.name}", dim=True, color=ANSIColor.CYAN)
-                self.write(":", dim=True)
-                self.write(f"{comment.source_info.line}\t", dim=True, color=ANSIColor.CYAN)
-                self.write(comment.source_info.original_line.strip(), dim=True)
-                self.write("\n")
-            else:
-                self.write(f"  # {comment!s}\n", dim=True)
-        if is_current_test:
-            self.write("→ ", bold=True)
-        else:
-            self.write("  ")
-        if test.source_info is not None and test.source_info.original_line is not None:
-            source_prefix = f"{test.source_info.path.name}:{test.source_info.line}"
-            indent = f"{' ' * len(source_prefix)}\t"
-            self.write(test.source_info.path.name, dim=True, color=ANSIColor.CYAN)
-            self.write(":", dim=True)
-            self.write(test.source_info.line, dim=True, color=ANSIColor.CYAN)
-            self.write("\t")
-            self.write(test.source_info.original_line.strip(), color=ANSIColor.BLUE, bold=True)
-        else:
-            indent = ""
-            self.write(f"{'>' * test.level}{test.offset!s}\t")
-            self.write(test.message, color=ANSIColor.BLUE, bold=True)
+        writer = ANSIWriter(use_ansi=sys.stdout.isatty())
         if self.profile.value and test in self.profile_results:
-            self.write(f"\t⏱  {int(self.profile_results[test] + 0.5)}ms")
-        if test.mime is not None:
-            self.write(f"\n  {indent}!:mime ", dim=True)
-            self.write(test.mime, color=ANSIColor.BLUE)
-        for e in test.extensions:
-            self.write(f"\n  {indent}!:ext  ", dim=True)
-            self.write(str(e), color=ANSIColor.BLUE)
-        self.write("\n")
+            pre_mime_text = f"\t⏱  {int(self.profile_results[test] + 0.5)}ms"
+        else:
+            pre_mime_text = ""
+        test.write(writer, is_current_test=is_current_test, pre_mime_text=pre_mime_text)
+        super().write(str(writer))
 
     def write(self, message: Any, bold: bool = False, dim: bool = False, color: Optional[ANSIColor] = None):
         if sys.stdout.isatty() and isinstance(message, MagicTest):
@@ -545,17 +499,9 @@ class Debugger(REPL):
             super().write(message=message, bold=bold, dim=dim, color=color)
 
     def print_context(self, data: bytes, offset: int, context_bytes: int = 32, num_bytes: int = 1):
-        bytes_before = min(offset, context_bytes)
-        context_before = string_escape(data[offset - bytes_before:offset])
-        current_byte = string_escape(data[offset:offset+num_bytes])
-        context_after = string_escape(data[offset + num_bytes:offset + num_bytes + context_bytes])
-        self.write(context_before)
-        self.write(current_byte, bold=True)
-        self.write(context_after)
-        self.write("\n")
-        self.write(f"{' ' * len(context_before)}")
-        self.write(f"{'^' * len(current_byte)}", bold=True)
-        self.write(f"{' ' * len(context_after)}\n")
+        writer = ANSIWriter(use_ansi=sys.stdout.isatty())
+        writer.write_context(data, offset, context_bytes, num_bytes)
+        super().write(message=str(writer))
 
     def _debug(self, func: Callable[[Any], T], *args, **kwargs) -> T:
         if self.profile.value:

@@ -1,11 +1,12 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
+from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
 
 
-if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
+if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class Nitf(KaitaiStruct):
@@ -36,62 +37,62 @@ class Nitf(KaitaiStruct):
         self.header._read()
         self._debug['header']['end'] = self._io.pos()
         self._debug['image_segments']['start'] = self._io.pos()
-        self.image_segments = []
+        self.image_segments = [None] * (int(self.header.num_image_segments))
         for i in range(int(self.header.num_image_segments)):
             if not 'arr' in self._debug['image_segments']:
                 self._debug['image_segments']['arr'] = []
             self._debug['image_segments']['arr'].append({'start': self._io.pos()})
             _t_image_segments = Nitf.ImageSegment(i, self._io, self, self._root)
             _t_image_segments._read()
-            self.image_segments.append(_t_image_segments)
+            self.image_segments[i] = _t_image_segments
             self._debug['image_segments']['arr'][i]['end'] = self._io.pos()
 
         self._debug['image_segments']['end'] = self._io.pos()
         self._debug['graphics_segments']['start'] = self._io.pos()
-        self.graphics_segments = []
+        self.graphics_segments = [None] * (int(self.header.num_graphics_segments))
         for i in range(int(self.header.num_graphics_segments)):
             if not 'arr' in self._debug['graphics_segments']:
                 self._debug['graphics_segments']['arr'] = []
             self._debug['graphics_segments']['arr'].append({'start': self._io.pos()})
             _t_graphics_segments = Nitf.GraphicsSegment(i, self._io, self, self._root)
             _t_graphics_segments._read()
-            self.graphics_segments.append(_t_graphics_segments)
+            self.graphics_segments[i] = _t_graphics_segments
             self._debug['graphics_segments']['arr'][i]['end'] = self._io.pos()
 
         self._debug['graphics_segments']['end'] = self._io.pos()
         self._debug['text_segments']['start'] = self._io.pos()
-        self.text_segments = []
+        self.text_segments = [None] * (int(self.header.num_text_files))
         for i in range(int(self.header.num_text_files)):
             if not 'arr' in self._debug['text_segments']:
                 self._debug['text_segments']['arr'] = []
             self._debug['text_segments']['arr'].append({'start': self._io.pos()})
             _t_text_segments = Nitf.TextSegment(i, self._io, self, self._root)
             _t_text_segments._read()
-            self.text_segments.append(_t_text_segments)
+            self.text_segments[i] = _t_text_segments
             self._debug['text_segments']['arr'][i]['end'] = self._io.pos()
 
         self._debug['text_segments']['end'] = self._io.pos()
         self._debug['data_extension_segments']['start'] = self._io.pos()
-        self.data_extension_segments = []
+        self.data_extension_segments = [None] * (int(self.header.num_data_extension))
         for i in range(int(self.header.num_data_extension)):
             if not 'arr' in self._debug['data_extension_segments']:
                 self._debug['data_extension_segments']['arr'] = []
             self._debug['data_extension_segments']['arr'].append({'start': self._io.pos()})
             _t_data_extension_segments = Nitf.DataExtensionSegment(i, self._io, self, self._root)
             _t_data_extension_segments._read()
-            self.data_extension_segments.append(_t_data_extension_segments)
+            self.data_extension_segments[i] = _t_data_extension_segments
             self._debug['data_extension_segments']['arr'][i]['end'] = self._io.pos()
 
         self._debug['data_extension_segments']['end'] = self._io.pos()
         self._debug['reserved_extension_segments']['start'] = self._io.pos()
-        self.reserved_extension_segments = []
+        self.reserved_extension_segments = [None] * (int(self.header.num_reserved_extension))
         for i in range(int(self.header.num_reserved_extension)):
             if not 'arr' in self._debug['reserved_extension_segments']:
                 self._debug['reserved_extension_segments']['arr'] = []
             self._debug['reserved_extension_segments']['arr'].append({'start': self._io.pos()})
             _t_reserved_extension_segments = Nitf.ReservedExtensionSegment(i, self._io, self, self._root)
             _t_reserved_extension_segments._read()
-            self.reserved_extension_segments.append(_t_reserved_extension_segments)
+            self.reserved_extension_segments[i] = _t_reserved_extension_segments
             self._debug['reserved_extension_segments']['arr'][i]['end'] = self._io.pos()
 
         self._debug['reserved_extension_segments']['end'] = self._io.pos()
@@ -200,12 +201,12 @@ class Nitf(KaitaiStruct):
                 self._debug['num_lut_entries']['end'] = self._io.pos()
 
             self._debug['luts']['start'] = self._io.pos()
-            self.luts = []
+            self.luts = [None] * (int(self.num_luts))
             for i in range(int(self.num_luts)):
                 if not 'arr' in self._debug['luts']:
                     self._debug['luts']['arr'] = []
                 self._debug['luts']['arr'].append({'start': self._io.pos()})
-                self.luts.append(self._io.read_bytes(int(self.num_lut_entries)))
+                self.luts[i] = self._io.read_bytes(int(self.num_lut_entries))
                 self._debug['luts']['arr'][i]['end'] = self._io.pos()
 
             self._debug['luts']['end'] = self._io.pos()
@@ -240,10 +241,10 @@ class Nitf(KaitaiStruct):
         @property
         def has_mask(self):
             if hasattr(self, '_m_has_mask'):
-                return self._m_has_mask
+                return self._m_has_mask if hasattr(self, '_m_has_mask') else None
 
             self._m_has_mask = (self.image_sub_header.img_compression)[0:2] == u"MM"
-            return getattr(self, '_m_has_mask', None)
+            return self._m_has_mask if hasattr(self, '_m_has_mask') else None
 
 
     class TextSegment(KaitaiStruct):
@@ -443,24 +444,24 @@ class Nitf(KaitaiStruct):
             self._debug['tpxcd']['end'] = self._io.pos()
             if self.has_bmr:
                 self._debug['bmrbnd']['start'] = self._io.pos()
-                self.bmrbnd = []
+                self.bmrbnd = [None] * (self.bmrtmr_count)
                 for i in range(self.bmrtmr_count):
                     if not 'arr' in self._debug['bmrbnd']:
                         self._debug['bmrbnd']['arr'] = []
                     self._debug['bmrbnd']['arr'].append({'start': self._io.pos()})
-                    self.bmrbnd.append(self._io.read_u4be())
+                    self.bmrbnd[i] = self._io.read_u4be()
                     self._debug['bmrbnd']['arr'][i]['end'] = self._io.pos()
 
                 self._debug['bmrbnd']['end'] = self._io.pos()
 
             if self.has_tmr:
                 self._debug['tmrbnd']['start'] = self._io.pos()
-                self.tmrbnd = []
+                self.tmrbnd = [None] * (self.bmrtmr_count)
                 for i in range(self.bmrtmr_count):
                     if not 'arr' in self._debug['tmrbnd']:
                         self._debug['tmrbnd']['arr'] = []
                     self._debug['tmrbnd']['arr'].append({'start': self._io.pos()})
-                    self.tmrbnd.append(self._io.read_u4be())
+                    self.tmrbnd[i] = self._io.read_u4be()
                     self._debug['tmrbnd']['arr'][i]['end'] = self._io.pos()
 
                 self._debug['tmrbnd']['end'] = self._io.pos()
@@ -469,58 +470,58 @@ class Nitf(KaitaiStruct):
         @property
         def has_bmr(self):
             if hasattr(self, '_m_has_bmr'):
-                return self._m_has_bmr
+                return self._m_has_bmr if hasattr(self, '_m_has_bmr') else None
 
             self._m_has_bmr = self.bmrlnth != 0
-            return getattr(self, '_m_has_bmr', None)
+            return self._m_has_bmr if hasattr(self, '_m_has_bmr') else None
 
         @property
         def has_tmr(self):
             if hasattr(self, '_m_has_tmr'):
-                return self._m_has_tmr
+                return self._m_has_tmr if hasattr(self, '_m_has_tmr') else None
 
             self._m_has_tmr = self.tmrlnth != 0
-            return getattr(self, '_m_has_tmr', None)
+            return self._m_has_tmr if hasattr(self, '_m_has_tmr') else None
 
         @property
         def tmrbnd_size(self):
             if hasattr(self, '_m_tmrbnd_size'):
-                return self._m_tmrbnd_size
+                return self._m_tmrbnd_size if hasattr(self, '_m_tmrbnd_size') else None
 
             self._m_tmrbnd_size = ((self.bmrtmr_count * 4) if self.has_tmr else 0)
-            return getattr(self, '_m_tmrbnd_size', None)
+            return self._m_tmrbnd_size if hasattr(self, '_m_tmrbnd_size') else None
 
         @property
         def tpxcd_size(self):
             if hasattr(self, '_m_tpxcd_size'):
-                return self._m_tpxcd_size
+                return self._m_tpxcd_size if hasattr(self, '_m_tpxcd_size') else None
 
             self._m_tpxcd_size = (self.tpxcdlnth if (self.tpxcdlnth % 8) == 0 else (self.tpxcdlnth + (8 - (self.tpxcdlnth % 8)))) // 8
-            return getattr(self, '_m_tpxcd_size', None)
+            return self._m_tpxcd_size if hasattr(self, '_m_tpxcd_size') else None
 
         @property
         def total_size(self):
             if hasattr(self, '_m_total_size'):
-                return self._m_total_size
+                return self._m_total_size if hasattr(self, '_m_total_size') else None
 
             self._m_total_size = ((((((4 + 2) + 2) + 2) + self.tpxcd_size) + self.bmrbnd_size) + self.tmrbnd_size)
-            return getattr(self, '_m_total_size', None)
+            return self._m_total_size if hasattr(self, '_m_total_size') else None
 
         @property
         def bmrbnd_size(self):
             if hasattr(self, '_m_bmrbnd_size'):
-                return self._m_bmrbnd_size
+                return self._m_bmrbnd_size if hasattr(self, '_m_bmrbnd_size') else None
 
             self._m_bmrbnd_size = ((self.bmrtmr_count * 4) if self.has_bmr else 0)
-            return getattr(self, '_m_bmrbnd_size', None)
+            return self._m_bmrbnd_size if hasattr(self, '_m_bmrbnd_size') else None
 
         @property
         def bmrtmr_count(self):
             if hasattr(self, '_m_bmrtmr_count'):
-                return self._m_bmrtmr_count
+                return self._m_bmrtmr_count if hasattr(self, '_m_bmrtmr_count') else None
 
             self._m_bmrtmr_count = ((int(self._parent.image_sub_header.num_blocks_per_row) * int(self._parent.image_sub_header.num_blocks_per_col)) * (1 if self._parent.image_sub_header.img_mode != u"S" else (int(self._parent.image_sub_header.num_bands) if int(self._parent.image_sub_header.num_bands) != 0 else int(self._parent.image_sub_header.num_multispectral_bands))))
-            return getattr(self, '_m_bmrtmr_count', None)
+            return self._m_bmrtmr_count if hasattr(self, '_m_bmrtmr_count') else None
 
 
     class GraphicsSegment(KaitaiStruct):
@@ -578,10 +579,10 @@ class Nitf(KaitaiStruct):
         @property
         def tre_ofl(self):
             if hasattr(self, '_m_tre_ofl'):
-                return self._m_tre_ofl
+                return self._m_tre_ofl if hasattr(self, '_m_tre_ofl') else None
 
             self._m_tre_ofl = self.des_base.desid == u"TRE_OVERFLOW"
-            return getattr(self, '_m_tre_ofl', None)
+            return self._m_tre_ofl if hasattr(self, '_m_tre_ofl') else None
 
 
     class DataExtensionSegment(KaitaiStruct):
@@ -705,14 +706,14 @@ class Nitf(KaitaiStruct):
             self.num_img_comments = (self._io.read_bytes(1)).decode(u"UTF-8")
             self._debug['num_img_comments']['end'] = self._io.pos()
             self._debug['img_comments']['start'] = self._io.pos()
-            self.img_comments = []
+            self.img_comments = [None] * (int(self.num_img_comments))
             for i in range(int(self.num_img_comments)):
                 if not 'arr' in self._debug['img_comments']:
                     self._debug['img_comments']['arr'] = []
                 self._debug['img_comments']['arr'].append({'start': self._io.pos()})
                 _t_img_comments = Nitf.ImageComment(self._io, self, self._root)
                 _t_img_comments._read()
-                self.img_comments.append(_t_img_comments)
+                self.img_comments[i] = _t_img_comments
                 self._debug['img_comments']['arr'][i]['end'] = self._io.pos()
 
             self._debug['img_comments']['end'] = self._io.pos()
@@ -731,14 +732,14 @@ class Nitf(KaitaiStruct):
                 self._debug['num_multispectral_bands']['end'] = self._io.pos()
 
             self._debug['bands']['start'] = self._io.pos()
-            self.bands = []
+            self.bands = [None] * ((int(self.num_bands) if int(self.num_bands) != 0 else int(self.num_multispectral_bands)))
             for i in range((int(self.num_bands) if int(self.num_bands) != 0 else int(self.num_multispectral_bands))):
                 if not 'arr' in self._debug['bands']:
                     self._debug['bands']['arr'] = []
                 self._debug['bands']['arr'].append({'start': self._io.pos()})
                 _t_bands = Nitf.BandInfo(self._io, self, self._root)
                 _t_bands._read()
-                self.bands.append(_t_bands)
+                self.bands[i] = _t_bands
                 self._debug['bands']['arr'][i]['end'] = self._io.pos()
 
             self._debug['bands']['end'] = self._io.pos()
@@ -785,12 +786,12 @@ class Nitf(KaitaiStruct):
 
             if int(self.user_def_img_data_len) > 2:
                 self._debug['user_def_img_data']['start'] = self._io.pos()
-                self.user_def_img_data = []
+                self.user_def_img_data = [None] * ((int(self.user_def_img_data_len) - 3))
                 for i in range((int(self.user_def_img_data_len) - 3)):
                     if not 'arr' in self._debug['user_def_img_data']:
                         self._debug['user_def_img_data']['arr'] = []
                     self._debug['user_def_img_data']['arr'].append({'start': self._io.pos()})
-                    self.user_def_img_data.append(self._io.read_u1())
+                    self.user_def_img_data[i] = self._io.read_u1()
                     self._debug['user_def_img_data']['arr'][i]['end'] = self._io.pos()
 
                 self._debug['user_def_img_data']['end'] = self._io.pos()
@@ -978,14 +979,14 @@ class Nitf(KaitaiStruct):
             self.num_image_segments = (self._io.read_bytes(3)).decode(u"UTF-8")
             self._debug['num_image_segments']['end'] = self._io.pos()
             self._debug['linfo']['start'] = self._io.pos()
-            self.linfo = []
+            self.linfo = [None] * (int(self.num_image_segments))
             for i in range(int(self.num_image_segments)):
                 if not 'arr' in self._debug['linfo']:
                     self._debug['linfo']['arr'] = []
                 self._debug['linfo']['arr'].append({'start': self._io.pos()})
                 _t_linfo = Nitf.LengthImageInfo(self._io, self, self._root)
                 _t_linfo._read()
-                self.linfo.append(_t_linfo)
+                self.linfo[i] = _t_linfo
                 self._debug['linfo']['arr'][i]['end'] = self._io.pos()
 
             self._debug['linfo']['end'] = self._io.pos()
@@ -993,14 +994,14 @@ class Nitf(KaitaiStruct):
             self.num_graphics_segments = (self._io.read_bytes(3)).decode(u"UTF-8")
             self._debug['num_graphics_segments']['end'] = self._io.pos()
             self._debug['lnnfo']['start'] = self._io.pos()
-            self.lnnfo = []
+            self.lnnfo = [None] * (int(self.num_graphics_segments))
             for i in range(int(self.num_graphics_segments)):
                 if not 'arr' in self._debug['lnnfo']:
                     self._debug['lnnfo']['arr'] = []
                 self._debug['lnnfo']['arr'].append({'start': self._io.pos()})
                 _t_lnnfo = Nitf.LengthGraphicInfo(self._io, self, self._root)
                 _t_lnnfo._read()
-                self.lnnfo.append(_t_lnnfo)
+                self.lnnfo[i] = _t_lnnfo
                 self._debug['lnnfo']['arr'][i]['end'] = self._io.pos()
 
             self._debug['lnnfo']['end'] = self._io.pos()
@@ -1011,14 +1012,14 @@ class Nitf(KaitaiStruct):
             self.num_text_files = (self._io.read_bytes(3)).decode(u"UTF-8")
             self._debug['num_text_files']['end'] = self._io.pos()
             self._debug['ltnfo']['start'] = self._io.pos()
-            self.ltnfo = []
+            self.ltnfo = [None] * (int(self.num_text_files))
             for i in range(int(self.num_text_files)):
                 if not 'arr' in self._debug['ltnfo']:
                     self._debug['ltnfo']['arr'] = []
                 self._debug['ltnfo']['arr'].append({'start': self._io.pos()})
                 _t_ltnfo = Nitf.LengthTextInfo(self._io, self, self._root)
                 _t_ltnfo._read()
-                self.ltnfo.append(_t_ltnfo)
+                self.ltnfo[i] = _t_ltnfo
                 self._debug['ltnfo']['arr'][i]['end'] = self._io.pos()
 
             self._debug['ltnfo']['end'] = self._io.pos()
@@ -1026,14 +1027,14 @@ class Nitf(KaitaiStruct):
             self.num_data_extension = (self._io.read_bytes(3)).decode(u"UTF-8")
             self._debug['num_data_extension']['end'] = self._io.pos()
             self._debug['ldnfo']['start'] = self._io.pos()
-            self.ldnfo = []
+            self.ldnfo = [None] * (int(self.num_data_extension))
             for i in range(int(self.num_data_extension)):
                 if not 'arr' in self._debug['ldnfo']:
                     self._debug['ldnfo']['arr'] = []
                 self._debug['ldnfo']['arr'].append({'start': self._io.pos()})
                 _t_ldnfo = Nitf.LengthDataInfo(self._io, self, self._root)
                 _t_ldnfo._read()
-                self.ldnfo.append(_t_ldnfo)
+                self.ldnfo[i] = _t_ldnfo
                 self._debug['ldnfo']['arr'][i]['end'] = self._io.pos()
 
             self._debug['ldnfo']['end'] = self._io.pos()
@@ -1041,14 +1042,14 @@ class Nitf(KaitaiStruct):
             self.num_reserved_extension = (self._io.read_bytes(3)).decode(u"UTF-8")
             self._debug['num_reserved_extension']['end'] = self._io.pos()
             self._debug['lrnfo']['start'] = self._io.pos()
-            self.lrnfo = []
+            self.lrnfo = [None] * (int(self.num_reserved_extension))
             for i in range(int(self.num_reserved_extension)):
                 if not 'arr' in self._debug['lrnfo']:
                     self._debug['lrnfo']['arr'] = []
                 self._debug['lrnfo']['arr'].append({'start': self._io.pos()})
                 _t_lrnfo = Nitf.LengthReservedInfo(self._io, self, self._root)
                 _t_lrnfo._read()
-                self.lrnfo.append(_t_lrnfo)
+                self.lrnfo[i] = _t_lrnfo
                 self._debug['lrnfo']['arr'][i]['end'] = self._io.pos()
 
             self._debug['lrnfo']['end'] = self._io.pos()
@@ -1086,12 +1087,12 @@ class Nitf(KaitaiStruct):
             self.sfh_delim1 = self._io.read_u4be()
             self._debug['sfh_delim1']['end'] = self._io.pos()
             self._debug['sfh_dr']['start'] = self._io.pos()
-            self.sfh_dr = []
+            self.sfh_dr = [None] * (int(self.sfh_l1))
             for i in range(int(self.sfh_l1)):
                 if not 'arr' in self._debug['sfh_dr']:
                     self._debug['sfh_dr']['arr'] = []
                 self._debug['sfh_dr']['arr'].append({'start': self._io.pos()})
-                self.sfh_dr.append(self._io.read_u1())
+                self.sfh_dr[i] = self._io.read_u1()
                 self._debug['sfh_dr']['arr'][i]['end'] = self._io.pos()
 
             self._debug['sfh_dr']['end'] = self._io.pos()
@@ -1122,12 +1123,12 @@ class Nitf(KaitaiStruct):
 
             if int(self.header_data_length) > 2:
                 self._debug['header_data']['start'] = self._io.pos()
-                self.header_data = []
+                self.header_data = [None] * ((int(self.header_data_length) - 3))
                 for i in range((int(self.header_data_length) - 3)):
                     if not 'arr' in self._debug['header_data']:
                         self._debug['header_data']['arr'] = []
                     self._debug['header_data']['arr'].append({'start': self._io.pos()})
-                    self.header_data.append(self._io.read_u1())
+                    self.header_data[i] = self._io.read_u1()
                     self._debug['header_data']['arr'][i]['end'] = self._io.pos()
 
                 self._debug['header_data']['end'] = self._io.pos()

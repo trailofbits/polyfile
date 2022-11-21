@@ -1,12 +1,13 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
+from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 from enum import Enum
 import collections
 
 
-if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
+if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class Xwd(KaitaiStruct):
@@ -55,17 +56,17 @@ class Xwd(KaitaiStruct):
         self.hdr._read()
         self._debug['hdr']['end'] = self._io.pos()
         self._debug['color_map']['start'] = self._io.pos()
-        self._raw_color_map = []
-        self.color_map = []
+        self._raw_color_map = [None] * (self.hdr.color_map_entries)
+        self.color_map = [None] * (self.hdr.color_map_entries)
         for i in range(self.hdr.color_map_entries):
             if not 'arr' in self._debug['color_map']:
                 self._debug['color_map']['arr'] = []
             self._debug['color_map']['arr'].append({'start': self._io.pos()})
-            self._raw_color_map.append(self._io.read_bytes(12))
+            self._raw_color_map[i] = self._io.read_bytes(12)
             _io__raw_color_map = KaitaiStream(BytesIO(self._raw_color_map[i]))
             _t_color_map = Xwd.ColorMapEntry(_io__raw_color_map, self, self._root)
             _t_color_map._read()
-            self.color_map.append(_t_color_map)
+            self.color_map[i] = _t_color_map
             self._debug['color_map']['arr'][i]['end'] = self._io.pos()
 
         self._debug['color_map']['end'] = self._io.pos()

@@ -5,8 +5,8 @@ from zipfile import ZipFile as PythonZip
 
 from .fileutils import ExactNamedTempfile, FileStream, Tempfile
 from .logger import StatusLogger
-from .magic import AbsoluteOffset, FailedTest, MagicMatcher, MagicTest, MatchedTest, TestResult
-from .polyfile import InvalidMatch, Match, register_parser
+from .magic import AbsoluteOffset, FailedTest, MagicMatcher, MagicTest, MatchedTest, TestResult, TestType
+from .polyfile import InvalidMatch, register_parser
 from .structmatcher import PolyFileStruct
 from .structs import ByteField, Constant, Endianness, StructError, UInt16, UInt32
 
@@ -30,6 +30,9 @@ class RelaxedJarMatcher(MagicTest):
             message="Java JAR archive",
             parent=relaxed_zip_matcher
         )
+
+    def subtest_type(self) -> TestType:
+        return TestType.BINARY
 
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
         if parent_match is None:

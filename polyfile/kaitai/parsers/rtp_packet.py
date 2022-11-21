@@ -1,12 +1,13 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
+from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 from enum import Enum
 import collections
 
 
-if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
+if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class RtpPacket(KaitaiStruct):
@@ -125,7 +126,7 @@ class RtpPacket(KaitaiStruct):
         bytes appended to the payload as padding.
         """
         if hasattr(self, '_m_len_padding_if_exists'):
-            return self._m_len_padding_if_exists
+            return self._m_len_padding_if_exists if hasattr(self, '_m_len_padding_if_exists') else None
 
         if self.has_padding:
             _pos = self._io.pos()
@@ -135,15 +136,15 @@ class RtpPacket(KaitaiStruct):
             self._debug['_m_len_padding_if_exists']['end'] = self._io.pos()
             self._io.seek(_pos)
 
-        return getattr(self, '_m_len_padding_if_exists', None)
+        return self._m_len_padding_if_exists if hasattr(self, '_m_len_padding_if_exists') else None
 
     @property
     def len_padding(self):
         """Always returns number of padding bytes to in the payload."""
         if hasattr(self, '_m_len_padding'):
-            return self._m_len_padding
+            return self._m_len_padding if hasattr(self, '_m_len_padding') else None
 
         self._m_len_padding = (self.len_padding_if_exists if self.has_padding else 0)
-        return getattr(self, '_m_len_padding', None)
+        return self._m_len_padding if hasattr(self, '_m_len_padding') else None
 
 

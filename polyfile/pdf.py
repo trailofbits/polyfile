@@ -23,7 +23,7 @@ from pdfminer.pdftypes import (
 from .fileutils import FileStream
 from .fileutils import Tempfile
 from .logger import getStatusLogger
-from .magic import AbsoluteOffset, FailedTest, MagicMatcher, MagicTest, MatchedTest, TestResult
+from .magic import AbsoluteOffset, FailedTest, MagicMatcher, MagicTest, MatchedTest, TestResult, TestType
 from .polyfile import Match, Matcher, Submatch, register_parser
 
 log = getStatusLogger("PDF")
@@ -853,6 +853,9 @@ class RelaxedPDFMatcher(MagicTest):
             extensions=("pdf",),
             message="Malformed PDF"
         )
+
+    def subtest_type(self) -> TestType:
+        return TestType.BINARY
 
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
         if b"%PDF-" in data:

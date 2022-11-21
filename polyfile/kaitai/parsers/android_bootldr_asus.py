@@ -1,11 +1,12 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
+from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
 
 
-if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
+if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class AndroidBootldrAsus(KaitaiStruct):
@@ -44,14 +45,14 @@ class AndroidBootldrAsus(KaitaiStruct):
         self.reserved2 = self._io.read_u4le()
         self._debug['reserved2']['end'] = self._io.pos()
         self._debug['images']['start'] = self._io.pos()
-        self.images = []
+        self.images = [None] * (3)
         for i in range(3):
             if not 'arr' in self._debug['images']:
                 self._debug['images']['arr'] = []
             self._debug['images']['arr'].append({'start': self._io.pos()})
             _t_images = AndroidBootldrAsus.Image(self._io, self, self._root)
             _t_images._read()
-            self.images.append(_t_images)
+            self.images[i] = _t_images
             self._debug['images']['arr'][i]['end'] = self._io.pos()
 
         self._debug['images']['end'] = self._io.pos()
@@ -95,10 +96,10 @@ class AndroidBootldrAsus(KaitaiStruct):
         @property
         def file_name(self):
             if hasattr(self, '_m_file_name'):
-                return self._m_file_name
+                return self._m_file_name if hasattr(self, '_m_file_name') else None
 
             self._m_file_name = (u"ifwi.bin" if self.chunk_id == u"IFWI!!!!" else (u"droidboot.img" if self.chunk_id == u"DROIDBT!" else (u"splashscreen.img" if self.chunk_id == u"SPLASHS!" else u"")))
-            return getattr(self, '_m_file_name', None)
+            return self._m_file_name if hasattr(self, '_m_file_name') else None
 
 
 

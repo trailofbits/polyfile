@@ -1,12 +1,13 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
+from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 from enum import Enum
 import collections
 
 
-if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
+if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class RubyMarshal(KaitaiStruct):
@@ -81,14 +82,14 @@ class RubyMarshal(KaitaiStruct):
             self.num_elements._read()
             self._debug['num_elements']['end'] = self._io.pos()
             self._debug['elements']['start'] = self._io.pos()
-            self.elements = []
+            self.elements = [None] * (self.num_elements.value)
             for i in range(self.num_elements.value):
                 if not 'arr' in self._debug['elements']:
                     self._debug['elements']['arr'] = []
                 self._debug['elements']['arr'].append({'start': self._io.pos()})
                 _t_elements = RubyMarshal.Record(self._io, self, self._root)
                 _t_elements._read()
-                self.elements.append(_t_elements)
+                self.elements[i] = _t_elements
                 self._debug['elements']['arr'][i]['end'] = self._io.pos()
 
             self._debug['elements']['end'] = self._io.pos()
@@ -141,14 +142,14 @@ class RubyMarshal(KaitaiStruct):
             self.num_members._read()
             self._debug['num_members']['end'] = self._io.pos()
             self._debug['members']['start'] = self._io.pos()
-            self.members = []
+            self.members = [None] * (self.num_members.value)
             for i in range(self.num_members.value):
                 if not 'arr' in self._debug['members']:
                     self._debug['members']['arr'] = []
                 self._debug['members']['arr'].append({'start': self._io.pos()})
                 _t_members = RubyMarshal.Pair(self._io, self, self._root)
                 _t_members._read()
-                self.members.append(_t_members)
+                self.members[i] = _t_members
                 self._debug['members']['arr'][i]['end'] = self._io.pos()
 
             self._debug['members']['end'] = self._io.pos()
@@ -247,18 +248,18 @@ class RubyMarshal(KaitaiStruct):
         @property
         def is_immediate(self):
             if hasattr(self, '_m_is_immediate'):
-                return self._m_is_immediate
+                return self._m_is_immediate if hasattr(self, '_m_is_immediate') else None
 
             self._m_is_immediate =  ((self.code > 4) and (self.code < 252)) 
-            return getattr(self, '_m_is_immediate', None)
+            return self._m_is_immediate if hasattr(self, '_m_is_immediate') else None
 
         @property
         def value(self):
             if hasattr(self, '_m_value'):
-                return self._m_value
+                return self._m_value if hasattr(self, '_m_value') else None
 
             self._m_value = (((self.code - 5) if self.code < 128 else (4 - (~(self.code) & 127))) if self.is_immediate else (0 if self.code == 0 else ((self.encoded - 256) if self.code == 255 else ((self.encoded - 65536) if self.code == 254 else ((((self.encoded2 << 16) | self.encoded) - 16777216) if self.code == 253 else (((self.encoded2 << 16) | self.encoded) if self.code == 3 else self.encoded))))))
-            return getattr(self, '_m_value', None)
+            return self._m_value if hasattr(self, '_m_value') else None
 
 
     class Pair(KaitaiStruct):
@@ -302,14 +303,14 @@ class RubyMarshal(KaitaiStruct):
             self.num_vars._read()
             self._debug['num_vars']['end'] = self._io.pos()
             self._debug['vars']['start'] = self._io.pos()
-            self.vars = []
+            self.vars = [None] * (self.num_vars.value)
             for i in range(self.num_vars.value):
                 if not 'arr' in self._debug['vars']:
                     self._debug['vars']['arr'] = []
                 self._debug['vars']['arr'].append({'start': self._io.pos()})
                 _t_vars = RubyMarshal.Pair(self._io, self, self._root)
                 _t_vars._read()
-                self.vars.append(_t_vars)
+                self.vars[i] = _t_vars
                 self._debug['vars']['arr'][i]['end'] = self._io.pos()
 
             self._debug['vars']['end'] = self._io.pos()
@@ -384,14 +385,14 @@ class RubyMarshal(KaitaiStruct):
             self.num_pairs._read()
             self._debug['num_pairs']['end'] = self._io.pos()
             self._debug['pairs']['start'] = self._io.pos()
-            self.pairs = []
+            self.pairs = [None] * (self.num_pairs.value)
             for i in range(self.num_pairs.value):
                 if not 'arr' in self._debug['pairs']:
                     self._debug['pairs']['arr'] = []
                 self._debug['pairs']['arr'].append({'start': self._io.pos()})
                 _t_pairs = RubyMarshal.Pair(self._io, self, self._root)
                 _t_pairs._read()
-                self.pairs.append(_t_pairs)
+                self.pairs[i] = _t_pairs
                 self._debug['pairs']['arr'][i]['end'] = self._io.pos()
 
             self._debug['pairs']['end'] = self._io.pos()

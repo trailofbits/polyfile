@@ -1,12 +1,13 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
+from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 from enum import Enum
 import collections
 
 
-if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
+if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 from polyfile.kaitai.parsers import php_serialized_value
@@ -86,12 +87,12 @@ class PharWithoutStub(KaitaiStruct):
         self.manifest._read()
         self._debug['manifest']['end'] = self._io.pos()
         self._debug['files']['start'] = self._io.pos()
-        self.files = []
+        self.files = [None] * (self.manifest.num_files)
         for i in range(self.manifest.num_files):
             if not 'arr' in self._debug['files']:
                 self._debug['files']['arr'] = []
             self._debug['files']['arr'].append({'start': self._io.pos()})
-            self.files.append(self._io.read_bytes(self.manifest.file_entries[i].len_data_compressed))
+            self.files[i] = self._io.read_bytes(self.manifest.file_entries[i].len_data_compressed)
             self._debug['files']['arr'][i]['end'] = self._io.pos()
 
         self._debug['files']['end'] = self._io.pos()
@@ -121,7 +122,7 @@ class PharWithoutStub(KaitaiStruct):
         def parsed(self):
             """The serialized value, parsed as a structure."""
             if hasattr(self, '_m_parsed'):
-                return self._m_parsed
+                return self._m_parsed if hasattr(self, '_m_parsed') else None
 
             _pos = self._io.pos()
             self._io.seek(0)
@@ -130,7 +131,7 @@ class PharWithoutStub(KaitaiStruct):
             self._m_parsed._read()
             self._debug['_m_parsed']['end'] = self._io.pos()
             self._io.seek(_pos)
-            return getattr(self, '_m_parsed', None)
+            return self._m_parsed if hasattr(self, '_m_parsed') else None
 
 
     class Signature(KaitaiStruct):
@@ -172,28 +173,28 @@ class PharWithoutStub(KaitaiStruct):
         def permissions(self):
             """The file's permission bits."""
             if hasattr(self, '_m_permissions'):
-                return self._m_permissions
+                return self._m_permissions if hasattr(self, '_m_permissions') else None
 
             self._m_permissions = (self.value & 511)
-            return getattr(self, '_m_permissions', None)
+            return self._m_permissions if hasattr(self, '_m_permissions') else None
 
         @property
         def zlib_compressed(self):
             """Whether this file's data is stored using zlib compression."""
             if hasattr(self, '_m_zlib_compressed'):
-                return self._m_zlib_compressed
+                return self._m_zlib_compressed if hasattr(self, '_m_zlib_compressed') else None
 
             self._m_zlib_compressed = (self.value & 4096) != 0
-            return getattr(self, '_m_zlib_compressed', None)
+            return self._m_zlib_compressed if hasattr(self, '_m_zlib_compressed') else None
 
         @property
         def bzip2_compressed(self):
             """Whether this file's data is stored using bzip2 compression."""
             if hasattr(self, '_m_bzip2_compressed'):
-                return self._m_bzip2_compressed
+                return self._m_bzip2_compressed if hasattr(self, '_m_bzip2_compressed') else None
 
             self._m_bzip2_compressed = (self.value & 8192) != 0
-            return getattr(self, '_m_bzip2_compressed', None)
+            return self._m_bzip2_compressed if hasattr(self, '_m_bzip2_compressed') else None
 
 
     class ApiVersion(KaitaiStruct):
@@ -271,10 +272,10 @@ class PharWithoutStub(KaitaiStruct):
             zlib compression.
             """
             if hasattr(self, '_m_any_zlib_compressed'):
-                return self._m_any_zlib_compressed
+                return self._m_any_zlib_compressed if hasattr(self, '_m_any_zlib_compressed') else None
 
             self._m_any_zlib_compressed = (self.value & 4096) != 0
-            return getattr(self, '_m_any_zlib_compressed', None)
+            return self._m_any_zlib_compressed if hasattr(self, '_m_any_zlib_compressed') else None
 
         @property
         def any_bzip2_compressed(self):
@@ -282,19 +283,19 @@ class PharWithoutStub(KaitaiStruct):
             bzip2 compression.
             """
             if hasattr(self, '_m_any_bzip2_compressed'):
-                return self._m_any_bzip2_compressed
+                return self._m_any_bzip2_compressed if hasattr(self, '_m_any_bzip2_compressed') else None
 
             self._m_any_bzip2_compressed = (self.value & 8192) != 0
-            return getattr(self, '_m_any_bzip2_compressed', None)
+            return self._m_any_bzip2_compressed if hasattr(self, '_m_any_bzip2_compressed') else None
 
         @property
         def has_signature(self):
             """Whether this phar contains a signature."""
             if hasattr(self, '_m_has_signature'):
-                return self._m_has_signature
+                return self._m_has_signature if hasattr(self, '_m_has_signature') else None
 
             self._m_has_signature = (self.value & 65536) != 0
-            return getattr(self, '_m_has_signature', None)
+            return self._m_has_signature if hasattr(self, '_m_has_signature') else None
 
 
     class Manifest(KaitaiStruct):
@@ -338,14 +339,14 @@ class PharWithoutStub(KaitaiStruct):
                 self._debug['metadata']['end'] = self._io.pos()
 
             self._debug['file_entries']['start'] = self._io.pos()
-            self.file_entries = []
+            self.file_entries = [None] * (self.num_files)
             for i in range(self.num_files):
                 if not 'arr' in self._debug['file_entries']:
                     self._debug['file_entries']['arr'] = []
                 self._debug['file_entries']['arr'].append({'start': self._io.pos()})
                 _t_file_entries = PharWithoutStub.FileEntry(self._io, self, self._root)
                 _t_file_entries._read()
-                self.file_entries.append(_t_file_entries)
+                self.file_entries[i] = _t_file_entries
                 self._debug['file_entries']['arr'][i]['end'] = self._io.pos()
 
             self._debug['file_entries']['end'] = self._io.pos()

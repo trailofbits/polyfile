@@ -1,5 +1,6 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
+from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 from enum import Enum
@@ -7,7 +8,7 @@ import collections
 import zlib
 
 
-if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
+if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class Fallout2Dat(KaitaiStruct):
@@ -72,14 +73,14 @@ class Fallout2Dat(KaitaiStruct):
             self.file_count = self._io.read_u4le()
             self._debug['file_count']['end'] = self._io.pos()
             self._debug['files']['start'] = self._io.pos()
-            self.files = []
+            self.files = [None] * (self.file_count)
             for i in range(self.file_count):
                 if not 'arr' in self._debug['files']:
                     self._debug['files']['arr'] = []
                 self._debug['files']['arr'].append({'start': self._io.pos()})
                 _t_files = Fallout2Dat.File(self._io, self, self._root)
                 _t_files._read()
-                self.files.append(_t_files)
+                self.files[i] = _t_files
                 self._debug['files']['arr'][i]['end'] = self._io.pos()
 
             self._debug['files']['end'] = self._io.pos()
@@ -114,7 +115,7 @@ class Fallout2Dat(KaitaiStruct):
         @property
         def contents_raw(self):
             if hasattr(self, '_m_contents_raw'):
-                return self._m_contents_raw
+                return self._m_contents_raw if hasattr(self, '_m_contents_raw') else None
 
             if self.flags == Fallout2Dat.Compression.none:
                 io = self._root._io
@@ -125,12 +126,12 @@ class Fallout2Dat(KaitaiStruct):
                 self._debug['_m_contents_raw']['end'] = io.pos()
                 io.seek(_pos)
 
-            return getattr(self, '_m_contents_raw', None)
+            return self._m_contents_raw if hasattr(self, '_m_contents_raw') else None
 
         @property
         def contents_zlib(self):
             if hasattr(self, '_m_contents_zlib'):
-                return self._m_contents_zlib
+                return self._m_contents_zlib if hasattr(self, '_m_contents_zlib') else None
 
             if self.flags == Fallout2Dat.Compression.zlib:
                 io = self._root._io
@@ -142,23 +143,23 @@ class Fallout2Dat(KaitaiStruct):
                 self._debug['_m_contents_zlib']['end'] = io.pos()
                 io.seek(_pos)
 
-            return getattr(self, '_m_contents_zlib', None)
+            return self._m_contents_zlib if hasattr(self, '_m_contents_zlib') else None
 
         @property
         def contents(self):
             if hasattr(self, '_m_contents'):
-                return self._m_contents
+                return self._m_contents if hasattr(self, '_m_contents') else None
 
             if  ((self.flags == Fallout2Dat.Compression.zlib) or (self.flags == Fallout2Dat.Compression.none)) :
                 self._m_contents = (self.contents_zlib if self.flags == Fallout2Dat.Compression.zlib else self.contents_raw)
 
-            return getattr(self, '_m_contents', None)
+            return self._m_contents if hasattr(self, '_m_contents') else None
 
 
     @property
     def footer(self):
         if hasattr(self, '_m_footer'):
-            return self._m_footer
+            return self._m_footer if hasattr(self, '_m_footer') else None
 
         _pos = self._io.pos()
         self._io.seek((self._io.size() - 8))
@@ -167,12 +168,12 @@ class Fallout2Dat(KaitaiStruct):
         self._m_footer._read()
         self._debug['_m_footer']['end'] = self._io.pos()
         self._io.seek(_pos)
-        return getattr(self, '_m_footer', None)
+        return self._m_footer if hasattr(self, '_m_footer') else None
 
     @property
     def index(self):
         if hasattr(self, '_m_index'):
-            return self._m_index
+            return self._m_index if hasattr(self, '_m_index') else None
 
         _pos = self._io.pos()
         self._io.seek(((self._io.size() - 8) - self.footer.index_size))
@@ -181,6 +182,6 @@ class Fallout2Dat(KaitaiStruct):
         self._m_index._read()
         self._debug['_m_index']['end'] = self._io.pos()
         self._io.seek(_pos)
-        return getattr(self, '_m_index', None)
+        return self._m_index if hasattr(self, '_m_index') else None
 
 

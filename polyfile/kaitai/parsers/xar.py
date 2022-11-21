@@ -1,5 +1,6 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
+from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 from enum import Enum
@@ -7,7 +8,7 @@ import collections
 import zlib
 
 
-if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
+if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class Xar(KaitaiStruct):
@@ -129,26 +130,26 @@ class Xar(KaitaiStruct):
             that OpenSSL recognizes.
             """
             if hasattr(self, '_m_checksum_algorithm_name'):
-                return self._m_checksum_algorithm_name
+                return self._m_checksum_algorithm_name if hasattr(self, '_m_checksum_algorithm_name') else None
 
             self._m_checksum_algorithm_name = (self.checksum_alg_name if self.has_checksum_alg_name else (u"none" if self.checksum_algorithm_int == Xar.ChecksumAlgorithmsApple.none.value else (u"sha1" if self.checksum_algorithm_int == Xar.ChecksumAlgorithmsApple.sha1.value else (u"md5" if self.checksum_algorithm_int == Xar.ChecksumAlgorithmsApple.md5.value else (u"sha256" if self.checksum_algorithm_int == Xar.ChecksumAlgorithmsApple.sha256.value else (u"sha512" if self.checksum_algorithm_int == Xar.ChecksumAlgorithmsApple.sha512.value else u""))))))
-            return getattr(self, '_m_checksum_algorithm_name', None)
+            return self._m_checksum_algorithm_name if hasattr(self, '_m_checksum_algorithm_name') else None
 
         @property
         def has_checksum_alg_name(self):
             if hasattr(self, '_m_has_checksum_alg_name'):
-                return self._m_has_checksum_alg_name
+                return self._m_has_checksum_alg_name if hasattr(self, '_m_has_checksum_alg_name') else None
 
             self._m_has_checksum_alg_name =  ((self.checksum_algorithm_int == self._root.checksum_algorithm_other) and (self.len_header >= 32) and ((self.len_header % 4) == 0)) 
-            return getattr(self, '_m_has_checksum_alg_name', None)
+            return self._m_has_checksum_alg_name if hasattr(self, '_m_has_checksum_alg_name') else None
 
         @property
         def len_header(self):
             if hasattr(self, '_m_len_header'):
-                return self._m_len_header
+                return self._m_len_header if hasattr(self, '_m_len_header') else None
 
             self._m_len_header = self._root.header_prefix.len_header
-            return getattr(self, '_m_len_header', None)
+            return self._m_len_header if hasattr(self, '_m_len_header') else None
 
 
     class TocType(KaitaiStruct):
@@ -172,9 +173,9 @@ class Xar(KaitaiStruct):
            Source - https://github.com/mackyle/xar/blob/66d451d/xar/include/xar.h.in#L85
         """
         if hasattr(self, '_m_checksum_algorithm_other'):
-            return self._m_checksum_algorithm_other
+            return self._m_checksum_algorithm_other if hasattr(self, '_m_checksum_algorithm_other') else None
 
         self._m_checksum_algorithm_other = 3
-        return getattr(self, '_m_checksum_algorithm_other', None)
+        return self._m_checksum_algorithm_other if hasattr(self, '_m_checksum_algorithm_other') else None
 
 

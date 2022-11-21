@@ -1,11 +1,12 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
+from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
 
 
-if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
+if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class BroadcomTrx(KaitaiStruct):
@@ -98,14 +99,14 @@ class BroadcomTrx(KaitaiStruct):
             self.product_id = (KaitaiStream.bytes_terminate(self._io.read_bytes(12), 0, False)).decode(u"utf-8")
             self._debug['product_id']['end'] = self._io.pos()
             self._debug['comp_hw']['start'] = self._io.pos()
-            self.comp_hw = []
+            self.comp_hw = [None] * (4)
             for i in range(4):
                 if not 'arr' in self._debug['comp_hw']:
                     self._debug['comp_hw']['arr'] = []
                 self._debug['comp_hw']['arr'].append({'start': self._io.pos()})
                 _t_comp_hw = BroadcomTrx.Tail.HwCompInfo(self._io, self, self._root)
                 _t_comp_hw._read()
-                self.comp_hw.append(_t_comp_hw)
+                self.comp_hw[i] = _t_comp_hw
                 self._debug['comp_hw']['arr'][i]['end'] = self._io.pos()
 
             self._debug['comp_hw']['end'] = self._io.pos()
@@ -194,35 +195,35 @@ class BroadcomTrx(KaitaiStruct):
             @property
             def is_present(self):
                 if hasattr(self, '_m_is_present'):
-                    return self._m_is_present
+                    return self._m_is_present if hasattr(self, '_m_is_present') else None
 
                 self._m_is_present = self.ofs_body != 0
-                return getattr(self, '_m_is_present', None)
+                return self._m_is_present if hasattr(self, '_m_is_present') else None
 
             @property
             def is_last(self):
                 if hasattr(self, '_m_is_last'):
-                    return self._m_is_last
+                    return self._m_is_last if hasattr(self, '_m_is_last') else None
 
                 if self.is_present:
                     self._m_is_last =  ((self.idx == (len(self._parent.partitions) - 1)) or (not (self._parent.partitions[(self.idx + 1)].is_present))) 
 
-                return getattr(self, '_m_is_last', None)
+                return self._m_is_last if hasattr(self, '_m_is_last') else None
 
             @property
             def len_body(self):
                 if hasattr(self, '_m_len_body'):
-                    return self._m_len_body
+                    return self._m_len_body if hasattr(self, '_m_len_body') else None
 
                 if self.is_present:
                     self._m_len_body = ((self._root._io.size() - self.ofs_body) if self.is_last else self._parent.partitions[(self.idx + 1)].ofs_body)
 
-                return getattr(self, '_m_len_body', None)
+                return self._m_len_body if hasattr(self, '_m_len_body') else None
 
             @property
             def body(self):
                 if hasattr(self, '_m_body'):
-                    return self._m_body
+                    return self._m_body if hasattr(self, '_m_body') else None
 
                 if self.is_present:
                     io = self._root._io
@@ -233,7 +234,7 @@ class BroadcomTrx(KaitaiStruct):
                     self._debug['_m_body']['end'] = io.pos()
                     io.seek(_pos)
 
-                return getattr(self, '_m_body', None)
+                return self._m_body if hasattr(self, '_m_body') else None
 
 
         class Flags(KaitaiStruct):
@@ -246,12 +247,12 @@ class BroadcomTrx(KaitaiStruct):
 
             def _read(self):
                 self._debug['flags']['start'] = self._io.pos()
-                self.flags = []
+                self.flags = [None] * (16)
                 for i in range(16):
                     if not 'arr' in self._debug['flags']:
                         self._debug['flags']['arr'] = []
                     self._debug['flags']['arr'].append({'start': self._io.pos()})
-                    self.flags.append(self._io.read_bits_int_le(1) != 0)
+                    self.flags[i] = self._io.read_bits_int_le(1) != 0
                     self._debug['flags']['arr'][i]['end'] = self._io.pos()
 
                 self._debug['flags']['end'] = self._io.pos()
@@ -261,7 +262,7 @@ class BroadcomTrx(KaitaiStruct):
     @property
     def header(self):
         if hasattr(self, '_m_header'):
-            return self._m_header
+            return self._m_header if hasattr(self, '_m_header') else None
 
         _pos = self._io.pos()
         self._io.seek(0)
@@ -270,12 +271,12 @@ class BroadcomTrx(KaitaiStruct):
         self._m_header._read()
         self._debug['_m_header']['end'] = self._io.pos()
         self._io.seek(_pos)
-        return getattr(self, '_m_header', None)
+        return self._m_header if hasattr(self, '_m_header') else None
 
     @property
     def tail(self):
         if hasattr(self, '_m_tail'):
-            return self._m_tail
+            return self._m_tail if hasattr(self, '_m_tail') else None
 
         _pos = self._io.pos()
         self._io.seek((self._io.size() - 64))
@@ -284,6 +285,6 @@ class BroadcomTrx(KaitaiStruct):
         self._m_tail._read()
         self._debug['_m_tail']['end'] = self._io.pos()
         self._io.seek(_pos)
-        return getattr(self, '_m_tail', None)
+        return self._m_tail if hasattr(self, '_m_tail') else None
 
 

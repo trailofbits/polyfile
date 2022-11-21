@@ -194,7 +194,7 @@ class Dicom(KaitaiStruct):
         other_failures_sequence = 528794
         studies_containing_other_referenced_instances_sequence = 528896
         related_series_sequence = 528976
-        lossy_image_compression = 532752
+        lossy_image_compression_retired = 532752
         derivation_description = 532753
         source_image_sequence = 532754
         stage_name = 532768

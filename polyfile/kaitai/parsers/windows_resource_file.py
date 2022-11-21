@@ -1,12 +1,13 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
+from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
 from enum import Enum
 
 
-if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
+if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class WindowsResourceFile(KaitaiStruct):
@@ -144,12 +145,12 @@ class WindowsResourceFile(KaitaiStruct):
             it as enum value, if applicable.
             """
             if hasattr(self, '_m_type_as_predef'):
-                return self._m_type_as_predef
+                return self._m_type_as_predef if hasattr(self, '_m_type_as_predef') else None
 
             if  ((not (self.type.is_string)) and (self.type.as_numeric <= 255)) :
                 self._m_type_as_predef = KaitaiStream.resolve_enum(WindowsResourceFile.Resource.PredefTypes, self.type.as_numeric)
 
-            return getattr(self, '_m_type_as_predef', None)
+            return self._m_type_as_predef if hasattr(self, '_m_type_as_predef') else None
 
 
     class UnicodeOrId(KaitaiStruct):
@@ -202,31 +203,31 @@ class WindowsResourceFile(KaitaiStruct):
         @property
         def save_pos1(self):
             if hasattr(self, '_m_save_pos1'):
-                return self._m_save_pos1
+                return self._m_save_pos1 if hasattr(self, '_m_save_pos1') else None
 
             self._m_save_pos1 = self._io.pos()
-            return getattr(self, '_m_save_pos1', None)
+            return self._m_save_pos1 if hasattr(self, '_m_save_pos1') else None
 
         @property
         def save_pos2(self):
             if hasattr(self, '_m_save_pos2'):
-                return self._m_save_pos2
+                return self._m_save_pos2 if hasattr(self, '_m_save_pos2') else None
 
             self._m_save_pos2 = self._io.pos()
-            return getattr(self, '_m_save_pos2', None)
+            return self._m_save_pos2 if hasattr(self, '_m_save_pos2') else None
 
         @property
         def is_string(self):
             if hasattr(self, '_m_is_string'):
-                return self._m_is_string
+                return self._m_is_string if hasattr(self, '_m_is_string') else None
 
             self._m_is_string = self.first != 65535
-            return getattr(self, '_m_is_string', None)
+            return self._m_is_string if hasattr(self, '_m_is_string') else None
 
         @property
         def as_string(self):
             if hasattr(self, '_m_as_string'):
-                return self._m_as_string
+                return self._m_as_string if hasattr(self, '_m_as_string') else None
 
             if self.is_string:
                 _pos = self._io.pos()
@@ -236,7 +237,7 @@ class WindowsResourceFile(KaitaiStruct):
                 self._debug['_m_as_string']['end'] = self._io.pos()
                 self._io.seek(_pos)
 
-            return getattr(self, '_m_as_string', None)
+            return self._m_as_string if hasattr(self, '_m_as_string') else None
 
 
 

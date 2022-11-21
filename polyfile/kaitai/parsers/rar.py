@@ -1,12 +1,13 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
 
+from pkg_resources import parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 from enum import Enum
 import collections
 
 
-if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 9):
+if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 from polyfile.kaitai.parsers import dos_datetime
@@ -176,26 +177,26 @@ class Rar(KaitaiStruct):
         def has_add(self):
             """True if block has additional content attached to it."""
             if hasattr(self, '_m_has_add'):
-                return self._m_has_add
+                return self._m_has_add if hasattr(self, '_m_has_add') else None
 
             self._m_has_add = (self.flags & 32768) != 0
-            return getattr(self, '_m_has_add', None)
+            return self._m_has_add if hasattr(self, '_m_has_add') else None
 
         @property
         def header_size(self):
             if hasattr(self, '_m_header_size'):
-                return self._m_header_size
+                return self._m_header_size if hasattr(self, '_m_header_size') else None
 
             self._m_header_size = (11 if self.has_add else 7)
-            return getattr(self, '_m_header_size', None)
+            return self._m_header_size if hasattr(self, '_m_header_size') else None
 
         @property
         def body_size(self):
             if hasattr(self, '_m_body_size'):
-                return self._m_body_size
+                return self._m_body_size if hasattr(self, '_m_body_size') else None
 
             self._m_body_size = (self.block_size - self.header_size)
-            return getattr(self, '_m_body_size', None)
+            return self._m_body_size if hasattr(self, '_m_body_size') else None
 
 
     class BlockFileHeader(KaitaiStruct):
