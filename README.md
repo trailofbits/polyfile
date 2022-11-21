@@ -25,7 +25,7 @@ pip3 install polyfile
 
 To install PolyFile from source, in the same directory as this README, run:
 ```
-pip3 install -e .
+pip3 install .
 ```
 
 Important: Before installing from source, make sure Java is installed. Java is used to
@@ -35,11 +35,33 @@ This will automatically install the `polyfile` and `polymerge` executables in yo
 
 ## Usage
 
+Running `polyfile` on a file with no arguments will mimic the behavior of `file --keep-going`:
+```console
+$ polyfile png-polyglot.png
+PNG image data, 256 x 144, 8-bit/color RGB, non-interlaced
+Brainfu** Program
+Malformed PDF
+PDF document, version 1.3,  1 pages
+ZIP end of central directory record Java JAR archive 
 ```
-usage: polyfile [-h] [--format {mime,html,json,sbud}] [--output OUTPUT]
-                [--filetype FILETYPE] [--list] [--html HTML]
+To generate an interactive hex viewer for the file, use the `--html` option:
+```console
+$ polyfile --html output.html png-polyglot.png
+Found a file of type application/pdf at byte offset 0
+Found a file of type application/x-brainfuck at byte offset 0
+Found a file of type image/png at byte offset 0
+Found a file of type application/zip at byte offset 0
+Found a file of type application/java-archive at byte offset 0
+Saved HTML output to output.html
+```
+
+Full usage instructions follow:
+```
+usage: polyfile [-h] [--format {file,mime,html,json,sbud}] [--output OUTPUT]
+                [--filetype FILETYPE] [--list] [--html HTML] [--explain]
                 [--only-match-mime] [--only-match] [--require-match]
-                [--max-matches MAX_MATCHES] [--debugger] [--no-debug-python]
+                [--max-matches MAX_MATCHES] [--debugger]
+                [--eval-command EVAL_COMMAND] [--no-debug-python]
                 [--quiet | --debug | --trace] [--version] [-dumpversion]
                 [FILE]
 
@@ -48,43 +70,46 @@ A utility to recursively map the structure of a file.
 positional arguments:
   FILE                  the file to analyze; pass '-' or omit to read from STDIN
 
-optional arguments:
+options:
   -h, --help            show this help message and exit
-  --format {mime,html,json,sbud}, -r {mime,html,json,sbud}
+  --format {file,mime,html,json,sbud}, -r {file,mime,html,json,sbud}
                         PolyFile's output format
-
+                        
                         Output formats are:
-                        mime ... the detected MIME types associated with the file,
-                                 like the output of the `file` command
-                        html ... an interactive HTML-based hex viewer
-                        json ... a modified version of the SBUD format in JSON syntax
-                        sbud ... equivalent to 'json'
-
+                        file ...... the detected formats associated with the file,
+                                    like the output of the `file` command
+                        mime ...... the detected MIME types associated with the file,
+                                    like the output of the `file --mime-type` command
+                        explain ... like 'mime', but adds a human-readable explanation
+                                    for why each MIME type matched
+                        html ...... an interactive HTML-based hex viewer
+                        json ...... a modified version of the SBUD format in JSON syntax
+                        sbud ...... equivalent to 'json'
+                        
                         Multiple formats can be output at once:
-
+                        
                             polyfile INPUT_FILE -f mime -f json
-
+                        
                         Their output will be concatenated to STDOUT in the order that
                         they occur in the arguments.
-
+                        
                         To save each format to a separate file, see the `--output` argument.
-
-                        If no format is specified, PolyFile defaults to `--format sbud`,
-                        but this will change to `--format mime` in v0.5.0
+                        
+                        If no format is specified, PolyFile defaults to `--format file`
   --output OUTPUT, -o OUTPUT
                         an optional output path for `--format`
-
+                        
                         Each instance of `--output` applies to the previous instance
                         of the `--format` option.
-
+                        
                         For example:
-
+                        
                             polyfile INPUT_FILE --format html --output output.html \
                                                 --format sbud --output output.json
-
+                        
                         will save HTML to to `output.html` and SBUD to `output.json`.
                         No two outputs can be directed at the same file path.
-
+                        
                         The path can be '-' for STDOUT.
                         If an `--output` is omitted for a format,
                         then it will implicitly be printed to STDOUT.
@@ -93,6 +118,7 @@ optional arguments:
   --list, -l            list the supported filetypes for the `--filetype` argument and exit
   --html HTML, -t HTML  path to write an interactive HTML file for exploring the PDF;
                         equivalent to `--format html --output HTML`
+  --explain             equivalent to `--format explain
   --only-match-mime, -I
                         "just print out the matching MIME types for the file, one on each line;
                         equivalent to `--format mime`
@@ -101,23 +127,14 @@ optional arguments:
   --max-matches MAX_MATCHES
                         stop scanning after having found this many matches
   --debugger, -db       drop into an interactive debugger for libmagic file definition matching and PolyFile parsing
+  --eval-command EVAL_COMMAND, -ex EVAL_COMMAND
+                        execute the given debugger command
   --no-debug-python     by default, the `--debugger` option will break on custom matchers and prompt to debug using PDB. This option will suppress those prompts.
   --quiet, -q           suppress all log output
   --debug, -d           print debug information
   --trace, -dd          print extra verbose debug information
   --version, -v         print PolyFile's version information to STDERR
   -dumpversion          print PolyFile's raw version information to STDOUT and exit
-```
-
-To generate a JSON mapping of a file, run:
-
-```
-polyfile INPUT_FILE > output.json
-```
-
-You can optionally have PolyFile output an interactive HTML page containing a labeled, interactive hexdump of the file:
-```
-polyfile INPUT_FILE --html output.html > output.json
 ```
 
 ### Interactive Debugger
@@ -140,7 +157,7 @@ It currently has support for parsing and semantically mapping the following form
 
 For an example that exercises all of these file formats, run:
 ```bash
-curl -v --silent https://www.sultanik.com/files/ESultanikResume.pdf | polyfile --html ESultanikResume.html - > ESultanikResume.json
+curl -v --silent https://www.sultanik.com/files/ESultanikResume.pdf | polyfile --html ESultanikResume.html -
 ```
 
 Prior to PolyFile version 0.3.0, it used the [TrID database](http://mark0.net/soft-trid-deflist.html) for file
@@ -150,13 +167,7 @@ TrID matching code is still shipped with PolyFile and can be invoked programmati
 
 ### Output Format
 
-PolyFile outputs its mapping in an extension of the [SBuD](https://github.com/corkami/sbud) JSON format described [in the documentation](docs/json_format.md).
-
-PolyFile can also emit a standalone HTML document that contains an interactive hex viewer as well as syntax trees for
-the discovered file formats. Simply pass the `--html` argument to PolyFile with an output path:
-```console
-$ polyfile input_file --html output.html
-```
+PolyFile has several options for outputting its results, specified by its `--format` option. For computer-readable output, PolyFile has an extension of the [SBuD](https://github.com/corkami/sbud) JSON format described [in the documentation](docs/json_format.md). Prior to version 0.5.0 this was the default output format of PolyFile. However, now the default output format is to mimic the behavior of the `file` command. To maintain the original behavior, use the `--format sbud` option.
 
 ### libMagic Implementation
 
