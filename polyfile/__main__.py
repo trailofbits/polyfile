@@ -328,14 +328,18 @@ equivalent to `--format mime`"""))
             with output_format.output_stream as output:
                 if output_format.output_format == "file":
                     istty = sys.stderr.isatty() and output.isatty() and logging.root.level <= logging.INFO
+                    lines = set()
                     with KeyboardInterruptHandler():
                         for match in analyzer.magic_matches():
-                            if istty:
-                                log.clear_status()
-                                output.write(f"{match!s}\n")
-                                output.flush()
-                            else:
-                                output.write(f"{match!s}\n")
+                            line = str(match)
+                            if line not in lines:
+                                lines.add(line)
+                                if istty:
+                                    log.clear_status()
+                                    output.write(f"{line}\n")
+                                    output.flush()
+                                else:
+                                    output.write(f"{line}\n")
                     if istty:
                         log.clear_status()
                 elif output_format.output_format in ("mime", "explain"):
