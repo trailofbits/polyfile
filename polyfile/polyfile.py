@@ -257,21 +257,11 @@ class Matcher:
                                 f"parsing {match_obj!s} in {file_stream!s}: {e!s}")
 
     def identify(
-            self, file_stream: Union[str, Path, IO, FileStream], parent: Optional[Match] = None
+            self, file_stream: Union[str, Path, IO, FileStream]
     ) -> Iterator[MagicMatch]:
         with FileStream(file_stream) as f:
-            matched_mimetypes: Set[str] = set()
             context = MatchContext.load(f, only_match_mime=False)
-            for magic_match in self.magic_matcher.match(context):
-                yield magic_match
-                for result in magic_match:
-                    if result.test.mime is None:
-                        continue
-                    mimetype = result.test.mime.resolve(context)
-                    if mimetype in matched_mimetypes:
-                        continue
-                    matched_mimetypes.add(mimetype)
-                    yield from self.handle_mimetype(mimetype, result, context.data, file_stream, parent)
+            yield from self.magic_matcher.match(context)
 
     def match(self, file_stream: Union[str, Path, IO, FileStream], parent: Optional[Match] = None) -> Iterator[Match]:
         with FileStream(file_stream) as f:
@@ -368,7 +358,7 @@ class Analyzer:
                 self._magic_matches = []
                 self._magic_match_iterator = iter(self.matcher.identify(self.path))
             else:
-                yield from self._matches
+                yield from self._magic_matches
             while True:
                 try:
                     match = next(self._magic_match_iterator)

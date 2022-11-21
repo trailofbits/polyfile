@@ -344,6 +344,8 @@ Please update your scripts!
                                 output.flush()
                             else:
                                 output.write(f"{match!s}\n")
+                    if istty:
+                        log.clear_status()
                 elif output_format.output_format in ("mime", "explain"):
                     omm = sys.stderr.isatty() and output.isatty() and logging.root.level <= logging.INFO
                     if omm:
