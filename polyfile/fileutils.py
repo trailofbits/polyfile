@@ -64,6 +64,8 @@ class PathOrStdin:
         self.path: str = path
         if self.path == '-':
             self._tempfile: Optional[ExactNamedTempfile] = ExactNamedTempfile(sys.stdin.buffer.read(), "STDIN")
+        elif not Path(path).exists():
+            raise FileNotFoundError(path)
         else:
             self._tempfile = None
 
