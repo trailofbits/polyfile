@@ -58,8 +58,7 @@ class KeyboardInterruptHandler:
 
 class FormatOutput:
     valid_formats = ("mime", "html", "json", "sbud", "explain")
-    # TODO: Change this from "sbud" to "mime" in v0.5.0:
-    default_format = "sbud"
+    default_format = "file"
 
     def __init__(self, output_format: Optional[str] = None, output_path: Optional[str] = None):
         if output_format is None:
@@ -144,8 +143,7 @@ they occur in the arguments.
 
 To save each format to a separate file, see the `--output` argument.
 
-If no format is specified, PolyFile defaults to `--format sbud`,
-but this will change to `--format file` in v0.5.0"""))
+If no format is specified, PolyFile defaults to `--format file`"""))
 
     parser.add_argument('--output', '-o', action=ValidateOutput, type=str, # nargs=2,
                         # metavar=(f"{{{','.join(ValidateOutput.valid_outputs)}}}", "PATH"),
@@ -304,16 +302,7 @@ equivalent to `--format mime`"""))
             stack.enter_context(debugger)
         elif args.no_debug_python:
             log.warning("Ignoring `--no-debug-python`; it can only be used with the --debugger option.")
-        if not sys.stdout.isatty() or not sys.stdin.isatty():
-            log.warning("""WARNING
-!!!!!!!
-The default output format for PolyFile will be changing in forthcoming release v0.5.0!
-Currently, the default output format is SBUD/JSON.
-In release v0.5.0, it will switch to the equivalent of the current `--format file` option.
-To preserve the original behavior, add the `--format sbud` command line option.
-Please update your scripts!
 
-""")
         analyzer = Analyzer(file_path, parse=not args.only_match, magic_matcher=magic_matcher)
 
         needs_sbud = any(output_format.output_format in {"html", "json", "sbud"} for output_format in args.format)
@@ -339,14 +328,18 @@ Please update your scripts!
             with output_format.output_stream as output:
                 if output_format.output_format == "file":
                     istty = sys.stderr.isatty() and output.isatty() and logging.root.level <= logging.INFO
+                    lines = set()
                     with KeyboardInterruptHandler():
                         for match in analyzer.magic_matches():
-                            if istty:
-                                log.clear_status()
-                                output.write(f"{match!s}\n")
-                                output.flush()
-                            else:
-                                output.write(f"{match!s}\n")
+                            line = str(match)
+                            if line not in lines:
+                                lines.add(line)
+                                if istty:
+                                    log.clear_status()
+                                    output.write(f"{line}\n")
+                                    output.flush()
+                                else:
+                                    output.write(f"{line}\n")
                     if istty:
                         log.clear_status()
                 elif output_format.output_format in ("mime", "explain"):
