@@ -7,6 +7,7 @@ from mimetypes import guess_extension
 from pathlib import Path
 import pkg_resources
 from time import localtime
+import traceback
 from typing import Any, Callable, Dict, IO, Iterable, Iterator, List, Optional, Set, Tuple, Union
 
 from .fileutils import FileStream
@@ -255,6 +256,8 @@ class Matcher:
                 except Exception as e:
                     log.warning(f"Parser {parser!s} for MIME type {mimetype} raised an exception while "
                                 f"parsing {match_obj!s} in {file_stream!s}: {e!s}")
+                    if log.isEnabledFor(logger.logging.DEBUG):
+                        traceback.print_exc()
 
     def identify(
             self, file_stream: Union[str, Path, IO, FileStream]
