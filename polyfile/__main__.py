@@ -120,7 +120,7 @@ def main(argv=None):
                         help='the file to analyze; pass \'-\' or omit to read from STDIN')
 
     parser.add_argument('--format', '-r', type=FormatOutput, action="append", choices=[
-        FormatOutput(f) for f in ("file", "mime", "html", "json", "sbud")
+        FormatOutput(f) for f in FormatOutput.valid_formats + ("json",)
     ], help=dedent("""PolyFile's output format
 
 Output formats are:
