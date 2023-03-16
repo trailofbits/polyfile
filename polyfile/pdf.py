@@ -132,8 +132,9 @@ class PSToken:
     def __hex__(self):
         return PSStr(super().__hex__(), pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes)
 
-    #def __str__(self):
-    #    return PSStr(super().__str__(), pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes)
+    def __str__(self):
+        raise NotImplementedError()
+        # return PSStr(super().__str__(), pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes)
 
     def __repr__(self):
         return f"{self.__class__.__name__}({super().__repr__()}, pdf_offset={self.pdf_offset!r}, "\
@@ -143,6 +144,9 @@ class PSToken:
 class PSInt(PSToken, int):
     def __index__(self):
         return self
+
+    def __str__(self):
+        return str(int(self))
 
 
 C = TypeVar("C")
@@ -271,6 +275,10 @@ class PSBytes(PSSequence, bytes):
         return PSStr(super().decode(encoding, errors), pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes)
 
 
+    def __str__(self):
+        return bytes.__str__(self)
+
+
 class PDFDeciphered(PSBytes):
     original_bytes: bytes
 
@@ -289,7 +297,8 @@ class PDFDeciphered(PSBytes):
 
 
 class PSFloat(PSToken, float):
-    pass
+    def __str__(self):
+        return float.__str__(self)
 
 
 class PSBool:
@@ -408,6 +417,10 @@ class PDFDict(dict, PDFDict_Type):
         ret.pdf_bytes = pdf_bytes
         return ret
 
+    def __str__(self):
+        return dict.__str__(self)
+
+
 
 class PDFList(PSSequence, list):
     @staticmethod
@@ -425,6 +438,10 @@ class PDFList(PSSequence, list):
         if start_offset is None or end_offset is None:
             raise ValueError(f"Cannot determine PDF bounds for list {items!r}")
         return PDFList(items, pdf_offset=start_offset, pdf_bytes=end_offset - start_offset)
+
+    def __str__(self):
+        return list.__str__(self)
+
 
 
 def make_ps_object(value, pdf_offset: int, pdf_bytes: int) -> Union[PDFBaseParserToken, PSStr, PDFDict]:
@@ -1191,6 +1208,9 @@ def pdf_parser(file_stream, parent: Match):
                 yield value_match
                 yield from parse_object(v, matcher=parent.matcher, parent=value_match,
                                         pdf_header_offset=pdf_header_offset)
+
+        if not isinstance(xref, PDFXRef):
+            continue
 
         xref_start = min(min(c.pdf_offset for c in row if c is not None) for row in xref.offsets.values())
         xref_end = max(max(c.pdf_offset + c.pdf_bytes for c in row if c is not None) for row in xref.offsets.values())
