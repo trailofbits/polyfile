@@ -1,8 +1,10 @@
-from abnf.grammars.misc import load_grammar_rulelist
+from abnf.grammars.misc import load_grammar_rules
 from abnf.grammars import rfc9110, rfc5322, rfc4647, rfc5646, rfc3986
-from abnf import Rule, parser
+from abnf import Rule, parser, Node
 
 from .polyfile import register_parser, InvalidMatch, Submatch
+
+from typing import List, Tuple
 
 # Goals: "parse HTTP"
 #   - parse HTTP requests from utf-8 text file(s) with abnf
@@ -18,7 +20,10 @@ from .polyfile import register_parser, InvalidMatch, Submatch
 # Sample captures from WireShark: https://wiki.wireshark.org/SampleCaptures
 # "the ultimate PCAP" https://weberblog.net/the-ultimate-pcap/
 
-rulelist = [
+# We recycle the majority of the RFC 9110 rule list here, since the rfc9110.py
+# class doesn't make needed the rule substitutions from other specs.
+# Note NodeVisitor#visit() replaces all dashes with underscores.
+rulelist: List[Tuple[str, Rule]] = [
     ("Accept", rfc9110.Rule("Accept")),
     ("Accept-Charset", rfc9110.Rule("Accept-Charset")),
     ("Accept-Encoding", rfc9110.Rule("Accept-Encoding")),
@@ -41,6 +46,7 @@ rulelist = [
     ("From", rfc5322.Rule("mailbox")),
     ("GMT", rfc9110.Rule("GMT")),
     ("HTTP-date", rfc9110.Rule("HTTP-date")),
+    ("Host", rfc9110.Rule("Host")),
     ("IMF-fixdate", rfc9110.Rule("IMF-fixdate")),
     ("If-Match", rfc9110.Rule("If-Match")),
     ("If-Modified-Since", rfc9110.Rule("If-Modified-Since")),
@@ -162,11 +168,122 @@ rulelist = [
 ]
 
 
-@load_grammar_rulelist(rulelist)
-class HttpStringParser(Rule, parser.NodeVisitor):
+@load_grammar_rules(rulelist)
+class Grammar(Rule):
+    # add rules that cannot be imported here
+    grammar: List[str] = [
+        "headers = Accept / Accept-Charset / Accept-Encoding / Accept-Language / Accept-Ranges / Allow / Authentication-Info / Authorization / Connection / Content-Encoding / Content-Language / Content-Length / Content-Location / Content-Range / Content-Type / Date / ETag / Expect / From / GMT / HTTP-date / Host / IMF-fixdate / If-Match / If-Modified-Since / If-None-Match / If-Range / If-Unmodified-Since / Last-Modified / Location / Max-Forwards / Proxy-Authenticate / Proxy-Authentication-Info / Proxy-Authorization / Range / Referer / Retry-After / Server / TE / Trailer / Upgrade / User-Agent / Vary / Via / WWW-Authenticate"
+    ]
+
+
+class HttpVisitor(parser.NodeVisitor):
+    """The NodeVisitor class requires a visit_Name()
+    method which can be called to visit only the section(s) of the AST of interest.
+    """
+
     def __init__(self):
         super().__init__()
+        self.content_coding: List[str] = []
+        self.content_length: int
+        self.transfer_coding: str
+        self.uri_host: str
+        self.uri_port: int
 
-    def parse_http(self, input: str):
-        ast, offset = self.parse(input, 0)
-        self.visit(ast)
+    def visit_Content_Encoding(self, node: Node):
+        """
+        Walks the section of the AST which is defined by the following RFC 9110 ABNF:
+        Content-Encoding  = [ content-coding *( OWS "," OWS content-coding ) ]
+        content-coding    = token
+        token             = 1*tchar
+        tchar             = "!" / "#" / "$" / "%" / "&" / "'" / "*" / "+" / "-" / "." / "^" / "_" / "`" / "|" / "~" / DIGIT / ALPHA
+        OWS               = *( SP / HTAB )
+
+        SP                =  %x20
+        HTAB              =  %x09 ; horizontal tab
+        DIGIT             =  %x30-39 ; 0-9
+        ALPHA             =  %x41-5A / %x61-7A ; A-Z / a-z
+        """
+        for child in node.children:
+            self.visit(child)
+
+    def visit_content_coding(self, node: Node):
+        self.content_coding.append(node.value)
+
+    def visit_Content_Length(self, node: Node):
+        """
+        Walks the section of the AST which is defined by the following RFC 9110 ABNF:
+        Content-Length    = 1*DIGIT
+        DIGIT             =  %x30-39 ; 0-9
+        """
+        self.content_length = int(node.value)
+
+    def visit_TE(self, node: Node):
+        """
+        Walks the section of the AST which is defined by the following RFC 9110 ABNF:
+        TE                 = #t-codings
+        t-codings          = "trailers" / ( transfer-coding [ weight ] )
+        transfer-coding    = token *( OWS ";" OWS transfer-parameter )
+        transfer-parameter = token BWS "=" BWS ( token / quoted-string )
+        token             = 1*tchar
+        tchar             = "!" / "#" / "$" / "%" / "&" / "'" / "*" / "+" / "-" / "." / "^" / "_" / "`" / "|" / "~" / DIGIT / ALPHA
+        weight = OWS ";" OWS "q=" qvalue
+        BWS = OWS
+        OWS = *( SP / HTAB )
+        SP                =  %x20
+        HTAB              =  %x09 ; horizontal tab
+        DIGIT             =  %x30-39 ; 0-9
+        ALPHA             =  %x41-5A / %x61-7A ; A-Z / a-z
+        """
+        for child in node.children:
+            self.visit(child)
+
+    def visit_t_codings(self, node: Node):
+        self.t_codings = node.value
+
+    def visit_Host(self, node: Node):
+        """
+        Walks the section of the AST which 1. is defined by the following RFC 9110 ABNF:
+        Host     = uri-host [ ":" port ]
+        uri-host = <host, see [URI], Section 3.2.2>
+        port     = <port, see [URI], Section 3.2.3>
+
+        (The definitions of "URI-reference", "absolute-URI", "relative-part", "authority", "port", "host", "path-abempty", "segment", and "query" are adopted from the URI generic syntax.)
+
+        and 2. by the following RFC 3986 ABNF:
+        host          = IP-literal / IPv4address / reg-name
+        IP-literal    = "[" ( IPv6address / IPvFuture  ) "]"
+        IPv4address   = dec-octet "." dec-octet "." dec-octet "." dec-octet
+        IPvFuture     = "v" 1*HEXDIG "." 1*( unreserved / sub-delims / ":" )
+        IPv6address   = 6( h16 ":" ) ls32
+                   / "::" 5( h16 ":" ) ls32
+                   / [ h16 ] "::" 4( h16 ":" ) ls32
+                   / [ *1( h16 ":" ) h16 ] "::" 3( h16 ":" ) ls32
+                   / [ *2( h16 ":" ) h16 ] "::" 2( h16 ":" ) ls32
+                   / [ *3( h16 ":" ) h16 ] "::" h16 ":" ls32
+                   / [ *4( h16 ":" ) h16 ] "::" ls32
+                   / [ *5( h16 ":" ) h16 ] "::" h16
+                   / [ *6( h16 ":" ) h16 ] "::"
+        dec-octet     = DIGIT                 ; 0-9
+                   / %x31-39 DIGIT         ; 10-99
+                   / "1" 2DIGIT            ; 100-199
+                   / "2" %x30-34 DIGIT     ; 200-249
+                   / "25" %x30-35          ; 250-255
+
+        reg-name      = *( unreserved / pct-encoded / sub-delims )
+        pct-encoded   = "%" HEXDIG HEXDIG
+
+        unreserved    = ALPHA / DIGIT / "-" / "." / "_" / "~"
+        sub-delims    = "!" / "$" / "&" / "'" / "(" / ")" / "*" / "+" / "," / ";" / "="
+        port  = *DIGIT
+        HEXDIG            = DIGIT / "A" / "B" / "C" / "D" / "E" / "F"
+        DIGIT             =  %x30-39 ; 0-9
+        ALPHA             =  %x41-5A / %x61-7A ; A-Z / a-z
+        """
+        for child in node.children:
+            self.visit(child)
+
+    def visit_uri_host(self, node: Node):
+        self.uri_host = node.value
+
+    def visit_port(self, node: Node):
+        self.uri_port = node.value
