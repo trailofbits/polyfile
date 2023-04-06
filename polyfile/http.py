@@ -113,7 +113,8 @@ rulelist: List[Tuple[str, Rule]] = [
     ("last-pos", rfc9110.Rule("last-pos")),
     ("mailbox", rfc5322.Rule("mailbox")),
     ("media-range", rfc9110.Rule("media-range")),
-    ("media-type", rfc9110.Rule("method")),
+    ("media-type", rfc9110.Rule("media-type")),
+    ("method", rfc9110.Rule("method")),
     ("minute", rfc9110.Rule("minute")),
     ("month", rfc9110.Rule("month")),
     ("obs-date", rfc9110.Rule("obs-date")),
@@ -171,8 +172,10 @@ rulelist: List[Tuple[str, Rule]] = [
 @load_grammar_rules(rulelist)
 class Grammar(Rule):
     # add rules that cannot be imported here
+    # abnf library repetition operator not implemented correctly to allow for n repetitions
     grammar: List[str] = [
-        "headers = Accept / Accept-Charset / Accept-Encoding / Accept-Language / Accept-Ranges / Allow / Authentication-Info / Authorization / Connection / Content-Encoding / Content-Language / Content-Length / Content-Location / Content-Range / Content-Type / Date / ETag / Expect / From / GMT / HTTP-date / Host / IMF-fixdate / If-Match / If-Modified-Since / If-None-Match / If-Range / If-Unmodified-Since / Last-Modified / Location / Max-Forwards / Proxy-Authenticate / Proxy-Authentication-Info / Proxy-Authorization / Range / Referer / Retry-After / Server / TE / Trailer / Upgrade / User-Agent / Vary / Via / WWW-Authenticate"
+        "request = method SP absolute-path SP protocol CR LF 1*( header CR LF )",
+        'header = "Accept:" SP Accept / "Accept-Charset:" SP Accept-Charset / "Accept-Encoding:" SP Accept-Encoding / "Accept-Language:" SP Accept-Language / "Accept-Ranges:" SP Accept-Ranges / "Allow:" SP Allow / "Authentication-Info:" SP Authentication-Info / "Authorization:" SP Authorization / "Connection:" SP Connection / "Content-Encoding:" SP Content-Encoding / "Content-Language:" SP Content-Language / "Content-Length:" SP Content-Length / "Content-Location:" SP Content-Location / "Content-Range:" SP Content-Range / "Content-Type:" SP Content-Type / "Date:" SP Date / "ETag:" SP ETag / "Expect:" SP Expect / "From:" SP From / "HTTP-date:" SP HTTP-date / "Host:" SP Host / "If-Match:" SP If-Match / "If-Modified-Since:" SP If-Modified-Since / "If-None-Match:" SP If-None-Match / "If-Range:" SP If-Range / "If-Unmodified-Since:" SP If-Unmodified-Since / "Last-Modified:" SP Last-Modified / "Location:" SP Location / "Max-Forwards:" SP Max-Forwards / "Proxy-Authenticate:" SP Proxy-Authenticate / "Proxy-Authentication-Info:" SP Proxy-Authentication-Info / "Proxy-Authorization:" SP Proxy-Authorization / "Range:" SP Range / "Referer:" SP Referer / "Retry-After:" SP Retry-After / "Server:" SP Server / "Transfer-Encoding:" SP TE / "Trailer:" SP Trailer / "Upgrade:" SP Upgrade / "User-Agent:" SP User-Agent / "Vary:" SP Vary / "Via:" SP Via / "WWW-Authenticate:" SP WWW-Authenticate',
     ]
 
 
@@ -185,7 +188,7 @@ class HttpVisitor(parser.NodeVisitor):
         super().__init__()
         self.content_coding: List[str] = []
         self.content_length: int
-        self.transfer_coding: str
+        self.t_codings: List[str] = []
         self.uri_host: str
         self.uri_port: int
 
@@ -238,7 +241,7 @@ class HttpVisitor(parser.NodeVisitor):
             self.visit(child)
 
     def visit_t_codings(self, node: Node):
-        self.t_codings = node.value
+        self.t_codings.append(node.value)
 
     def visit_Host(self, node: Node):
         """
