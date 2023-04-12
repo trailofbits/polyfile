@@ -200,10 +200,11 @@ class Http11RequestGrammar(Rule):
 
     All other headers defined by HTTP/1.1 are end-to-end headers.
 
-    References
+    General References
        - How header fields generally get structured: https://www.rfc-editor.org/rfc/rfc7230#section-3.2
        - Also helpful: https://www.rfc-editor.org/rfc/rfc5234 which describes how ABNF for syntax specifications works
        - And https://www.rfc-editor.org/rfc/rfc9110#section-5.6.1 (pound sign definition for ABNF in e.g. Forwarded header RFC7239)
+       - Structured Header rules (even fancier than RFC 7230): https://datatracker.ietf.org/doc/html/rfc8941
     """
     grammar: List[str] = [
         "request = method SP absolute-path SP protocol CR LF 1*( header CR LF )",
@@ -234,7 +235,8 @@ class Http11RequestGrammar(Rule):
         # https://w3c.github.io/webappsec-fetch-metadata/#sec-fetch-site-header
         'Sec-Fetch-Site = "cross-site" / "same-origin" / "same-site" / "none"',
         # https://w3c.github.io/webappsec-fetch-metadata/#sec-fetch-user-header
-        "Sec-Fetch-User = TODO",
+        # https://docs.w3cub.com/http/headers/sec-fetch-user.html
+        "Sec-Fetch-User = ?1",
         # https://w3c.github.io/ServiceWorker/#handle-fetch
         "Service-Worker-Navigation-Preload = TODO",
         # https://httpwg.org/specs/rfc9112.html#field.transfer-encoding
