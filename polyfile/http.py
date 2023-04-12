@@ -200,6 +200,7 @@ class Http11RequestGrammar(Rule):
     All other headers defined by HTTP/1.1 are end-to-end headers.
 
     General References
+       - https://http.dev/headers#http-header-categories-and-names (also includes response headers; it is VERY IMPORTANT that response headers not be defined in Http11RequestGrammar and only be defined in TODO Http11ResponseGrammar!)
        - How header fields generally get structured: https://www.rfc-editor.org/rfc/rfc7230#section-3.2
        - Also helpful: https://www.rfc-editor.org/rfc/rfc5234 which describes how ABNF for syntax specifications works
        - And https://www.rfc-editor.org/rfc/rfc9110#section-5.6.1 (pound sign definition for ABNF in e.g. Forwarded header RFC7239)
@@ -245,7 +246,12 @@ class Http11RequestGrammar(Rule):
         # https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Upgrade-Insecure-Requests
         'Upgrade-Insecure-Requests = "1"',
         # https://datatracker.ietf.org/doc/html/draft-ietf-httpbis-digest-headers#section-4
-        "Want-Digest = TODO",
+        # https://http.dev/want-digest
+        "Want-Digest = 1#want-digest-value",
+        'want-digest-value = digest-algorithm [ ";" "q" "=" qvalue]',
+        'qvalue = ( "0" [ "." 0*1DIGIT ] ) / ( "1" [ "." 0*1( "0" ) ] )',
+        # https://www.ietf.org/archive/id/draft-ietf-httpbis-digest-headers-04.html#section-5
+        'digest-algorithm = "sha-256" / "sha-512" / "md5" / "sha" / "unixsum" / "unixcksum" / "id-sha-512" / "id-sha-256" / token',
     ]
 
 
