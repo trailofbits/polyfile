@@ -1,5 +1,5 @@
 from unittest import TestCase
-from polyfile.http import Grammar, HttpVisitor
+from polyfile.http import Http11RequestGrammar, HttpVisitor
 from abnf.parser import Node
 
 
@@ -36,7 +36,7 @@ SMUGGLED
         ]
 
     def test_headers(self):
-        ast, offset = Grammar("request").parse(self.test_requests[0], 0)
+        ast, offset = Http11RequestGrammar("request").parse(self.test_requests[0], 0)
         visitor: HttpVisitor = HttpVisitor()
         visitor.visit(ast)
 

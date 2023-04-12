@@ -1,6 +1,17 @@
 from abnf.grammars.misc import load_grammar_rules
-from abnf.grammars import rfc9110, rfc5322, rfc4647, rfc5646, rfc3986
+from abnf.grammars import (
+    cors,
+    rfc9110,
+    rfc5322,
+    rfc4647,
+    rfc5646,
+    rfc3986,
+    rfc9111,
+    rfc6265,
+)
 from abnf import Rule, parser, Node
+
+from .polyfile.http import defacto, deprecated, experimental
 
 from .polyfile import register_parser, InvalidMatch, Submatch
 
@@ -20,19 +31,20 @@ from typing import List, Tuple
 # Sample captures from WireShark: https://wiki.wireshark.org/SampleCaptures
 # "the ultimate PCAP" https://weberblog.net/the-ultimate-pcap/
 
-# We recycle the majority of the RFC 9110 rule list here, since the rfc9110.py
-# class doesn't make needed the rule substitutions from other specs.
-# Note NodeVisitor#visit() replaces all dashes with underscores.
-rulelist: List[Tuple[str, Rule]] = [
+# Note that the rfc9110.py class doesn't include all needed rules other specs and is missing HTTP headers used in practice but not defined in spec.
+# NodeVisitor#visit() replaces all dashes with underscores.
+# RESPONSE headers in RFC 9110 are NOT included here.
+request_rulelist: List[Tuple[str, Rule]] = [
     ("Accept", rfc9110.Rule("Accept")),
-    ("Accept-Charset", rfc9110.Rule("Accept-Charset")),
     ("Accept-Encoding", rfc9110.Rule("Accept-Encoding")),
     ("Accept-Language", rfc9110.Rule("Accept-Language")),
-    ("Accept-Ranges", rfc9110.Rule("Accept-Ranges")),
+    ("Access-Control-Request-Method", cors.Rule("Access-Control-Request-Method")),
+    ("Access-Control-Request-Headers", cors.Rule("Access-Control-Request-Headers")),
+    ("Age", rfc9111.Rule("Age")),
     ("Allow", rfc9110.Rule("Allow")),
-    ("Authentication-Info", rfc9110.Rule("Authentication-Info")),
     ("Authorization", rfc9110.Rule("Authorization")),
     ("BWS", rfc9110.Rule("BWS")),
+    ("Cache-Control", rfc9111.Rule("Cache-Control")),
     ("Connection", rfc9110.Rule("Connection")),
     ("Content-Encoding", rfc9110.Rule("Content-Encoding")),
     ("Content-Language", rfc9110.Rule("Content-Language")),
@@ -56,6 +68,7 @@ rulelist: List[Tuple[str, Rule]] = [
     ("Last-Modified", rfc9110.Rule("Last-Modified")),
     ("Location", rfc9110.Rule("Location")),
     ("Max-Forwards", rfc9110.Rule("Max-Forwards")),
+    ("Origin", cors.Rule("Origin")),
     ("OWS", rfc9110.Rule("OWS")),
     ("Proxy-Authenticate", rfc9110.Rule("Proxy-Authenticate")),
     ("Proxy-Authentication-Info", rfc9110.Rule("Proxy-Authentication-Info")),
@@ -64,13 +77,10 @@ rulelist: List[Tuple[str, Rule]] = [
     ("Range", rfc9110.Rule("Range")),
     ("Referer", rfc9110.Rule("Referer")),
     ("Retry-After", rfc9110.Rule("Retry-After")),
-    ("Server", rfc9110.Rule("Server")),
     ("TE", rfc9110.Rule("TE")),
-    ("Trailer", rfc9110.Rule("Trailer")),
     ("URI-reference", rfc3986.Rule("URI-reference")),
     ("Upgrade", rfc9110.Rule("Upgrade")),
     ("User-Agent", rfc9110.Rule("User-Agent")),
-    ("Vary", rfc9110.Rule("Vary")),
     ("Via", rfc9110.Rule("Via")),
     ("WWW-Authenticate", rfc9110.Rule("WWW-Authenticate")),
     ("absolute-URI", rfc3986.Rule("absolute-URI")),
@@ -86,6 +96,7 @@ rulelist: List[Tuple[str, Rule]] = [
     ("complete-length", rfc9110.Rule("complete-length")),
     ("connection-option", rfc9110.Rule("connection-option")),
     ("content-coding", rfc9110.Rule("content-coding")),
+    ("cookie-header", rfc6265.Rule("cookie-header")),
     ("credentials", rfc9110.Rule("credentials")),
     ("ctext", rfc9110.Rule("ctext")),
     ("date1", rfc9110.Rule("date1")),
@@ -94,10 +105,13 @@ rulelist: List[Tuple[str, Rule]] = [
     ("day", rfc9110.Rule("day")),
     ("day-name", rfc9110.Rule("day-name")),
     ("day-name-l", rfc9110.Rule("day-name-l")),
+    ("defacto-header", defacto.Rule("defacto-header")),
+    ("deprecated-header", deprecated.Rule("deprecated-header")),
     ("delay-seconds", rfc9110.Rule("delay-seconds")),
     ("entity-tag", rfc9110.Rule("entity-tag")),
     ("etagc", rfc9110.Rule("etagc")),
     ("expectation", rfc9110.Rule("expectation")),
+    ("experimental-header", experimental.Rule("experimental-header")),
     ("field-content", rfc9110.Rule("field-content")),
     ("field-name", rfc9110.Rule("field-name")),
     ("field-value", rfc9110.Rule("field-value")),
@@ -169,13 +183,44 @@ rulelist: List[Tuple[str, Rule]] = [
 ]
 
 
-@load_grammar_rules(rulelist)
-class Grammar(Rule):
-    # add rules that cannot be imported here
-    # abnf library repetition operator not implemented correctly to allow for n repetitions
+@load_grammar_rules(request_rulelist)
+class Http11RequestGrammar(Rule):
+    # todo ensure no response headers are allowed in the request grammar
     grammar: List[str] = [
+        # how header fields generally get structured: https://www.rfc-editor.org/rfc/rfc7230#section-3.2
         "request = method SP absolute-path SP protocol CR LF 1*( header CR LF )",
-        'header = "Accept:" SP Accept / "Accept-Charset:" SP Accept-Charset / "Accept-Encoding:" SP Accept-Encoding / "Accept-Language:" SP Accept-Language / "Accept-Ranges:" SP Accept-Ranges / "Allow:" SP Allow / "Authentication-Info:" SP Authentication-Info / "Authorization:" SP Authorization / "Connection:" SP Connection / "Content-Encoding:" SP Content-Encoding / "Content-Language:" SP Content-Language / "Content-Length:" SP Content-Length / "Content-Location:" SP Content-Location / "Content-Range:" SP Content-Range / "Content-Type:" SP Content-Type / "Date:" SP Date / "ETag:" SP ETag / "Expect:" SP Expect / "From:" SP From / "HTTP-date:" SP HTTP-date / "Host:" SP Host / "If-Match:" SP If-Match / "If-Modified-Since:" SP If-Modified-Since / "If-None-Match:" SP If-None-Match / "If-Range:" SP If-Range / "If-Unmodified-Since:" SP If-Unmodified-Since / "Last-Modified:" SP Last-Modified / "Location:" SP Location / "Max-Forwards:" SP Max-Forwards / "Proxy-Authenticate:" SP Proxy-Authenticate / "Proxy-Authentication-Info:" SP Proxy-Authentication-Info / "Proxy-Authorization:" SP Proxy-Authorization / "Range:" SP Range / "Referer:" SP Referer / "Retry-After:" SP Retry-After / "Server:" SP Server / "Transfer-Encoding:" SP TE / "Trailer:" SP Trailer / "Upgrade:" SP Upgrade / "User-Agent:" SP User-Agent / "Vary:" SP Vary / "Via:" SP Via / "WWW-Authenticate:" SP WWW-Authenticate',
+        'header = forbidden-header / rfc9110-header / rfc9111-header / defacto-header / deprecated-header / experimental-header / cookie-header / "Forwarded:" OWS Forwarded OWS / "Service-Worker-Navigation-Preload:" OWS Service-Worker-Navigation-Preload OWS / "Transfer-Encoding:" OWS Transfer-Encoding OWS / "Upgrade-Insecure-Requests:" OWS Upgrade-Insecure-Requests OWS / "Want-Digest:" OWS Want-Digest OWS',
+        # https://developer.mozilla.org/en-US/docs/Glossary/Forbidden_header_name - includes Fetch spec
+        'forbidden-header = "Accept-Encoding:" OWS Accept-Encoding OWS / "Access-Control-Request-Headers:" OWS Access-Control-Request-Headers OWS / Access-Control-Request-Method:" OWS Access-Control-Request-Method OWS / "Origin:" OWS Origin OWS / "Sec-CH-UA:" OWS Sec-CH-UA OWS / "Sec-Fetch-Dest:" OWS Sec-Fetch-Dest OWS / "Sec-Fetch-Mode:" OWS Sec-Fetch-Mode OWS / "Sec-Fetch-Site:" OWS Sec-Fetch-Site OWS / "Sec-Fetch-User:" OWS Sec-Fetch-User OWS',
+        # Mainly sourced from RFC 9110; not including response headers
+        'rfc9110-header = "Accept:" OWS Accept OWS / "Accept-Language:" OWS Accept-Language OWS / "Authorization:" OWS Authorization OWS / "Connection:" OWS Connection OWS / "Content-Encoding:" OWS Content-Encoding OWS / "Content-Language:" OWS Content-Language OWS / "Content-Length:" OWS Content-Length OWS / "Content-Range:" OWS Content-Range OWS / "Content-Type:" OWS Content-Type OWS / "Date:" OWS Date OWS / "Expect:" OWS Expect OWS / "From:" OWS From OWS / "Host:" OWS Host OWS / "If-Match:" OWS If-Match OWS / "If-Modified-Since:" OWS If-Modified-Since OWS / "If-None-Match:" OWS If-None-Match OWS / "If-Range:" OWS If-Range OWS / "If-Unmodified-Since:" OWS If-Unmodified-Since OWS / "Keep-Alive:" OWS Keep-Alive OWS / "Location:" OWS Location OWS / "Max-Forwards:" OWS Max-Forwards OWS / "Proxy-Authentication-Info:" OWS Proxy-Authentication-Info OWS / "Proxy-Authorization:" OWS Proxy-Authorization OWS / "Range:" OWS Range OWS / "Referer:" OWS Referer OWS / "Retry-After:" OWS Retry-After OWS / "TE:" OWS TE OWS / "Upgrade:" OWS Upgrade OWS / "User-Agent:" OWS User-Agent OWS / "Via:" OWS Via OWS / "WWW-Authenticate:" OWS WWW-Authenticate OWS',
+        # rfc 9111 headers follow
+        'rfc9111-header = "Age: " OWS Age OWS / "Cache-Control:" OWS Cache-Control OWS',
+        # https://www.rfc-editor.org/rfc/rfc7239#section-4
+        Forwarded   = 1#forwarded-element
+
+       'forwarded-element = [ forwarded-pair ] *( ";" [ forwarded-pair ] )',
+       'forwarded-pair = token "=" value',
+       "value          = token / quoted-string",
+        # https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Keep-Alive
+        # https://httpwg.org/specs/rfc9112.html#compatibility.with.http.1.0.persistent.connections
+        "Keep-Alive = TODO",
+        # https://w3c.github.io/webappsec-fetch-metadata/#sec-fetch-dest-header
+        "Sec-Fetch-Dest = TODO",
+        # https://w3c.github.io/webappsec-fetch-metadata/#sec-fetch-mode-header
+        "Sec-Fetch-Mode = TODO",
+        # https://w3c.github.io/webappsec-fetch-metadata/#sec-fetch-site-header
+        "Sec-Fetch-Site = TODO",
+        # https://w3c.github.io/webappsec-fetch-metadata/#sec-fetch-user-header
+        "Sec-Fetch-User = TODO",
+        # https://w3c.github.io/ServiceWorker/#handle-fetch
+        "Service-Worker-Navigation-Preload = TODO",
+        # https://httpwg.org/specs/rfc9112.html#field.transfer-encoding
+        "Transfer-Encoding = TODO",
+        # https://w3c.github.io/webappsec-upgrade-insecure-requests/#preference
+        "Upgrade-Insecure-Requests = TODO",
+        # https://datatracker.ietf.org/doc/html/draft-ietf-httpbis-digest-headers#section-4
+        "Want-Digest = TODO",
     ]
 
 
