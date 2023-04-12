@@ -230,7 +230,7 @@ class Http11RequestGrammar(Rule):
         # https://w3c.github.io/webappsec-fetch-metadata/#sec-fetch-dest-header
         'Sec-Fetch-Dest = "audio" / "audioworklet" / "document" / "embed" / "empty" / "font" / "frame" / "iframe" / "image" / "manifest" / "object" / "paintworklet" / "report" / "script" / "serviceworker" / "sharedworker" / "style" / "track" / "video" / "worker" / "xslt"',
         # https://w3c.github.io/webappsec-fetch-metadata/#sec-fetch-mode-header
-        "Sec-Fetch-Mode = TODO",
+        'Sec-Fetch-Mode = "cors" / "navigate" / "no-cors" / "same-origin" / "websocket"',
         # https://w3c.github.io/webappsec-fetch-metadata/#sec-fetch-site-header
         "Sec-Fetch-Site = TODO",
         # https://w3c.github.io/webappsec-fetch-metadata/#sec-fetch-user-header
