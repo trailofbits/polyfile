@@ -232,7 +232,7 @@ class Http11RequestGrammar(Rule):
         # https://w3c.github.io/webappsec-fetch-metadata/#sec-fetch-mode-header
         'Sec-Fetch-Mode = "cors" / "navigate" / "no-cors" / "same-origin" / "websocket"',
         # https://w3c.github.io/webappsec-fetch-metadata/#sec-fetch-site-header
-        "Sec-Fetch-Site = TODO",
+        'Sec-Fetch-Site = "cross-site" / "same-origin" / "same-site" / "none"',
         # https://w3c.github.io/webappsec-fetch-metadata/#sec-fetch-user-header
         "Sec-Fetch-User = TODO",
         # https://w3c.github.io/ServiceWorker/#handle-fetch
