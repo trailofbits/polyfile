@@ -239,9 +239,11 @@ class Http11RequestGrammar(Rule):
         # https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Service-Worker-Navigation-Preload
         'Service-Worker-Navigation-Preload = "true" / token / quoted-string',
         # https://httpwg.org/specs/rfc9112.html#field.transfer-encoding
-        "Transfer-Encoding = TODO",
+        # TODO express without the '#' if needed
+        "Transfer-Encoding = #transfer-coding",
         # https://w3c.github.io/webappsec-upgrade-insecure-requests/#preference
-        "Upgrade-Insecure-Requests = TODO",
+        # https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Upgrade-Insecure-Requests
+        'Upgrade-Insecure-Requests = "1"',
         # https://datatracker.ietf.org/doc/html/draft-ietf-httpbis-digest-headers#section-4
         "Want-Digest = TODO",
     ]
