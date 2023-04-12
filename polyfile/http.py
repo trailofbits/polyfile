@@ -195,6 +195,7 @@ class Http11RequestGrammar(Rule):
         # https://developer.mozilla.org/en-US/docs/Glossary/Forbidden_header_name - includes Fetch spec
         'forbidden-header = "Accept-Encoding:" OWS Accept-Encoding OWS / "Access-Control-Request-Headers:" OWS Access-Control-Request-Headers OWS / Access-Control-Request-Method:" OWS Access-Control-Request-Method OWS / "Origin:" OWS Origin OWS / "Sec-CH-UA:" OWS Sec-CH-UA OWS / "Sec-Fetch-Dest:" OWS Sec-Fetch-Dest OWS / "Sec-Fetch-Mode:" OWS Sec-Fetch-Mode OWS / "Sec-Fetch-Site:" OWS Sec-Fetch-Site OWS / "Sec-Fetch-User:" OWS Sec-Fetch-User OWS',
         # Mainly sourced from RFC 9110; not including response headers
+        # TODO split these into hop-by-hop and end-to-end
         'rfc9110-header = "Accept:" OWS Accept OWS / "Accept-Language:" OWS Accept-Language OWS / "Authorization:" OWS Authorization OWS / "Connection:" OWS Connection OWS / "Content-Encoding:" OWS Content-Encoding OWS / "Content-Language:" OWS Content-Language OWS / "Content-Length:" OWS Content-Length OWS / "Content-Range:" OWS Content-Range OWS / "Content-Type:" OWS Content-Type OWS / "Date:" OWS Date OWS / "Expect:" OWS Expect OWS / "From:" OWS From OWS / "Host:" OWS Host OWS / "If-Match:" OWS If-Match OWS / "If-Modified-Since:" OWS If-Modified-Since OWS / "If-None-Match:" OWS If-None-Match OWS / "If-Range:" OWS If-Range OWS / "If-Unmodified-Since:" OWS If-Unmodified-Since OWS / "Keep-Alive:" OWS Keep-Alive OWS / "Location:" OWS Location OWS / "Max-Forwards:" OWS Max-Forwards OWS / "Proxy-Authentication-Info:" OWS Proxy-Authentication-Info OWS / "Proxy-Authorization:" OWS Proxy-Authorization OWS / "Range:" OWS Range OWS / "Referer:" OWS Referer OWS / "Retry-After:" OWS Retry-After OWS / "TE:" OWS TE OWS / "Upgrade:" OWS Upgrade OWS / "User-Agent:" OWS User-Agent OWS / "Via:" OWS Via OWS / "WWW-Authenticate:" OWS WWW-Authenticate OWS',
         # rfc 9111 headers follow
         'rfc9111-header = "Age: " OWS Age OWS / "Cache-Control:" OWS Cache-Control OWS',
@@ -205,7 +206,11 @@ class Http11RequestGrammar(Rule):
         "value          = token / quoted-string",
         # https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Keep-Alive
         # https://httpwg.org/specs/rfc9112.html#compatibility.with.http.1.0.persistent.connections
-        "Keep-Alive = TODO",
+        # https://www.rfc-editor.org/rfc/rfc2068.html#section-19.7.1
+        'Keep-Alive = keepalive-param *( OWS "," OWS keepalive-param )',
+        'keepalive-param = param-name "=" value',
+        # param-name is a best guess, it doesn't seem to be explicitly defined
+        "param-name = token / quoted-string",
         # https://w3c.github.io/webappsec-fetch-metadata/#sec-fetch-dest-header
         "Sec-Fetch-Dest = TODO",
         # https://w3c.github.io/webappsec-fetch-metadata/#sec-fetch-mode-header
