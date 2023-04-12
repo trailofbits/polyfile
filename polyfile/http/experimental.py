@@ -3,10 +3,7 @@ from abnf.grammars import rfc9110, rfc3986
 from abnf import Rule as _Rule
 from typing import List, Tuple
 
-inherited_rulelist: List[Tuple[str, _Rule]] = []
 
-
-@load_grammar_rules(inherited_rulelist)
 class Rule(_Rule):
     """Request headers defined as 'experimental' by the Mozilla developer documentation, which have partial cross browser support.
 
