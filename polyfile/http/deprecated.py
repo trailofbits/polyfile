@@ -23,7 +23,7 @@ class Rule(_Rule):
         # all deprecated headers follow (regardless of context or spec)
         'deprecated-header = "Accept-Charset:" OWS Accept-Charset OWS / "Authentication-Info:" OWS Authentication-Info OWS / "DNT:" OWS DNT OWS / "DPR:" OWS DPR OWS / "Expect-CT:" OWS Expect-CT OWS / "Pragma:" OWS Pragma OWS / "Sec-CH-UA-Full-Version:" OWS Sec-CH-UA-Full-Version OWS / "Viewport-Width:" OWS Viewport-Width OWS / "Warning:" OWS Warning OWS / "Width:" OWS Width OWS',
         # https://www.w3.org/TR/tracking-dnt/#dnt-header-field
-        "DNT = ( "0" / "1" ) *DNT-extension",
+        'DNT = ( "0" / "1" ) *DNT-extension',
         # DNT-extension excludes CTL, SP, DQUOTE, comma, backslash
         "DNT-extension = %x21 / %x23-2B / %x2D-5B / %x5D-7E",
         # https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/DPR
@@ -51,4 +51,4 @@ class Rule(_Rule):
         # https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Width
         # The width of the resource in physical pixels, rounded up to the nearest integer.
         "Width = 1*DIGIT",
-      ]
+    ]
