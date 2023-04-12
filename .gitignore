@@ -4,3 +4,5 @@ poyfile/trie_full.gz
 polyfile/trie_partial.gz
 ~*
 *.pyc
+.vscode/
+.vscode/*
