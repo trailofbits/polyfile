@@ -12,7 +12,7 @@ inherited_rulelist: List[Tuple[str, _Rule]] = [
 
 @load_grammar_rules(inherited_rulelist)
 class Rule(_Rule):
-    """A place to define headers which do not have an RFC or other standard, but are in common use. As linked, these definitions are primarily based on Mozilla documentation for now.
+    """A place to define *hop-by-hop* headers which do not have an RFC or other standard, but are in common use. As linked, these definitions are primarily based on Mozilla documentation for now.
 
     These are highly worth parsing and examining since they can be spoofed and are untrustworthy if not added by a reverse proxy on a hop-by-hop request path.
 

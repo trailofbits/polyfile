@@ -96,7 +96,7 @@ request_rulelist: List[Tuple[str, Rule]] = [
     ("complete-length", rfc9110.Rule("complete-length")),
     ("connection-option", rfc9110.Rule("connection-option")),
     ("content-coding", rfc9110.Rule("content-coding")),
-    ("cookie-header", rfc6265.Rule("cookie-header")),
+    ("cookie-string", rfc6265.Rule("cookie-string")),
     ("credentials", rfc9110.Rule("credentials")),
     ("ctext", rfc9110.Rule("ctext")),
     ("date1", rfc9110.Rule("date1")),
@@ -208,14 +208,13 @@ class Http11RequestGrammar(Rule):
     """
     grammar: List[str] = [
         "request = method SP absolute-path SP protocol CR LF 1*( header CR LF )",
-        'header = forbidden-header / rfc9110-header / rfc9111-header / defacto-header / deprecated-header / experimental-header / cookie-header / "Forwarded:" OWS Forwarded OWS / "Service-Worker-Navigation-Preload:" OWS Service-Worker-Navigation-Preload OWS / "Transfer-Encoding:" OWS Transfer-Encoding OWS / "Upgrade-Insecure-Requests:" OWS Upgrade-Insecure-Requests OWS / "Want-Digest:" OWS Want-Digest OWS',
-        # https://developer.mozilla.org/en-US/docs/Glossary/Forbidden_header_name - includes Fetch spec
-        'forbidden-header = "Accept-Encoding:" OWS Accept-Encoding OWS / "Access-Control-Request-Headers:" OWS Access-Control-Request-Headers OWS / Access-Control-Request-Method:" OWS Access-Control-Request-Method OWS / "Origin:" OWS Origin OWS / "Sec-CH-UA:" OWS Sec-CH-UA OWS / "Sec-Fetch-Dest:" OWS Sec-Fetch-Dest OWS / "Sec-Fetch-Mode:" OWS Sec-Fetch-Mode OWS / "Sec-Fetch-Site:" OWS Sec-Fetch-Site OWS / "Sec-Fetch-User:" OWS Sec-Fetch-User OWS',
-        # Mainly sourced from RFC 9110; not including response headers
-        # TODO split these into hop-by-hop and end-to-end
-        'rfc9110-header = "Accept:" OWS Accept OWS / "Accept-Language:" OWS Accept-Language OWS / "Authorization:" OWS Authorization OWS / "Connection:" OWS Connection OWS / "Content-Encoding:" OWS Content-Encoding OWS / "Content-Language:" OWS Content-Language OWS / "Content-Length:" OWS Content-Length OWS / "Content-Range:" OWS Content-Range OWS / "Content-Type:" OWS Content-Type OWS / "Date:" OWS Date OWS / "Expect:" OWS Expect OWS / "From:" OWS From OWS / "Host:" OWS Host OWS / "If-Match:" OWS If-Match OWS / "If-Modified-Since:" OWS If-Modified-Since OWS / "If-None-Match:" OWS If-None-Match OWS / "If-Range:" OWS If-Range OWS / "If-Unmodified-Since:" OWS If-Unmodified-Since OWS / "Keep-Alive:" OWS Keep-Alive OWS / "Location:" OWS Location OWS / "Max-Forwards:" OWS Max-Forwards OWS / "Proxy-Authentication-Info:" OWS Proxy-Authentication-Info OWS / "Proxy-Authorization:" OWS Proxy-Authorization OWS / "Range:" OWS Range OWS / "Referer:" OWS Referer OWS / "Retry-After:" OWS Retry-After OWS / "TE:" OWS TE OWS / "Upgrade:" OWS Upgrade OWS / "User-Agent:" OWS User-Agent OWS / "Via:" OWS Via OWS / "WWW-Authenticate:" OWS WWW-Authenticate OWS',
-        # rfc 9111 headers follow
-        'rfc9111-header = "Age: " OWS Age OWS / "Cache-Control:" OWS Cache-Control OWS',
+        "header = hop-by-hop-header / end-to-end-header / caching-header / deprecated-header / experimental-header",
+        # Added by proxies (forward and reverse) generally; mainly sourced from RFC 9110; not including response headers
+        'hop-by-hop-header = "Connection:" OWS Connection OWS / "Forwarded:" OWS Forwarded OWS / "Keep-Alive:" OWS Keep-Alive OWS / "Proxy-Authenticate:" OWS Proxy-Authenticate OWS / "Proxy-Authorization:" OWS Proxy-Authorization OWS / "TE:" OWS TE OWS / "Trailers:" OWS Trailers OWS / "Transfer-Encoding:" OWS Transfer-Encoding OWS / "Upgrade:" OWS Upgrade OWS / "Via:" OWS Via OWS / defacto-header',
+        # Mainly sourced from RFC 9110 (but also includes eg RFC 6265 for cookies, and others); not including response headers
+        'end-to-end-header = "Accept:" OWS Accept OWS / "Accept-Encoding:" OWS Accept-Encoding OWS / "Accept-Language:" OWS Accept-Language OWS / "Access-Control-Request-Headers:" OWS Access-Control-Request-Headers OWS / Access-Control-Request-Method:" OWS Access-Control-Request-Method OWS / "Authorization:" OWS Authorization OWS /  "Content-Encoding:" OWS Content-Encoding OWS / "Content-Language:" OWS Content-Language OWS / "Content-Length:" OWS Content-Length OWS / "Content-Range:" OWS Content-Range OWS / "Content-Type:" OWS Content-Type OWS / "Cookie:" OWS cookie-string OWS / "Date:" OWS Date OWS / "Expect:" OWS Expect OWS / "From:" OWS From OWS / "Host:" OWS Host OWS / "If-Match:" OWS If-Match OWS / "If-Modified-Since:" OWS If-Modified-Since OWS / "If-None-Match:" OWS If-None-Match OWS / "If-Range:" OWS If-Range OWS / "If-Unmodified-Since:" OWS If-Unmodified-Since OWS / "Location:" OWS Location OWS / "Max-Forwards:" OWS Max-Forwards OWS / "Origin:" OWS Origin OWS / "Proxy-Authentication-Info:" OWS Proxy-Authentication-Info OWS /  / "Range:" OWS Range OWS / "Referer:" OWS Referer OWS / "Retry-After:" OWS Retry-After OWS / "Sec-CH-UA:" OWS Sec-CH-UA OWS / "Sec-Fetch-Dest:" OWS Sec-Fetch-Dest OWS / "Sec-Fetch-Mode:" OWS Sec-Fetch-Mode OWS / "Sec-Fetch-Site:" OWS Sec-Fetch-Site OWS / "Sec-Fetch-User:" OWS Sec-Fetch-User OWS / "Service-Worker-Navigation-Preload:" OWS Service-Worker-Navigation-Preload OWS / "Upgrade-Insecure-Requests:" OWS Upgrade-Insecure-Requests OWS / "User-Agent:" OWS User-Agent OWS / "Want-Digest:" OWS Want-Digest OWS / "WWW-Authenticate:" OWS WWW-Authenticate OWS',
+        # rfc 9111 (caching) headers follow
+        'caching-header = "Age: " OWS Age OWS / "Cache-Control:" OWS Cache-Control OWS',
         # https://www.rfc-editor.org/rfc/rfc7239#section-4
         'Forwarded = forwarded-element *( OWS "," OWS forwarded-element )',
         'forwarded-element = [ forwarded-pair ] *( ";" [ forwarded-pair ] )',
@@ -247,6 +246,7 @@ class Http11RequestGrammar(Rule):
         'Upgrade-Insecure-Requests = "1"',
         # https://datatracker.ietf.org/doc/html/draft-ietf-httpbis-digest-headers#section-4
         # https://http.dev/want-digest
+        # TODO express without the '#' if needed
         "Want-Digest = 1#want-digest-value",
         'want-digest-value = digest-algorithm [ ";" "q" "=" qvalue]',
         'qvalue = ( "0" [ "." 0*1DIGIT ] ) / ( "1" [ "." 0*1( "0" ) ] )',
