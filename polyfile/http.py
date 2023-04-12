@@ -188,7 +188,6 @@ class Http11RequestGrammar(Rule):
     # todo ensure no response headers are allowed in the request grammar
     """
      RFC 2616: The following HTTP/1.1 headers are hop-by-hop headers:
-
        - Connection
        - Keep-Alive
        - Proxy-Authenticate
@@ -237,8 +236,8 @@ class Http11RequestGrammar(Rule):
         # https://w3c.github.io/webappsec-fetch-metadata/#sec-fetch-user-header
         # https://docs.w3cub.com/http/headers/sec-fetch-user.html
         "Sec-Fetch-User = ?1",
-        # https://w3c.github.io/ServiceWorker/#handle-fetch
-        "Service-Worker-Navigation-Preload = TODO",
+        # https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Service-Worker-Navigation-Preload
+        'Service-Worker-Navigation-Preload = "true" / token / quoted-string',
         # https://httpwg.org/specs/rfc9112.html#field.transfer-encoding
         "Transfer-Encoding = TODO",
         # https://w3c.github.io/webappsec-upgrade-insecure-requests/#preference
