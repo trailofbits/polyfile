@@ -188,6 +188,8 @@ class Http11RequestGrammar(Rule):
     # todo ensure no response headers are allowed in the request grammar
     grammar: List[str] = [
         # how header fields generally get structured: https://www.rfc-editor.org/rfc/rfc7230#section-3.2
+        # also helpful: https://www.rfc-editor.org/rfc/rfc5234 which describes how ABNF for syntax specifications works
+        # and https://www.rfc-editor.org/rfc/rfc9110#section-5.6.1 (pound sign definition for ABNF in e.g. Forwarded header RFC7239)
         "request = method SP absolute-path SP protocol CR LF 1*( header CR LF )",
         'header = forbidden-header / rfc9110-header / rfc9111-header / defacto-header / deprecated-header / experimental-header / cookie-header / "Forwarded:" OWS Forwarded OWS / "Service-Worker-Navigation-Preload:" OWS Service-Worker-Navigation-Preload OWS / "Transfer-Encoding:" OWS Transfer-Encoding OWS / "Upgrade-Insecure-Requests:" OWS Upgrade-Insecure-Requests OWS / "Want-Digest:" OWS Want-Digest OWS',
         # https://developer.mozilla.org/en-US/docs/Glossary/Forbidden_header_name - includes Fetch spec
@@ -197,11 +199,10 @@ class Http11RequestGrammar(Rule):
         # rfc 9111 headers follow
         'rfc9111-header = "Age: " OWS Age OWS / "Cache-Control:" OWS Cache-Control OWS',
         # https://www.rfc-editor.org/rfc/rfc7239#section-4
-        Forwarded   = 1#forwarded-element
-
-       'forwarded-element = [ forwarded-pair ] *( ";" [ forwarded-pair ] )',
-       'forwarded-pair = token "=" value',
-       "value          = token / quoted-string",
+        'Forwarded = forwarded-element *( OWS "," OWS forwarded-element )',
+        'forwarded-element = [ forwarded-pair ] *( ";" [ forwarded-pair ] )',
+        'forwarded-pair = token "=" value',
+        "value          = token / quoted-string",
         # https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Keep-Alive
         # https://httpwg.org/specs/rfc9112.html#compatibility.with.http.1.0.persistent.connections
         "Keep-Alive = TODO",
