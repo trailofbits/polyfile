@@ -11,7 +11,7 @@ from abnf.grammars import (
 )
 from abnf import Rule, parser, Node
 
-from .polyfile.http import defacto, deprecated, experimental
+from .http import defacto, deprecated, experimental
 
 from .polyfile import register_parser, InvalidMatch, Submatch
 

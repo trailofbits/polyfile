@@ -1,5 +1,5 @@
 from unittest import TestCase
-from polyfile.http import Http11RequestGrammar, HttpVisitor
+from polyfile.http_11 import Http11RequestGrammar, HttpVisitor
 from abnf.parser import Node
 
 
