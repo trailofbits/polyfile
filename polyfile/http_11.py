@@ -31,9 +31,10 @@ from typing import List, Tuple
 # Sample captures from WireShark: https://wiki.wireshark.org/SampleCaptures
 # "the ultimate PCAP" https://weberblog.net/the-ultimate-pcap/
 
-# Note that the rfc9110.py class doesn't include all needed rules other specs and is missing HTTP headers used in practice but not defined in spec.
-# NodeVisitor#visit() replaces all dashes with underscores.
+# The rfc9110.py class doesn't include all needed rules other specs and is missing HTTP headers used in practice but not defined in spec.
+# NodeVisitor#visit() replaces all dashes here with underscores.
 # RESPONSE headers in RFC 9110 are NOT included here.
+# None of these RFCs really define HTTP request body. That is TODO.
 request_rulelist: List[Tuple[str, Rule]] = [
     ("Accept", rfc9110.Rule("Accept")),
     ("Accept-Encoding", rfc9110.Rule("Accept-Encoding")),
