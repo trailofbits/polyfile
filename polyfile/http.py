@@ -186,10 +186,26 @@ request_rulelist: List[Tuple[str, Rule]] = [
 @load_grammar_rules(request_rulelist)
 class Http11RequestGrammar(Rule):
     # todo ensure no response headers are allowed in the request grammar
+    """
+     RFC 2616: The following HTTP/1.1 headers are hop-by-hop headers:
+
+       - Connection
+       - Keep-Alive
+       - Proxy-Authenticate
+       - Proxy-Authorization
+       - TE
+       - Trailers
+       - Transfer-Encoding
+       - Upgrade
+
+    All other headers defined by HTTP/1.1 are end-to-end headers.
+
+    References
+       - How header fields generally get structured: https://www.rfc-editor.org/rfc/rfc7230#section-3.2
+       - Also helpful: https://www.rfc-editor.org/rfc/rfc5234 which describes how ABNF for syntax specifications works
+       - And https://www.rfc-editor.org/rfc/rfc9110#section-5.6.1 (pound sign definition for ABNF in e.g. Forwarded header RFC7239)
+    """
     grammar: List[str] = [
-        # how header fields generally get structured: https://www.rfc-editor.org/rfc/rfc7230#section-3.2
-        # also helpful: https://www.rfc-editor.org/rfc/rfc5234 which describes how ABNF for syntax specifications works
-        # and https://www.rfc-editor.org/rfc/rfc9110#section-5.6.1 (pound sign definition for ABNF in e.g. Forwarded header RFC7239)
         "request = method SP absolute-path SP protocol CR LF 1*( header CR LF )",
         'header = forbidden-header / rfc9110-header / rfc9111-header / defacto-header / deprecated-header / experimental-header / cookie-header / "Forwarded:" OWS Forwarded OWS / "Service-Worker-Navigation-Preload:" OWS Service-Worker-Navigation-Preload OWS / "Transfer-Encoding:" OWS Transfer-Encoding OWS / "Upgrade-Insecure-Requests:" OWS Upgrade-Insecure-Requests OWS / "Want-Digest:" OWS Want-Digest OWS',
         # https://developer.mozilla.org/en-US/docs/Glossary/Forbidden_header_name - includes Fetch spec
@@ -212,7 +228,7 @@ class Http11RequestGrammar(Rule):
         # param-name is a best guess, it doesn't seem to be explicitly defined
         "param-name = token / quoted-string",
         # https://w3c.github.io/webappsec-fetch-metadata/#sec-fetch-dest-header
-        "Sec-Fetch-Dest = TODO",
+        'Sec-Fetch-Dest = "audio" / "audioworklet" / "document" / "embed" / "empty" / "font" / "frame" / "iframe" / "image" / "manifest" / "object" / "paintworklet" / "report" / "script" / "serviceworker" / "sharedworker" / "style" / "track" / "video" / "worker" / "xslt"',
         # https://w3c.github.io/webappsec-fetch-metadata/#sec-fetch-mode-header
         "Sec-Fetch-Mode = TODO",
         # https://w3c.github.io/webappsec-fetch-metadata/#sec-fetch-site-header
