@@ -83,6 +83,7 @@ request_rulelist: List[Tuple[str, Rule]] = [
     ("cookie-string", rfc6265.Rule("cookie-string")),
     ("defacto-header", defacto.Rule("defacto-header")),
     ("deprecated-header", deprecated.Rule("deprecated-header")),
+    ("experimental-header", experimental.Rule("experimental-header")),
     # TODO I think these will be useful for body rules?
     # ("parameter", rfc9110.Rule("parameter")),
     # ("parameter-name", rfc9110.Rule("parameter-name")),
@@ -92,6 +93,7 @@ request_rulelist: List[Tuple[str, Rule]] = [
     ("protocol", rfc9110.Rule("protocol")),
     ("protocol-name", rfc9110.Rule("protocol-name")),
     ("protocol-version", rfc9110.Rule("protocol-version")),
+    # ("sh-boolean", experimental.Rule("sh-boolean")),
     ("token", rfc9110.Rule("token")),
     ("token68", rfc9110.Rule("token68")),
     ("transfer-coding", rfc9110.Rule("transfer-coding")),
