@@ -27,8 +27,25 @@ class Rule(_Rule):
         'ECT = "2g" / "3g" / "4g" / "slow-2g"',
         # https://wicg.github.io/netinfo/#rtt-request-header-field
         "RTT = TODO",
-        # https://wicg.github.io/savedata/#save-data-request-header-field TODO Structured Headers RFC for sh-list
+        # https://datatracker.ietf.org/doc/html/draft-ietf-httpbis-header-structure-15
+        # https://wicg.github.io/savedata/#save-data-request-header-field follows the Structured Headers RFC for sh-list (TODO kaoudis: move structured headers abnf to its own file)
         'Save-Data = "on" / sh-list',
+        'sh-list = list-member *( *SP "," *SP list-member )',
+        "list-member = sh-item / inner-list",
+        'inner-list    = "(" *SP [ sh-item *( 1*SP sh-item ) *SP ] ")" *parameter',
+        "sh-item   = bare-item *parameter",
+        "bare-item = sh-integer / sh-decimal / sh-string / sh-token / sh-binary / sh-boolean",
+        'sh-integer = ["-"] 1*15DIGIT',
+        'sh-decimal  = ["-"] 1*12DIGIT "." 1*3DIGIT',
+        "sh-string = DQUOTE *(chr) DQUOTE",
+        "chr       = unescaped / escaped",
+        "unescaped = %x20-21 / %x23-5B / %x5D-7E",
+        'escaped   = "" ( DQUOTE / "" )',
+        'sh-token = ( ALPHA / "\*" ) *( tchar / ":" / "/" )',
+        'sh-binary = ":" *(base64) ":"',
+        'base64    = ALPHA / DIGIT / "+" / "/" / "="',
+        'sh-boolean = "?" boolean',
+        'boolean    = "0" / "1"',
         # https://wicg.github.io/user-preference-media-features-headers/#sec-ch-prefers-reduced-motion
         "Sec-CH-Prefers-Reduced-Motion = TODO",
         # https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Sec-CH-UA
