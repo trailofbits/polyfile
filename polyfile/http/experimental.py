@@ -29,7 +29,7 @@ class Rule(_Rule):
         # https://wicg.github.io/netinfo/#ect-request-header-field
         'ECT = "2g" / "3g" / "4g" / "slow-2g"',
         # https://wicg.github.io/netinfo/#rtt-request-header-field
-        "RTT = TODO",
+        "RTT = 1*DIGIT",
         # https://datatracker.ietf.org/doc/html/draft-ietf-httpbis-header-structure-15
         # https://wicg.github.io/savedata/#save-data-request-header-field TODO Structured Headers RFC for sh-list
         'Save-Data = "on" / sh-list',
