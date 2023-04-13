@@ -138,7 +138,7 @@ class Http11RequestGrammar(Rule):
         # Mainly sourced from RFC 9110 (but also includes eg RFC 6265 for cookies, and others); not including response headers
         'end-to-end-header = "Accept:" OWS Accept OWS / "Accept-Encoding:" OWS Accept-Encoding OWS / "Accept-Language:" OWS Accept-Language OWS / "Access-Control-Request-Headers:" OWS Access-Control-Request-Headers OWS / "Access-Control-Request-Method:" OWS Access-Control-Request-Method OWS / "Authorization:" OWS Authorization OWS / "Content-Encoding:" OWS Content-Encoding OWS / "Content-Language:" OWS Content-Language OWS / "Content-Length:" OWS Content-Length OWS / "Content-Range:" OWS Content-Range OWS / "Content-Type:" OWS Content-Type OWS / "Cookie:" OWS cookie-string OWS / "Date:" OWS Date OWS / "Expect:" OWS Expect OWS / "From:" OWS From OWS / "Host:" OWS Host OWS / "If-Match:" OWS If-Match OWS / "If-Modified-Since:" OWS If-Modified-Since OWS / "If-None-Match:" OWS If-None-Match OWS / "If-Range:" OWS If-Range OWS / "If-Unmodified-Since:" OWS If-Unmodified-Since OWS / "Location:" OWS Location OWS / "Max-Forwards:" OWS Max-Forwards OWS / "Range:" OWS Range OWS / "Referer:" OWS Referer OWS / "Retry-After:" OWS Retry-After OWS / "Sec-CH-UA:" OWS Sec-CH-UA OWS / "Sec-Fetch-Dest:" OWS Sec-Fetch-Dest OWS / "Sec-Fetch-Mode:" OWS Sec-Fetch-Mode OWS / "Sec-Fetch-Site:" OWS Sec-Fetch-Site OWS / "Sec-Fetch-User:" OWS Sec-Fetch-User OWS / "Service-Worker-Navigation-Preload:" OWS Service-Worker-Navigation-Preload OWS / "Upgrade-Insecure-Requests:" OWS Upgrade-Insecure-Requests OWS / "User-Agent:" OWS User-Agent OWS / "Want-Digest:" OWS Want-Digest OWS / "WWW-Authenticate:" OWS WWW-Authenticate OWS',
         # rfc 9111 (caching) request headers follow
-        'caching-header = "Age: " OWS Age OWS / "Cache-Control:" OWS Cache-Control OWS',
+        'caching-header = "Age:" OWS Age OWS / "Cache-Control:" OWS Cache-Control OWS',
         # TODO kaoudis this is a placeholder for all the other stuff? this might not play nice with responses / if this grammar is used to parse responses, everything responsewise might end up in here
         'unknown-or-bespoke-header = token ":" OWS token OWS',
         # https://developer.mozilla.org/en-US/docs/Web/HTTP/Methods
@@ -190,57 +190,25 @@ class HttpVisitor(parser.NodeVisitor):
 
     def __init__(self):
         super().__init__()
-        self.content_coding: List[str] = []
+        self.content_encoding: List[str] = []
         self.content_length: int
-        self.t_codings: List[str] = []
+        self.transfer_encoding: str
         self.uri_host: str
         self.uri_port: int
+        self.body: str
 
     def visit_Content_Encoding(self, node: Node):
-        """
-        Walks the section of the AST which is defined by the following RFC 9110 ABNF:
-        Content-Encoding  = [ content-coding *( OWS "," OWS content-coding ) ]
-        content-coding    = token
-        token             = 1*tchar
-        tchar             = "!" / "#" / "$" / "%" / "&" / "'" / "*" / "+" / "-" / "." / "^" / "_" / "`" / "|" / "~" / DIGIT / ALPHA
-        OWS               = *( SP / HTAB )
-
-        SP                =  %x20
-        HTAB              =  %x09 ; horizontal tab
-        DIGIT             =  %x30-39 ; 0-9
-        ALPHA             =  %x41-5A / %x61-7A ; A-Z / a-z
-        """
         for child in node.children:
+            print("Content-Encoding CHILD VALUE" + child.value)
             self.visit(child)
 
     def visit_content_coding(self, node: Node):
-        self.content_coding.append(node.value)
+        self.content_encoding = node.value
 
     def visit_Content_Length(self, node: Node):
-        """
-        Walks the section of the AST which is defined by the following RFC 9110 ABNF:
-        Content-Length    = 1*DIGIT
-        DIGIT             =  %x30-39 ; 0-9
-        """
         self.content_length = int(node.value)
 
     def visit_TE(self, node: Node):
-        """
-        Walks the section of the AST which is defined by the following RFC 9110 ABNF:
-        TE                 = #t-codings
-        t-codings          = "trailers" / ( transfer-coding [ weight ] )
-        transfer-coding    = token *( OWS ";" OWS transfer-parameter )
-        transfer-parameter = token BWS "=" BWS ( token / quoted-string )
-        token             = 1*tchar
-        tchar             = "!" / "#" / "$" / "%" / "&" / "'" / "*" / "+" / "-" / "." / "^" / "_" / "`" / "|" / "~" / DIGIT / ALPHA
-        weight = OWS ";" OWS "q=" qvalue
-        BWS = OWS
-        OWS = *( SP / HTAB )
-        SP                =  %x20
-        HTAB              =  %x09 ; horizontal tab
-        DIGIT             =  %x30-39 ; 0-9
-        ALPHA             =  %x41-5A / %x61-7A ; A-Z / a-z
-        """
         for child in node.children:
             self.visit(child)
 
@@ -248,44 +216,6 @@ class HttpVisitor(parser.NodeVisitor):
         self.t_codings.append(node.value)
 
     def visit_Host(self, node: Node):
-        """
-        Walks the section of the AST which 1. is defined by the following RFC 9110 ABNF:
-        Host     = uri-host [ ":" port ]
-        uri-host = <host, see [URI], Section 3.2.2>
-        port     = <port, see [URI], Section 3.2.3>
-
-        (The definitions of "URI-reference", "absolute-URI", "relative-part", "authority", "port", "host", "path-abempty", "segment", and "query" are adopted from the URI generic syntax.)
-
-        and 2. by the following RFC 3986 ABNF:
-        host          = IP-literal / IPv4address / reg-name
-        IP-literal    = "[" ( IPv6address / IPvFuture  ) "]"
-        IPv4address   = dec-octet "." dec-octet "." dec-octet "." dec-octet
-        IPvFuture     = "v" 1*HEXDIG "." 1*( unreserved / sub-delims / ":" )
-        IPv6address   = 6( h16 ":" ) ls32
-                   / "::" 5( h16 ":" ) ls32
-                   / [ h16 ] "::" 4( h16 ":" ) ls32
-                   / [ *1( h16 ":" ) h16 ] "::" 3( h16 ":" ) ls32
-                   / [ *2( h16 ":" ) h16 ] "::" 2( h16 ":" ) ls32
-                   / [ *3( h16 ":" ) h16 ] "::" h16 ":" ls32
-                   / [ *4( h16 ":" ) h16 ] "::" ls32
-                   / [ *5( h16 ":" ) h16 ] "::" h16
-                   / [ *6( h16 ":" ) h16 ] "::"
-        dec-octet     = DIGIT                 ; 0-9
-                   / %x31-39 DIGIT         ; 10-99
-                   / "1" 2DIGIT            ; 100-199
-                   / "2" %x30-34 DIGIT     ; 200-249
-                   / "25" %x30-35          ; 250-255
-
-        reg-name      = *( unreserved / pct-encoded / sub-delims )
-        pct-encoded   = "%" HEXDIG HEXDIG
-
-        unreserved    = ALPHA / DIGIT / "-" / "." / "_" / "~"
-        sub-delims    = "!" / "$" / "&" / "'" / "(" / ")" / "*" / "+" / "," / ";" / "="
-        port  = *DIGIT
-        HEXDIG            = DIGIT / "A" / "B" / "C" / "D" / "E" / "F"
-        DIGIT             =  %x30-39 ; 0-9
-        ALPHA             =  %x41-5A / %x61-7A ; A-Z / a-z
-        """
         for child in node.children:
             self.visit(child)
 
@@ -294,3 +224,6 @@ class HttpVisitor(parser.NodeVisitor):
 
     def visit_port(self, node: Node):
         self.uri_port = node.value
+
+    def visit_body(self, node: Node):
+        self.body = node.value
