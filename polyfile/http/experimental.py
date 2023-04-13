@@ -1,10 +1,15 @@
 from abnf.grammars.misc import load_grammar_rules
 from abnf.grammars import rfc9110, rfc3986
+from . import structured_headers
 from abnf import Rule as _Rule
 from typing import List, Tuple
 
 rulelist: List[Tuple[str, _Rule]] = [
     ("OWS", rfc9110.Rule("OWS")),
+    ("sh-list", structured_headers.Rule("sh-list")),
+    ("sh-string", structured_headers.Rule("sh-string")),
+    ("sh-decimal", structured_headers.Rule("sh-decimal")),
+    ("sh-boolean", structured_headers.Rule("sh-boolean")),
 ]
 
 
@@ -30,25 +35,8 @@ class Rule(_Rule):
         'ECT = "2g" / "3g" / "4g" / "slow-2g"',
         # https://wicg.github.io/netinfo/#rtt-request-header-field
         "RTT = 1*DIGIT",
-        # https://datatracker.ietf.org/doc/html/draft-ietf-httpbis-header-structure-15
         # https://wicg.github.io/savedata/#save-data-request-header-field TODO Structured Headers RFC for sh-list
         'Save-Data = "on" / sh-list',
-        'sh-list = list-member *( OWS "," OWS list-member )',
-        "list-member = sh-item / inner-list",
-        'inner-list    = "(" *SP [ sh-item *( 1*SP sh-item ) *SP ] ")" *parameter',
-        "sh-item   = bare-item *parameter",
-        "bare-item = sh-integer / sh-decimal / sh-string / sh-token / sh-binary / sh-boolean",
-        'sh-integer = ["-"] 1*15DIGIT',
-        'sh-decimal  = ["-"] 1*12DIGIT "." 1*3DIGIT',
-        "sh-string = DQUOTE *(chr) DQUOTE",
-        "chr       = unescaped / escaped",
-        "unescaped = %x20-21 / %x23-5B / %x5D-7E",
-        'escaped   = "" ( DQUOTE / "" )',
-        'sh-token = ( ALPHA / "\*" ) *( tchar / ":" / "/" )',
-        'sh-binary = ":" *(base64) ":"',
-        'base64    = ALPHA / DIGIT / "+" / "/" / "="',
-        'sh-boolean = "?" boolean',
-        'boolean    = "0" / "1"',
         # https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Sec-CH-UA
         # TODO sf-list vs sh-list
         "Sec-CH-UA = sh-list",
@@ -71,7 +59,7 @@ class Rule(_Rule):
         # https://wicg.github.io/ua-client-hints/#sec-ch-ua-platform-version
         "Sec-CH-UA-Platform-Version = sh-string",
         # https://wicg.github.io/ua-client-hints/#sec-ch-ua-wow64
-        "Sec-CH-UA-WoW64 = sf-boolean",
+        "Sec-CH-UA-WoW64 = sh-boolean",
         # https://privacycg.github.io/gpc-spec/#the-sec-gpc-header-field-for-http-requests
         'Sec-GPC = "1"',
         # https://wicg.github.io/user-preference-media-features-headers/#sec-ch-prefers-reduced-motion

@@ -16,12 +16,11 @@ inherited_rulelist: List[Tuple[str, _Rule]] = [
 @load_grammar_rules(inherited_rulelist)
 class Rule(_Rule):
     """
-    Request headers which are in general deprecated by most browsers.
+    Request headers which are in general deprecated by modern browsers, but may still be included from spoofed user agents or unusual user agents.
     """
 
     grammar: List[str] = [
-        # all deprecated headers follow (regardless of context or spec)
-        'deprecated-header = "Accept-Charset:" OWS Accept-Charset OWS / "Authentication-Info:" OWS Authentication-Info OWS / "DNT:" OWS DNT OWS / "DPR:" OWS DPR OWS / "Expect-CT:" OWS Expect-CT OWS / "Pragma:" OWS Pragma OWS / "Viewport-Width:" OWS Viewport-Width OWS / "Warning:" OWS Warning OWS / "Width:" OWS Width OWS',  # / TODO can't find spec for "Sec-CH-UA-Full-Version:" OWS Sec-CH-UA-Full-Version OWS
+        'deprecated-header = "Accept-Charset:" OWS Accept-Charset OWS / "Authentication-Info:" OWS Authentication-Info OWS / "DNT:" OWS DNT OWS / "DPR:" OWS DPR OWS / "Expect-CT:" OWS Expect-CT OWS / "Pragma:" OWS Pragma OWS / "Viewport-Width:" OWS Viewport-Width OWS / "Warning:" OWS Warning OWS / "Width:" OWS Width OWS',
         # https://www.w3.org/TR/tracking-dnt/#dnt-header-field
         'DNT = ( "0" / "1" ) *DNT-extension',
         # DNT-extension excludes CTL, SP, DQUOTE, comma, backslash
@@ -35,8 +34,6 @@ class Rule(_Rule):
         "directive-value     = token / quoted-string",
         # https://httpwg.org/specs/rfc9111.html#field.pragma
         'Pragma = "no-cache"',
-        # https://wicg.github.io/ua-client-hints/#sec-ch-ua-full-version TODO this is another Structured Header
-        # "Sec-CH-UA-Full-Version = TODO",
         # https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Viewport-Width
         # The width of the user's viewport in CSS pixels, rounded up to the nearest integer.
         "Viewport-Width = 1*DIGIT",

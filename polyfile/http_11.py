@@ -12,7 +12,7 @@ from abnf.grammars import (
 )
 from abnf import Rule, parser, Node
 
-from .http import defacto, deprecated, experimental
+from .http import defacto, deprecated, experimental, structured_headers
 
 from .polyfile import register_parser, InvalidMatch, Submatch
 
@@ -93,7 +93,7 @@ request_rulelist: List[Tuple[str, Rule]] = [
     ("protocol", rfc9110.Rule("protocol")),
     ("protocol-name", rfc9110.Rule("protocol-name")),
     ("protocol-version", rfc9110.Rule("protocol-version")),
-    # ("sh-boolean", experimental.Rule("sh-boolean")),
+    ("sh-boolean", structured_headers.Rule("sh-boolean")),
     ("token", rfc9110.Rule("token")),
     ("token68", rfc9110.Rule("token68")),
     ("transfer-coding", rfc9110.Rule("transfer-coding")),
@@ -158,7 +158,7 @@ class Http11RequestGrammar(Rule):
         'Sec-Fetch-Site = "cross-site" / "same-origin" / "same-site" / "none"',
         # https://w3c.github.io/webappsec-fetch-metadata/#sec-fetch-user-header
         # https://docs.w3cub.com/http/headers/sec-fetch-user.html
-        'Sec-Fetch-User = "?1"',
+        "Sec-Fetch-User = sh-boolean",
         # https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Service-Worker-Navigation-Preload
         # 'Service-Worker-Navigation-Preload = "true" / token / quoted-string',
         # https://httpwg.org/specs/rfc9112.html#field.transfer-encoding
