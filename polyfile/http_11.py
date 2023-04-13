@@ -179,7 +179,7 @@ class Http11RequestGrammar(Rule):
         # https://www.ietf.org/archive/id/draft-ietf-httpbis-digest-headers-04.html#section-5
         'digest-algorithm = "sha-256" / "sha-512" / "md5" / "sha" / "unixsum" / "unixcksum" / "id-sha-512" / "id-sha-256" / token',
         # https://developer.mozilla.org/en-US/docs/Web/HTTP/Messages
-        "body = OWS ( token / token68 ) CR LF",
+        "body = 1*( token / token68 / OWS / CR LF )",
     ]
 
 
