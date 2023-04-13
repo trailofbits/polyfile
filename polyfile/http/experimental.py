@@ -18,7 +18,7 @@ class Rule(_Rule):
     """
 
     grammar: List[str] = [
-        'experimental-header = "Device-Memory:" OWS Device-Memory OWS / "Downlink:" OWS Downlink OWS / "Early-Data:" OWS Early-Data OWS / "ECT:" OWS ECT OWS / "RTT:" OWS RTT OWS / "Save-Data:" OWS Save-Data OWS / "Sec-CH-UA-Arch:" OWS Sec-CH-UA-Arch OWS / "Sec-CH-UA-Bitness:" OWS Sec-CH-UA-Bitness OWS / "Sec-CH-UA-Form-Factor:" OWS Sec-CH-UA-Form-Factor / "Sec-CH-UA-Full-Version:" OWS Sec-CH-UA-Full-Version OWS / "Sec-CH-UA-Full-Version-List:" OWS Sec-CH-UA-Full-Version-List OWS / "Sec-CH-UA-Mobile:" OWS Sec-CH-UA-Mobile OWS / "Sec-CH-UA-Model:" OWS Sec-CH-UA-Model OWS / "Sec-CH-UA-Platform:" OWS Sec-CH-UA-Platform OWS / "Sec-CH-UA-Platform-Version:" OWS Sec-CH-UA-Platform-Version OWS / "Sec-GPC:" OWS Sec-GPC OWS / "Sec-CH-Prefers-Reduced-Motion:" OWS Sec-CH-Prefers-Reduced-Motion OWS / "Sec-WebSocket-Accept:" OWS Sec-WebSocket-Accept OWS',
+        'experimental-header = "Device-Memory:" OWS Device-Memory OWS / "Downlink:" OWS Downlink OWS / "Early-Data:" OWS Early-Data OWS / "ECT:" OWS ECT OWS / "RTT:" OWS RTT OWS / "Save-Data:" OWS Save-Data OWS / "Sec-CH-UA-Arch:" OWS Sec-CH-UA-Arch OWS / "Sec-CH-UA-Bitness:" OWS Sec-CH-UA-Bitness OWS / "Sec-CH-UA-Form-Factor:" OWS Sec-CH-UA-Form-Factor / "Sec-CH-UA-Full-Version:" OWS Sec-CH-UA-Full-Version OWS / "Sec-CH-UA-Full-Version-List:" OWS Sec-CH-UA-Full-Version-List OWS / "Sec-CH-UA-Mobile:" OWS Sec-CH-UA-Mobile OWS / "Sec-CH-UA-Model:" OWS Sec-CH-UA-Model OWS / "Sec-CH-UA-Platform:" OWS Sec-CH-UA-Platform OWS / "Sec-CH-UA-Platform-Version:" OWS Sec-CH-UA-Platform-Version OWS / "Sec-GPC:" OWS Sec-GPC OWS / "Sec-CH-Prefers-Reduced-Motion:" OWS Sec-CH-Prefers-Reduced-Motion OWS',
         # https://www.w3.org/TR/device-memory/#iana-device-memory
         'Device-Memory = "0.25" / "0.5" / "1" / "2" / "4" / "8"',
         # https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Downlink
@@ -70,10 +70,10 @@ class Rule(_Rule):
         "Sec-CH-UA-Platform = sh-string",
         # https://wicg.github.io/ua-client-hints/#sec-ch-ua-platform-version
         "Sec-CH-UA-Platform-Version = sh-string",
+        # https://wicg.github.io/ua-client-hints/#sec-ch-ua-wow64
+        "Sec-CH-UA-WoW64 = sf-boolean",
         # https://privacycg.github.io/gpc-spec/#the-sec-gpc-header-field-for-http-requests
-        "Sec-GPC = TODO",
+        'Sec-GPC = "1"',
         # https://wicg.github.io/user-preference-media-features-headers/#sec-ch-prefers-reduced-motion
-        "Sec-CH-Prefers-Reduced-Motion = TODO",
-        # https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Sec-WebSocket-Accept
-        "Sec-WebSocket-Accept = TODO",
+        'Sec-CH-Prefers-Reduced-Motion = "no-preference" / "reduce"',
     ]
