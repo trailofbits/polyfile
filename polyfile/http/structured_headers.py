@@ -11,9 +11,10 @@ rulelist: List[Tuple[str, _Rule]] = [
 @load_grammar_rules(rulelist)
 class Rule(_Rule):
     """
-    Several headers that Mozilla considers 'experimental' rely on ABNF constructions from the Structured Headers draft.
+    Several headers that Mozilla considers 'experimental' rely on ABNF constructions from RFC 8941: Structured Headers.
 
-    https://datatracker.ietf.org/doc/html/draft-ietf-httpbis-header-structure-15
+    https://datatracker.ietf.org/doc/html/rfc8941
+    Also possibly of note: https://datatracker.ietf.org/doc/html/rfc8941#section-4.2
     """
 
     grammar: List[str] = [
