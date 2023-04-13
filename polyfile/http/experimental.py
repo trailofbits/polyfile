@@ -18,7 +18,7 @@ class Rule(_Rule):
     """
 
     grammar: List[str] = [
-        'experimental-header = "Device-Memory:" OWS Device-Memory OWS / "Downlink:" OWS Downlink OWS / "Early-Data:" OWS Early-Data OWS / "ECT:" OWS ECT OWS / "RTT:" OWS RTT OWS / "Save-Data:" OWS Save-Data OWS / "Sec-CH-UA-Arch:" OWS Sec-CH-UA-Arch OWS / "Sec-CH-UA-Bitness:" OWS Sec-CH-UA-Bitness OWS / "Sec-CH-UA-Full-Version-List:" OWS Sec-CH-UA-Full-Version-List OWS / "Sec-CH-UA-Mobile:" OWS Sec-CH-UA-Mobile OWS / "Sec-CH-UA-Model:" OWS Sec-CH-UA-Model OWS / "Sec-CH-UA-Platform:" OWS Sec-CH-UA-Platform OWS / "Sec-CH-UA-Platform-Version:" OWS Sec-CH-UA-Platform-Version OWS / "Sec-GPC:" OWS Sec-GPC OWS / "Sec-CH-Prefers-Reduced-Motion:" OWS Sec-CH-Prefers-Reduced-Motion OWS / "Sec-WebSocket-Accept:" OWS Sec-WebSocket-Accept OWS',
+        'experimental-header = "Device-Memory:" OWS Device-Memory OWS / "Downlink:" OWS Downlink OWS / "Early-Data:" OWS Early-Data OWS / "ECT:" OWS ECT OWS / "RTT:" OWS RTT OWS / "Save-Data:" OWS Save-Data OWS / "Sec-CH-UA-Arch:" OWS Sec-CH-UA-Arch OWS / "Sec-CH-UA-Bitness:" OWS Sec-CH-UA-Bitness OWS / "Sec-CH-UA-Form-Factor:" OWS Sec-CH-UA-Form-Factor / "Sec-CH-UA-Full-Version:" OWS Sec-CH-UA-Full-Version OWS / "Sec-CH-UA-Full-Version-List:" OWS Sec-CH-UA-Full-Version-List OWS / "Sec-CH-UA-Mobile:" OWS Sec-CH-UA-Mobile OWS / "Sec-CH-UA-Model:" OWS Sec-CH-UA-Model OWS / "Sec-CH-UA-Platform:" OWS Sec-CH-UA-Platform OWS / "Sec-CH-UA-Platform-Version:" OWS Sec-CH-UA-Platform-Version OWS / "Sec-GPC:" OWS Sec-GPC OWS / "Sec-CH-Prefers-Reduced-Motion:" OWS Sec-CH-Prefers-Reduced-Motion OWS / "Sec-WebSocket-Accept:" OWS Sec-WebSocket-Accept OWS',
         # https://www.w3.org/TR/device-memory/#iana-device-memory
         'Device-Memory = "0.25" / "0.5" / "1" / "2" / "4" / "8"',
         # https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Downlink
@@ -33,7 +33,7 @@ class Rule(_Rule):
         # https://datatracker.ietf.org/doc/html/draft-ietf-httpbis-header-structure-15
         # https://wicg.github.io/savedata/#save-data-request-header-field TODO Structured Headers RFC for sh-list
         'Save-Data = "on" / sh-list',
-        'sh-list = list-member *( *SP "," *SP list-member )',
+        'sh-list = list-member *( OWS "," OWS list-member )',
         "list-member = sh-item / inner-list",
         'inner-list    = "(" *SP [ sh-item *( 1*SP sh-item ) *SP ] ")" *parameter',
         "sh-item   = bare-item *parameter",
@@ -50,22 +50,26 @@ class Rule(_Rule):
         'sh-boolean = "?" boolean',
         'boolean    = "0" / "1"',
         # https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Sec-CH-UA
-        "Sec-CH-UA = TODO",
+        # TODO sf-list vs sh-list
+        "Sec-CH-UA = sh-list",
         # https://wicg.github.io/ua-client-hints/#sec-ch-ua-arch
-        "Sec-CH-UA-Arch = TODO",
+        "Sec-CH-UA-Arch = sh-string",
         # https://wicg.github.io/ua-client-hints/#sec-ch-ua-bitness
-        "Sec-CH-UA-Bitness = TODO",
+        "Sec-CH-UA-Bitness = sh-string",
+        # https://wicg.github.io/ua-client-hints/#sec-ch-ua-form-factor
+        "Sec-CH-UA-Form-Factor = sh-string",
         # https://wicg.github.io/ua-client-hints/#sec-ch-ua-full-version
+        "Sec-CH-UA-Full-Version = sh-string",
         # https://wicg.github.io/ua-client-hints/#sec-ch-ua-full-version-list
-        "Sec-CH-UA-Full-Version-List = TODO",
+        "Sec-CH-UA-Full-Version-List = sh-list",
         # https://wicg.github.io/ua-client-hints/#sec-ch-ua-mobile
-        "Sec-CH-UA-Mobile = TODO",
+        "Sec-CH-UA-Mobile = sh-boolean",
         # https://wicg.github.io/ua-client-hints/#sec-ch-ua-model
-        "Sec-CH-UA-Model = TODO",
+        "Sec-CH-UA-Model = sh-string",
         # https://wicg.github.io/ua-client-hints/#sec-ch-ua-platform
-        "Sec-CH-UA-Platform = TODO",
+        "Sec-CH-UA-Platform = sh-string",
         # https://wicg.github.io/ua-client-hints/#sec-ch-ua-platform-version
-        "Sec-CH-UA-Platform-Version = TODO",
+        "Sec-CH-UA-Platform-Version = sh-string",
         # https://privacycg.github.io/gpc-spec/#the-sec-gpc-header-field-for-http-requests
         "Sec-GPC = TODO",
         # https://wicg.github.io/user-preference-media-features-headers/#sec-ch-prefers-reduced-motion
