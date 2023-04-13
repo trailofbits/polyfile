@@ -93,6 +93,7 @@ request_rulelist: List[Tuple[str, Rule]] = [
     ("protocol", rfc9110.Rule("protocol")),
     ("protocol-name", rfc9110.Rule("protocol-name")),
     ("protocol-version", rfc9110.Rule("protocol-version")),
+    ("query", rfc3986.Rule("query")),
     ("sh-boolean", structured_headers.Rule("sh-boolean")),
     ("token", rfc9110.Rule("token")),
     ("token68", rfc9110.Rule("token68")),
@@ -126,9 +127,11 @@ class Http11RequestGrammar(Rule):
        - Structured Header rules (even fancier than RFC 7230): https://datatracker.ietf.org/doc/html/rfc8941
     """
     grammar: List[str] = [
-        "request = method SP absolute-path SP protocol CR LF 1*( header CR LF )",
+        # https://developer.mozilla.org/en-US/docs/Web/HTTP/Messages
+        "request = method SP request-path SP protocol CR LF 1*( header CR LF ) *body",
         # method is defined as 'token' in rfc9110 but better to be explicit
         'method = "GET" / "HEAD" / "POST" / "PUT" / "PATCH" / "DELETE" / "TRACE" / "CONNECT" / "OPTIONS"',
+        'request-path = absolute-path *( "?" query ) / "*"',
         "header = caching-header / deprecated-header / end-to-end-header / hop-by-hop-header / experimental-header / unknown-or-bespoke-header",
         # Added by proxies (forward and reverse) generally; mainly sourced from RFC 9110; not including response headers
         'hop-by-hop-header = "Connection:" OWS Connection OWS / "Forwarded:" OWS Forwarded OWS / "Keep-Alive:" OWS Keep-Alive OWS / "Proxy-Authenticate:" OWS Proxy-Authenticate OWS / "Proxy-Authentication-Info:" OWS Proxy-Authentication-Info OWS / "Proxy-Authorization:" OWS Proxy-Authorization OWS / "TE:" OWS TE OWS / "Trailer:" OWS Trailer OWS / "Transfer-Encoding:" OWS Transfer-Encoding OWS / "Upgrade:" OWS Upgrade OWS / "Via:" OWS Via OWS / defacto-header',
@@ -175,6 +178,8 @@ class Http11RequestGrammar(Rule):
         'want-digest-qvalue = ( "0" [ "." 0*1DIGIT ] ) / ( "1" [ "." 0*1( "0" ) ] )',
         # https://www.ietf.org/archive/id/draft-ietf-httpbis-digest-headers-04.html#section-5
         'digest-algorithm = "sha-256" / "sha-512" / "md5" / "sha" / "unixsum" / "unixcksum" / "id-sha-512" / "id-sha-256" / token',
+        # https://developer.mozilla.org/en-US/docs/Web/HTTP/Messages
+        "body = OWS ( token / token68 ) CR LF",
     ]
 
 
