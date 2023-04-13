@@ -24,9 +24,6 @@ from typing import List, Tuple
 #   - maybe use this input to feed abnf parser if it's not a dupe step??
 #   - maybe: expand from HTTP 1.1 to HTTP 2 (requires parsing HPACK and QPACK, but might be easy with dpkt, scapy, etc?)
 
-# Textual Input
-# ???
-
 # PCAP
 # Samples from NetReSec: https://www.netresec.com/?page=PcapFiles
 # Sample captures from WireShark: https://wiki.wireshark.org/SampleCaptures
@@ -83,6 +80,7 @@ request_rulelist: List[Tuple[str, Rule]] = [
     ("WWW-Authenticate", rfc9110.Rule("WWW-Authenticate")),
     ("absolute-URI", rfc3986.Rule("absolute-URI")),
     ("absolute-path", rfc9110.Rule("absolute-path")),
+    ("cookie-string", rfc6265.Rule("cookie-string")),
     ("defacto-header", defacto.Rule("defacto-header")),
     ("deprecated-header", deprecated.Rule("deprecated-header")),
     # ("parameter", rfc9110.Rule("parameter")),
