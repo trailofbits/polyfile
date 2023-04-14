@@ -67,6 +67,22 @@ class HttpUnitTests(TestCase):
         self.assertEqual(visitor.transfer_encoding, "chunked")
         self.assertIn(member="SMUGGLED", container=visitor.body)
 
+    def test_post_body_chunked_with_smuggling_cl_te_timing_detection(self):
+        """Since the front-end server uses the Content-Length header, if request smuggling is possible, it will forward only part of this request, omitting the X. The back-end server uses the Transfer-Encoding header, processes the first chunk, and then waits for the next chunk to arrive. This will cause an observable time delay."""
+
+        request = """POST / HTTP/1.1\r\nHost: vulnerable-website.com\r\nTransfer-Encoding: chunked\r\nContent-Length: 4\r\n\r\n1\r\nA\r\nX"""
+        visitor = self.build_and_visit_ast(request)
+        self.assertEqual("1\r\nA\r\nX", visitor.body)
+
+    def test_post_body_chunked_with_smuggling_cl_te_2(self):
+        """To confirm a CL.TE vulnerability, you would send an attack request like this. If the attack is successful, then the last two lines of this request are treated by the back-end server as belonging to the next request that is received."""
+
+        request = """POST /search HTTP/1.1\r\nHost: vulnerable-website.com\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 49\r\nTransfer-Encoding: chunked\r\n\r\ne\r\nq=smuggling&x=\r\n0\r\n\r\nGET /404 HTTP/1.1\r\nFoo: x"""
+        visitor = self.build_and_visit_ast(request)
+        self.assertEqual(
+            "e\r\nq=smuggling&x=\r\n0\r\n\r\nGET /404 HTTP/1.1\r\nFoo: x", visitor.body
+        )
+
     def test_post_body_chunked_with_smuggling_te_cl(self):
         """Here, the front-end server uses the Transfer-Encoding header and the back-end server uses the Content-Length header. We can perform a simple HTTP request smuggling attack as follows:"""
 
@@ -78,6 +94,13 @@ class HttpUnitTests(TestCase):
         self.assertEqual(visitor.transfer_encoding, "chunked")
         self.assertIn(member="SMUGGLED", container=visitor.body)
         self.assertIn(member="0", container=visitor.body)
+
+    def test_post_body_chunked_with_smuggling_te_cl_timing_detection(self):
+        """If an application is vulnerable to the TE.CL variant of request smuggling, then sending a request like the following will often cause a time delay. Since the front-end server uses the Transfer-Encoding header, it will forward only part of this request, omitting the X. The back-end server uses the Content-Length header, expects more content in the message body, and waits for the remaining content to arrive."""
+
+        request = """POST / HTTP/1.1\r\nHost: vulnerable-website.com\r\nTransfer-Encoding: chunked\r\nContent-Length: 6\r\n\r\n0\r\n\r\nX"""
+        visitor = self.build_and_visit_ast(request)
+        self.assertEqual("0\r\n\r\nX", visitor.body)
 
     def test_post_body_chunked_with_smuggling_te_te(self):
         """Here, the front-end and back-end servers both support the Transfer-Encoding header, but one of the servers can be induced not to process it by obfuscating the header in some way.
