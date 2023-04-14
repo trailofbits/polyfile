@@ -76,14 +76,13 @@ request_rulelist: List[Tuple[str, Rule]] = [
     ("Retry-After", rfc9110.Rule("Retry-After")),
     ("TE", rfc9110.Rule("TE")),
     ("Trailer", rfc9110.Rule("Trailer")),
-    # https://www.rfc-editor.org/rfc/rfc7230#section-4 this is a better defn of transfer-encoding than the rfc9112, which is less clear
-    ("Transfer-Encoding", rfc7230.Rule("Transfer-Encoding")),
     ("Upgrade", rfc9110.Rule("Upgrade")),
     ("User-Agent", rfc9110.Rule("User-Agent")),
     ("Via", rfc9110.Rule("Via")),
     ("WWW-Authenticate", rfc9110.Rule("WWW-Authenticate")),
     ("absolute-URI", rfc3986.Rule("absolute-URI")),
     ("absolute-path", rfc9110.Rule("absolute-path")),
+    ("chunked-body", rfc7230.Rule("chunked-body")),
     ("cookie-string", rfc6265.Rule("cookie-string")),
     ("defacto-header", defacto.Rule("defacto-header")),
     ("deprecated-header", deprecated.Rule("deprecated-header")),
@@ -97,6 +96,7 @@ request_rulelist: List[Tuple[str, Rule]] = [
     ("start-line", rfc7230.Rule("start-line")),
     ("token", rfc9110.Rule("token")),
     ("token68", rfc9110.Rule("token68")),
+    ("transfer-coding", rfc7230.Rule("transfer-coding")),
 ]
 
 
@@ -164,6 +164,9 @@ class Http11RequestGrammar(Rule):
         "Sec-Fetch-User = sh-boolean",
         # https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Service-Worker-Navigation-Preload
         'Service-Worker-Navigation-Preload = "true" / token / quoted-string',
+        # https://www.rfc-editor.org/rfc/rfc7230#section-4 this is a better defn of transfer-encoding than the rfc9112, which is less clear. Also c.f. https://www.rfc-editor.org/rfc/rfc7230#section-4.2.3
+        'Transfer-Encoding = *( "," OWS ) transfer-coding-plus-x-gzip *( OWS "," [ OWS transfer-coding-plus-x-gzip ] )',
+        'transfer-coding-plus-x-gzip = transfer-coding / "x-gzip"',
         # https://w3c.github.io/webappsec-upgrade-insecure-requests/#preference
         # https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Upgrade-Insecure-Requests
         'Upgrade-Insecure-Requests = "1"',
@@ -178,7 +181,7 @@ class Http11RequestGrammar(Rule):
         # https://www.rfc-editor.org/rfc/rfc7230#section-3.3
         # TODO kaoudis we are pretty dumb about allowed body size now - effectively, all body sizes are allowed for all methods. handle this in the body visitor method.
         # https://www.rfc-editor.org/rfc/rfc7230#section-3.5
-        "body = 1*OCTET",
+        "body = chunked-body / 1*OCTET",
     ]
 
 
@@ -206,7 +209,8 @@ class HttpVisitor(parser.NodeVisitor):
     content_length: Optional[int] = None
     transfer_encoding: Optional[str] = None
     host: Optional[str] = None
-    body: Optional[str] = None
+    body_raw: Optional[str] = None
+    body_parsed: Optional[str] = None
 
     def __init__(self):
         super().__init__()
@@ -216,7 +220,7 @@ class HttpVisitor(parser.NodeVisitor):
             if child.name == "header":
                 self.headers.append(child.value)
             if child.name == "body":
-                self.body = child.value
+                self.body_raw = child.value
 
             self.visit(child)
 
@@ -276,4 +280,8 @@ class HttpVisitor(parser.NodeVisitor):
             elif child.name == "Upgrade":
                 self.upgrade = child.value
 
+            self.visit(child)
+
+    def visit_body(self, node: Node):
+        for child in node.children:
             self.visit(child)
