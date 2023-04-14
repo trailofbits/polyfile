@@ -36,6 +36,9 @@ from typing import List, Optional, Tuple
 # RESPONSE headers in RFC 9110 are NOT included here.
 # None of these RFCs really define HTTP request body. That is TODO.
 request_rulelist: List[Tuple[str, Rule]] = [
+    ("BWS", rfc9110.Rule("BWS")),
+    ("OWS", rfc9110.Rule("OWS")),
+    ("RWS", rfc9110.Rule("RWS")),
     ("Accept", rfc9110.Rule("Accept")),
     ("Accept-Encoding", rfc9110.Rule("Accept-Encoding")),
     ("Accept-Language", rfc9110.Rule("Accept-Language")),
@@ -43,7 +46,6 @@ request_rulelist: List[Tuple[str, Rule]] = [
     ("Age", rfc9111.Rule("Age")),
     ("Allow", rfc9110.Rule("Allow")),
     ("Authorization", rfc9110.Rule("Authorization")),
-    ("BWS", rfc9110.Rule("BWS")),
     ("Cache-Control", rfc9111.Rule("Cache-Control")),
     ("Connection", rfc9110.Rule("Connection")),
     ("Content-Encoding", rfc9110.Rule("Content-Encoding")),
@@ -66,16 +68,16 @@ request_rulelist: List[Tuple[str, Rule]] = [
     ("Last-Modified", rfc9110.Rule("Last-Modified")),
     ("Location", rfc9110.Rule("Location")),
     ("Max-Forwards", rfc9110.Rule("Max-Forwards")),
-    ("OWS", rfc9110.Rule("OWS")),
     ("Proxy-Authenticate", rfc9110.Rule("Proxy-Authenticate")),
     ("Proxy-Authentication-Info", rfc9110.Rule("Proxy-Authentication-Info")),
     ("Proxy-Authorization", rfc9110.Rule("Proxy-Authorization")),
-    ("RWS", rfc9110.Rule("RWS")),
     ("Range", rfc9110.Rule("Range")),
     ("Referer", rfc9110.Rule("Referer")),
     ("Retry-After", rfc9110.Rule("Retry-After")),
     ("TE", rfc9110.Rule("TE")),
     ("Trailer", rfc9110.Rule("Trailer")),
+    # https://www.rfc-editor.org/rfc/rfc7230#section-4 this is a better defn of transfer-encoding than the rfc9112, which is less clear
+    ("Transfer-Encoding", rfc7230.Rule("Transfer-Encoding")),
     ("Upgrade", rfc9110.Rule("Upgrade")),
     ("User-Agent", rfc9110.Rule("User-Agent")),
     ("Via", rfc9110.Rule("Via")),
@@ -86,11 +88,6 @@ request_rulelist: List[Tuple[str, Rule]] = [
     ("defacto-header", defacto.Rule("defacto-header")),
     ("deprecated-header", deprecated.Rule("deprecated-header")),
     ("experimental-header", experimental.Rule("experimental-header")),
-    # TODO I think these will be useful for body rules?
-    # ("parameter", rfc9110.Rule("parameter")),
-    # ("parameter-name", rfc9110.Rule("parameter-name")),
-    # ("parameter-value", rfc9110.Rule("parameter-value")),
-    # ("parameters", rfc9110.Rule("parameters")),
     ("port", rfc3986.Rule("port")),
     ("protocol", rfc9110.Rule("protocol")),
     ("protocol-name", rfc9110.Rule("protocol-name")),
@@ -100,8 +97,6 @@ request_rulelist: List[Tuple[str, Rule]] = [
     ("start-line", rfc7230.Rule("start-line")),
     ("token", rfc9110.Rule("token")),
     ("token68", rfc9110.Rule("token68")),
-    ("transfer-coding", rfc9110.Rule("transfer-coding")),
-    ("transfer-parameter", rfc9110.Rule("transfer-parameter")),
 ]
 
 
@@ -168,9 +163,7 @@ class Http11RequestGrammar(Rule):
         # https://docs.w3cub.com/http/headers/sec-fetch-user.html
         "Sec-Fetch-User = sh-boolean",
         # https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Service-Worker-Navigation-Preload
-        # 'Service-Worker-Navigation-Preload = "true" / token / quoted-string',
-        # https://httpwg.org/specs/rfc9112.html#field.transfer-encoding
-        'Transfer-Encoding = transfer-coding *( OWS "," OWS transfer-coding )',
+        'Service-Worker-Navigation-Preload = "true" / token / quoted-string',
         # https://w3c.github.io/webappsec-upgrade-insecure-requests/#preference
         # https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Upgrade-Insecure-Requests
         'Upgrade-Insecure-Requests = "1"',
@@ -184,6 +177,7 @@ class Http11RequestGrammar(Rule):
         # https://developer.mozilla.org/en-US/docs/Web/HTTP/Messages
         # https://www.rfc-editor.org/rfc/rfc7230#section-3.3
         # TODO kaoudis we are pretty dumb about allowed body size now - effectively, all body sizes are allowed for all methods. handle this in the body visitor method.
+        # https://www.rfc-editor.org/rfc/rfc7230#section-3.5
         "body = 1*OCTET",
     ]
 
@@ -256,8 +250,30 @@ class HttpVisitor(parser.NodeVisitor):
             self.visit(child)
 
     def visit_hop_by_hop_header(self, node: Node):
+        """RFC 2616: The following HTTP/1.1 headers are hop-by-hop headers:
+        - Connection
+        - Keep-Alive
+        - Proxy-Authenticate
+        - Proxy-Authorization
+        - TE
+        - Trailer(s)
+        - Transfer-Encoding
+        - Upgrade
+        """
         for child in node.children:
-            if child.name == "Transfer-Encoding":
+            if child.name == "Connection":
+                self.connection = child.value
+            elif child.name == "Keep-Alive":
+                self.keep_alive = child.value
+            elif child.name == "Proxy-Authenticate":
+                self.proxy_authenticate = child.value
+            elif child.name == "TE":
+                self.te = child.value
+            elif child.name == "Trailer":
+                self.trailer = child.value
+            elif child.name == "Transfer-Encoding":
                 self.transfer_encoding = child.value
+            elif child.name == "Upgrade":
+                self.upgrade = child.value
 
             self.visit(child)
