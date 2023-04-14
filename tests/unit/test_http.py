@@ -6,7 +6,7 @@ from abnf.parser import Node, ParseError
 class HttpUnitTests(TestCase):
     # Test requests are from https://portswigger.net/web-security/request-smuggling.
 
-    grammar = Http11RequestGrammar("request")
+    grammar: Http11RequestGrammar = Http11RequestGrammar("request")
 
     def setUp(self) -> None:
         super().setUp()
@@ -101,6 +101,16 @@ class HttpUnitTests(TestCase):
         request = """POST / HTTP/1.1\r\nHost: vulnerable-website.com\r\nTransfer-Encoding: chunked\r\nContent-Length: 6\r\n\r\n0\r\n\r\nX"""
         visitor = self.build_and_visit_ast(request)
         self.assertEqual("0\r\n\r\nX", visitor.body)
+
+    def test_post_body_chunked_with_smuggling_te_cl_2(self):
+        """To confirm a TE.CL vulnerability, you would send an attack request like this. If the attack is successful, then everything from GET /404 onwards is treated by the back-end server as belonging to the next request that is received."""
+
+        request = """POST /search HTTP/1.1\r\nHost: vulnerable-website.com\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 4\r\nTransfer-Encoding: chunked\r\n\r\n7c\r\nGET /404 HTTP/1.1\r\nHost: vulnerable-website.com\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 144\r\n\r\nx=\r\n0"""
+        visitor = self.build_and_visit_ast(request)
+        self.assertEqual(
+            "7c\r\nGET /404 HTTP/1.1\r\nHost: vulnerable-website.com\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 144\r\n\r\nx=\r\n0",
+            visitor.body,
+        )
 
     def test_post_body_chunked_with_smuggling_te_te(self):
         """Here, the front-end and back-end servers both support the Transfer-Encoding header, but one of the servers can be induced not to process it by obfuscating the header in some way.
