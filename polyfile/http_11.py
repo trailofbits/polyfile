@@ -18,7 +18,7 @@ from .http import defacto, deprecated, experimental, structured_headers
 
 from .polyfile import register_parser, InvalidMatch, Submatch
 
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 # Goals: "parse HTTP"
 #   - parse HTTP requests from utf-8 text file(s) with abnf
@@ -97,6 +97,7 @@ request_rulelist: List[Tuple[str, Rule]] = [
     ("protocol-version", rfc9110.Rule("protocol-version")),
     ("query", rfc3986.Rule("query")),
     ("sh-boolean", structured_headers.Rule("sh-boolean")),
+    ("start-line", rfc7230.Rule("start-line")),
     ("token", rfc9110.Rule("token")),
     ("token68", rfc9110.Rule("token68")),
     ("transfer-coding", rfc9110.Rule("transfer-coding")),
@@ -129,8 +130,8 @@ class Http11RequestGrammar(Rule):
        - Structured Header rules (even fancier than RFC 7230): https://datatracker.ietf.org/doc/html/rfc8941
     """
     grammar: List[str] = [
-        # https://developer.mozilla.org/en-US/docs/Web/HTTP/Messages
-        "request = method SP request-path SP protocol CR LF 1*( header CR LF ) *( OWS / CR LF ) *body",
+        # https://www.rfc-editor.org/rfc/rfc7230
+        "request = start-line 1*( header CR LF ) CR LF [ body ]",
         # method is defined as 'token' in rfc9110 but better to be explicit
         'method = "GET" / "HEAD" / "POST" / "PUT" / "PATCH" / "DELETE" / "TRACE" / "CONNECT" / "OPTIONS"',
         'request-path = absolute-path *( "?" query ) / "*"',
@@ -181,7 +182,9 @@ class Http11RequestGrammar(Rule):
         # https://www.ietf.org/archive/id/draft-ietf-httpbis-digest-headers-04.html#section-5
         'digest-algorithm = "sha-256" / "sha-512" / "md5" / "sha" / "unixsum" / "unixcksum" / "id-sha-512" / "id-sha-256" / token',
         # https://developer.mozilla.org/en-US/docs/Web/HTTP/Messages
-        "body = 1*( token / token68 )",
+        # https://www.rfc-editor.org/rfc/rfc7230#section-3.3
+        # TODO kaoudis we are pretty dumb about allowed body size now - effectively, all body sizes are allowed for all methods. handle this in the body visitor method.
+        "body = 1*OCTET",
     ]
 
 
@@ -199,18 +202,17 @@ class HttpMethod(StrEnum):
 
 class HttpVisitor(parser.NodeVisitor):
     """The NodeVisitor class requires a visit_Name()
-    method which can be called to visit only the section(s) of the AST of interest.
+    method which can be called to visit only the section(s) of the AST of interest. Add (or edit) additional visitor methods for additional AST sections of interest.
     """
 
     method: HttpMethod
-    request_path: str
-    protocol: str
+    request_target: str
     headers: List[str] = []
-    content_type: str
-    content_length: int
-    transfer_encoding: str
-    host: str
-    body: str
+    content_type: Optional[str] = None
+    content_length: Optional[int] = None
+    transfer_encoding: Optional[str] = None
+    host: Optional[str] = None
+    body: Optional[str] = None
 
     def __init__(self):
         super().__init__()
@@ -224,14 +226,19 @@ class HttpVisitor(parser.NodeVisitor):
 
             self.visit(child)
 
+    def visit_start_line(self, node: Node):
+        for child in node.children:
+            self.visit(child)
+
+    def visit_request_line(self, node: Node):
+        for child in node.children:
+            self.visit(child)
+
     def visit_method(self, node: Node):
         self.method = HttpMethod(node.value)
 
-    def visit_request_path(self, node: Node):
-        self.request_path = node.value
-
-    def visit_protocol(self, node: Node):
-        self.protocol = node.value
+    def visit_request_target(self, node: Node):
+        self.request_target = node.value
 
     def visit_header(self, node: Node):
         for child in node.children:
@@ -245,5 +252,12 @@ class HttpVisitor(parser.NodeVisitor):
                 self.content_type = child.value
             elif child.name == "Host":
                 self.host = child.value
+
+            self.visit(child)
+
+    def visit_hop_by_hop_header(self, node: Node):
+        for child in node.children:
+            if child.name == "Transfer-Encoding":
+                self.transfer_encoding = child.value
 
             self.visit(child)
