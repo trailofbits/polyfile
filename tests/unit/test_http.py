@@ -1,5 +1,5 @@
 from unittest import TestCase
-from polyfile.http_11 import Http11RequestGrammar, HttpVisitor
+from polyfile.http_11 import *
 from abnf.parser import Node
 
 
@@ -13,14 +13,17 @@ class HttpUnitTests(TestCase):
             """POST / HTTP/1.1\r\nHost: vulnerable-website.com\r\nContent-Length: 3\r\nTransfer-Encoding: chunked\r\n\r\n8\r\nSMUGGLED\r\n0""",
         ]
 
-    def test_headers(self):
+    def test_post_body_variant_one(self):
         request = """POST /search HTTP/1.1\r\nHost: normal-website.com\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 11\r\n\r\nq=smuggling"""
         ast, offset = Http11RequestGrammar("request").parse(request, 0)
         visitor: HttpVisitor = HttpVisitor()
         visitor.visit(ast)
-        print(ast)
+        # print(ast)
 
-        assert visitor.t_codings == "chunked"
+        assert visitor.method == HttpMethod.POST
+        assert visitor.request_path == "/search"
+        assert visitor.protocol == "HTTP/1.1"
+        assert visitor.content_type == "application/x-www-form-urlencoded"
         assert visitor.content_length == 11
-        assert visitor.uri_host == "vulnerable-website.com"
-        assert visitor.uri_port is None
+        assert "q=smuggling" in visitor.body
+        assert len(visitor.body) == visitor.content_length

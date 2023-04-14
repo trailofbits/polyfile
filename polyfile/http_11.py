@@ -1,3 +1,5 @@
+from enum import StrEnum
+
 from abnf.grammars.misc import load_grammar_rules
 from abnf.grammars import (
     cors,
@@ -128,7 +130,7 @@ class Http11RequestGrammar(Rule):
     """
     grammar: List[str] = [
         # https://developer.mozilla.org/en-US/docs/Web/HTTP/Messages
-        "request = method SP request-path SP protocol CR LF 1*( header CR LF ) *body",
+        "request = method SP request-path SP protocol CR LF 1*( header CR LF ) *( OWS / CR LF ) *body",
         # method is defined as 'token' in rfc9110 but better to be explicit
         'method = "GET" / "HEAD" / "POST" / "PUT" / "PATCH" / "DELETE" / "TRACE" / "CONNECT" / "OPTIONS"',
         'request-path = absolute-path *( "?" query ) / "*"',
@@ -179,8 +181,20 @@ class Http11RequestGrammar(Rule):
         # https://www.ietf.org/archive/id/draft-ietf-httpbis-digest-headers-04.html#section-5
         'digest-algorithm = "sha-256" / "sha-512" / "md5" / "sha" / "unixsum" / "unixcksum" / "id-sha-512" / "id-sha-256" / token',
         # https://developer.mozilla.org/en-US/docs/Web/HTTP/Messages
-        "body = 1*( token / token68 / OWS / CR LF )",
+        "body = 1*( token / token68 )",
     ]
+
+
+class HttpMethod(StrEnum):
+    GET = "GET"
+    HEAD = "HEAD"
+    POST = "POST"
+    PUT = "PUT"
+    PATCH = "PATCH"
+    DELETE = "DELETE"
+    TRACE = "TRACE"
+    CONNECT = "CONNECT"
+    OPTIONS = "OPTIONS"
 
 
 class HttpVisitor(parser.NodeVisitor):
@@ -188,42 +202,48 @@ class HttpVisitor(parser.NodeVisitor):
     method which can be called to visit only the section(s) of the AST of interest.
     """
 
+    method: HttpMethod
+    request_path: str
+    protocol: str
+    headers: List[str] = []
+    content_type: str
+    content_length: int
+    transfer_encoding: str
+    host: str
+    body: str
+
     def __init__(self):
         super().__init__()
-        self.content_encoding: List[str] = []
-        self.content_length: int
-        self.transfer_encoding: str
-        self.uri_host: str
-        self.uri_port: int
-        self.body: str
 
-    def visit_Content_Encoding(self, node: Node):
+    def visit_request(self, node: Node):
         for child in node.children:
-            print("Content-Encoding CHILD VALUE" + child.value)
+            if child.name == "header":
+                self.headers.append(child.value)
+            if child.name == "body":
+                self.body = child.value
+
             self.visit(child)
 
-    def visit_content_coding(self, node: Node):
-        self.content_encoding = node.value
+    def visit_method(self, node: Node):
+        self.method = HttpMethod(node.value)
 
-    def visit_Content_Length(self, node: Node):
-        self.content_length = int(node.value)
+    def visit_request_path(self, node: Node):
+        self.request_path = node.value
 
-    def visit_TE(self, node: Node):
-        for child in node.children:
-            self.visit(child)
+    def visit_protocol(self, node: Node):
+        self.protocol = node.value
 
-    def visit_t_codings(self, node: Node):
-        self.t_codings.append(node.value)
-
-    def visit_Host(self, node: Node):
+    def visit_header(self, node: Node):
         for child in node.children:
             self.visit(child)
 
-    def visit_uri_host(self, node: Node):
-        self.uri_host = node.value
+    def visit_end_to_end_header(self, node: Node):
+        for child in node.children:
+            if child.name == "Content-Length":
+                self.content_length = int(child.value)
+            elif child.name == "Content-Type":
+                self.content_type = child.value
+            elif child.name == "Host":
+                self.host = child.value
 
-    def visit_port(self, node: Node):
-        self.uri_port = node.value
-
-    def visit_body(self, node: Node):
-        self.body = node.value
+            self.visit(child)
