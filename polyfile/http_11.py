@@ -92,6 +92,7 @@ request_rulelist: List[Tuple[str, Rule]] = [
     ("protocol-name", rfc9110.Rule("protocol-name")),
     ("protocol-version", rfc9110.Rule("protocol-version")),
     ("query", rfc3986.Rule("query")),
+    ("quoted-string", rfc9110.Rule("quoted-string")),
     ("sh-boolean", structured_headers.Rule("sh-boolean")),
     ("start-line", rfc7230.Rule("start-line")),
     ("token", rfc9110.Rule("token")),
@@ -125,10 +126,8 @@ class Http11RequestGrammar(Rule):
        - Structured Header rules (even fancier than RFC 7230): https://datatracker.ietf.org/doc/html/rfc8941
     """
     grammar: List[str] = [
-        # https://www.rfc-editor.org/rfc/rfc7230
+        # https://www.rfc-editor.org/rfc/rfc7230 defines start-line and request.
         "request = start-line 1*( header CR LF ) CR LF [ body ]",
-        # method is defined as 'token' in rfc9110 but better to be explicit
-        'method = "GET" / "HEAD" / "POST" / "PUT" / "PATCH" / "DELETE" / "TRACE" / "CONNECT" / "OPTIONS"',
         'request-path = absolute-path *( "?" query ) / "*"',
         "header = caching-header / deprecated-header / end-to-end-header / hop-by-hop-header / experimental-header / unknown-or-bespoke-header",
         # Added by proxies (forward and reverse) generally; mainly sourced from RFC 9110; not including response headers
@@ -137,10 +136,12 @@ class Http11RequestGrammar(Rule):
         'end-to-end-header = "Accept:" OWS Accept OWS / "Accept-Encoding:" OWS Accept-Encoding OWS / "Accept-Language:" OWS Accept-Language OWS / "Access-Control-Request-Headers:" OWS Access-Control-Request-Headers OWS / "Access-Control-Request-Method:" OWS Access-Control-Request-Method OWS / "Authorization:" OWS Authorization OWS / "Content-Encoding:" OWS Content-Encoding OWS / "Content-Language:" OWS Content-Language OWS / "Content-Length:" OWS Content-Length OWS / "Content-Range:" OWS Content-Range OWS / "Content-Type:" OWS Content-Type OWS / "Cookie:" OWS cookie-string OWS / "Date:" OWS Date OWS / "Expect:" OWS Expect OWS / "From:" OWS From OWS / "Host:" OWS Host OWS / "If-Match:" OWS If-Match OWS / "If-Modified-Since:" OWS If-Modified-Since OWS / "If-None-Match:" OWS If-None-Match OWS / "If-Range:" OWS If-Range OWS / "If-Unmodified-Since:" OWS If-Unmodified-Since OWS / "Location:" OWS Location OWS / "Max-Forwards:" OWS Max-Forwards OWS / "Range:" OWS Range OWS / "Referer:" OWS Referer OWS / "Retry-After:" OWS Retry-After OWS / "Sec-CH-UA:" OWS Sec-CH-UA OWS / "Sec-Fetch-Dest:" OWS Sec-Fetch-Dest OWS / "Sec-Fetch-Mode:" OWS Sec-Fetch-Mode OWS / "Sec-Fetch-Site:" OWS Sec-Fetch-Site OWS / "Sec-Fetch-User:" OWS Sec-Fetch-User OWS / "Service-Worker-Navigation-Preload:" OWS Service-Worker-Navigation-Preload OWS / "Upgrade-Insecure-Requests:" OWS Upgrade-Insecure-Requests OWS / "User-Agent:" OWS User-Agent OWS / "Want-Digest:" OWS Want-Digest OWS / "WWW-Authenticate:" OWS WWW-Authenticate OWS',
         # rfc 9111 (caching) request headers follow
         'caching-header = "Age:" OWS Age OWS / "Cache-Control:" OWS Cache-Control OWS',
-        # TODO kaoudis this is a placeholder for all the other stuff? this might not play nice with responses / if this grammar is used to parse responses, everything responsewise might end up in here
+        # TODO kaoudis this is a placeholder for all the other headers... should be a better way to do this
         'unknown-or-bespoke-header = token ":" OWS token OWS',
         # https://developer.mozilla.org/en-US/docs/Web/HTTP/Methods
         "Access-Control-Request-Method = method",
+        # method is defined as 'token' in rfc9110 but better to be explicit...
+        'method = "GET" / "HEAD" / "POST" / "PUT" / "PATCH" / "DELETE" / "TRACE" / "CONNECT" / "OPTIONS"',
         # https://www.rfc-editor.org/rfc/rfc7239#section-4
         'Forwarded = forwarded-element *( OWS "," OWS forwarded-element )',
         'forwarded-element = [ forwarded-pair ] *( ";" [ forwarded-pair ] )',
@@ -179,7 +180,6 @@ class Http11RequestGrammar(Rule):
         'digest-algorithm = "sha-256" / "sha-512" / "md5" / "sha" / "unixsum" / "unixcksum" / "id-sha-512" / "id-sha-256" / token',
         # https://developer.mozilla.org/en-US/docs/Web/HTTP/Messages
         # https://www.rfc-editor.org/rfc/rfc7230#section-3.3
-        # TODO kaoudis we are pretty dumb about allowed body size now - effectively, all body sizes are allowed for all methods. handle this in the body visitor method.
         # https://www.rfc-editor.org/rfc/rfc7230#section-3.5
         "body = chunked-body / 1*OCTET",
     ]
@@ -202,15 +202,22 @@ class HttpVisitor(parser.NodeVisitor):
     method which can be called to visit only the section(s) of the AST of interest. Add (or edit) additional visitor methods for additional AST sections of interest.
     """
 
+    # start-line
     method: HttpMethod
     request_target: str
+
+    # headers (global)
     headers: List[str] = []
+
+    # headers (specific)
     content_type: Optional[str] = None
     content_length: Optional[int] = None
     transfer_encoding: Optional[str] = None
     host: Optional[str] = None
+
+    # body
     body_raw: Optional[str] = None
-    body_parsed: Optional[str] = None
+    body_parsed: List[str] = []
 
     def __init__(self):
         super().__init__()
@@ -254,23 +261,20 @@ class HttpVisitor(parser.NodeVisitor):
             self.visit(child)
 
     def visit_hop_by_hop_header(self, node: Node):
-        """RFC 2616: The following HTTP/1.1 headers are hop-by-hop headers:
-        - Connection
-        - Keep-Alive
-        - Proxy-Authenticate
-        - Proxy-Authorization
-        - TE
-        - Trailer(s)
-        - Transfer-Encoding
-        - Upgrade
-        """
+        """RFC2616 and RFC7230 hop-by-hop headers."""
         for child in node.children:
             if child.name == "Connection":
                 self.connection = child.value
+            elif child.name == "Forwarded":
+                self.forwarded = child.value
             elif child.name == "Keep-Alive":
                 self.keep_alive = child.value
             elif child.name == "Proxy-Authenticate":
                 self.proxy_authenticate = child.value
+            elif child.name == "Proxy-Authentication-Info":
+                self.proxy_authentication_info = child.value
+            elif child.name == "Proxy-Authorization":
+                self.proxy_authorization = child.value
             elif child.name == "TE":
                 self.te = child.value
             elif child.name == "Trailer":
@@ -279,9 +283,52 @@ class HttpVisitor(parser.NodeVisitor):
                 self.transfer_encoding = child.value
             elif child.name == "Upgrade":
                 self.upgrade = child.value
+            elif child.name == "Via":
+                self.via = child.value
 
             self.visit(child)
 
     def visit_body(self, node: Node):
+        if self.content_length is not None and self.content_length > 0:
+            print(f"content-length: {self.content_length}")
+            octet_counter = self.content_length
+            for child in node.children:
+                print(f"CHILD: {child.name} -> {child.value}")
+
+                # only append octets up to content-length; the rest are still in the AST and may refer to various kinds of trailer(s) but should be ignored for purposes of content-length based body processing.
+                if octet_counter > 0 and child.name == "OCTET":
+                    print(
+                        f"\nbody at ctr={octet_counter}: '{''.join(self.body_parsed)}', adding '{child.value}'"
+                    )
+                    octet_counter -= 1
+                    self.body_parsed.append(child.value)
+
+                self.visit(child)
+        elif self.transfer_encoding == "chunked" or self.te == "chunked":
+            # c.f. https://www.rfc-editor.org/rfc/rfc7230#section-4.1.3
+            # see also: visit_chunked_body()
+            for child in node.children:
+                self.visit(child)
+        else:
+            return  # do nothing
+
+    def visit_chunked_body(self, node: Node):
+        """Defined in RFC 7230 Sec. 4.1.3
+        c.f. https://www.rfc-editor.org/rfc/rfc7230#section-4.1.3
+        """
+        print("hiiiiii")
+        length = 0
+        chunk_size = None
         for child in node.children:
+            print(f"{child.name} -> {child.value}")
+            if child.name == "chunk-size":
+                # chunk size is expressed in hex
+                chunk_size = int(child.value, 16)
+                length += chunk_size
+            elif chunk_size > 0 and child.name == "chunk-data":
+                self.body_parsed.append(child.value)
+                chunk_size -= 1
+            elif self.trailer is not None and child.name == "trailer":
+                self.headers.append(child.value)
+
             self.visit(child)
