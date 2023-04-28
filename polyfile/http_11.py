@@ -202,22 +202,44 @@ class HttpVisitor(parser.NodeVisitor):
     method which can be called to visit only the section(s) of the AST of interest. Add (or edit) additional visitor methods for additional AST sections of interest.
     """
 
+    hex_without_zero = [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "a",
+        "b",
+        "c",
+        "d",
+        "e",
+        "f",
+        "A",
+        "B",
+        "C",
+        "D",
+        "E",
+    ]
+
     # start-line
     method: HttpMethod
     request_target: str
 
     # headers (global)
-    headers: List[str] = []
+    headers: List[str] = None
 
     # headers (specific)
     content_type: Optional[str] = None
     content_length: Optional[int] = None
-    transfer_encoding: Optional[str] = None
     host: Optional[str] = None
 
     # body
-    body_raw: Optional[str] = None
-    body_parsed: List[str] = []
+    body_raw: str = None
+    body_parsed: List[str] = None
 
     def __init__(self):
         super().__init__()
@@ -225,9 +247,15 @@ class HttpVisitor(parser.NodeVisitor):
     def visit_request(self, node: Node):
         for child in node.children:
             if child.name == "header":
+                if self.headers is None:
+                    # prevents weird reuse between instances in unittest.
+                    # TODO kaoudis find out why
+                    self.headers = list()
                 self.headers.append(child.value)
             if child.name == "body":
                 self.body_raw = child.value
+                if self.body_parsed is None:
+                    self.body_parsed = list()
 
             self.visit(child)
 
@@ -289,46 +317,128 @@ class HttpVisitor(parser.NodeVisitor):
             self.visit(child)
 
     def visit_body(self, node: Node):
-        if self.content_length is not None and self.content_length > 0:
-            print(f"content-length: {self.content_length}")
+        if (
+            self.content_length is not None
+            and self.content_length > 0
+            and not hasattr(self, "transfer_encoding")
+            and not hasattr(self, "te")
+        ):
             octet_counter = self.content_length
             for child in node.children:
-                print(f"CHILD: {child.name} -> {child.value}")
-
                 # only append octets up to content-length; the rest are still in the AST and may refer to various kinds of trailer(s) but should be ignored for purposes of content-length based body processing.
                 if octet_counter > 0 and child.name == "OCTET":
-                    print(
-                        f"\nbody at ctr={octet_counter}: '{''.join(self.body_parsed)}', adding '{child.value}'"
-                    )
                     octet_counter -= 1
                     self.body_parsed.append(child.value)
 
                 self.visit(child)
-        elif self.transfer_encoding == "chunked" or self.te == "chunked":
+        elif (
+            hasattr(self, "transfer_encoding") and self.transfer_encoding == "chunked"
+        ) or (hasattr(self, "te") and self.te == "chunked"):
+            # TODO kaoudis chunked-body visitation isn't working quite right (for some reason body only parses as 1*OCTET), this is a hack following the rfc parsing definition
             # c.f. https://www.rfc-editor.org/rfc/rfc7230#section-4.1.3
-            # see also: visit_chunked_body()
-            for child in node.children:
-                self.visit(child)
+            self.visit_chunked_body(node)
         else:
             return  # do nothing
 
-    def visit_chunked_body(self, node: Node):
-        """Defined in RFC 7230 Sec. 4.1.3
-        c.f. https://www.rfc-editor.org/rfc/rfc7230#section-4.1.3
+    def chunk_size(self, node_children: List[Node]) -> Tuple[int, int]:
+        """There is no max chunk size defined in spec. Therefore, read until the semicolon which would start a chunk extension, or until CR (for CR LF). The index returned is either the index of the first extension field semicolon, or the CR of the CR LF which indicates hte chunk body starts next."""
+        chunk_size_acc: List[str] = []
+        for child in node_children:
+            # https://stackoverflow.com/a/7058854
+            if child.value in self.hex_without_zero:
+                chunk_size_acc.append(child.value)
+            elif child.value == "0":
+                return (0, 1)
+            else:
+                # the chunk size and the index of the first non-chunk-size thing
+                return (int("".join(chunk_size_acc), 16), node_children.index(child))
+
+    def chunk_extensions(
+        self, node_children: List[Node], starting_index: int
+    ) -> Tuple[List[str], int]:
+        """Returns the chunk extensions and the first index after the following CRLF.
+        TODO kaoudis: handle chunk extensions less basically."""
+        chunk_ext: List[str] = []
+        for child in node_children[starting_index:]:
+            if child.value != "\r":
+                chunk_ext.append(child.value)
+            else:
+                index = node_children.index(child)
+                if len(node_children) >= index + 2 and node_children[index + 1] == "\n":
+                    return (chunk_ext, index + 2)
+
+    def accumulate_trailers(self, node_children: List[Node]):
+        """read trailer field
+        while (trailer field is not empty) {
+            if (trailer field is allowed to be sent in a trailer) {
+                append trailer field to existing header fields
+            }
+            read trailer-field
+        }
+        TODO kaoudis: add trailer headers that are allowed to
+        the headers member
         """
-        print("hiiiiii")
-        length = 0
-        chunk_size = None
-        for child in node.children:
-            print(f"{child.name} -> {child.value}")
-            if child.name == "chunk-size":
-                # chunk size is expressed in hex
-                chunk_size = int(child.value, 16)
-                length += chunk_size
-            elif chunk_size > 0 and child.name == "chunk-data":
+        pass
+
+    def accumulate_chunks(self, node_children: List[Node], length: int = 0) -> int:
+        # read chunk-size, chunk-ext (if any), and CR LF
+        (chunk_size, next_index) = self.chunk_size(node_children)
+        length += chunk_size
+
+        # node_children[1] = CR; node_children[2] = LF if no chunk-ext
+        # https://www.rfc-editor.org/rfc/rfc7230#section-4.1.1
+        # a recipient must ignore unrecognized chunk-extensions!
+        if chunk_size > 0:
+            if (
+                node_children[next_index].value != ";"
+                and len(node_children) >= next_index + 2
+            ):
+                starting_index: int = next_index + 2
+            else:
+                (self.chunk_ext, starting_index) = self.chunk_extensions(
+                    node_children, next_index
+                )
+        else:
+            return chunk_size
+
+        for child in node_children[starting_index:]:
+            if chunk_size > 0:
                 self.body_parsed.append(child.value)
                 chunk_size -= 1
-            elif self.trailer is not None and child.name == "trailer":
-                self.headers.append(child.value)
+            else:
+                if child.value in self.hex_without_zero:
+                    index = node_children.index(child)
+
+                    if (
+                        index + 2 <= len(node_children)
+                        and node_children[index + 1].value == "\r"
+                        and node_children[index + 2].value == "\n"
+                    ):
+                        # this is the hack. assume if not 0 and all octets are accounted for, the next thing is the next chunk size. We just want to keep adding data to self.body_parsed.
+                        slice_index = len(node_children) - length
+                        length += self.accumulate_chunks(
+                            node_children[slice_index:], length
+                        )
+                else:
+                    index = node_children.index(child)
+                    self.accumulate_trailers(node_children[index:])
+                    return length
 
             self.visit(child)
+
+    def visit_chunked_body(self, node: Node):
+        """Defined in RFC 7230 Sec. 4.1.3
+         c.f. https://www.rfc-editor.org/rfc/rfc7230#section-4.1.3
+
+         If a message is received with both a Transfer-Encoding and a
+        Content-Length header field, the Transfer-Encoding overrides the
+        Content-Length.  Such a message might indicate an attempt to
+        perform request smuggling (Section 9.5) or response splitting
+        (Section 9.4) and ought to be handled as an error.  A sender MUST
+        remove the received Content-Length field prior to forwarding such
+        a message downstream.
+        """
+        # TODO kaoudis for now all body nodes are OCTET, but
+        # this is hack adapting the RFC algorithm for now.
+        # Would like to fix things so chunked-body and children parse into the AST correctly.
+        self.content_length = self.accumulate_chunks(node_children=node.children)
