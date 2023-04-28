@@ -18,7 +18,7 @@ from .http import defacto, deprecated, experimental, structured_headers
 
 from .polyfile import register_parser, InvalidMatch, Submatch
 
-from typing import List, Optional, Tuple
+from typing import List, Optional, Set, Tuple
 
 # Goals: "parse HTTP"
 #   - parse HTTP requests from utf-8 text file(s) with abnf
@@ -181,7 +181,7 @@ class Http11RequestGrammar(Rule):
         # https://developer.mozilla.org/en-US/docs/Web/HTTP/Messages
         # https://www.rfc-editor.org/rfc/rfc7230#section-3.3
         # https://www.rfc-editor.org/rfc/rfc7230#section-3.5
-        "body = chunked-body / 1*OCTET",
+        "body = 1*OCTET",
     ]
 
 
@@ -229,7 +229,7 @@ class HttpVisitor(parser.NodeVisitor):
     method: HttpMethod
     request_target: str
 
-    # headers (global)
+    # unprocessed headers (global)
     headers: List[str] = None
 
     # headers (specific)
@@ -334,14 +334,14 @@ class HttpVisitor(parser.NodeVisitor):
         elif (
             hasattr(self, "transfer_encoding") and self.transfer_encoding == "chunked"
         ) or (hasattr(self, "te") and self.te == "chunked"):
-            # TODO kaoudis chunked-body visitation isn't working quite right (for some reason body only parses as 1*OCTET), this is a hack following the rfc parsing definition
+            # this is a hack following the rfc parsing definition
             # c.f. https://www.rfc-editor.org/rfc/rfc7230#section-4.1.3
             self.visit_chunked_body(node)
         else:
             return  # do nothing
 
     def chunk_size(self, node_children: List[Node]) -> Tuple[int, int]:
-        """There is no max chunk size defined in spec. Therefore, read until the semicolon which would start a chunk extension, or until CR (for CR LF). The index returned is either the index of the first extension field semicolon, or the CR of the CR LF which indicates hte chunk body starts next."""
+        """There is no max chunk size defined in spec. Therefore, read until the semicolon which would start a chunk extension, or until CR (for CR LF). The index returned is either the index of the first extension field semicolon, or the CR of the CR LF which indicates hte chunk body starts next. If there are trailers, we'll return the index of the first trailer, and chunk_size of 0."""
         chunk_size_acc: List[str] = []
         for child in node_children:
             # https://stackoverflow.com/a/7058854
@@ -349,15 +349,17 @@ class HttpVisitor(parser.NodeVisitor):
                 chunk_size_acc.append(child.value)
             elif child.value == "0":
                 return (0, 1)
-            else:
+            elif child.value == "\r":
                 # the chunk size and the index of the first non-chunk-size thing
                 return (int("".join(chunk_size_acc), 16), node_children.index(child))
+            else:
+                return (0, node_children.index(child))
 
-    def chunk_extensions(
+    def accumulate_chunk_extensions(
         self, node_children: List[Node], starting_index: int
     ) -> Tuple[List[str], int]:
         """Returns the chunk extensions and the first index after the following CRLF.
-        TODO kaoudis: handle chunk extensions less basically."""
+        TODO kaoudis: handle chunk extensions more better according to RFC."""
         chunk_ext: List[str] = []
         for child in node_children[starting_index:]:
             if child.value != "\r":
@@ -368,17 +370,68 @@ class HttpVisitor(parser.NodeVisitor):
                     return (chunk_ext, index + 2)
 
     def accumulate_trailers(self, node_children: List[Node]):
-        """read trailer field
-        while (trailer field is not empty) {
-            if (trailer field is allowed to be sent in a trailer) {
-                append trailer field to existing header fields
-            }
-            read trailer-field
-        }
-        TODO kaoudis: add trailer headers that are allowed to
-        the headers member
         """
-        pass
+        Following https://www.rfc-editor.org/rfc/rfc7230#section-4.4,
+        we use the Trailer header to figure out what will be in the chunked transfer coding trailer(s) and add these additional headers to the Visitor instance's header list.
+
+        See also: https://www.rfc-editor.org/rfc/rfc7230#section-4.1.2, https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Trailer
+
+        The trailer fields are identical to header fields, except
+        they are sent in a chunked trailer instead of the message's header
+        section.
+
+        A sender MUST NOT generate a trailer that contains a field necessary
+        for message framing (e.g., Transfer-Encoding and Content-Length),
+        routing (e.g., Host), request modifiers (e.g., controls and
+        conditionals in Section 5 of [RFC7231]), authentication (e.g., see
+        [RFC7235] and [RFC6265]), response control data (e.g., see Section
+        7.1 of [RFC7231]), or determining how to process the payload (e.g.,
+        Content-Encoding, Content-Type, Content-Range, and Trailer).
+
+        When a chunked message containing a non-empty trailer is received,
+        the recipient MAY process the fields (aside from those forbidden
+        above) as if they were appended to the message's header section.  A
+        recipient MUST ignore (or consider as an error) any fields that are
+        forbidden to be sent in a trailer, since processing them as if they
+        were present in the header section might bypass external security
+        filters.
+        """
+
+        if hasattr(self, "trailer"):
+            # TODO kaoudis make this not case sensitive??
+            disallowed_fields: Set = {
+                "Transfer-Encoding",
+                "Content-Length",
+                "Host",
+                "Cache-Control",
+                "Max-Forwards",
+                "TE",
+                "Authorization",
+                "Set-Cookie",
+                "Content-Encoding",
+                "Content-Type",
+                "Content-Range",
+                "Trailer",
+            }
+
+            trailer_field_names: Set = set(self.trailer.split(","))
+            allowed_trailer_field_names: Set = trailer_field_names - disallowed_fields
+            trailer = []
+
+            for node in node_children:
+                print(f"TRAILERRRR {node.name} -> {node.value}")
+                trailer.append(node.value)
+
+            # TODO kaoudis this is utterly ridiculous, clean it up
+            trailer_headers = "".join(trailer).split("\r\n")
+            for header in trailer_headers:
+                print(header)
+                name, value = header.split(":", 1)
+                if name in allowed_trailer_field_names:
+                    self.headers.append(header.strip(" \r\n\t\v"))
+                    self.__setattr__(
+                        name.lower().strip(" \r\n\t\v"), value.strip(" \r\n\t\v")
+                    )
 
     def accumulate_chunks(self, node_children: List[Node], length: int = 0) -> int:
         # read chunk-size, chunk-ext (if any), and CR LF
@@ -395,34 +448,40 @@ class HttpVisitor(parser.NodeVisitor):
             ):
                 starting_index: int = next_index + 2
             else:
-                (self.chunk_ext, starting_index) = self.chunk_extensions(
+                (self.chunk_ext, starting_index) = self.accumulate_chunk_extensions(
                     node_children, next_index
                 )
-        else:
+        elif not hasattr(self, "trailer"):
             return chunk_size
 
         for child in node_children[starting_index:]:
+            index = node_children.index(child)
+
             if chunk_size > 0:
                 self.body_parsed.append(child.value)
                 chunk_size -= 1
+            elif child.value in self.hex_without_zero:
+                if (
+                    index + 2 <= len(node_children)
+                    and node_children[index + 1].value == "\r"
+                    and node_children[index + 2].value == "\n"
+                ):
+                    # this is the hack. assume if not 0 and all octets are accounted for, the next thing is the next chunk size. We just want to keep adding data to self.body_parsed.
+                    slice_index = len(node_children) - length
+                    length += self.accumulate_chunks(
+                        node_children[slice_index:], length
+                    )
+            elif (
+                hasattr(self, "trailer")
+                and index + 3 <= len(node_children)
+                and child.value == "0"
+                and node_children[index + 1] == "\r"
+                and node_children[index + 2] == "\n"
+            ):
+                trailer_starting_index = index + 3
+                self.accumulate_trailers(node_children[trailer_starting_index:])
             else:
-                if child.value in self.hex_without_zero:
-                    index = node_children.index(child)
-
-                    if (
-                        index + 2 <= len(node_children)
-                        and node_children[index + 1].value == "\r"
-                        and node_children[index + 2].value == "\n"
-                    ):
-                        # this is the hack. assume if not 0 and all octets are accounted for, the next thing is the next chunk size. We just want to keep adding data to self.body_parsed.
-                        slice_index = len(node_children) - length
-                        length += self.accumulate_chunks(
-                            node_children[slice_index:], length
-                        )
-                else:
-                    index = node_children.index(child)
-                    self.accumulate_trailers(node_children[index:])
-                    return length
+                return length
 
             self.visit(child)
 
@@ -438,7 +497,5 @@ class HttpVisitor(parser.NodeVisitor):
         remove the received Content-Length field prior to forwarding such
         a message downstream.
         """
-        # TODO kaoudis for now all body nodes are OCTET, but
-        # this is hack adapting the RFC algorithm for now.
-        # Would like to fix things so chunked-body and children parse into the AST correctly.
+        # TODO kaoudis remove this hack where we don't use the chunked-body rules from rfc7230 since: rfc7230 requires incremental parsing, and if we parse the body all at once the way abnf would like instead of incrementally, it seems we will interpret some octets incorrectly :(
         self.content_length = self.accumulate_chunks(node_children=node.children)

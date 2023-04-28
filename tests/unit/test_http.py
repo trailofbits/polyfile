@@ -235,3 +235,21 @@ class Http11RequestUnitTests(TestCase):
             "Transfer-Encoding\r\n: chunked"
         )
         self.assertRaises(ParseError, self.request_grammar.parse, request, 0)
+
+    def test_trailer_chunked(self):
+        request = """HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nTransfer-Encoding: chunked\r\nTrailer: Expires\r\n\r\n7\r\nMozilla\r\n9\r\nDeveloper\r\n7\r\nNetwork\r\n0\r\nExpires: Wed, 21 Oct 2015 07:28:00 GMT\r\n\r\n"""
+        ast, offset = self.request_grammar.parse(request, 0)
+        self.visitor.visit(ast)
+
+        self.assertEqual(self.visitor.transfer_encoding, "chunked")
+        self.assertEqual(
+            self.visitor.body_raw,
+            "7\r\nMozilla\r\n9\r\nDeveloper\r\n7\r\nNetwork\r\n0\r\nExpires: Wed, 21 Oct 2015 07:28:00 GMT\r\n\r\n",
+        )
+        self.assertEqual("".join(self.visitor.body_parsed), "MozillaDeveloperNetwork")
+        self.assertEqual(self.visitor.trailer, "Expires")
+        self.assertTrue(hasattr(self.visitor, "Expires"))
+        self.assertIn(
+            "Expires: Wed, 21 Oct 2015 07:28:00 GMT",
+            container=self.visitor.headers,
+        )
