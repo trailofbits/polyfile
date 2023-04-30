@@ -20,21 +20,18 @@ from .polyfile import register_parser, InvalidMatch, Submatch
 
 from typing import List, Optional, Set, Tuple
 
-# Goals: "parse HTTP"
-#   - parse HTTP requests from utf-8 text file(s) with abnf
-#   - parse HTTP requests (and streams) from pcaps with dpkt.
-#   - maybe use this input to feed abnf parser if it's not a dupe step??
-#   - maybe: expand from HTTP 1.1 to HTTP 2 (requires parsing HPACK and QPACK, but might be easy with dpkt, scapy, etc?)
+# The overall goal of this parser is to take in utf-8 textual representations
+# of http requests, and make sense of the headers, then make sense of the
+# body/ies according to the headers.
 
-# PCAP
-# Samples from NetReSec: https://www.netresec.com/?page=PcapFiles
-# Sample captures from WireShark: https://wiki.wireshark.org/SampleCaptures
-# "the ultimate PCAP" https://weberblog.net/the-ultimate-pcap/
+#   - TODO: support lowercase header names such as 'content-length' instead of only 'Content-Length' (currently case sensitive)
+#   - TODO: create a similar parser for HTTP/2 requests (requires parsing HPACK and QPACK)
+#   - TODO: websockets upgrade negotiation headers
+#   - TODO: RFC9112 I think supersedes RFC9110 and should be accounted for here
 
-# The rfc9110.py class doesn't include all needed rules other specs and is missing HTTP headers used in practice but not defined in spec.
-# NodeVisitor#visit() replaces all dashes here with underscores.
-# RESPONSE headers in RFC 9110 are NOT included here.
-# None of these RFCs really define HTTP request body. That is TODO.
+# Response headers are not included here, since this parser is intended to parse valid http/1.1 requests. If the header can be used in either a request or a response, or only in a request, it should/can be included here.
+# NB: the rfc9110.py class doesn't include all needed rules other specs and is missing HTTP headers used in practice but not defined in spec.
+# NB: NodeVisitor#visit() replaces all dashes here with underscores.
 request_rulelist: List[Tuple[str, Rule]] = [
     ("BWS", rfc9110.Rule("BWS")),
     ("OWS", rfc9110.Rule("OWS")),
@@ -103,20 +100,8 @@ request_rulelist: List[Tuple[str, Rule]] = [
 
 @load_grammar_rules(request_rulelist)
 class Http11RequestGrammar(Rule):
-    # todo ensure no response headers are allowed in the request grammar
-    # TODO websockets nego headers
     """
-     RFC 2616: The following HTTP/1.1 headers are hop-by-hop headers:
-       - Connection
-       - Keep-Alive
-       - Proxy-Authenticate
-       - Proxy-Authorization
-       - TE
-       - Trailer(s)
-       - Transfer-Encoding
-       - Upgrade
-
-    All other headers defined by HTTP/1.1 are end-to-end headers.
+    An HTTP/1.1 request grammar, which is applied in the HttpVisitor below as demonstrated in the associated unit test suite.
 
     General References
        - https://http.dev/headers#http-header-categories-and-names (also includes response headers; it is VERY IMPORTANT that response headers not be defined in Http11RequestGrammar and only be defined in TODO Http11ResponseGrammar!)
@@ -125,6 +110,7 @@ class Http11RequestGrammar(Rule):
        - And https://www.rfc-editor.org/rfc/rfc9110#section-5.6.1 (pound sign definition for ABNF in e.g. Forwarded header RFC7239)
        - Structured Header rules (even fancier than RFC 7230): https://datatracker.ietf.org/doc/html/rfc8941
     """
+
     grammar: List[str] = [
         # https://www.rfc-editor.org/rfc/rfc7230 defines start-line and request.
         "request = start-line 1*( header CR LF ) CR LF [ body ]",
@@ -198,7 +184,10 @@ class HttpMethod(StrEnum):
 
 
 class HttpVisitor(parser.NodeVisitor):
-    """The NodeVisitor class requires a visit_Name()
+    """Interprets information parsed into an AST using the abnf-powered
+    HTTP 1.1 request grammar.
+
+    NB: The NodeVisitor class requires a visit_Name()
     method which can be called to visit only the section(s) of the AST of interest. Add (or edit) additional visitor methods for additional AST sections of interest.
     """
 
@@ -244,12 +233,21 @@ class HttpVisitor(parser.NodeVisitor):
     def __init__(self):
         super().__init__()
 
+    def remove_header(self, name: str) -> None:
+        # TODO kaoudis make headers a dict and drop by name
+        """Required by RFC to support Trailer and Content-Encoding headers. Once the header no longer applies to the message, it must be removed."""
+        for header in self.headers:
+            if header.startswith(name):
+                # remove first instance
+                self.headers.remove(header)
+                return
+
     def visit_request(self, node: Node):
         for child in node.children:
             if child.name == "header":
                 if self.headers is None:
                     # prevents weird reuse between instances in unittest.
-                    # TODO kaoudis find out why
+                    # TODO kaoudis find out why? maybe bad test config?
                     self.headers = list()
                 self.headers.append(child.value)
             if child.name == "body":
@@ -325,7 +323,7 @@ class HttpVisitor(parser.NodeVisitor):
         ):
             octet_counter = self.content_length
             for child in node.children:
-                # only append octets up to content-length; the rest are still in the AST and may refer to various kinds of trailer(s) but should be ignored for purposes of content-length based body processing.
+                # Append octets up to content-length if the body is not chunked encoding; the rest are still in the AST and may refer to various kinds of trailer(s) but should be ignored for purposes of content-length based body processing.
                 if octet_counter > 0 and child.name == "OCTET":
                     octet_counter -= 1
                     self.body_parsed.append(child.value)
@@ -336,6 +334,8 @@ class HttpVisitor(parser.NodeVisitor):
         ) or (hasattr(self, "te") and self.te == "chunked"):
             # this is a hack following the rfc parsing definition
             # c.f. https://www.rfc-editor.org/rfc/rfc7230#section-4.1.3
+            # since abnf parses everything all at once and I really want
+            # it to be incremental to more sensibly follow the rfc defn
             self.visit_chunked_body(node)
         else:
             return  # do nothing
@@ -398,7 +398,6 @@ class HttpVisitor(parser.NodeVisitor):
         """
 
         if hasattr(self, "trailer"):
-            # TODO kaoudis make this not case sensitive??
             disallowed_fields: Set = {
                 "Transfer-Encoding",
                 "Content-Length",
@@ -416,16 +415,17 @@ class HttpVisitor(parser.NodeVisitor):
 
             trailer_field_names: Set = set(self.trailer.split(","))
             allowed_trailer_field_names: Set = trailer_field_names - disallowed_fields
-            trailer = []
+            trailer_headers_string = []
 
             for node in node_children:
-                print(f"TRAILERRRR {node.name} -> {node.value}")
-                trailer.append(node.value)
+                trailer_headers_string.append(node.value)
 
             # TODO kaoudis this is utterly ridiculous, clean it up
-            trailer_headers = "".join(trailer).split("\r\n")
+            trailer_headers: List[str] = list(
+                filter(None, "".join(trailer_headers_string).split("\r\n"))
+            )
+
             for header in trailer_headers:
-                print(header)
                 name, value = header.split(":", 1)
                 if name in allowed_trailer_field_names:
                     self.headers.append(header.strip(" \r\n\t\v"))
@@ -434,6 +434,8 @@ class HttpVisitor(parser.NodeVisitor):
                     )
 
     def accumulate_chunks(self, node_children: List[Node], length: int = 0) -> int:
+        """An utterly hideous yet hopefully fairly close interpretation of the chunk accumulation algorithm from rfc7230 and rfc9112."""
+
         # read chunk-size, chunk-ext (if any), and CR LF
         (chunk_size, next_index) = self.chunk_size(node_children)
         length += chunk_size
@@ -448,38 +450,43 @@ class HttpVisitor(parser.NodeVisitor):
             ):
                 starting_index: int = next_index + 2
             else:
+                # in theory chunk extensions should start with ';'
                 (self.chunk_ext, starting_index) = self.accumulate_chunk_extensions(
                     node_children, next_index
                 )
         elif not hasattr(self, "trailer"):
+            # chunk size is 0 and no trailer, so we are done
             return chunk_size
 
         for child in node_children[starting_index:]:
             index = node_children.index(child)
 
             if chunk_size > 0:
+                # just blindly trust the number lol
                 self.body_parsed.append(child.value)
                 chunk_size -= 1
-            elif child.value in self.hex_without_zero:
-                if (
-                    index + 2 <= len(node_children)
-                    and node_children[index + 1].value == "\r"
-                    and node_children[index + 2].value == "\n"
-                ):
-                    # this is the hack. assume if not 0 and all octets are accounted for, the next thing is the next chunk size. We just want to keep adding data to self.body_parsed.
-                    slice_index = len(node_children) - length
-                    length += self.accumulate_chunks(
-                        node_children[slice_index:], length
-                    )
             elif (
-                hasattr(self, "trailer")
-                and index + 3 <= len(node_children)
-                and child.value == "0"
-                and node_children[index + 1] == "\r"
-                and node_children[index + 2] == "\n"
+                index + 3 <= len(node_children)
+                and child.value == "\r"
+                and node_children[index + 1].value == "\n"
+                and node_children[index + 2].value in self.hex_without_zero
             ):
-                trailer_starting_index = index + 3
+                # If not 0 and all octets are accounted for, the next thing should be the next chunk size. Keep adding data to body_parsed.
+                slice_index = index + 2
+                length += self.accumulate_chunks(node_children[slice_index:], length)
+            elif (
+                # hasattr 'trailer' means there was a Trailer header
+                hasattr(self, "trailer")
+                # '\r\n0\r\n' where our current index is the first '\r'
+                and index + 5 <= len(node_children)
+                and child.value == "\r"
+                # ending chunks w/ '0\r\n'
+                and node_children[index + 2].value == "0"
+            ):
+                print(f"trying from '{node_children[index + 5].value}'")
+                trailer_starting_index = index + 5
                 self.accumulate_trailers(node_children[trailer_starting_index:])
+                return length
             else:
                 return length
 
@@ -487,7 +494,7 @@ class HttpVisitor(parser.NodeVisitor):
 
     def visit_chunked_body(self, node: Node):
         """Defined in RFC 7230 Sec. 4.1.3
-         c.f. https://www.rfc-editor.org/rfc/rfc7230#section-4.1.3
+         c.f. https://www.rfc-editor.org/rfc/rfc7230#section-4.1.3 and repeated! in https://www.rfc-editor.org/rfc/rfc9112#section-7.1.3
 
          If a message is received with both a Transfer-Encoding and a
         Content-Length header field, the Transfer-Encoding overrides the
@@ -497,5 +504,5 @@ class HttpVisitor(parser.NodeVisitor):
         remove the received Content-Length field prior to forwarding such
         a message downstream.
         """
-        # TODO kaoudis remove this hack where we don't use the chunked-body rules from rfc7230 since: rfc7230 requires incremental parsing, and if we parse the body all at once the way abnf would like instead of incrementally, it seems we will interpret some octets incorrectly :(
         self.content_length = self.accumulate_chunks(node_children=node.children)
+        self.remove_header("Transfer-Encoding: chunked")
