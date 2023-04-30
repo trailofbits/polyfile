@@ -483,7 +483,6 @@ class HttpVisitor(parser.NodeVisitor):
                 # ending chunks w/ '0\r\n'
                 and node_children[index + 2].value == "0"
             ):
-                print(f"trying from '{node_children[index + 5].value}'")
                 trailer_starting_index = index + 5
                 self.accumulate_trailers(node_children[trailer_starting_index:])
                 return length
