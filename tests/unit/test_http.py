@@ -48,6 +48,8 @@ class Http11RequestUnitTests(TestCase):
         self.assertEqual(self.visitor.request_target, "/search")
         self.assertEqual(self.visitor.content_type, "application/x-www-form-urlencoded")
         self.assertEqual(self.visitor.transfer_encoding, "chunked")
+        # we have processed the encoding and removed it from the message, effectively
+        self.assertNotIn("Transfer-Encoding", self.visitor.headers)
 
         # chunk content length
         self.assertIn(member="b", container=self.visitor.body_raw)
