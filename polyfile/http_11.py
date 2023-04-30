@@ -235,10 +235,9 @@ class HttpVisitor(parser.NodeVisitor):
         super().__init__()
 
     def remove_header(self, name: str) -> None:
-        """Required by RFC to support Trailer and Content-Encoding headers. Once the header no longer applies to the message, it must be removed."""
+        """Required by RFC to support Transfer-Encoding and TE headers. Once the transfer encoding no longer applies to the message, it must be removed."""
         if name in self.headers:
-            self.headers.remove(name)
-            return
+            self.headers.pop(name)
 
     def visit_request(self, node: Node):
         for child in node.children:
@@ -509,4 +508,4 @@ class HttpVisitor(parser.NodeVisitor):
         a message downstream.
         """
         self.content_length = self.accumulate_chunks(node_children=node.children)
-        self.remove_header("Transfer-Encoding: chunked")
+        self.remove_header("Transfer-Encoding")
