@@ -192,7 +192,7 @@ class HttpVisitor(parser.NodeVisitor):
     method which can be called to visit only the section(s) of the AST of interest. Add (or edit) additional visitor methods for additional AST sections of interest.
     """
 
-    hex_without_zero = [
+    _hex_without_zero = [
         "1",
         "2",
         "3",
@@ -234,7 +234,7 @@ class HttpVisitor(parser.NodeVisitor):
     def __init__(self):
         super().__init__()
 
-    def remove_header(self, name: str) -> None:
+    def _remove_header(self, name: str) -> None:
         """Required by RFC to support Transfer-Encoding and TE headers. Once the transfer encoding no longer applies to the message, it must be removed."""
         if name in self.headers:
             self.headers.pop(name)
@@ -338,12 +338,12 @@ class HttpVisitor(parser.NodeVisitor):
         else:
             return  # do nothing
 
-    def chunk_size(self, node_children: List[Node]) -> Tuple[int, int]:
+    def _chunk_size(self, node_children: List[Node]) -> Tuple[int, int]:
         """There is no max chunk size defined in spec. Therefore, read until the semicolon which would start a chunk extension, or until CR (for CR LF). The index returned is either the index of the first extension field semicolon, or the CR of the CR LF which indicates hte chunk body starts next. If there are trailers, we'll return the index of the first trailer, and chunk_size of 0."""
         chunk_size_acc: List[str] = []
         for child in node_children:
             # https://stackoverflow.com/a/7058854
-            if child.value in self.hex_without_zero:
+            if child.value in self._hex_without_zero:
                 chunk_size_acc.append(child.value)
             elif child.value == "0":
                 return (0, 1)
@@ -353,7 +353,7 @@ class HttpVisitor(parser.NodeVisitor):
             else:
                 return (0, node_children.index(child))
 
-    def accumulate_chunk_extensions(
+    def _accumulate_chunk_extensions(
         self, node_children: List[Node], starting_index: int
     ) -> Tuple[List[str], int]:
         """Returns the chunk extensions and the first index after the following CRLF.
@@ -367,7 +367,7 @@ class HttpVisitor(parser.NodeVisitor):
                 if len(node_children) >= index + 2 and node_children[index + 1] == "\n":
                     return (chunk_ext, index + 2)
 
-    def accumulate_trailers(self, node_children: List[Node]):
+    def _accumulate_trailers(self, node_children: List[Node]):
         """
         Following https://www.rfc-editor.org/rfc/rfc7230#section-4.4,
         we use the Trailer header to figure out what will be in the chunked transfer coding trailer(s) and add these additional headers to the Visitor instance's header list.
@@ -437,11 +437,11 @@ class HttpVisitor(parser.NodeVisitor):
                     self.headers[name] = value.strip(whitespace)
                     self.__setattr__(name.lower(), value)
 
-    def accumulate_chunks(self, node_children: List[Node], length: int = 0) -> int:
+    def _accumulate_chunks(self, node_children: List[Node], length: int = 0) -> int:
         """An utterly hideous yet hopefully fairly close interpretation of the chunk accumulation algorithm from rfc7230 and rfc9112."""
 
         # read chunk-size, chunk-ext (if any), and CR LF
-        (chunk_size, next_index) = self.chunk_size(node_children)
+        (chunk_size, next_index) = self._chunk_size(node_children)
         length += chunk_size
 
         # node_children[1] = CR; node_children[2] = LF if no chunk-ext
@@ -455,7 +455,7 @@ class HttpVisitor(parser.NodeVisitor):
                 starting_index: int = next_index + 2
             else:
                 # in theory chunk extensions should start with ';'
-                (self.chunk_ext, starting_index) = self.accumulate_chunk_extensions(
+                (self.chunk_ext, starting_index) = self._accumulate_chunk_extensions(
                     node_children, next_index
                 )
         elif not hasattr(self, "trailer"):
@@ -473,11 +473,11 @@ class HttpVisitor(parser.NodeVisitor):
                 index + 3 <= len(node_children)
                 and child.value == "\r"
                 and node_children[index + 1].value == "\n"
-                and node_children[index + 2].value in self.hex_without_zero
+                and node_children[index + 2].value in self._hex_without_zero
             ):
                 # If not 0 and all octets are accounted for, the next thing should be the next chunk size. Keep adding data to body_parsed.
                 slice_index = index + 2
-                length += self.accumulate_chunks(node_children[slice_index:], length)
+                length += self._accumulate_chunks(node_children[slice_index:], length)
             elif (
                 # hasattr 'trailer' means there was a Trailer header
                 hasattr(self, "trailer")
@@ -488,7 +488,7 @@ class HttpVisitor(parser.NodeVisitor):
                 and node_children[index + 2].value == "0"
             ):
                 trailer_starting_index = index + 5
-                self.accumulate_trailers(node_children[trailer_starting_index:])
+                self._accumulate_trailers(node_children[trailer_starting_index:])
                 return length
             else:
                 return length
@@ -507,5 +507,5 @@ class HttpVisitor(parser.NodeVisitor):
         remove the received Content-Length field prior to forwarding such
         a message downstream.
         """
-        self.content_length = self.accumulate_chunks(node_children=node.children)
-        self.remove_header("Transfer-Encoding")
+        self.content_length = self._accumulate_chunks(node_children=node.children)
+        self._remove_header("Transfer-Encoding")
