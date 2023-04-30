@@ -248,6 +248,27 @@ class Http11RequestUnitTests(TestCase):
         )
         self.assertEqual("".join(self.visitor.body_parsed), "MozillaDeveloperNetwork")
 
+    def test_trailer_header_with_no_trailer(self):
+        """We should fail to parse the request body if a trailer is indicated, the encoding is chunked, and there is no trailer."""
+        request = """HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nTransfer-Encoding: chunked\r\nTrailer: Bar\r\n\r\n7\r\nMozilla\r\n9\r\nDeveloper\r\n7\r\nNetwork\r\n0\r\n"""
+        ast, offset = self.request_grammar.parse(request, 0)
+        self.visitor.visit(ast)
+
+        self.assertEqual(self.visitor.transfer_encoding, "chunked")
+        self.assertTrue(hasattr(self.visitor, "trailer"))
+        self.assertFalse(hasattr(self, "bar"))
+
+    def test_disallowed_trailer(self):
+        """Some headers are not allowed to be included as trailers. This means when we parse teh actual trailer field, this should fail."""
+        request = """HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nTransfer-Encoding: chunked\r\nTrailer: Trailer\r\n\r\n7\r\nMozilla\r\n9\r\nDeveloper\r\n7\r\nNetwork\r\n0\r\nTrailer: coolstuff\r\n\r\n"""
+        ast, offset = self.request_grammar.parse(request, 0)
+        self.visitor.visit(ast)
+
+        self.assertEqual(self.visitor.transfer_encoding, "chunked")
+        self.assertTrue(hasattr(self.visitor, "trailer"))
+        self.assertIn("Trailer", container=self.visitor.headers)
+        self.assertEqual(self.visitor.headers["Trailer"], "Trailer")
+
     def test_chunked_with_trailer_header(self):
         """In this example, the Expires header is used at the end of the chunked message and serves as a trailing header.
 
