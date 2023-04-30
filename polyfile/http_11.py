@@ -1,4 +1,5 @@
 from enum import StrEnum
+from string import whitespace
 
 from abnf.grammars.misc import load_grammar_rules
 from abnf.grammars import (
@@ -18,7 +19,7 @@ from .http import defacto, deprecated, experimental, structured_headers
 
 from .polyfile import register_parser, InvalidMatch, Submatch
 
-from typing import List, Optional, Set, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 
 # The overall goal of this parser is to take in utf-8 textual representations
 # of http requests, and make sense of the headers, then make sense of the
@@ -219,7 +220,7 @@ class HttpVisitor(parser.NodeVisitor):
     request_target: str
 
     # unprocessed headers (global)
-    headers: List[str] = None
+    headers: Dict[str, str] = None
 
     # headers (specific)
     content_type: Optional[str] = None
@@ -234,13 +235,10 @@ class HttpVisitor(parser.NodeVisitor):
         super().__init__()
 
     def remove_header(self, name: str) -> None:
-        # TODO kaoudis make headers a dict and drop by name
         """Required by RFC to support Trailer and Content-Encoding headers. Once the header no longer applies to the message, it must be removed."""
-        for header in self.headers:
-            if header.startswith(name):
-                # remove first instance
-                self.headers.remove(header)
-                return
+        if name in self.headers:
+            self.headers.remove(name)
+            return
 
     def visit_request(self, node: Node):
         for child in node.children:
@@ -248,8 +246,9 @@ class HttpVisitor(parser.NodeVisitor):
                 if self.headers is None:
                     # prevents weird reuse between instances in unittest.
                     # TODO kaoudis find out why? maybe bad test config?
-                    self.headers = list()
-                self.headers.append(child.value)
+                    self.headers = dict()
+                header_name, header_value = child.value.strip(whitespace).split(":", 1)
+                self.headers[header_name] = header_value.strip(whitespace)
             if child.name == "body":
                 self.body_raw = child.value
                 if self.body_parsed is None:
@@ -426,12 +425,18 @@ class HttpVisitor(parser.NodeVisitor):
             )
 
             for header in trailer_headers:
-                name, value = header.split(":", 1)
+                name, value = header.strip(whitespace).split(":", 1)
                 if name in allowed_trailer_field_names:
-                    self.headers.append(header.strip(" \r\n\t\v"))
-                    self.__setattr__(
-                        name.lower().strip(" \r\n\t\v"), value.strip(" \r\n\t\v")
-                    )
+                    # A recipient that retains a received trailer field MUST
+                    # either store/forward the trailer field separately from
+                    # the received header fields or merge the received trailer
+                    # field into the header section. A recipient MUST NOT merge
+                    # a received trailer field into the header section unless
+                    # its corresponding header field definition explicitly
+                    # permits and instructs how the trailer field value can be
+                    # safely merged.
+                    self.headers[name] = value.strip(whitespace)
+                    self.__setattr__(name.lower(), value)
 
     def accumulate_chunks(self, node_children: List[Node], length: int = 0) -> int:
         """An utterly hideous yet hopefully fairly close interpretation of the chunk accumulation algorithm from rfc7230 and rfc9112."""

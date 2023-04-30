@@ -195,10 +195,8 @@ class Http11RequestUnitTests(TestCase):
         )
         ast, offset = self.request_grammar.parse(request, 0)
         self.visitor.visit(ast)
-        self.assertIn(
-            member="Transfer-Encoding: chunked", container=self.visitor.headers
-        )
-        self.assertIn(member="Transfer-Encoding: x", container=self.visitor.headers)
+        self.assertIn(member="Transfer-Encoding", container=self.visitor.headers)
+        self.assertEqual(self.visitor.headers["Transfer-Encoding"], "x")
         # TODO kaoudis should these Transfer-Encoding headers be deduped. by spec?
         self.assertEqual(self.visitor.transfer_encoding, "x")
 
@@ -237,6 +235,7 @@ class Http11RequestUnitTests(TestCase):
         self.assertRaises(ParseError, self.request_grammar.parse, request, 0)
 
     def test_multichunk_no_trailer(self):
+        """This is an example of a chunked-encoding request followed by multiple chunks and terminated correctly."""
         request = """HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nTransfer-Encoding: chunked\r\n\r\n7\r\nMozilla\r\n9\r\nDeveloper\r\n7\r\nNetwork\r\n0\r\n"""
         ast, offset = self.request_grammar.parse(request, 0)
         self.visitor.visit(ast)
@@ -250,6 +249,9 @@ class Http11RequestUnitTests(TestCase):
         self.assertEqual("".join(self.visitor.body_parsed), "MozillaDeveloperNetwork")
 
     def test_chunked_with_trailer_header(self):
+        """In this example, the Expires header is used at the end of the chunked message and serves as a trailing header.
+
+        https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Trailer"""
         request = """HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nTransfer-Encoding: chunked\r\nTrailer: Expires\r\n\r\n7\r\nMozilla\r\n9\r\nDeveloper\r\n7\r\nNetwork\r\n0\r\nExpires: Wed, 21 Oct 2015 07:28:00 GMT\r\n\r\n"""
         ast, offset = self.request_grammar.parse(request, 0)
         self.visitor.visit(ast)
@@ -263,6 +265,9 @@ class Http11RequestUnitTests(TestCase):
         self.assertEqual(self.visitor.trailer, "Expires")
         self.assertTrue(hasattr(self.visitor, "expires"))
         self.assertIn(
-            "Expires: Wed, 21 Oct 2015 07:28:00 GMT",
+            "Expires",
             container=self.visitor.headers,
+        )
+        self.assertEqual(
+            self.visitor.headers["Expires"], "Wed, 21 Oct 2015 07:28:00 GMT"
         )
