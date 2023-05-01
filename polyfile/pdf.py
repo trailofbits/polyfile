@@ -1,5 +1,5 @@
 import sys
-from typing import Callable, Dict, Iterator, Optional, Union
+from typing import Callable, Dict, Iterator, List, Optional, Type, TypeVar, Union
 import zlib
 
 from pdfminer.ascii85 import ascii85decode, asciihexdecode
@@ -51,7 +51,49 @@ def load_trailer(self, parser: "PDFParser") -> None:
     return
 
 
+def load_xref(self: PDFXRef, parser: "PDFParser"):
+    while True:
+        try:
+            (pos, line) = parser.nextline()
+            line = line.strip()
+            if not line:
+                continue
+        except PSEOF:
+            raise PDFNoValidXRef("Unexpected EOF - file corrupted?")
+        if line.startswith(b"trailer"):
+            parser.seek(pos)
+            break
+        f = line.split(b" ")
+        if len(f) != 2:
+            error_msg = "Trailer not found: {!r}: line={!r}".format(parser, line)
+            raise PDFNoValidXRef(error_msg)
+        try:
+            (start, nobjs) = map(int, f)
+        except ValueError:
+            error_msg = "Invalid line: {!r}: line={!r}".format(parser, line)
+            raise PDFNoValidXRef(error_msg)
+        for objid in range(start, start + nobjs):
+            try:
+                (_, line) = parser.nextline()
+                line = line.strip()
+            except PSEOF:
+                raise PDFNoValidXRef("Unexpected EOF - file corrupted?")
+            f = line.split(b" ")
+            if len(f) != 3:
+                error_msg = "Invalid XRef format: {!r}, line={!r}".format(
+                    parser, line
+                )
+                raise PDFNoValidXRef(error_msg)
+            (pos_b, genno_b, use_b) = f
+            if use_b != b"n":
+                continue
+            self.offsets[objid] = (None, pos_b.__int__(), genno_b.__int__())
+    log.debug("xref objects: %r", self.offsets)
+    self.load_trailer(parser)
+
+
 PDFXRef.load_trailer = load_trailer
+PDFXRef.load = load_xref
 
 
 class PSToken:
@@ -65,10 +107,21 @@ class PSToken:
         return ret
 
     def __int__(self):
-        return PSInt(self, pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes)
+        if isinstance(self, PSInt):
+            return self
+        return PSInt(int(self, base=10), pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes)
 
     def __float__(self):
-        return PSFloat(self, pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes)
+        if isinstance(self, float):
+            return self
+        elif isinstance(self, int):
+            return PSFloat(int(self, base=10), pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes)
+        elif isinstance(self, bytes):
+            return PSFloat(self.decode(), pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes)
+        elif isinstance(self, PSStr):
+            return PSFloat(str(self), pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes)
+        else:
+            raise NotImplementedError()
 
     def __bytes__(self):
         if isinstance(self, PSBytes):
@@ -80,7 +133,8 @@ class PSToken:
         return PSStr(super().__hex__(), pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes)
 
     def __str__(self):
-        return PSStr(super().__str__(), pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes)
+        raise NotImplementedError()
+        # return PSStr(super().__str__(), pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes)
 
     def __repr__(self):
         return f"{self.__class__.__name__}({super().__repr__()}, pdf_offset={self.pdf_offset!r}, "\
@@ -88,10 +142,74 @@ class PSToken:
 
 
 class PSInt(PSToken, int):
-    pass
+    def __index__(self):
+        return self
+
+    def __str__(self):
+        return str(int(self))
+
+
+C = TypeVar("C")
 
 
 class PSSequence(PSToken):
+    def split(self: Type[C], sep: Optional[C] = None, maxsplit: int = -1) -> List[C]:
+        remainder = self
+        current: Optional[C] = None
+        result: List[C] = []
+        if sep is None:
+            remainder = remainder.strip()
+        while remainder and (maxsplit < 0 or len(result) <= maxsplit):
+            c = remainder[0:1]
+            remainder = remainder[1:]
+            if sep is None:
+                if not c.strip():
+                    if current is not None:
+                        result.append(current)
+                        current = None
+                else:
+                    if current is None:
+                        current = c
+                    else:
+                        current += c
+            else:
+                if current is None:
+                    current = c
+                else:
+                    current += c
+                if current[-len(sep):] == sep:
+                    result.append(current[:-len(sep)])
+                    current = None
+        if current is not None:
+            if not result or maxsplit < 0 or len(result) <= maxsplit:
+                result.append(current)
+            else:
+                result[-1] += current
+        return result
+
+    def __add__(self: Type[C], other) -> C:
+        if isinstance(other, self.__class__) and other.pdf_offset == self.pdf_offset + self.pdf_bytes:
+            return self.__class__(super().__add__(other), pdf_offset=self.pdf_offset)
+        return self.__class__(super().__add__(other), pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes)
+
+    def __radd__(self: Type[C], other) -> C:
+        return self.__class__(other, pdf_offset=self.pdf_offset - len(other)) + self
+
+    def lstrip(self: Type[C], chars: bytes = b" \t\n\r") -> C:
+        ret = self
+        while ret and ret[0] in chars:
+            ret = ret[1:]
+        return ret
+
+    def rstrip(self: Type[C], chars: bytes = b" \t\n\r") -> C:
+        ret = self
+        while ret and ret[-1] in chars:
+            ret = ret[:-1]
+        return ret
+
+    def strip(self: Type[C], chars: bytes = b" \t\n\r") -> C:
+        return self.lstrip(chars).rstrip(chars)
+
     def __getitem__(self, item):
         if isinstance(item, int):
             value = super().__getitem__(item)
@@ -139,8 +257,26 @@ class PSBytes(PSSequence, bytes):
             kwargs["pdf_bytes"] = len(args[0])
         return super().__new__(cls, *args, **kwargs)
 
-    def decode(self, encoding: str = ..., errors: str = ...) -> PSStr:
+    def __getitem__(self, item):
+        if isinstance(item, slice):
+            if item.start is None:
+                start = 0
+            else:
+                start = item.start
+            return PSBytes(super().__getitem__(item), pdf_offset=self.pdf_offset + start)
+        else:
+            ret = super().__getitem__(item)
+            if isinstance(ret, PSInt):
+                return ret
+            else:
+                return PSInt(ret, pdf_offset=self.pdf_offset + item)
+
+    def decode(self, encoding: str = "utf-8", errors: str = "strict") -> PSStr:
         return PSStr(super().decode(encoding, errors), pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes)
+
+
+    def __str__(self):
+        return bytes.__str__(self)
 
 
 class PDFDeciphered(PSBytes):
@@ -161,7 +297,8 @@ class PDFDeciphered(PSBytes):
 
 
 class PSFloat(PSToken, float):
-    pass
+    def __str__(self):
+        return float.__str__(self)
 
 
 class PSBool:
@@ -280,6 +417,10 @@ class PDFDict(dict, PDFDict_Type):
         ret.pdf_bytes = pdf_bytes
         return ret
 
+    def __str__(self):
+        return dict.__str__(self)
+
+
 
 class PDFList(PSSequence, list):
     @staticmethod
@@ -297,6 +438,10 @@ class PDFList(PSSequence, list):
         if start_offset is None or end_offset is None:
             raise ValueError(f"Cannot determine PDF bounds for list {items!r}")
         return PDFList(items, pdf_offset=start_offset, pdf_bytes=end_offset - start_offset)
+
+    def __str__(self):
+        return list.__str__(self)
+
 
 
 def make_ps_object(value, pdf_offset: int, pdf_bytes: int) -> Union[PDFBaseParserToken, PSStr, PDFDict]:
@@ -808,6 +953,7 @@ class InstrumentedPDFDocument(PDFDocument):
                 super().__init__(*args, **kwargs)
             finally:
                 PDFXRef.get_trailer = old_get_trailer
+
     # @property
     # def xrefs(self):
     #     if not self._xrefs:
@@ -927,15 +1073,15 @@ def reverse_expect(file_stream, expected: Union[bytes, Callable[[int, bytes], bo
 def pdf_obj_parser(file_stream, obj, objid: int, parent: Match, pdf_header_offset: int = 0) -> Iterator[Submatch]:
     data: Optional[bytes] = None
     if isinstance(obj, PDFObjectStream):
-        log.status(f"Parsing PDF obj {obj.objid} {obj.genno}")
+        log.status(f"Parsing PDF obj {obj.objid!s} {obj.genno!s}")
         try:
             data = obj.get_data()
         except PDFNotImplementedError as e:
-            log.error(f"Unsupported PDF stream filter in object {obj.objid} {obj.genno}: {e!s}")
+            log.error(f"Unsupported PDF stream filter in object {obj.objid!s} {obj.genno!s}: {e!s}")
         relative_offset = obj.attrs.pdf_offset
         obj_length = obj.data_value.pdf_offset - obj.attrs.pdf_offset + obj.data_value.pdf_bytes - 1
     else:
-        log.status(f"Parsing PDF obj {objid}")
+        log.status(f"Parsing PDF obj {objid!s}")
         relative_offset = obj.pdf_offset
         obj_length = obj.pdf_bytes - 1
     with file_stream.save_pos():
@@ -957,7 +1103,7 @@ def pdf_obj_parser(file_stream, obj, objid: int, parent: Match, pdf_header_offse
     if isinstance(obj, PDFObjectStream):
         match = Submatch(
             name="PDFObject",
-            display_name=f"PDFObject{obj.objid}.{obj.genno}",
+            display_name=f"PDFObject{obj.objid!s}.{obj.genno!s}",
             match_obj=(obj.objid, obj.genno),
             relative_offset=relative_offset,
             length=obj_length,
@@ -1023,3 +1169,96 @@ def pdf_parser(file_stream, parent: Match):
                     continue
                 yielded.add(objid)
             yield from pdf_obj_parser(file_stream, obj, objid, parent, pdf_header_offset=pdf_header_offset)
+
+        trailer = xref.get_trailer()
+        if trailer is not None:
+            trailer_start = min(k.pdf_offset for k in trailer.keys())
+            trailer_end = max(v.pdf_offset + v.pdf_bytes for v in trailer.values())
+            t = Submatch(
+                "Trailer",
+                b"",
+                relative_offset=trailer_start,
+                length=trailer_end - trailer_start,
+                parent=parent
+            )
+            yield t
+            for k, v in trailer.items():
+                kvp = Submatch(
+                    "KeyValuePair",
+                    b"",
+                    relative_offset=k.pdf_offset - trailer_start,
+                    length=v.pdf_offset + v.pdf_bytes - k.pdf_offset,
+                    parent=t
+                )
+                yield kvp
+                yield Submatch(
+                    "Key",
+                    k,
+                    relative_offset=k.pdf_offset - k.pdf_offset,
+                    length=k.pdf_bytes,
+                    parent=kvp
+                )
+                value_match = Submatch(
+                    "Value",
+                    b"",
+                    relative_offset=v.pdf_offset - k.pdf_offset,
+                    length=v.pdf_bytes,
+                    parent=kvp
+                )
+                yield value_match
+                yield from parse_object(v, matcher=parent.matcher, parent=value_match,
+                                        pdf_header_offset=pdf_header_offset)
+
+        if not isinstance(xref, PDFXRef):
+            continue
+
+        xref_start = min(min(c.pdf_offset for c in row if c is not None) for row in xref.offsets.values())
+        xref_end = max(max(c.pdf_offset + c.pdf_bytes for c in row if c is not None) for row in xref.offsets.values())
+        x = Submatch(
+            "XRefTable",
+            b"",
+            relative_offset=xref_start,
+            length=xref_end - xref_start,
+            parent=parent
+        )
+        yield x
+        for row in xref.offsets.values():
+            row_start = min(c.pdf_offset for c in row if c is not None)
+            row_end = max(c.pdf_offset + c.pdf_bytes for c in row if c is not None)
+            row_match = Submatch(
+                "XRefRow",
+                b"",
+                relative_offset=row_start - xref_start,
+                length=row_end - row_start,
+                parent=x
+            )
+            yield row_match
+            obj_id, pos, gen_no = row
+            if obj_id is not None:
+                ret = Submatch(
+                    "ObjectID",
+                    b"",
+                    relative_offset=obj_id.pdf_offset - row_start,
+                    length=obj_id.pdf_bytes,
+                    parent=row_match
+                )
+                yield ret
+                yield from parse_object(obj_id, matcher=parent.matcher, parent=ret, pdf_header_offset=pdf_header_offset)
+            ret = Submatch(
+                "Position",
+                b"",
+                relative_offset=pos.pdf_offset - row_start,
+                length=pos.pdf_bytes,
+                parent=row_match
+            )
+            yield ret
+            yield from parse_object(ret, matcher=parent.matcher, parent=ret, pdf_header_offset=pdf_header_offset)
+            ret = Submatch(
+                "Generation",
+                b"",
+                relative_offset=gen_no.pdf_offset - row_start,
+                length=gen_no.pdf_bytes,
+                parent=row_match
+            )
+            yield ret
+            yield from parse_object(ret, matcher=parent.matcher, parent=ret, pdf_header_offset=pdf_header_offset)
