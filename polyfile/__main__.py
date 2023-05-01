@@ -376,7 +376,7 @@ equivalent to `--format mime`"""))
                     assert needs_sbud
                     json.dump(sbud, output)
                     if not output_format.output_to_stdout:
-                        log.info(f"Saved {output_format.upper()} output to {output_format.output_path}")
+                        log.info(f"Saved {output_format.output_format.upper()} output to {output_format.output_path}")
                 elif output_format.output_format == "html":
                     assert needs_sbud
                     output.write(html.generate(file_path, sbud))
