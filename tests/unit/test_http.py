@@ -4,7 +4,7 @@ from unittest import TestCase
 from abnf.parser import ParseError
 
 from polyfile.fileutils import FileStream, Tempfile
-from polyfile.http_11 import *
+from polyfile.http.http_11 import *
 
 
 class Http11RequestUnitTests(TestCase):
@@ -303,6 +303,5 @@ class Http11RequestUnitTests(TestCase):
         with Tempfile(b"POST /search HTTP/1.1\r\nHost: normal-website.com\r\nContent-Type: "
                       b"application/x-www-form-urlencoded\r\nContent-Length: 11\r\n\r\nq=smuggling") as t:
             fs = FileStream(t)
-            match = Match("Testing", None, 0)
-            for match in parse_http_11(fs, match):
+            for match in parse_http_11(fs, None):
                 print(match)

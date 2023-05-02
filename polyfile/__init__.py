@@ -4,7 +4,7 @@ from . import (
     jpeg,
     zipmatcher,
     nitf,
-    http_11,
+    http,
     kaitaimatcher,
     languagematcher,
     polyfile

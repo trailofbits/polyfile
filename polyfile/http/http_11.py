@@ -1,5 +1,4 @@
 from enum import StrEnum
-from pathlib import Path
 from string import whitespace
 
 from abnf.grammars.misc import load_grammar_rules
@@ -16,11 +15,7 @@ from abnf.grammars import (
 )
 from abnf import Rule, parser, Node
 
-from .ast import Node as ASTNode
-from .fileutils import ExactNamedTempfile, FileStream
-from .http import defacto, deprecated, experimental, structured_headers
-from .magic import MagicMatcher
-from .polyfile import register_parser, Match
+from . import defacto, deprecated, experimental, structured_headers
 
 from typing import Dict, List, Optional, Set, Tuple
 
@@ -512,20 +507,3 @@ class HttpVisitor(parser.NodeVisitor):
         """
         self.content_length = self._accumulate_chunks(node_children=node.children)
         self._remove_header("Transfer-Encoding")
-
-
-# Register a magic matcher for HTTP 1.1 headers:
-
-with ExactNamedTempfile(b"""0 regex/s [^\\n]* HTTP/1.1$ HTTP 1.1
-!:mime application/x-http-1.1
-""", name="HTTP1.1Matcher") as t:
-    http_11_matcher = MagicMatcher.DEFAULT_INSTANCE.add(Path(t))[0]
-
-
-@register_parser("application/x-http-1.1")
-def parse_http_11(file_stream: FileStream, parent: Optional[Match] = None):
-    offset = file_stream.tell()
-    file_stream.seek(0)
-    http_ast = Http11RequestGrammar("request").parse(file_stream.read().decode("utf-8"), start=offset)
-    root_node = ASTNode.load(http_ast)
-    yield from root_node.to_matches(parent)
