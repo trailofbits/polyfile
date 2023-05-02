@@ -1,18 +1,48 @@
 from enum import StrEnum
+import importlib
 from string import whitespace
 
 from abnf.grammars.misc import load_grammar_rules
-from abnf.grammars import (
-    cors,
-    rfc9110,
-    rfc5322,
-    rfc4647,
-    rfc5646,
-    rfc3986,
-    rfc7230,
-    rfc9111,
-    rfc6265,
-)
+
+from ..logger import getStatusLogger
+
+log = getStatusLogger("HTTP/1.1")
+
+# loading the following modules is _really_ slow, so log its status!
+for i, modname in enumerate(log.range((
+    "cors",
+    "rfc9110",
+    "rfc5322",
+    #"rfc4647",
+    #"rfc5646",
+    "rfc3986",
+    "rfc7230",
+    "rfc9111",
+    "rfc6265",
+), desc="Importing HTTP/1.1", unit=" grammars")):
+    mod = importlib.import_module(f".{modname}", package="abnf.grammars")
+    if i == 0:
+        cors = mod
+    elif i == 1:
+        rfc9110 = mod
+    elif i == 2:
+        rfc5322 = mod
+    elif i == 3:
+        rfc3986 = mod
+    elif i == 4:
+        rfc7230 = mod
+    elif i == 5:
+        rfc9111 = mod
+    elif i == 6:
+        rfc6265 = mod
+    else:
+        raise NotImplementedError()
+    log.debug(f"Loaded grammar for {modname}")
+del mod
+del modname
+del i
+log.clear_status()
+
 from abnf import Rule, parser, Node
 
 from . import defacto, deprecated, experimental, structured_headers
