@@ -4,10 +4,11 @@ from . import (
     jpeg,
     zipmatcher,
     nitf,
+    http_11,
     kaitaimatcher,
     languagematcher,
-    polyfile,
-    http,
+    polyfile
 )
+
 from .__main__ import main
 from .polyfile import __version__

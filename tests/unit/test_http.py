@@ -1,6 +1,10 @@
+from io import BytesIO
 from unittest import TestCase
-from polyfile.http_11 import *
+
 from abnf.parser import ParseError
+
+from polyfile.fileutils import FileStream, Tempfile
+from polyfile.http_11 import *
 
 
 class Http11RequestUnitTests(TestCase):
@@ -294,3 +298,11 @@ class Http11RequestUnitTests(TestCase):
         self.assertEqual(
             self.visitor.headers["Expires"], "Wed, 21 Oct 2015 07:28:00 GMT"
         )
+
+    def test_matching(self):
+        with Tempfile(b"POST /search HTTP/1.1\r\nHost: normal-website.com\r\nContent-Type: "
+                      b"application/x-www-form-urlencoded\r\nContent-Length: 11\r\n\r\nq=smuggling") as t:
+            fs = FileStream(t)
+            match = Match("Testing", None, 0)
+            for match in parse_http_11(fs, match):
+                print(match)
