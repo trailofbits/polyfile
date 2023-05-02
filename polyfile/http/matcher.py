@@ -29,6 +29,6 @@ def parse_http_11(file_stream: FileStream, parent: Match):
 
         from .http_11 import Http11RequestGrammar as Grammar
         Http11RequestGrammar = Grammar
-    http_ast = Http11RequestGrammar("request").parse(file_stream.read().decode("utf-8"), start=offset)
+    http_ast, _ = Http11RequestGrammar("request").parse(file_stream.read().decode("utf-8"), start=offset)
     root_node = ASTNode.load(http_ast)
     yield from root_node.to_matches(parent)

@@ -71,7 +71,7 @@ class Node:
             if children is None:
                 ancestors.append((obj, ()))
                 if hasattr(obj, "children"):
-                    for child in obj.children:
+                    for child in reversed(obj.children):
                         ancestors.append((child, None))
                 continue
             if not hasattr(obj, "name"):
@@ -91,13 +91,16 @@ class Node:
                 length: Optional[int] = obj.length
             else:
                 length = None
-            if ancestors and ancestors[-1][1]:
-                older_sibling: Optional[Node] = ancestors[-1][1][-1]
+            older_sibling: Optional[Node] = None
+            for reversed_parent_index, (parent, siblings) in enumerate(reversed(ancestors)):
+                if siblings is not None:
+                    if siblings:
+                        older_sibling: Optional[Node] = siblings[-1]
+                    break
             else:
-                older_sibling = None
+                assert not ancestors
             node = cls(name=name, value=value, offset=offset, length=length, older_sibling=older_sibling,
                        children=children)
             if not ancestors:
                 return node
-            parent, siblings = ancestors[-1]
-            ancestors[-1] = parent, siblings + (node,)
+            ancestors[len(ancestors) - reversed_parent_index - 1] = parent, siblings + (node,)
