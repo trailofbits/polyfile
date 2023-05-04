@@ -2396,7 +2396,7 @@ class OctetStreamTest(MagicTest):
 TEST_PATTERN: Pattern[str] = re.compile(
     r"^(?P<level>[>]*)(?P<offset>[^\s!][^\s]*)\s+(?P<data_type>[^\s]+)\s+(?P<remainder>.+)$"
 )
-MIME_PATTERN: Pattern[str] = re.compile(r"^!:mime\s+([^\s]+)\s*(#.*)?$")
+MIME_PATTERN: Pattern[str] = re.compile(r"^!:mime\s+([^#]+?)\s*(#.*)?$")
 EXTENSION_PATTERN: Pattern[str] = re.compile(r"^!:ext\s+([^\s]+)\s*(#.*)?$")
 
 

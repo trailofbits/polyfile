@@ -437,9 +437,9 @@ class REPL(metaclass=REPLMeta):
 
     def load_history(self):
         try:
-            readline.read_history_file(HISTORY_PATH)
+            readline.read_history_file(str(HISTORY_PATH))
             self._prev_history_length = readline.get_current_history_length()
-        except FileNotFoundError:
+        except (FileNotFoundError, OSError):
             open(HISTORY_PATH, 'wb').close()
             self._prev_history_length = 0
         # default history len is -1 (infinite), which may grow unruly
@@ -448,7 +448,8 @@ class REPL(metaclass=REPLMeta):
     def store_history(self):
         new_length = readline.get_current_history_length()
         try:
-            readline.append_history_file(max(new_length - self._prev_history_length, 0), HISTORY_PATH)
+            if hasattr(readline, "append_history_file"):
+                readline.append_history_file(max(new_length - self._prev_history_length, 0), HISTORY_PATH)
             self._prev_history_length = readline.get_current_history_length()
         except IOError as e:
             log.warning(f"Unable to save history to {HISTORY_PATH!s}: {e!s}")
