@@ -1,7 +1,9 @@
 from typing import Iterable, Optional, Tuple
 from unittest import TestCase
 
+from polyfile.polyfile import Analyzer, Match
 from polyfile.ast import Node
+from polyfile.fileutils import Tempfile
 
 
 class TestASTNode:
@@ -61,3 +63,14 @@ class ASTTest(TestCase):
         self.assertEqual("grandchild3", grandchild3.name)
         self.assertEqual(13, grandchild3.offset)
         self.assertEqual(7, grandchild3.length)
+
+    def test_ast_conversion(self):
+        ast = Node.load(self.example_obj)
+        analyzer = Analyzer("")
+        matcher = analyzer.matcher
+        root_match = Match("root", None, matcher=matcher)
+        matches = list(ast.to_matches(root_match))
+        self.assertEqual(6, len(matches))
+        for m, name in zip(matches, ("root", "child1", "grandchild1", "child2", "grandchild2", "grandchild3")):
+            self.assertIs(root_match, m.root)
+            self.assertEqual(name, m.name)
