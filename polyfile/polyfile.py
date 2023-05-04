@@ -5,7 +5,7 @@ import hashlib
 from json import dumps
 from mimetypes import guess_extension
 from pathlib import Path
-import pkg_resources
+import sys
 from time import localtime
 from typing import Any, Callable, Dict, IO, Iterable, Iterator, List, Optional, Set, Tuple, Union
 
@@ -13,7 +13,14 @@ from .fileutils import FileStream
 from . import logger
 from .magic import MagicMatcher, Match as MagicMatch, MatchContext, TestResult
 
-__version__: str = pkg_resources.require("polyfile")[0].version
+if sys.version_info >= (3, 10):
+    from importlib.metadata import version
+    __version__: str = version("polyfile")
+    del version
+else:
+    import pkg_resources
+    __version__ = pkg_resources.require("polyfile")[0].version
+    del pkg_resources
 mod_year = localtime(Path(__file__).stat().st_mtime).tm_year
 __copyright__: str = f"Copyright ©{mod_year} Trail of Bits"
 __license__: str = "Apache License Version 2.0 https://www.apache.org/licenses/"
