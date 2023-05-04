@@ -5,6 +5,8 @@ from abnf.parser import ParseError
 
 from polyfile.fileutils import FileStream, Tempfile
 from polyfile.http.http_11 import *
+from polyfile.http.matcher import http_11_matcher, HTTP_11_MIME_TYPE
+from polyfile.magic import MagicMatcher, MatchedTest
 
 
 class Http11RequestUnitTests(TestCase):
@@ -300,8 +302,16 @@ class Http11RequestUnitTests(TestCase):
         )
 
     def test_matching(self):
-        with Tempfile(b"POST /search HTTP/1.1\r\nHost: normal-website.com\r\nContent-Type: "
-                      b"application/x-www-form-urlencoded\r\nContent-Length: 11\r\n\r\nq=smuggling") as t:
-            fs = FileStream(t)
-            for match in parse_http_11(fs, None):
-                print(match)
+        matcher = MagicMatcher.DEFAULT_INSTANCE
+        self.assertIn(HTTP_11_MIME_TYPE, matcher.tests_by_mime)
+        tests = matcher.tests_by_mime[HTTP_11_MIME_TYPE]
+        self.assertGreaterEqual(len(tests), 1)
+        test = next(iter(tests))
+        matches = tuple(test.match(b"POST /search HTTP/1.1\r\nHost: normal-website.com\r\nContent-Type: "
+                                   b"application/x-www-form-urlencoded\r\nContent-Length: 11\r\n\r\nq=smuggling"))
+        self.assertGreaterEqual(len(matches), 1)
+        match = matches[0]
+        self.assertIsInstance(match, MatchedTest)
+        self.assertEqual(match.offset, 0)
+        self.assertEqual(match.length, 22)
+        self.assertEqual(match.value, "POST /search HTTP/1.1\r")
