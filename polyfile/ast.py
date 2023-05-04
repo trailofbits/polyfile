@@ -19,6 +19,14 @@ class Node:
         self.older_sibling: Optional[Node] = older_sibling
         self.children: Tuple[Node, ...] = tuple(children)
 
+    def __repr__(self):
+        r = f"{self.__class__.__name__}(name={self.name!r}"
+        if self.value is not None:
+            r = f"{r}, value={self.value!r}"
+        r = f"{r}, offset={self.offset!r}, length={self.length!r}, older_sibling={self.older_sibling!r}, " \
+            f"children={self.children!r})"
+        return r
+
     @property
     def offset(self) -> int:
         if self._offset is None:
@@ -69,11 +77,11 @@ class Node:
         while True:
             obj, children = ancestors.pop()
             if children is None:
-                ancestors.append((obj, ()))
-                if hasattr(obj, "children"):
-                    for child in reversed(obj.children):
-                        ancestors.append((child, None))
-                continue
+                if hasattr(obj, "children") and obj.children:
+                    ancestors.append((obj, ()))
+                    ancestors.extend((child, None) for child in reversed(obj.children))
+                    continue
+                children = ()
             if not hasattr(obj, "name"):
                 raise ValueError(f"{obj!r} does not have a `name` attribute!")
             name: str = obj.name
