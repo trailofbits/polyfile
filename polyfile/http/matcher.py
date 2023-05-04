@@ -8,10 +8,13 @@ from ..polyfile import register_parser, Match
 
 Http11RequestGrammar = None
 
+HTTP_MIME_TYPE: str = "message/x-http"
+HTTP_11_MIME_TYPE: str = f"{HTTP_MIME_TYPE}; version=1.1"
+
 
 # Register a magic matcher for HTTP 1.1 headers:
 with ExactNamedTempfile(b"""0 regex/s [^\\\\n]*?\\\\s+HTTP/1.1\\\\s*$ HTTP 1.1
-!:mime application/x-http-1.1
+!:mime """ + HTTP_11_MIME_TYPE.encode("utf-8") + b"""
 >0 string GET GET request header
 >0 string POST POST request header
 >0 string PUT PUT request header
@@ -19,7 +22,7 @@ with ExactNamedTempfile(b"""0 regex/s [^\\\\n]*?\\\\s+HTTP/1.1\\\\s*$ HTTP 1.1
     http_11_matcher = MagicMatcher.DEFAULT_INSTANCE.add(Path(t))[0]
 
 
-@register_parser("application/x-http-1.1")
+@register_parser(HTTP_11_MIME_TYPE)
 def parse_http_11(file_stream: FileStream, parent: Match):
     offset = file_stream.tell()
     file_stream.seek(0)
