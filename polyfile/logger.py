@@ -1,7 +1,7 @@
 import logging
 import sys
 from time import time
-from typing import Collection, Iterator, Optional, TypeVar
+from typing import Collection, Iterator, TypeVar
 
 
 STATUS = 15

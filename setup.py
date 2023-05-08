@@ -36,6 +36,7 @@ setup(
         "Pillow>=5.0.0",
         "pyreadline3;platform_system=='Windows'",
         "pyyaml>=3.13",
+        "rich>=13.3.5",
         "setuptools>=65.5.1"
     ],
     extras_require={
@@ -44,8 +45,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'polyfile = polyfile.__main__:main',
-            'polymerge = polymerge.__main__:main'
+            'polyfile = polyfile.__main__:main'
         ]
     },
     package_data={"polyfile": [
