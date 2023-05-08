@@ -8,6 +8,9 @@ import sys
 from textwrap import dedent
 from typing import ContextManager, Optional, TextIO
 
+from rich import traceback
+from rich.logging import RichHandler
+
 from . import html
 from . import logger
 from .fileutils import PathOrStdin, PathOrStdout
@@ -253,13 +256,22 @@ equivalent to `--format mime`"""))
         args.format.append(FormatOutput())
 
     if args.quiet:
-        logger.setLevel(logging.CRITICAL)
+        numeric_log_level = logging.CRITICAL
     elif args.trace:
-        logger.setLevel(logger.TRACE)
+        numeric_log_level = logger.TRACE
     elif args.debug:
-        logger.setLevel(logging.DEBUG)
+        numeric_log_level = logging.DEBUG
     else:
-        logger.setLevel(logger.STATUS)
+        numeric_log_level = logger.STATUS
+
+    logging.basicConfig(
+        level=numeric_log_level,
+        format="%(message)s",
+        datefmt="[%X]",
+        handlers=[RichHandler(console=log.console)],
+    )
+
+    traceback.install(show_locals=True)
 
     if args.filetype:
         regex = r'|'.join(fr"({ f.replace('*', '.*').replace('?', '.?') })" for f in args.filetype)
@@ -334,13 +346,10 @@ equivalent to `--format mime`"""))
                             if line not in lines:
                                 lines.add(line)
                                 if istty:
-                                    log.clear_status()
                                     output.write(f"{line}\n")
                                     output.flush()
                                 else:
                                     output.write(f"{line}\n")
-                    if istty:
-                        log.clear_status()
                 elif output_format.output_format in ("mime", "explain"):
                     omm = sys.stderr.isatty() and output.isatty() and logging.root.level <= logging.INFO
                     if omm:
@@ -351,7 +360,6 @@ equivalent to `--format mime`"""))
                         for mimetype, match in analyzer.mime_types():
                             found_match = True
                             if omm:
-                                log.clear_status()
                                 output.write(mimetype)
                                 output.flush()
                                 sys.stderr.write("." * (longest_mimetype - len(mimetype) + 1))
@@ -367,8 +375,6 @@ equivalent to `--format mime`"""))
                     if args.require_match and not found_match and not needs_sbud:
                         log.info("No matches found, exiting")
                         return 127
-                    if omm:
-                        log.clear_status()
                     elif not output_format.output_to_stdout:
                         log.info(f"Saved MIME output to {output_format.output_path}")
                 elif output_format.output_format == "json" or output_format.output_format == "sbud":

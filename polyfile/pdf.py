@@ -1073,17 +1073,17 @@ def reverse_expect(file_stream, expected: Union[bytes, Callable[[int, bytes], bo
 def pdf_obj_parser(file_stream, obj, objid: int, parent: Match, pdf_header_offset: int = 0) -> Iterator[Submatch]:
     data: Optional[bytes] = None
     if isinstance(obj, PDFObjectStream):
-        log.status(f"Parsing PDF obj {obj.objid!s} {obj.genno!s}")
-        try:
-            data = obj.get_data()
-        except PDFNotImplementedError as e:
-            log.error(f"Unsupported PDF stream filter in object {obj.objid!s} {obj.genno!s}: {e!s}")
-        relative_offset = obj.attrs.pdf_offset
-        obj_length = obj.data_value.pdf_offset - obj.attrs.pdf_offset + obj.data_value.pdf_bytes - 1
+        with log.status(f"[bold green]Parsing PDF [bold white]obj {obj.objid!s} {obj.genno!s}"):
+            try:
+                data = obj.get_data()
+            except PDFNotImplementedError as e:
+                log.error(f"Unsupported PDF stream filter in object {obj.objid!s} {obj.genno!s}: {e!s}")
+            relative_offset = obj.attrs.pdf_offset
+            obj_length = obj.data_value.pdf_offset - obj.attrs.pdf_offset + obj.data_value.pdf_bytes - 1
     else:
-        log.status(f"Parsing PDF obj {objid!s}")
-        relative_offset = obj.pdf_offset
-        obj_length = obj.pdf_bytes - 1
+        with log.status(f"[bold green]Parsing PDF [bold white]obj {objid!s}"):
+            relative_offset = obj.pdf_offset
+            obj_length = obj.pdf_bytes - 1
     with file_stream.save_pos():
         file_stream.seek(parent.offset + relative_offset - pdf_header_offset)
         reverse_skip_whitespace(file_stream)
@@ -1124,7 +1124,6 @@ def pdf_obj_parser(file_stream, obj, objid: int, parent: Match, pdf_header_offse
         )
         yield match
         yield from parse_object(obj, parent.matcher, match, pdf_header_offset=pdf_header_offset)
-    log.clear_status()
 
 
 @register_parser("application/pdf")

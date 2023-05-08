@@ -2676,7 +2676,7 @@ class MagicMatcher:
         elif not isinstance(to_match, MatchContext):
             to_match = MatchContext.load(to_match)
         yielded = False
-        for test in log.range(self.non_text_tests, desc="binary matching", unit=" tests", delay=1.0):
+        for test in log.range(self.non_text_tests, desc="binary matching"):
             m = Match(matcher=self, context=to_match, results=test.match(to_match))
             if m and (not to_match.only_match_mime or any(t is not None for t in m.mimetypes)):
                 yield m
@@ -2686,7 +2686,7 @@ class MagicMatcher:
         is_text = text_matcher and (not to_match.only_match_mime or any(t is not None for t in text_matcher.mimetypes))
         if is_text:
             # this is a text file, so try all of the textual tests:
-            for test in log.range(self.text_tests, desc="text matching", unit=" tests", delay=1.0):
+            for test in log.range(self.text_tests, desc="text matching"):
                 m = Match(matcher=self, context=to_match, results=test.match(to_match))
                 if m and (not to_match.only_match_mime or any(t is not None for t in m.mimetypes)):
                     yield m

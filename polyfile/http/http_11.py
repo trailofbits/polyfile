@@ -28,7 +28,7 @@ for i, modname in enumerate(log.range((
     "rfc7230",
     "rfc9111",
     "rfc6265",
-), desc="Importing HTTP/1.1", unit=" grammars")):
+), desc="Importing HTTP/1.1 grammars")):
     mod = importlib.import_module(f".{modname}", package="abnf.grammars")
     if i == 0:
         cors = mod
@@ -50,7 +50,6 @@ for i, modname in enumerate(log.range((
 del mod
 del modname
 del i
-log.clear_status()
 
 from abnf import Rule, parser, Node
 
