@@ -1,10 +1,10 @@
 from contextlib import nullcontext
 import logging
 import sys
-from typing import Collection, Iterable, TypeVar, Union
+from typing import Collection, Iterator, Optional, TypeVar, Union
 
 from rich.console import Console, ConsoleRenderable, RichCast, Style
-from rich.progress import track
+from rich.progress import Progress
 from rich.status import Status
 
 
@@ -60,6 +60,7 @@ class StatusLogger(logging.getLoggerClass()):
     def __init__(self, name, level=logging.NOTSET):
         super().__init__(name, level)
         self.console: Console = Console(log_path=False, file=sys.stderr)
+        self.progress: Optional[Progress] = None
         # self.addHandler(DEFAULT_STATUS_LOG_HANDLER)
 
     def status(self,
@@ -76,15 +77,24 @@ class StatusLogger(logging.getLoggerClass()):
         else:
             return nullcontext()
 
-    def range(
+    def track(
             self,
             iterable: Collection[T],
             desc: str = "",
-            update_interval: float = 0.1,
             transient: bool = False
-    ) -> Iterable[T]:
-        return track(sequence=iterable, description=desc, console=self.console, transient=transient,
-                     update_period=update_interval)
+    ) -> Iterator[T]:
+        if self.progress is None:
+            self.progress = Progress(console=self.console, transient=transient)
+            self.progress.start()
+            progress_created = True
+        else:
+            progress_created = False
+        for t in self.progress.track(sequence=iterable, description=desc):
+            yield t
+        if progress_created:
+            if self.progress.finished:
+                self.progress.stop()
+                self.progress = None
 
     def trace(self, msg, *args, **kwargs):
         if self.isEnabledFor(TRACE):

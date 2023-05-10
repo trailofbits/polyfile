@@ -18,7 +18,7 @@ else:
 log = getStatusLogger("HTTP/1.1")
 
 # loading the following modules is _really_ slow, so log its status!
-for i, modname in enumerate(log.range((
+for i, modname in enumerate(log.progress((
     "cors",
     "rfc9110",
     "rfc5322",
