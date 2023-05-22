@@ -680,9 +680,9 @@ class MagicTest(ABC):
         self._mime: Optional[Message] = None
         self.extensions: Set[str] = set(extensions)
         if isinstance(message, Message):
-            self.message: Message = message
+            self._message: Message = message
         else:
-            self.message = Message.parse(message)
+            self._message = Message.parse(message)
         self._parent: Optional[MagicTest] = parent
         self.children: List[MagicTest] = []
         if parent is not None:
@@ -719,6 +719,14 @@ class MagicTest(ABC):
         if cls.AUTO_REGISTER_TEST:
             TEST_TYPES.add(cls)
         return super().__init_subclass__(**kwargs)
+
+    @property
+    def message(self) -> Message:
+        return self._message
+
+    @message.setter
+    def message(self, new_value: Message):
+        self._message = new_value
 
     @property
     def test_type(self) -> TestType:
@@ -937,6 +945,42 @@ class MagicTest(ABC):
         for e in self.extensions:
             s = f"{s}\n!:ext\t{e}"
         return s
+
+
+class DynamicMagicTest(MagicTest, ABC):
+    """A test that can be bound with a dynamically generated message"""
+
+    def __init__(
+            self,
+            offset: Offset,
+            mime: Optional[Union[str, TernaryExecutableMessage]] = None,
+            extensions: Iterable[str] = (),
+            default_message: Union[str, Message] = "",
+            parent: Optional["MagicTest"] = None,
+            comments: Iterable[Comment] = ()
+    ):
+        super().__init__(offset=offset, mime=mime, extensions=extensions, parent=parent, comments=comments,
+                         message=default_message)
+        self._bound_message: Optional[Message] = None
+
+    @property
+    def default_message(self) -> Message:
+        return super().message
+
+    @property
+    def message(self) -> Message:
+        if self._bound_message is None:
+            return self.default_message
+        else:
+            return self._bound_message
+
+    def bind(self, message: Union[str, Message]) -> MagicTest:
+        if not isinstance(message, Message):
+            message = Message.parse(message)
+        new_dict = dict(self.__dict__)
+        new_dict["message"] = message
+        bound_type = type(f"Bound{self.__class__.__name__}", (self.__class__,), new_dict)
+        return bound_type()
 
 
 TYPES_BY_NAME: Dict[str, "DataType"] = {}

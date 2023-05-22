@@ -7,6 +7,7 @@ from . import (
     http,
     kaitaimatcher,
     languagematcher,
+    pickles,
     polyfile
 )
 
