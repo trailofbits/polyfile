@@ -975,12 +975,13 @@ class DynamicMagicTest(MagicTest, ABC):
             return self._bound_message
 
     def bind(self, message: Union[str, Message]) -> MagicTest:
-        if not isinstance(message, Message):
+        if self._bound_message is not None:
+            raise ValueError(f"{self!r} already has a bound message: {self.message!s}")
+        elif not isinstance(message, Message):
             message = Message.parse(message)
-        new_dict = dict(self.__dict__)
-        new_dict["message"] = message
-        bound_type = type(f"Bound{self.__class__.__name__}", (self.__class__,), new_dict)
-        return bound_type()
+        result: DynamicMagicTest = type(f"Bound{self.__class__.__name__}", (self.__class__,), dict(self.__dict__))()
+        result._bound_message = message
+        return result
 
 
 TYPES_BY_NAME: Dict[str, "DataType"] = {}
