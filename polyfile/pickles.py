@@ -1,41 +1,9 @@
-from io import StringIO
-from typing import Any, Optional, Iterator
+from typing import Optional
 
-from fickling.analysis import check_safety
+from fickling.analysis import Analyzer, Severity
 from fickling.pickle import Pickled, PickleDecodeError
 
-from .magic import AbsoluteOffset, DynamicMagicTest, FailedTest, MagicMatcher, MagicTest, MatchedTest, Message, \
-    TestResult, TestType, MatchContext
-
-
-class MatchedPickle(MatchedTest):
-    def __init__(
-            self, test: MagicTest,
-            pickled: Pickled,
-            value: Any,
-            offset: int,
-            length: int,
-            parent: Optional["TestResult"] = None,
-    ):
-        super().__init__(test=test, value=value, offset=offset, length=length, parent=parent)
-        self.pickled: Pickled = pickled
-        self._safety_log: Optional[str] = None
-        self._is_likely_safe: Optional[bool] = None
-
-    @property
-    def safety_log(self) -> str:
-        if self._safety_log is None:
-            log_buffer = StringIO()
-            self._is_likely_safe = check_safety(self.pickled, stdout=log_buffer, stderr=log_buffer)
-            self._safety_log = str(log_buffer)
-        return self._safety_log
-
-    @property
-    def is_likely_safe(self) -> bool:
-        if self._is_likely_safe is None:
-            _ = self.safety_log
-            assert self._is_likely_safe is not None
-        return self._is_likely_safe
+from .magic import AbsoluteOffset, DynamicMagicTest, FailedTest, MagicMatcher, MatchedTest, TestResult, TestType
 
 
 class PickleMatcher(DynamicMagicTest):
@@ -58,12 +26,11 @@ class PickleMatcher(DynamicMagicTest):
             elif prev == 0x80 and c in (2, 3, 4):
                 try:
                     pickled = Pickled.load(data)
-                    log_buffer = StringIO()
-                    if check_safety(pickled, stdout=log_buffer, stderr=log_buffer):
+                    results = Analyzer.default_instance.analyze(pickled)
+                    if results.severity <= Severity.LIKELY_SAFE:
                         message = self.message
                     else:
-                        log_buffer.seek(0)
-                        buffer_data = log_buffer.read()
+                        buffer_data = results.to_string(verbosity=Severity.LIKELY_UNSAFE)
                         if buffer_data:
                             buffer_data = f"\n{buffer_data}".replace("%", "%%")
                         message = f"Likely Unsafe {self.default_message}{buffer_data}"
