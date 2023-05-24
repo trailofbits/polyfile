@@ -1839,15 +1839,19 @@ def msdos_time(value: int) -> str:
 
 class BaseNumericDataType(Enum):
     BYTE = ("byte", "b", 1)
+    BYTE1 = ("1", "b", 1)
     SHORT = ("short", "h", 2)
+    SHORT2 = ("2", "h", 2)
     LONG = ("long", "l", 4)
+    LONG4 = ("4", "l", 4)
     QUAD = ("quad", "q", 8)
+    QUAD8 = ("8", "q", 8)
     FLOAT = ("float", "f", 4)
     DOUBLE = ("double", "d", 8)
     DATE = ("date", "L", 4, lambda n: utc_date(n * 1000))
-    QDATE = ("qdate", "Q", 8, utc_date)
+    QDATE = ("qdate", "Q", 8, lambda n: utc_date(n * 1000))
     LDATE = ("ldate", "L", 4, lambda n: local_date(n * 1000))
-    QLDATE = ("qldate", "Q", 8, local_date)
+    QLDATE = ("qldate", "Q", 8, lambda n: local_date(n * 1000))
     QWDATE = ("qwdate", "Q", 8)
     MSDOSDATE = ("msdosdate", "h", 2, msdos_date)
     MSDOSTIME = ("msdostime", "h", 2, msdos_time)
@@ -2557,6 +2561,7 @@ class Match:
                 # sometimes we parsed a negative value and want to print it as an unsigned int:
                 result_str = result_str % (result.value + 2**(8 * result.length),)
             elif "%" in result_str.replace("%%", ""):
+                result_str = result_str.replace("%lld", "%d")
                 result_str = result_str % (result.value,)
             result_str = result_str.replace("%%", "%")
             msg = f"{msg}{result_str}"
