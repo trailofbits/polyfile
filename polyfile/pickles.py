@@ -65,9 +65,9 @@ class PickleMatcher(DynamicMagicTest):
                         log_buffer.seek(0)
                         buffer_data = log_buffer.read()
                         if buffer_data:
-                            buffer_data = f"\n{buffer_data}"
+                            buffer_data = f"\n{buffer_data}".replace("%", "%%")
                         message = f"Likely Unsafe {self.default_message}{buffer_data}"
-                    return MatchedTest(self.bind(message), value=data, offset=0, length=len(data))
+                    return MatchedTest(self.bind(message), value=str(message), offset=0, length=len(data))
                 except PickleDecodeError as e:
                     return FailedTest(self, offset=0, message=f"data was not decodable as a pickle file: {e!s}")
             prev = c
