@@ -13,7 +13,7 @@ if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
 class Avi(KaitaiStruct):
     """
     .. seealso::
-       Source - https://docs.microsoft.com/en-us/previous-versions/ms779636(v=vs.85)
+       Source - https://learn.microsoft.com/en-us/previous-versions/ms779636(v=vs.85)
     """
 
     class ChunkType(Enum):
@@ -139,7 +139,7 @@ class Avi(KaitaiStruct):
         """Main header of an AVI file, defined as AVIMAINHEADER structure.
         
         .. seealso::
-           Source - https://docs.microsoft.com/en-us/previous-versions/ms779632(v=vs.85)
+           Source - https://learn.microsoft.com/en-us/previous-versions/ms779632(v=vs.85)
         """
         SEQ_FIELDS = ["micro_sec_per_frame", "max_bytes_per_sec", "padding_granularity", "flags", "total_frames", "initial_frames", "streams", "suggested_buffer_size", "width", "height", "reserved"]
         def __init__(self, _io, _parent=None, _root=None):
@@ -225,7 +225,7 @@ class Avi(KaitaiStruct):
         """Stream header (one header per stream), defined as AVISTREAMHEADER structure.
         
         .. seealso::
-           Source - https://docs.microsoft.com/en-us/previous-versions/ms779638(v=vs.85)
+           Source - https://learn.microsoft.com/en-us/previous-versions/ms779638(v=vs.85)
         """
         SEQ_FIELDS = ["fcc_type", "fcc_handler", "flags", "priority", "language", "initial_frames", "scale", "rate", "start", "length", "suggested_buffer_size", "quality", "sample_size", "frame"]
         def __init__(self, _io, _parent=None, _root=None):

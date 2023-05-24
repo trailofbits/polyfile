@@ -1,6 +1,6 @@
 
 #------------------------------------------------------------------------------
-# $File: images,v 1.236 2022/10/31 13:22:26 christos Exp $
+# $File: images,v 1.242 2023/05/23 13:37:32 christos Exp $
 # images:  file(1) magic for image formats (see also "iff", and "c-lang" for
 # XPM bitmaps)
 #
@@ -1712,6 +1712,19 @@
 #>32058  ubequad		!0		\b, channel delays %16.16llx
 
 # From:		Joerg Jenderek
+# URL:		http://fileformats.archiveteam.org/wiki/GED
+#		https://recoil.sourceforge.net/formats.html#Atari-8-bit
+# Reference:	https://sourceforge.net/projects/recoil/files/recoil/6.3.4/recoil-6.3.4.tar.gz
+#		recoil-6.3.4/recoil.c
+#		http://mark0.net/download/triddefs_xml.7z/defs/b/bitmap-ged.trid.xml
+# Note:		called "Atari GED bitmap" by TrID; file size 11302
+#		and verified by RECOIL graphic tool
+0	string		\xFF\xFF0SO\x7F		Atari GED bitmap, 160x200
+#!:mime	application/octet-stream
+!:mime	image/x-atari-ged
+!:ext	ged
+
+# From:		Joerg Jenderek
 # URL:		http://fileformats.archiveteam.org/wiki/ImageLab/PrintTechnic
 # Reference:	http://mark0.net/download/triddefs_xml.7z/defs/b/bitmap-b_w.trid.xml
 # Note:		called "ImageLab bitmap" by TrID
@@ -2549,7 +2562,7 @@
 # URL: http://local.wasp.uwa.edu.au/~pbourke/dataformats/pic/
 # Radiance HDR; usually has .pic or .hdr extension.
 0	string	#?RADIANCE\n	Radiance HDR image data
-#!mime	image/vnd.radiance
+!:mime	image/vnd.radiance
 
 # From: Adam Buchbinder <adam.buchbinder@gmail.com>
 # URL: https://www.mpi-inf.mpg.de/resources/pfstools/pfs_format_spec.pdf
@@ -3919,6 +3932,29 @@
 #	display ICC/ICM color profile by ./icc
 #>>>0x154	use		color-profile
 
+# URL:		http://fileformats.archiveteam.org/wiki/CorelDRAW
+#		https://en.wikipedia.org/wiki/CorelDRAW
+# Reference:	http://mark0.net/download/triddefs_xml.7z/defs/c/cdr-gen.trid.xml
+# Note:		called "CorelDRAW drawing (generic)" by TrID
+#		version til 2 WL-based; from version 3 til 13 handled by ./riff and from 14 zip based handled by ./archive
+0	ubelong&0xFFffF7ff	0x574C6500	Corel Draw Picture
+#!:mime						image/x-coreldraw
+!:mime						application/vnd.corel-draw
+!:ext						cdr
+# Reference:	http://mark0.net/download/triddefs_xml.7z/defs/c/cdr-corel-10.trid.xml
+# Note:		called "CorelDRAW drawing (v1.0)" by TrID and
+#		"CorelDraw Drawing" with version "1.0" by DROID via PUID fmt/467
+#		only DROID fmt-467-signature-id-726.cdr example
+>2	ubyte			0x65		\b, version 1.0
+#>>4	ubelong			!0x45000000	\b, at 4 %#8.8x
+# Reference:	http://mark0.net/download/triddefs_xml.7z/defs/c/cdr-corel-20.trid.xml
+# Note:		called "CorelDRAW drawing (v2.0)" by TrID and
+#		"CorelDraw Drawing" with version "2.0" by DROID via PUID fmt/466
+>2	ubyte			0x6D		\b, version 2.0
+# According to DROID 0xed080000 or 0x25050000
+#>>4	ubelong			!0xed080000
+#>>>4	ubelong			!0x25050000	\b, at 4 %#8.8x
+
 # Type: Crunch compressed texture.
 # From: David Korth <gerbilsoft@gerbilsoft.com>
 # References:
@@ -4136,3 +4172,39 @@
 #!:mime	application/octet-stream
 !:mime	image/x-idf
 !:ext	idf
+
+# Type: ColoRIX VGA Paint Image File (.rix/.sci/.scX)
+# From: Eddy Jansson <github.com/eloj>
+# Reference: https://www.fileformat.info/format/rix/spec/
+#
+0	name		rix-header
+>0	uleshort	x	\b, %u x
+>2	uleshort	x	%u
+# palette type:
+# .. if direct color, low bits encode bpp
+>4	ubyte&128	0
+>>4 ubyte&127		x	\b %u bpp (direct color)
+# .. else palette
+>4	ubyte&128	128
+>>4	ubyte&7		0	\b x 2
+>>4	ubyte&7		1	\b x 4
+>>4	ubyte&7		2	\b x 8
+>>4	ubyte&7		3	\b x 16
+>>4	ubyte&7		4	\b x 32
+>>4	ubyte&7		5	\b x 64
+>>4	ubyte&7		6	\b x 128
+>>4	ubyte&7		7	\b x 256
+# storage type
+#>5	ubyte&15	0	\b, Linear
+>5	ubyte&15	1	\b, Planar (0213)
+>5	ubyte&15	2	\b, Planar
+>5	ubyte&15	3	\b, Text
+>5	ubyte&15	4	\b, Planar lines
+>5	ubyte&128	128	\b (compressed)
+>5	ubyte&64	64	\b (extension)
+>5	ubyte&32	32	\b (encrypted)
+
+0	string	RIX3	ColoRIX Image
+>4	use		rix-header
+
+0	string	RIX7	ColoRIX Slideshow

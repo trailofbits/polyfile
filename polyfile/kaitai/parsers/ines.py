@@ -13,7 +13,7 @@ if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
 class Ines(KaitaiStruct):
     """
     .. seealso::
-       Source - https://wiki.nesdev.com/w/index.php/INES
+       Source - https://www.nesdev.org/wiki/INES
     """
     SEQ_FIELDS = ["header", "trainer", "prg_rom", "chr_rom", "playchoice10", "title"]
     def __init__(self, _io, _parent=None, _root=None):
@@ -108,7 +108,7 @@ class Ines(KaitaiStruct):
         class F6(KaitaiStruct):
             """
             .. seealso::
-               Source - https://wiki.nesdev.com/w/index.php/INES#Flags_6
+               Source - https://www.nesdev.org/wiki/INES#Flags_6
             """
 
             class Mirroring(Enum):
@@ -142,7 +142,7 @@ class Ines(KaitaiStruct):
         class F7(KaitaiStruct):
             """
             .. seealso::
-               Source - https://wiki.nesdev.com/w/index.php/INES#Flags_7
+               Source - https://www.nesdev.org/wiki/INES#Flags_7
             """
             SEQ_FIELDS = ["upper_mapper", "format", "playchoice10", "vs_unisystem"]
             def __init__(self, _io, _parent=None, _root=None):
@@ -169,7 +169,7 @@ class Ines(KaitaiStruct):
         class F9(KaitaiStruct):
             """
             .. seealso::
-               Source - https://wiki.nesdev.com/w/index.php/INES#Flags_9
+               Source - https://www.nesdev.org/wiki/INES#Flags_9
             """
 
             class TvSystem(Enum):
@@ -194,7 +194,7 @@ class Ines(KaitaiStruct):
         class F10(KaitaiStruct):
             """
             .. seealso::
-               Source - https://wiki.nesdev.com/w/index.php/INES#Flags_10
+               Source - https://www.nesdev.org/wiki/INES#Flags_10
             """
 
             class TvSystem(Enum):
@@ -231,7 +231,7 @@ class Ines(KaitaiStruct):
         def mapper(self):
             """
             .. seealso::
-               Source - https://wiki.nesdev.com/w/index.php/Mapper
+               Source - https://www.nesdev.org/wiki/Mapper
             """
             if hasattr(self, '_m_mapper'):
                 return self._m_mapper if hasattr(self, '_m_mapper') else None
@@ -243,7 +243,7 @@ class Ines(KaitaiStruct):
     class Playchoice10(KaitaiStruct):
         """
         .. seealso::
-           Source - http://wiki.nesdev.com/w/index.php/PC10_ROM-Images
+           Source - https://www.nesdev.org/wiki/PC10_ROM-Images
         """
         SEQ_FIELDS = ["inst_rom", "prom"]
         def __init__(self, _io, _parent=None, _root=None):

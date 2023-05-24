@@ -21,7 +21,7 @@ class Dex(KaitaiStruct):
     fields, annotations, etc.
     
     .. seealso::
-       Source - https://source.android.com/devices/tech/dalvik/dex-format
+       Source - https://source.android.com/docs/core/runtime/dex-format
     """
 
     class ClassAccessFlags(Enum):

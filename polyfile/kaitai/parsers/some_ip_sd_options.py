@@ -16,7 +16,7 @@ class SomeIpSdOptions(KaitaiStruct):
     reachable (IP-Address, TransportProtocol, Port Number).
     
     .. seealso::
-       section 4.1.2.4 Options Format - https://www.autosar.org/fileadmin/user_upload/standards/foundation/19-11/AUTOSAR_PRS_SOMEIPServiceDiscoveryProtocol.pdf
+       section 4.1.2.4 Options Format - https://www.autosar.org/fileadmin/standards/foundation/19-11/AUTOSAR_PRS_SOMEIPServiceDiscoveryProtocol.pdf
        -
     """
     SEQ_FIELDS = ["entries"]

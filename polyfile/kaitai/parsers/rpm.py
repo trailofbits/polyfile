@@ -18,11 +18,11 @@ class Rpm(KaitaiStruct):
     are not covered by this specification.
     
     .. seealso::
-       Source - https://github.com/rpm-software-management/rpm/blob/911448f2/doc/manual/format.md
+       Source - https://github.com/rpm-software-management/rpm/blob/afad3167/docs/manual/format.md
     
     
     .. seealso::
-       Source - https://github.com/rpm-software-management/rpm/blob/911448f2/doc/manual/tags.md
+       Source - https://github.com/rpm-software-management/rpm/blob/afad3167/docs/manual/tags.md
     
     
     .. seealso::
@@ -370,6 +370,13 @@ class Rpm(KaitaiStruct):
         translation_url = 5100
         upstream_releases = 5101
         source_license_internal = 5102
+        pre_untrans = 5103
+        post_untrans = 5104
+        pre_untrans_prog = 5105
+        post_untrans_prog = 5106
+        pre_untrans_flags = 5107
+        post_untrans_flags = 5108
+        sys_users = 5109
 
     class RpmTypes(Enum):
         binary = 0

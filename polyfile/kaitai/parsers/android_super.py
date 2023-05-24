@@ -18,7 +18,7 @@ class AndroidSuper(KaitaiStruct):
     device. This metadata holds that mapping.
     
     .. seealso::
-       Source - https://source.android.com/devices/tech/ota/dynamic_partitions
+       Source - https://source.android.com/docs/core/ota/dynamic_partitions
     
     
     .. seealso::

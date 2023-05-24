@@ -22,7 +22,7 @@ class BtrfsStream(KaitaiStruct):
     If you want a text representation you may want to checkout `btrfs receive --dump` instead.
     
     .. seealso::
-       Source - https://btrfs.wiki.kernel.org/index.php/Design_notes_on_Send/Receive
+       Source - https://archive.kernel.org/oldwiki/btrfs.wiki.kernel.org/index.php/Design_notes_on_Send/Receive.html
     """
 
     class Command(Enum):

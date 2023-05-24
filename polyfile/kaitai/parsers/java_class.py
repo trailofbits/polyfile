@@ -13,7 +13,23 @@ if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
 class JavaClass(KaitaiStruct):
     """
     .. seealso::
-       Source - https://docs.oracle.com/javase/specs/jvms/se8/html/jvms-4.html#jvms-4.1
+       Source - https://docs.oracle.com/javase/specs/jvms/se19/html/jvms-4.html
+    
+    
+    .. seealso::
+       Source - https://docs.oracle.com/javase/specs/jls/se6/jls3.pdf
+    
+    
+    .. seealso::
+       Source - https://github.com/openjdk/jdk/blob/jdk-21%2B14/src/jdk.hotspot.agent/share/classes/sun/jvm/hotspot/runtime/ClassConstants.java
+    
+    
+    .. seealso::
+       Source - https://github.com/openjdk/jdk/blob/jdk-21%2B14/src/java.base/share/native/include/classfile_constants.h.template
+    
+    
+    .. seealso::
+       Source - https://github.com/openjdk/jdk/blob/jdk-21%2B14/src/hotspot/share/classfile/classFileParser.cpp
     """
     SEQ_FIELDS = ["magic", "version_minor", "version_major", "constant_pool_count", "constant_pool", "access_flags", "this_class", "super_class", "interfaces_count", "interfaces", "fields_count", "fields", "methods_count", "methods", "attributes_count", "attributes"]
     def __init__(self, _io, _parent=None, _root=None):
@@ -118,6 +134,38 @@ class JavaClass(KaitaiStruct):
             self._debug['attributes']['arr'][i]['end'] = self._io.pos()
 
         self._debug['attributes']['end'] = self._io.pos()
+
+    class VersionGuard(KaitaiStruct):
+        """`class` file format version 45.3 (appeared in the very first publicly
+        known release of Java SE AND JDK 1.0.2, released 23th January 1996) is so
+        ancient that it's taken for granted. Earlier formats seem to be
+        undocumented. Changes of `version_minor` don't change `class` format.
+        Earlier `version_major`s likely belong to Oak programming language, the
+        proprietary predecessor of Java.
+        
+        .. seealso::
+           James Gosling, Bill Joy and Guy Steele. The Java Language Specification. English. Ed. by Lisa Friendly. Addison-Wesley, Aug. 1996, p. 825. ISBN: 0-201-63451-1.
+        
+        
+        .. seealso::
+           Frank Yellin and Tim Lindholm. The Java Virtual Machine Specification. English. Ed. by Lisa Friendly. Addison-Wesley, Sept. 1996, p. 475. ISBN: 0-201-63452-X.
+        """
+        SEQ_FIELDS = ["_unnamed0"]
+        def __init__(self, major, _io, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root if _root else self
+            self.major = major
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['_unnamed0']['start'] = self._io.pos()
+            self._unnamed0 = self._io.read_bytes(0)
+            self._debug['_unnamed0']['end'] = self._io.pos()
+            _ = self.unnamed_0
+            if not self._root.version_major >= self.major:
+                raise kaitaistruct.ValidationExprError(self.unnamed_0, self._io, u"/types/version_guard/seq/0")
+
 
     class FloatCpInfo(KaitaiStruct):
         """
@@ -520,6 +568,31 @@ class JavaClass(KaitaiStruct):
             self._debug['value']['end'] = self._io.pos()
 
 
+    class DynamicCpInfo(KaitaiStruct):
+        """
+        .. seealso::
+           Source - https://docs.oracle.com/javase/specs/jvms/se19/html/jvms-4.html#jvms-4.4.10
+        """
+        SEQ_FIELDS = ["_unnamed0", "bootstrap_method_attr_index", "name_and_type_index"]
+        def __init__(self, _io, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root if _root else self
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['_unnamed0']['start'] = self._io.pos()
+            self._unnamed0 = JavaClass.VersionGuard(55, self._io, self, self._root)
+            self._unnamed0._read()
+            self._debug['_unnamed0']['end'] = self._io.pos()
+            self._debug['bootstrap_method_attr_index']['start'] = self._io.pos()
+            self.bootstrap_method_attr_index = self._io.read_u2be()
+            self._debug['bootstrap_method_attr_index']['end'] = self._io.pos()
+            self._debug['name_and_type_index']['start'] = self._io.pos()
+            self.name_and_type_index = self._io.read_u2be()
+            self._debug['name_and_type_index']['end'] = self._io.pos()
+
+
     class LongCpInfo(KaitaiStruct):
         """
         .. seealso::
@@ -543,7 +616,7 @@ class JavaClass(KaitaiStruct):
         .. seealso::
            Source - https://docs.oracle.com/javase/specs/jvms/se8/html/jvms-4.html#jvms-4.4.10
         """
-        SEQ_FIELDS = ["bootstrap_method_attr_index", "name_and_type_index"]
+        SEQ_FIELDS = ["_unnamed0", "bootstrap_method_attr_index", "name_and_type_index"]
         def __init__(self, _io, _parent=None, _root=None):
             self._io = _io
             self._parent = _parent
@@ -551,6 +624,10 @@ class JavaClass(KaitaiStruct):
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
+            self._debug['_unnamed0']['start'] = self._io.pos()
+            self._unnamed0 = JavaClass.VersionGuard(51, self._io, self, self._root)
+            self._unnamed0._read()
+            self._debug['_unnamed0']['end'] = self._io.pos()
             self._debug['bootstrap_method_attr_index']['start'] = self._io.pos()
             self.bootstrap_method_attr_index = self._io.read_u2be()
             self._debug['bootstrap_method_attr_index']['end'] = self._io.pos()
@@ -575,7 +652,7 @@ class JavaClass(KaitaiStruct):
             invoke_special = 7
             new_invoke_special = 8
             invoke_interface = 9
-        SEQ_FIELDS = ["reference_kind", "reference_index"]
+        SEQ_FIELDS = ["_unnamed0", "reference_kind", "reference_index"]
         def __init__(self, _io, _parent=None, _root=None):
             self._io = _io
             self._parent = _parent
@@ -583,12 +660,63 @@ class JavaClass(KaitaiStruct):
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
+            self._debug['_unnamed0']['start'] = self._io.pos()
+            self._unnamed0 = JavaClass.VersionGuard(51, self._io, self, self._root)
+            self._unnamed0._read()
+            self._debug['_unnamed0']['end'] = self._io.pos()
             self._debug['reference_kind']['start'] = self._io.pos()
             self.reference_kind = KaitaiStream.resolve_enum(JavaClass.MethodHandleCpInfo.ReferenceKindEnum, self._io.read_u1())
             self._debug['reference_kind']['end'] = self._io.pos()
             self._debug['reference_index']['start'] = self._io.pos()
             self.reference_index = self._io.read_u2be()
             self._debug['reference_index']['end'] = self._io.pos()
+
+
+    class ModulePackageCpInfo(KaitaiStruct):
+        """Project Jigsaw modules introduced in Java 9
+        
+        .. seealso::
+           Source - https://docs.oracle.com/javase/specs/jvms/se19/html/jvms-3.html#jvms-3.16
+        
+        
+        .. seealso::
+           Source - https://docs.oracle.com/javase/specs/jvms/se19/html/jvms-4.html#jvms-4.4.11
+        
+        
+        .. seealso::
+           Source - https://docs.oracle.com/javase/specs/jvms/se19/html/jvms-4.html#jvms-4.4.12
+        """
+        SEQ_FIELDS = ["_unnamed0", "name_index"]
+        def __init__(self, _io, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root if _root else self
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['_unnamed0']['start'] = self._io.pos()
+            self._unnamed0 = JavaClass.VersionGuard(53, self._io, self, self._root)
+            self._unnamed0._read()
+            self._debug['_unnamed0']['end'] = self._io.pos()
+            self._debug['name_index']['start'] = self._io.pos()
+            self.name_index = self._io.read_u2be()
+            self._debug['name_index']['end'] = self._io.pos()
+
+        @property
+        def name_as_info(self):
+            if hasattr(self, '_m_name_as_info'):
+                return self._m_name_as_info if hasattr(self, '_m_name_as_info') else None
+
+            self._m_name_as_info = self._root.constant_pool[(self.name_index - 1)].cp_info
+            return self._m_name_as_info if hasattr(self, '_m_name_as_info') else None
+
+        @property
+        def name_as_str(self):
+            if hasattr(self, '_m_name_as_str'):
+                return self._m_name_as_str if hasattr(self, '_m_name_as_str') else None
+
+            self._m_name_as_str = self.name_as_info.value
+            return self._m_name_as_str if hasattr(self, '_m_name_as_str') else None
 
 
     class NameAndTypeCpInfo(KaitaiStruct):
@@ -688,7 +816,7 @@ class JavaClass(KaitaiStruct):
         .. seealso::
            Source - https://docs.oracle.com/javase/specs/jvms/se8/html/jvms-4.html#jvms-4.4.9
         """
-        SEQ_FIELDS = ["descriptor_index"]
+        SEQ_FIELDS = ["_unnamed0", "descriptor_index"]
         def __init__(self, _io, _parent=None, _root=None):
             self._io = _io
             self._parent = _parent
@@ -696,6 +824,10 @@ class JavaClass(KaitaiStruct):
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
+            self._debug['_unnamed0']['start'] = self._io.pos()
+            self._unnamed0 = JavaClass.VersionGuard(51, self._io, self, self._root)
+            self._unnamed0._read()
+            self._debug['_unnamed0']['end'] = self._io.pos()
             self._debug['descriptor_index']['start'] = self._io.pos()
             self.descriptor_index = self._io.read_u2be()
             self._debug['descriptor_index']['end'] = self._io.pos()
@@ -792,7 +924,10 @@ class JavaClass(KaitaiStruct):
             name_and_type = 12
             method_handle = 15
             method_type = 16
+            dynamic = 17
             invoke_dynamic = 18
+            module = 19
+            package = 20
         SEQ_FIELDS = ["tag", "cp_info"]
         def __init__(self, is_prev_two_entries, _io, _parent=None, _root=None):
             self._io = _io
@@ -816,6 +951,9 @@ class JavaClass(KaitaiStruct):
                 elif _on == JavaClass.ConstantPoolEntry.TagEnum.class_type:
                     self.cp_info = JavaClass.ClassCpInfo(self._io, self, self._root)
                     self.cp_info._read()
+                elif _on == JavaClass.ConstantPoolEntry.TagEnum.dynamic:
+                    self.cp_info = JavaClass.DynamicCpInfo(self._io, self, self._root)
+                    self.cp_info._read()
                 elif _on == JavaClass.ConstantPoolEntry.TagEnum.utf8:
                     self.cp_info = JavaClass.Utf8CpInfo(self._io, self, self._root)
                     self.cp_info._read()
@@ -830,6 +968,9 @@ class JavaClass(KaitaiStruct):
                     self.cp_info._read()
                 elif _on == JavaClass.ConstantPoolEntry.TagEnum.float:
                     self.cp_info = JavaClass.FloatCpInfo(self._io, self, self._root)
+                    self.cp_info._read()
+                elif _on == JavaClass.ConstantPoolEntry.TagEnum.module:
+                    self.cp_info = JavaClass.ModulePackageCpInfo(self._io, self, self._root)
                     self.cp_info._read()
                 elif _on == JavaClass.ConstantPoolEntry.TagEnum.long:
                     self.cp_info = JavaClass.LongCpInfo(self._io, self, self._root)
@@ -848,6 +989,9 @@ class JavaClass(KaitaiStruct):
                     self.cp_info._read()
                 elif _on == JavaClass.ConstantPoolEntry.TagEnum.method_handle:
                     self.cp_info = JavaClass.MethodHandleCpInfo(self._io, self, self._root)
+                    self.cp_info._read()
+                elif _on == JavaClass.ConstantPoolEntry.TagEnum.package:
+                    self.cp_info = JavaClass.ModulePackageCpInfo(self._io, self, self._root)
                     self.cp_info._read()
                 elif _on == JavaClass.ConstantPoolEntry.TagEnum.name_and_type:
                     self.cp_info = JavaClass.NameAndTypeCpInfo(self._io, self, self._root)

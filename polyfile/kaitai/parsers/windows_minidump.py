@@ -21,7 +21,7 @@ class WindowsMinidump(KaitaiStruct):
     "streams", which contain some data according to its type attribute.
     
     .. seealso::
-       Source - https://docs.microsoft.com/en-us/windows/win32/api/minidumpapiset/ns-minidumpapiset-minidump_header
+       Source - https://learn.microsoft.com/en-us/windows/win32/api/minidumpapiset/ns-minidumpapiset-minidump_header
     """
 
     class StreamTypes(Enum):
@@ -114,7 +114,7 @@ class WindowsMinidump(KaitaiStruct):
     class ThreadList(KaitaiStruct):
         """
         .. seealso::
-           Source - https://docs.microsoft.com/en-us/windows/win32/api/minidumpapiset/ns-minidumpapiset-minidump_thread_list
+           Source - https://learn.microsoft.com/en-us/windows/win32/api/minidumpapiset/ns-minidumpapiset-minidump_thread_list
         """
         SEQ_FIELDS = ["num_threads", "threads"]
         def __init__(self, _io, _parent=None, _root=None):
@@ -144,7 +144,7 @@ class WindowsMinidump(KaitaiStruct):
     class LocationDescriptor(KaitaiStruct):
         """
         .. seealso::
-           Source - https://docs.microsoft.com/en-us/windows/win32/api/minidumpapiset/ns-minidumpapiset-minidump_location_descriptor
+           Source - https://learn.microsoft.com/en-us/windows/win32/api/minidumpapiset/ns-minidumpapiset-minidump_location_descriptor
         """
         SEQ_FIELDS = ["len_data", "ofs_data"]
         def __init__(self, _io, _parent=None, _root=None):
@@ -181,7 +181,7 @@ class WindowsMinidump(KaitaiStruct):
         actually a simple 32-bit length-prefixed UTF-16 string.
         
         .. seealso::
-           Source - https://docs.microsoft.com/en-us/windows/win32/api/minidumpapiset/ns-minidumpapiset-minidump_string
+           Source - https://learn.microsoft.com/en-us/windows/win32/api/minidumpapiset/ns-minidumpapiset-minidump_string
         """
         SEQ_FIELDS = ["len_str", "str"]
         def __init__(self, _io, _parent=None, _root=None):
@@ -204,7 +204,7 @@ class WindowsMinidump(KaitaiStruct):
         hardware and operating system which produces this dump.
         
         .. seealso::
-           Source - https://docs.microsoft.com/en-us/windows/win32/api/minidumpapiset/ns-minidumpapiset-minidump_system_info
+           Source - https://learn.microsoft.com/en-us/windows/win32/api/minidumpapiset/ns-minidumpapiset-minidump_system_info
         """
 
         class CpuArchs(Enum):
@@ -279,7 +279,7 @@ class WindowsMinidump(KaitaiStruct):
     class ExceptionRecord(KaitaiStruct):
         """
         .. seealso::
-           Source - https://docs.microsoft.com/en-us/windows/win32/api/minidumpapiset/ns-minidumpapiset-minidump_exception
+           Source - https://learn.microsoft.com/en-us/windows/win32/api/minidumpapiset/ns-minidumpapiset-minidump_exception
         """
         SEQ_FIELDS = ["code", "flags", "inner_exception", "addr", "num_params", "reserved", "params"]
         def __init__(self, _io, _parent=None, _root=None):
@@ -322,7 +322,7 @@ class WindowsMinidump(KaitaiStruct):
     class MiscInfo(KaitaiStruct):
         """
         .. seealso::
-           Source - https://docs.microsoft.com/en-us/windows/win32/api/minidumpapiset/ns-minidumpapiset-minidump_misc_info
+           Source - https://learn.microsoft.com/en-us/windows/win32/api/minidumpapiset/ns-minidumpapiset-minidump_misc_info
         """
         SEQ_FIELDS = ["len_info", "flags1", "process_id", "process_create_time", "process_user_time", "process_kernel_time", "cpu_max_mhz", "cpu_cur_mhz", "cpu_limit_mhz", "cpu_max_idle_state", "cpu_cur_idle_state"]
         def __init__(self, _io, _parent=None, _root=None):
@@ -370,7 +370,7 @@ class WindowsMinidump(KaitaiStruct):
     class Dir(KaitaiStruct):
         """
         .. seealso::
-           Source - https://docs.microsoft.com/en-us/windows/win32/api/minidumpapiset/ns-minidumpapiset-minidump_directory
+           Source - https://learn.microsoft.com/en-us/windows/win32/api/minidumpapiset/ns-minidumpapiset-minidump_directory
         """
         SEQ_FIELDS = ["stream_type", "len_data", "ofs_data"]
         def __init__(self, _io, _parent=None, _root=None):
@@ -434,7 +434,7 @@ class WindowsMinidump(KaitaiStruct):
     class Thread(KaitaiStruct):
         """
         .. seealso::
-           Source - https://docs.microsoft.com/en-us/windows/win32/api/minidumpapiset/ns-minidumpapiset-minidump_thread
+           Source - https://learn.microsoft.com/en-us/windows/win32/api/minidumpapiset/ns-minidumpapiset-minidump_thread
         """
         SEQ_FIELDS = ["thread_id", "suspend_count", "priority_class", "priority", "teb", "stack", "thread_context"]
         def __init__(self, _io, _parent=None, _root=None):
@@ -472,7 +472,7 @@ class WindowsMinidump(KaitaiStruct):
     class MemoryList(KaitaiStruct):
         """
         .. seealso::
-           Source - https://docs.microsoft.com/en-us/windows/win32/api/minidumpapiset/ns-minidumpapiset-minidump_memory64_list
+           Source - https://learn.microsoft.com/en-us/windows/win32/api/minidumpapiset/ns-minidumpapiset-minidump_memory64_list
         """
         SEQ_FIELDS = ["num_mem_ranges", "mem_ranges"]
         def __init__(self, _io, _parent=None, _root=None):
@@ -502,7 +502,7 @@ class WindowsMinidump(KaitaiStruct):
     class MemoryDescriptor(KaitaiStruct):
         """
         .. seealso::
-           Source - https://docs.microsoft.com/en-us/windows/win32/api/minidumpapiset/ns-minidumpapiset-minidump_memory_descriptor
+           Source - https://learn.microsoft.com/en-us/windows/win32/api/minidumpapiset/ns-minidumpapiset-minidump_memory_descriptor
         """
         SEQ_FIELDS = ["addr_memory_range", "memory"]
         def __init__(self, _io, _parent=None, _root=None):
@@ -524,7 +524,7 @@ class WindowsMinidump(KaitaiStruct):
     class ExceptionStream(KaitaiStruct):
         """
         .. seealso::
-           Source - https://docs.microsoft.com/en-us/windows/win32/api/minidumpapiset/ns-minidumpapiset-minidump_exception_stream
+           Source - https://learn.microsoft.com/en-us/windows/win32/api/minidumpapiset/ns-minidumpapiset-minidump_exception_stream
         """
         SEQ_FIELDS = ["thread_id", "reserved", "exception_rec", "thread_context"]
         def __init__(self, _io, _parent=None, _root=None):

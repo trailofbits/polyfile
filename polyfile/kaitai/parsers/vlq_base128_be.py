@@ -21,7 +21,7 @@ class VlqBase128Be(KaitaiStruct):
     * RAR 5.0 file format
     
     More information on this encoding is available at
-    https://en.wikipedia.org/wiki/Variable-length_quantity
+    <https://en.wikipedia.org/wiki/Variable-length_quantity>
     
     This particular implementation supports serialized values to up 8 bytes long.
     """

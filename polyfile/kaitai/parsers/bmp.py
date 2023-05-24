@@ -63,7 +63,7 @@ class Bmp(KaitaiStruct):
     
     ## Specs
      * [Bitmap Storage (Windows Dev Center)](
-         https://docs.microsoft.com/en-us/windows/win32/gdi/bitmap-storage
+         https://learn.microsoft.com/en-us/windows/win32/gdi/bitmap-storage
        )
         * BITMAPFILEHEADER
         * BITMAPINFOHEADER
@@ -155,7 +155,7 @@ class Bmp(KaitaiStruct):
     class CieXyz(KaitaiStruct):
         """
         .. seealso::
-           Source - https://docs.microsoft.com/en-us/windows/win32/api/wingdi/ns-wingdi-ciexyz
+           Source - https://learn.microsoft.com/en-us/windows/win32/api/wingdi/ns-wingdi-ciexyz
         """
         SEQ_FIELDS = ["x", "y", "z"]
         def __init__(self, _io, _parent=None, _root=None):
@@ -208,7 +208,7 @@ class Bmp(KaitaiStruct):
     class BitmapV5Extension(KaitaiStruct):
         """
         .. seealso::
-           Source - https://docs.microsoft.com/en-us/windows/win32/api/wingdi/ns-wingdi-bitmapv5header
+           Source - https://learn.microsoft.com/en-us/windows/win32/api/wingdi/ns-wingdi-bitmapv5header
         """
         SEQ_FIELDS = ["intent", "ofs_profile", "len_profile", "reserved"]
         def __init__(self, _io, _parent=None, _root=None):
@@ -243,7 +243,7 @@ class Bmp(KaitaiStruct):
         def profile_data(self):
             """
             .. seealso::
-               "If the profile is embedded, profile data is the actual profile, and if it is linked, the profile data is the null-terminated file name of the profile. This cannot be a Unicode string. It must be composed exclusively of characters from the Windows character set (code page 1252)." - https://docs.microsoft.com/en-us/windows/win32/wcs/using-structures-in-wcs-1-0
+               "If the profile is embedded, profile data is the actual profile, and if it is linked, the profile data is the null-terminated file name of the profile. This cannot be a Unicode string. It must be composed exclusively of characters from the Windows character set (code page 1252)." - https://learn.microsoft.com/en-us/windows/win32/wcs/using-structures-in-wcs-1-0
             """
             if hasattr(self, '_m_profile_data'):
                 return self._m_profile_data if hasattr(self, '_m_profile_data') else None
@@ -293,7 +293,7 @@ class Bmp(KaitaiStruct):
     class BitmapV4Extension(KaitaiStruct):
         """
         .. seealso::
-           Source - https://docs.microsoft.com/en-us/windows/win32/api/wingdi/ns-wingdi-bitmapv4header
+           Source - https://learn.microsoft.com/en-us/windows/win32/api/wingdi/ns-wingdi-bitmapv4header
         """
         SEQ_FIELDS = ["color_space_type", "endpoint_red", "endpoint_green", "endpoint_blue", "gamma_red", "gamma_blue", "gamma_green"]
         def __init__(self, _io, _parent=None, _root=None):
@@ -335,7 +335,7 @@ class Bmp(KaitaiStruct):
     class BitmapInfoExtension(KaitaiStruct):
         """
         .. seealso::
-           Source - https://docs.microsoft.com/en-us/previous-versions/dd183376(v=vs.85)
+           Source - https://learn.microsoft.com/en-us/previous-versions/dd183376(v=vs.85)
         """
         SEQ_FIELDS = ["compression", "os2_compression", "len_image", "x_resolution", "y_resolution", "num_colors_used", "num_colors_important"]
         def __init__(self, _io, _parent=None, _root=None):
@@ -395,10 +395,12 @@ class Bmp(KaitaiStruct):
 
 
     class Bitmap(KaitaiStruct):
-        """Replace with an opaque type if you care about the pixels.
-        You can look at an example of a JavaScript implementation: https://github.com/generalmimon/bmptool/blob/master/src/Bitmap.js
+        """Replace with an opaque type if you care about the pixels. You can look at
+        an example of a JavaScript implementation:
+        <https://github.com/generalmimon/bmptool/blob/master/src/Bitmap.js>
         
-        There is a proposal for adding bitmap data type to Kaitai Struct: https://github.com/kaitai-io/kaitai_struct/issues/188
+        There is a proposal for adding bitmap data type to Kaitai Struct:
+        <https://github.com/kaitai-io/kaitai_struct/issues/188>
         """
         SEQ_FIELDS = []
         def __init__(self, _io, _parent=None, _root=None):
@@ -414,7 +416,7 @@ class Bmp(KaitaiStruct):
     class BitmapHeader(KaitaiStruct):
         """
         .. seealso::
-           Source - https://docs.microsoft.com/en-us/windows/win32/api/wingdi/ns-wingdi-bitmapcoreheader
+           Source - https://learn.microsoft.com/en-us/windows/win32/api/wingdi/ns-wingdi-bitmapcoreheader
         
         
         .. seealso::
@@ -650,7 +652,7 @@ class Bmp(KaitaiStruct):
     class FileHeader(KaitaiStruct):
         """
         .. seealso::
-           Source - https://docs.microsoft.com/en-us/windows/win32/api/wingdi/ns-wingdi-bitmapfileheader
+           Source - https://learn.microsoft.com/en-us/windows/win32/api/wingdi/ns-wingdi-bitmapfileheader
         """
         SEQ_FIELDS = ["file_type", "len_file", "reserved1", "reserved2", "ofs_bitmap"]
         def __init__(self, _io, _parent=None, _root=None):
@@ -682,7 +684,7 @@ class Bmp(KaitaiStruct):
     class BitmapInfo(KaitaiStruct):
         """
         .. seealso::
-           Source - https://docs.microsoft.com/en-us/windows/win32/api/wingdi/ns-wingdi-bitmapinfo
+           Source - https://learn.microsoft.com/en-us/windows/win32/api/wingdi/ns-wingdi-bitmapinfo
         """
         SEQ_FIELDS = ["len_header", "header", "color_mask", "color_table"]
         def __init__(self, _io, _parent=None, _root=None):

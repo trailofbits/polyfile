@@ -17,7 +17,7 @@ class PsxTim(KaitaiStruct):
     
     
     .. seealso::
-       Source - http://mrclick.zophar.net/TilEd/download/timgfx.txt
+       Source - https://mrclick.zophar.net/TilEd/download/timgfx.txt
     
     
     .. seealso::

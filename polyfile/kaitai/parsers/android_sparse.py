@@ -26,7 +26,7 @@ class AndroidSparse(KaitaiStruct):
     
     
     .. seealso::
-       Source - https://source.android.com/devices/bootloader/images#sparse-image-format
+       Source - https://web.archive.org/web/20220322054458/https://source.android.com/devices/bootloader/images#sparse-image-format
     """
 
     class ChunkTypes(Enum):

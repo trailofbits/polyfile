@@ -17,7 +17,7 @@ class SomeIp(KaitaiStruct):
     and the underlying serialization/wire format.
     
     .. seealso::
-       Source - https://www.autosar.org/fileadmin/user_upload/standards/foundation/19-11/AUTOSAR_PRS_SOMEIPProtocol.pdf
+       Source - https://www.autosar.org/fileadmin/standards/foundation/19-11/AUTOSAR_PRS_SOMEIPProtocol.pdf
     """
     SEQ_FIELDS = ["header", "payload"]
     def __init__(self, _io, _parent=None, _root=None):

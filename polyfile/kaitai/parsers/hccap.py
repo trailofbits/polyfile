@@ -12,7 +12,8 @@ if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
 class Hccap(KaitaiStruct):
     """Native format of Hashcat password "recovery" utility.
     
-    A sample of file for testing can be downloaded from https://web.archive.org/web/20150220013635if_/http://hashcat.net:80/misc/example_hashes/hashcat.hccap
+    A sample of file for testing can be downloaded from
+    <https://web.archive.org/web/20150220013635if_/http://hashcat.net:80/misc/example_hashes/hashcat.hccap>
     
     .. seealso::
        Source - https://hashcat.net/wiki/doku.php?id=hccap

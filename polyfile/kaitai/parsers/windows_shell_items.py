@@ -23,7 +23,7 @@ class WindowsShellItems(KaitaiStruct):
     various Windows versions.
     
     .. seealso::
-       Source - https://github.com/libyal/libfwsi/blob/master/documentation/Windows%20Shell%20Item%20format.asciidoc
+       Source - https://github.com/libyal/libfwsi/blob/main/documentation/Windows%20Shell%20Item%20format.asciidoc
     """
     SEQ_FIELDS = ["items"]
     def __init__(self, _io, _parent=None, _root=None):
@@ -108,7 +108,7 @@ class WindowsShellItems(KaitaiStruct):
     class RootFolderBody(KaitaiStruct):
         """
         .. seealso::
-           Source - https://github.com/libyal/libfwsi/blob/master/documentation/Windows%20Shell%20Item%20format.asciidoc#32-root-folder-shell-item
+           Source - https://github.com/libyal/libfwsi/blob/main/documentation/Windows%20Shell%20Item%20format.asciidoc#32-root-folder-shell-item
         """
         SEQ_FIELDS = ["sort_index", "shell_folder_id"]
         def __init__(self, _io, _parent=None, _root=None):
@@ -129,7 +129,7 @@ class WindowsShellItems(KaitaiStruct):
     class VolumeBody(KaitaiStruct):
         """
         .. seealso::
-           Source - https://github.com/libyal/libfwsi/blob/master/documentation/Windows%20Shell%20Item%20format.asciidoc#33-volume-shell-item
+           Source - https://github.com/libyal/libfwsi/blob/main/documentation/Windows%20Shell%20Item%20format.asciidoc#33-volume-shell-item
         """
         SEQ_FIELDS = ["flags"]
         def __init__(self, _io, _parent=None, _root=None):
@@ -147,7 +147,7 @@ class WindowsShellItems(KaitaiStruct):
     class FileEntryBody(KaitaiStruct):
         """
         .. seealso::
-           Source - https://github.com/libyal/libfwsi/blob/master/documentation/Windows%20Shell%20Item%20format.asciidoc#34-file-entry-shell-item
+           Source - https://github.com/libyal/libfwsi/blob/main/documentation/Windows%20Shell%20Item%20format.asciidoc#34-file-entry-shell-item
         """
         SEQ_FIELDS = ["_unnamed0", "file_size", "last_mod_time", "file_attrs"]
         def __init__(self, _io, _parent=None, _root=None):

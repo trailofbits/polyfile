@@ -15,7 +15,7 @@ class Ttf(KaitaiStruct):
     an outline font.
     
     .. seealso::
-       Source - https://www.microsoft.com/typography/tt/ttf_spec/ttch02.doc
+       Source - https://web.archive.org/web/20160410081432/https://www.microsoft.com/typography/tt/ttf_spec/ttch02.doc
     """
     SEQ_FIELDS = ["offset_table", "directory_table"]
     def __init__(self, _io, _parent=None, _root=None):

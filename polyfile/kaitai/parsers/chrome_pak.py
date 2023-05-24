@@ -15,7 +15,7 @@ class ChromePak(KaitaiStruct):
     resources such as translated strings, help messages and images.
     
     .. seealso::
-       Source - https://dev.chromium.org/developers/design-documents/linuxresourcesandlocalizedstrings
+       Source - https://web.archive.org/web/20220126211447/https://dev.chromium.org/developers/design-documents/linuxresourcesandlocalizedstrings
     
     
     .. seealso::

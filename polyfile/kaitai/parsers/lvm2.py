@@ -23,7 +23,7 @@ class Lvm2(KaitaiStruct):
     ```
     
     .. seealso::
-       Source - https://github.com/libyal/libvslvm/blob/master/documentation/Logical%20Volume%20Manager%20(LVM)%20format.asciidoc
+       Source - https://github.com/libyal/libvslvm/blob/main/documentation/Logical%20Volume%20Manager%20(LVM)%20format.asciidoc
     """
     SEQ_FIELDS = ["pv"]
     def __init__(self, _io, _parent=None, _root=None):

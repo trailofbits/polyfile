@@ -17,10 +17,10 @@ class Au(KaitaiStruct):
     
     * <https://github.com/python/cpython/tree/b8a7daf077da/Lib/test/sndhdrdata>
     * <ftp://ftp-ccrma.stanford.edu/pub/Lisp/sf.tar.gz>
-    * <http://www-mmsp.ece.mcgill.ca/Documents/AudioFormats/AU/Samples.html>
+    * <https://www.mmsp.ece.mcgill.ca/Documents/AudioFormats/AU/Samples.html>
     
     .. seealso::
-       Source - http://www-mmsp.ece.mcgill.ca/Documents/AudioFormats/AU/AU.html
+       Source - https://www.mmsp.ece.mcgill.ca/Documents/AudioFormats/AU/AU.html
     
     
     .. seealso::

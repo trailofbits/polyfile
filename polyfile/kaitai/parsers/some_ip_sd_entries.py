@@ -15,7 +15,7 @@ class SomeIpSdEntries(KaitaiStruct):
     Publish/-Subscribe handling.
     
     .. seealso::
-       section 4.1.2.3  Entry Format - https://www.autosar.org/fileadmin/user_upload/standards/foundation/19-11/AUTOSAR_PRS_SOMEIPServiceDiscoveryProtocol.pdf
+       section 4.1.2.3  Entry Format - https://www.autosar.org/fileadmin/standards/foundation/19-11/AUTOSAR_PRS_SOMEIPServiceDiscoveryProtocol.pdf
        -
     """
     SEQ_FIELDS = ["entries"]
