@@ -2396,8 +2396,9 @@ class PlainTextTest(MagicTest):
             raise ValueError(f"A new PlainTextTest must be constructed for each call to .test")
         detector = UniversalDetector()
         offset = absolute_offset
-        while not detector.done and offset < len(data):
+        while not detector.done and offset < min(len(data), 5000000):
             # feed 1kB at a time until we have high confidence in the classification
+            # up to a maximum of 5MiB
             detector.feed(data[offset:offset+1024])
             offset += 1024
         detector.close()
