@@ -37,8 +37,6 @@ setup(
         "Pillow>=5.0.0",
         "pyreadline3;platform_system=='Windows'",
         "pyyaml>=3.13",
-        "requests>=2.31.0",  # this is not a direct dependency of PolyFile, but it is indirect, and earlier versions
-                             # have a high severity vulnerability
         "setuptools>=65.5.1"
     ],
     extras_require={
