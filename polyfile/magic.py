@@ -680,9 +680,9 @@ class MagicTest(ABC):
         self._mime: Optional[Message] = None
         self.extensions: Set[str] = set(extensions)
         if isinstance(message, Message):
-            self.message: Message = message
+            self._message: Message = message
         else:
-            self.message = Message.parse(message)
+            self._message = Message.parse(message)
         self._parent: Optional[MagicTest] = parent
         self.children: List[MagicTest] = []
         if parent is not None:
@@ -719,6 +719,14 @@ class MagicTest(ABC):
         if cls.AUTO_REGISTER_TEST:
             TEST_TYPES.add(cls)
         return super().__init_subclass__(**kwargs)
+
+    @property
+    def message(self) -> Message:
+        return self._message
+
+    @message.setter
+    def message(self, new_value: Message):
+        self._message = new_value
 
     @property
     def test_type(self) -> TestType:
@@ -937,6 +945,43 @@ class MagicTest(ABC):
         for e in self.extensions:
             s = f"{s}\n!:ext\t{e}"
         return s
+
+
+class DynamicMagicTest(MagicTest, ABC):
+    """A test that can be bound with a dynamically generated message"""
+
+    def __init__(
+            self,
+            offset: Offset,
+            mime: Optional[Union[str, TernaryExecutableMessage]] = None,
+            extensions: Iterable[str] = (),
+            default_message: Union[str, Message] = "",
+            parent: Optional["MagicTest"] = None,
+            comments: Iterable[Comment] = ()
+    ):
+        super().__init__(offset=offset, mime=mime, extensions=extensions, parent=parent, comments=comments,
+                         message=default_message)
+        self._bound_message: Optional[Message] = None
+
+    @property
+    def default_message(self) -> Message:
+        return super().message
+
+    @property
+    def message(self) -> Message:
+        if self._bound_message is None:
+            return self.default_message
+        else:
+            return self._bound_message
+
+    def bind(self, message: Union[str, Message]) -> MagicTest:
+        if self._bound_message is not None:
+            raise ValueError(f"{self!r} already has a bound message: {self.message!s}")
+        elif not isinstance(message, Message):
+            message = Message.parse(message)
+        result: DynamicMagicTest = type(f"Bound{self.__class__.__name__}", (self.__class__,), dict(self.__dict__))()
+        result._bound_message = message
+        return result
 
 
 TYPES_BY_NAME: Dict[str, "DataType"] = {}
@@ -1794,15 +1839,19 @@ def msdos_time(value: int) -> str:
 
 class BaseNumericDataType(Enum):
     BYTE = ("byte", "b", 1)
+    BYTE1 = ("1", "b", 1)
     SHORT = ("short", "h", 2)
+    SHORT2 = ("2", "h", 2)
     LONG = ("long", "l", 4)
+    LONG4 = ("4", "l", 4)
     QUAD = ("quad", "q", 8)
+    QUAD8 = ("8", "q", 8)
     FLOAT = ("float", "f", 4)
     DOUBLE = ("double", "d", 8)
     DATE = ("date", "L", 4, lambda n: utc_date(n * 1000))
-    QDATE = ("qdate", "Q", 8, utc_date)
+    QDATE = ("qdate", "Q", 8, lambda n: utc_date(n * 1000))
     LDATE = ("ldate", "L", 4, lambda n: local_date(n * 1000))
-    QLDATE = ("qldate", "Q", 8, local_date)
+    QLDATE = ("qldate", "Q", 8, lambda n: local_date(n * 1000))
     QWDATE = ("qwdate", "Q", 8)
     MSDOSDATE = ("msdosdate", "h", 2, msdos_date)
     MSDOSTIME = ("msdostime", "h", 2, msdos_time)
@@ -2351,8 +2400,9 @@ class PlainTextTest(MagicTest):
             raise ValueError(f"A new PlainTextTest must be constructed for each call to .test")
         detector = UniversalDetector()
         offset = absolute_offset
-        while not detector.done and offset < len(data):
+        while not detector.done and offset < min(len(data), 5000000):
             # feed 1kB at a time until we have high confidence in the classification
+            # up to a maximum of 5MiB
             detector.feed(data[offset:offset+1024])
             offset += 1024
         detector.close()
@@ -2511,6 +2561,7 @@ class Match:
                 # sometimes we parsed a negative value and want to print it as an unsigned int:
                 result_str = result_str % (result.value + 2**(8 * result.length),)
             elif "%" in result_str.replace("%%", ""):
+                result_str = result_str.replace("%lld", "%d")
                 result_str = result_str % (result.value,)
             result_str = result_str.replace("%%", "%")
             msg = f"{msg}{result_str}"

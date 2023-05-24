@@ -19,7 +19,7 @@ class ZxSpectrumTap(KaitaiStruct):
     metainformation prepended as a header.
     
     .. seealso::
-       Source - https://faqwiki.zxnet.co.uk/wiki/TAP_format
+       Source - https://sinclair.wiki.zxnet.co.uk/wiki/TAP_format
     """
 
     class FlagEnum(Enum):

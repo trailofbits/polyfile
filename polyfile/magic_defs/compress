@@ -1,5 +1,5 @@
 #------------------------------------------------------------------------------
-# $File: compress,v 1.86 2022/10/16 12:59:51 christos Exp $
+# $File: compress,v 1.90 2023/04/24 17:26:56 christos Exp $
 # compress:  file(1) magic for pure-compression formats (no archives)
 #
 # compress, gzip, pack, compact, huf, squeeze, crunch, freeze, yabba, etc.
@@ -19,7 +19,7 @@
 # gzip (GNU zip, not to be confused with Info-ZIP or PKWARE zip archiver)
 # URL: https://en.wikipedia.org/wiki/Gzip
 # Reference: https://tools.ietf.org/html/rfc1952
-# Update: Joerg Jenderek, Apr 2019
+# Update: Joerg Jenderek, Apr 2019, Dec 2022
 #   Edited by Chris Chittleborough <cchittleborough@yahoo.com.au>, March 2002
 #	* Original filename is only at offset 10 if "extra field" absent
 #	* Produce shorter output - notably, only report compression methods
@@ -62,20 +62,24 @@
 !:mime	application/gzip
 >>>0	use	gzip-info
 # size of the original (uncompressed) input data modulo 2^32
->>-0	offset		>48
+# TODO: check for GXD MCD cad the reported size
 >>>-4	ulelong		x		\b, original size modulo 2^32 %u
->>-0	offset		<48		\b, truncated
 # gzipped TAR or VirtualBox extension package
 #!:mime	application/x-compressed-tar
 #!:mime	application/x-virtualbox-vbox-extpack
 # https://www.w3.org/TR/SVG/mimereg.html
-#!:mime	image/image/svg+xml-compressed
+#!:mime	image/svg+xml-compressed
 #	zlib.3.gz
 #	microcode-20180312.tgz
 #	tpz same as tgz
 #	lua-md5_1.2-1_i386_i486.ipk	https://en.wikipedia.org/wiki/Opkg
 #	Oracle_VM_VirtualBox_Extension_Pack-5.0.12-104815.vbox-extpack
-!:ext	gz/tgz/tpz/ipk/vbox-extpack/svgz
+#	trees.blend			http://fileformats.archiveteam.org/wiki/BLEND
+#	2020-07-19-Note-16-24.xoj	https://xournal.sourceforge.net/manual.html
+#	MYgnucash-gz.gnucash		https://wiki.gnucash.org/wiki/GnuCash_XML_format
+#	text-rotate.dia			https://en.wikipedia.org/wiki/Dia_(software)
+#	MYrdata.RData			https://en.wikipedia.org/wiki/R_(programming_language)
+!:ext	gz/tgz/tpz/ipk/vbox-extpack/svgz/blend/dia/gnucash/rdata/xoj
 # FNAME/FCOMMENT bit implies file name/comment as iso-8859-1 text
 >3	byte&0x18	>0		gzip compressed data
 !:mime	application/gzip
@@ -84,12 +88,13 @@
 #!:mime	application/x-abiword-compressed
 #!:mime	image/image/svg+xml-compressed
 #	kleopatra_splashscreen.svgz	gzipped .svg
-!:ext	gz/tgz/tpz/zabw/svgz
+#	RSI-Mega-Demo_Disk1.adz		gzipped .adf	http://fileformats.archiveteam.org/wiki/ADF_(Amiga)
+#	PostbankTest.kmy		gzipped XML	https://docs.kde.org/stable5/en/kmymoney/kmymoney/details.formats.compressed.html
+#	Logo.xcfgz			gzipped .xcf	http://fileformats.archiveteam.org/wiki/XCF
+!:ext	gz/tgz/tpz/zabw/svgz/adz/kmy/xcfgz
 >>0	use	gzip-info
 # size of the original (uncompressed) input data modulo 2^32
->>-0	offset		>48
->>>-4	ulelong		x		\b, original size modulo 2^32 %u
->>-0	offset		<48		\b, truncated
+>>-4	ulelong		x		\b, original size modulo 2^32 %u
 #	display information of gzip compressed files
 0	name				gzip-info
 #>2	byte		x		THIS iS GZIP
@@ -258,16 +263,18 @@
 !:mime	application/x-7z-compressed
 !:ext 7z/cb7
 
-# Type: LZMA
-0	lelong&0xffffff	=0x5d
->12	leshort		0xff			LZMA compressed data,
+0	name		lzma			LZMA compressed data,
 !:mime	application/x-lzma
 !:ext	lzma
->>5	lequad		=0xffffffffffffffff	streamed
->>5	lequad		!0xffffffffffffffff	non-streamed, size %lld
->12	leshort		0			LZMA compressed data,
->>5	lequad		=0xffffffffffffffff	streamed
->>5	lequad		!0xffffffffffffffff	non-streamed, size %lld
+>5	lequad		=0xffffffffffffffff	streamed
+>5	lequad		!0xffffffffffffffff	non-streamed, size %lld
+
+# Type: LZMA
+0	lelong&0xffffff	=0x5d
+>12	leshort		0xff
+>>0	use		lzma
+>12	leshort		0
+>>0	use		lzma
 
 # http://tukaani.org/xz/xz-file-format.txt
 0	ustring		\xFD7zXZ\x00		XZ compressed data, checksum
@@ -425,20 +432,30 @@
 # https://support-docs.illumina.com/SW/ORA_Format_Specification/Content/SW/ORA/ORAFormatSpecification.htm
 0	uleshort	0x7c49	
 >2	lelong		0x80	ORA FASTQ compressed file
->6	ulelong		x	\b, DNA size %u
->10	ulelong		x	\b, read names size %u
->14	ulelong		x	\b, quality buffer 1 size %u
->18	ulelong		x	\b, quality buffer 2 size %u
->22	ulelong		x	\b, sequence buffer size %u
->26	ulelong		x	\b, N-position buffer size %u
->30	ulelong		x	\b, crypto buffer size %u
->34	ulelong		x	\b, misc  buffer 1 size %u
->38	ulelong		x	\b, misc  buffer 2 size %u
->42	ulelong		x	\b, flags %#x
->46	lelong		x	\b, read size %d
->50	lelong		x	\b, number of reads %d
->54	leshort		x	\b, version %d
+>>6	ulelong		x	\b, DNA size %u
+>>10	ulelong		x	\b, read names size %u
+>>14	ulelong		x	\b, quality buffer 1 size %u
+>>18	ulelong		x	\b, quality buffer 2 size %u
+>>22	ulelong		x	\b, sequence buffer size %u
+>>26	ulelong		x	\b, N-position buffer size %u
+>>30	ulelong		x	\b, crypto buffer size %u
+>>34	ulelong		x	\b, misc  buffer 1 size %u
+>>38	ulelong		x	\b, misc  buffer 2 size %u
+>>42	ulelong		x	\b, flags %#x
+>>46	lelong		x	\b, read size %d
+>>50	lelong		x	\b, number of reads %d
+>>54	leshort		x	\b, version %d
 
 # https://github.com/kspalaiologos/bzip3/blob/master/doc/file_format.md
 0	string/b	BZ3v1	bzip3 compressed data
 >5	ulelong		x	\b, blocksize %u
+
+
+# https://support-docs.illumina.com/SW/ORA_Format_Specification/Content/\
+# SW/ORA/ORAFormatSpecification.htm
+# From Guillaume Rizk
+0	short	=0x7C49 DRAGEN ORA file,
+>-261	short	=0x7C49 with metadata:
+>-125	u8	x	NB reads: %llu,
+>-109	u8	x	NB bases: %llu.
+>-219	u4&0x02	2	File contains interleaved paired reads

@@ -17,7 +17,8 @@ class PacketPpi(KaitaiStruct):
     out-of-band data. Originally it was developed to provide 802.11n
     radio information, but can be used for other purposes as well.
     
-    Sample capture: https://wiki.wireshark.org/SampleCaptures?action=AttachFile&do=get&target=Http.cap
+    Sample capture:
+    <https://wiki.wireshark.org/uploads/27707187aeb30df68e70c8fb9d614981/http.cap>
     
     .. seealso::
        PPI header format spec, section 3 - https://web.archive.org/web/20090206112419/https://www.cacetech.com/documents/PPI_Header_format_1.0.1.pdf

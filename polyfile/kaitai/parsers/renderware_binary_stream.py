@@ -203,7 +203,12 @@ class RenderwareBinaryStream(KaitaiStruct):
         self._debug['library_id_stamp']['end'] = self._io.pos()
         self._debug['body']['start'] = self._io.pos()
         _on = self.code
-        if _on == RenderwareBinaryStream.Sections.geometry:
+        if _on == RenderwareBinaryStream.Sections.atomic:
+            self._raw_body = self._io.read_bytes(self.size)
+            _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
+            self.body = RenderwareBinaryStream.ListWithHeader(_io__raw_body, self, self._root)
+            self.body._read()
+        elif _on == RenderwareBinaryStream.Sections.geometry:
             self._raw_body = self._io.read_bytes(self.size)
             _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
             self.body = RenderwareBinaryStream.ListWithHeader(_io__raw_body, self, self._root)
@@ -316,6 +321,14 @@ class RenderwareBinaryStream(KaitaiStruct):
             self._debug['morph_targets']['end'] = self._io.pos()
 
         @property
+        def num_uv_layers_raw(self):
+            if hasattr(self, '_m_num_uv_layers_raw'):
+                return self._m_num_uv_layers_raw if hasattr(self, '_m_num_uv_layers_raw') else None
+
+            self._m_num_uv_layers_raw = ((self.format & 16711680) >> 16)
+            return self._m_num_uv_layers_raw if hasattr(self, '_m_num_uv_layers_raw') else None
+
+        @property
         def is_textured(self):
             if hasattr(self, '_m_is_textured'):
                 return self._m_is_textured if hasattr(self, '_m_is_textured') else None
@@ -324,12 +337,20 @@ class RenderwareBinaryStream(KaitaiStruct):
             return self._m_is_textured if hasattr(self, '_m_is_textured') else None
 
         @property
-        def is_prelit(self):
-            if hasattr(self, '_m_is_prelit'):
-                return self._m_is_prelit if hasattr(self, '_m_is_prelit') else None
+        def is_native(self):
+            if hasattr(self, '_m_is_native'):
+                return self._m_is_native if hasattr(self, '_m_is_native') else None
 
-            self._m_is_prelit = (self.format & 8) != 0
-            return self._m_is_prelit if hasattr(self, '_m_is_prelit') else None
+            self._m_is_native = (self.format & 16777216) != 0
+            return self._m_is_native if hasattr(self, '_m_is_native') else None
+
+        @property
+        def num_uv_layers(self):
+            if hasattr(self, '_m_num_uv_layers'):
+                return self._m_num_uv_layers if hasattr(self, '_m_num_uv_layers') else None
+
+            self._m_num_uv_layers = ((2 if self.is_textured2 else (1 if self.is_textured else 0)) if self.num_uv_layers_raw == 0 else self.num_uv_layers_raw)
+            return self._m_num_uv_layers if hasattr(self, '_m_num_uv_layers') else None
 
         @property
         def is_textured2(self):
@@ -340,16 +361,16 @@ class RenderwareBinaryStream(KaitaiStruct):
             return self._m_is_textured2 if hasattr(self, '_m_is_textured2') else None
 
         @property
-        def is_native(self):
-            if hasattr(self, '_m_is_native'):
-                return self._m_is_native if hasattr(self, '_m_is_native') else None
+        def is_prelit(self):
+            if hasattr(self, '_m_is_prelit'):
+                return self._m_is_prelit if hasattr(self, '_m_is_prelit') else None
 
-            self._m_is_native = (self.format & 16777216) != 0
-            return self._m_is_native if hasattr(self, '_m_is_native') else None
+            self._m_is_prelit = (self.format & 8) != 0
+            return self._m_is_prelit if hasattr(self, '_m_is_prelit') else None
 
 
     class GeometryNonNative(KaitaiStruct):
-        SEQ_FIELDS = ["prelit_colors", "tex_coords", "triangles"]
+        SEQ_FIELDS = ["prelit_colors", "uv_layers", "triangles"]
         def __init__(self, _io, _parent=None, _root=None):
             self._io = _io
             self._parent = _parent
@@ -371,20 +392,18 @@ class RenderwareBinaryStream(KaitaiStruct):
 
                 self._debug['prelit_colors']['end'] = self._io.pos()
 
-            if  ((self._parent.is_textured) or (self._parent.is_textured2)) :
-                self._debug['tex_coords']['start'] = self._io.pos()
-                self.tex_coords = [None] * (self._parent.num_vertices)
-                for i in range(self._parent.num_vertices):
-                    if not 'arr' in self._debug['tex_coords']:
-                        self._debug['tex_coords']['arr'] = []
-                    self._debug['tex_coords']['arr'].append({'start': self._io.pos()})
-                    _t_tex_coords = RenderwareBinaryStream.TexCoord(self._io, self, self._root)
-                    _t_tex_coords._read()
-                    self.tex_coords[i] = _t_tex_coords
-                    self._debug['tex_coords']['arr'][i]['end'] = self._io.pos()
+            self._debug['uv_layers']['start'] = self._io.pos()
+            self.uv_layers = [None] * (self._parent.num_uv_layers)
+            for i in range(self._parent.num_uv_layers):
+                if not 'arr' in self._debug['uv_layers']:
+                    self._debug['uv_layers']['arr'] = []
+                self._debug['uv_layers']['arr'].append({'start': self._io.pos()})
+                _t_uv_layers = RenderwareBinaryStream.UvLayer(self._parent.num_vertices, self._io, self, self._root)
+                _t_uv_layers._read()
+                self.uv_layers[i] = _t_uv_layers
+                self._debug['uv_layers']['arr'][i]['end'] = self._io.pos()
 
-                self._debug['tex_coords']['end'] = self._io.pos()
-
+            self._debug['uv_layers']['end'] = self._io.pos()
             self._debug['triangles']['start'] = self._io.pos()
             self.triangles = [None] * (self._parent.num_triangles)
             for i in range(self._parent.num_triangles):
@@ -510,6 +529,43 @@ class RenderwareBinaryStream(KaitaiStruct):
 
                 self._debug['normals']['end'] = self._io.pos()
 
+
+
+    class StructAtomic(KaitaiStruct):
+        """
+        .. seealso::
+           Source - https://gtamods.com/wiki/Atomic_(RW_Section)#Structure
+        """
+        SEQ_FIELDS = ["frame_index", "geometry_index", "flag_render", "_unnamed3", "flag_collision_test", "_unnamed5", "unused"]
+        def __init__(self, _io, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root if _root else self
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['frame_index']['start'] = self._io.pos()
+            self.frame_index = self._io.read_u4le()
+            self._debug['frame_index']['end'] = self._io.pos()
+            self._debug['geometry_index']['start'] = self._io.pos()
+            self.geometry_index = self._io.read_u4le()
+            self._debug['geometry_index']['end'] = self._io.pos()
+            self._debug['flag_render']['start'] = self._io.pos()
+            self.flag_render = self._io.read_bits_int_le(1) != 0
+            self._debug['flag_render']['end'] = self._io.pos()
+            self._debug['_unnamed3']['start'] = self._io.pos()
+            self._unnamed3 = self._io.read_bits_int_le(1) != 0
+            self._debug['_unnamed3']['end'] = self._io.pos()
+            self._debug['flag_collision_test']['start'] = self._io.pos()
+            self.flag_collision_test = self._io.read_bits_int_le(1) != 0
+            self._debug['flag_collision_test']['end'] = self._io.pos()
+            self._debug['_unnamed5']['start'] = self._io.pos()
+            self._unnamed5 = self._io.read_bits_int_le(29)
+            self._debug['_unnamed5']['end'] = self._io.pos()
+            self._io.align_to_byte()
+            self._debug['unused']['start'] = self._io.pos()
+            self.unused = self._io.read_u4le()
+            self._debug['unused']['end'] = self._io.pos()
 
 
     class SurfaceProperties(KaitaiStruct):
@@ -646,7 +702,12 @@ class RenderwareBinaryStream(KaitaiStruct):
             self._debug['library_id_stamp']['end'] = self._io.pos()
             self._debug['header']['start'] = self._io.pos()
             _on = self._parent.code
-            if _on == RenderwareBinaryStream.Sections.geometry:
+            if _on == RenderwareBinaryStream.Sections.atomic:
+                self._raw_header = self._io.read_bytes(self.header_size)
+                _io__raw_header = KaitaiStream(BytesIO(self._raw_header))
+                self.header = RenderwareBinaryStream.StructAtomic(_io__raw_header, self, self._root)
+                self.header._read()
+            elif _on == RenderwareBinaryStream.Sections.geometry:
                 self._raw_header = self._io.read_bytes(self.header_size)
                 _io__raw_header = KaitaiStream(BytesIO(self._raw_header))
                 self.header = RenderwareBinaryStream.StructGeometry(_io__raw_header, self, self._root)
@@ -765,6 +826,30 @@ class RenderwareBinaryStream(KaitaiStruct):
             self._debug['v']['start'] = self._io.pos()
             self.v = self._io.read_f4le()
             self._debug['v']['end'] = self._io.pos()
+
+
+    class UvLayer(KaitaiStruct):
+        SEQ_FIELDS = ["tex_coords"]
+        def __init__(self, num_vertices, _io, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root if _root else self
+            self.num_vertices = num_vertices
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['tex_coords']['start'] = self._io.pos()
+            self.tex_coords = [None] * (self.num_vertices)
+            for i in range(self.num_vertices):
+                if not 'arr' in self._debug['tex_coords']:
+                    self._debug['tex_coords']['arr'] = []
+                self._debug['tex_coords']['arr'].append({'start': self._io.pos()})
+                _t_tex_coords = RenderwareBinaryStream.TexCoord(self._io, self, self._root)
+                _t_tex_coords._read()
+                self.tex_coords[i] = _t_tex_coords
+                self._debug['tex_coords']['arr'][i]['end'] = self._io.pos()
+
+            self._debug['tex_coords']['end'] = self._io.pos()
 
 
     class StructTextureDictionary(KaitaiStruct):

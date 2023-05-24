@@ -22,11 +22,11 @@ class DimeMessage(KaitaiStruct):
     && gunzip scanner_withoptions.dump.gz`
     
     .. seealso::
-       Source - https://tools.ietf.org/html/draft-nielsen-dime-02
+       Source - https://datatracker.ietf.org/doc/html/draft-nielsen-dime-02
     
     
     .. seealso::
-       Source - https://docs.microsoft.com/en-us/archive/msdn-magazine/2002/december/sending-files-attachments-and-soap-messages-via-dime
+       Source - https://learn.microsoft.com/en-us/archive/msdn-magazine/2002/december/sending-files-attachments-and-soap-messages-via-dime
     
     
     .. seealso::

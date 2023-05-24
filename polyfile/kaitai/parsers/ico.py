@@ -16,7 +16,7 @@ class Ico(KaitaiStruct):
     contained inside).
     
     .. seealso::
-       Source - https://docs.microsoft.com/en-us/previous-versions/ms997538(v=msdn.10)
+       Source - https://learn.microsoft.com/en-us/previous-versions/ms997538(v=msdn.10)
     """
     SEQ_FIELDS = ["magic", "num_images", "images"]
     def __init__(self, _io, _parent=None, _root=None):

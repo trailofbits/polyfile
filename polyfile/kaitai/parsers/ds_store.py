@@ -14,8 +14,14 @@ class DsStore(KaitaiStruct):
     
     .. seealso::
        Source - https://en.wikipedia.org/wiki/.DS_Store
-       https://metacpan.org/pod/distribution/Mac-Finder-DSStore/DSStoreFormat.pod
-       https://0day.work/parsing-the-ds_store-file-format
+    
+    
+    .. seealso::
+       Source - https://metacpan.org/dist/Mac-Finder-DSStore/view/DSStoreFormat.pod
+    
+    
+    .. seealso::
+       Source - https://0day.work/parsing-the-ds_store-file-format/
     """
     SEQ_FIELDS = ["alignment_header", "buddy_allocator_header"]
     def __init__(self, _io, _parent=None, _root=None):
@@ -144,7 +150,7 @@ class DsStore(KaitaiStruct):
                 if hasattr(self, '_m_size'):
                     return self._m_size if hasattr(self, '_m_size') else None
 
-                self._m_size = ((1 << self.address_raw) & self._root.block_address_mask)
+                self._m_size = (1 << (self.address_raw & self._root.block_address_mask))
                 return self._m_size if hasattr(self, '_m_size') else None
 
 

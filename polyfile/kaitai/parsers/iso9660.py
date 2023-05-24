@@ -33,7 +33,7 @@ class Iso9660(KaitaiStruct):
     class VolDescPrimary(KaitaiStruct):
         """
         .. seealso::
-           Source - http://wiki.osdev.org/ISO_9660#The_Primary_Volume_Descriptor
+           Source - https://wiki.osdev.org/ISO_9660#The_Primary_Volume_Descriptor
         """
         SEQ_FIELDS = ["unused1", "system_id", "volume_id", "unused2", "vol_space_size", "unused3", "vol_set_size", "vol_seq_num", "logical_block_size", "path_table_size", "lba_path_table_le", "lba_opt_path_table_le", "lba_path_table_be", "lba_opt_path_table_be", "root_dir", "vol_set_id", "publisher_id", "data_preparer_id", "application_id", "copyright_file_id", "abstract_file_id", "bibliographic_file_id", "vol_create_datetime", "vol_mod_datetime", "vol_expire_datetime", "vol_effective_datetime", "file_structure_version", "unused4", "application_area"]
         def __init__(self, _io, _parent=None, _root=None):
@@ -366,7 +366,7 @@ class Iso9660(KaitaiStruct):
     class PathTableLe(KaitaiStruct):
         """
         .. seealso::
-           Source - http://wiki.osdev.org/ISO_9660#The_Path_Table
+           Source - https://wiki.osdev.org/ISO_9660#The_Path_Table
         """
         SEQ_FIELDS = ["entries"]
         def __init__(self, _io, _parent=None, _root=None):
@@ -395,7 +395,7 @@ class Iso9660(KaitaiStruct):
     class DecDatetime(KaitaiStruct):
         """
         .. seealso::
-           Source - http://wiki.osdev.org/ISO_9660#Date.2Ftime_format
+           Source - https://wiki.osdev.org/ISO_9660#Date.2Ftime_format
         """
         SEQ_FIELDS = ["year", "month", "day", "hour", "minute", "sec", "sec_hundreds", "timezone"]
         def __init__(self, _io, _parent=None, _root=None):

@@ -10,7 +10,8 @@ if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class MifareClassic(KaitaiStruct):
-    """You can get a dump for testing by the link: https://github.com/zhovner/mfdread/raw/master/dump.mfd
+    """You can get a dump for testing from this link:
+    <https://github.com/zhovner/mfdread/raw/master/dump.mfd>
     
     .. seealso::
        Source - https://github.com/nfc-tools/libnfc

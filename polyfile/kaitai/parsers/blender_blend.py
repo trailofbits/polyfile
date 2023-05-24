@@ -159,7 +159,7 @@ class BlenderBlend(KaitaiStruct):
           structure, referring to types and names by index)
         
         .. seealso::
-           Source - https://en.blender.org/index.php/Dev:Source/Architecture/File_Format#Structure_DNA
+           Source - https://archive.blender.org/wiki/index.php/Dev:Source/Architecture/File_Format/#Structure_DNA
         """
         SEQ_FIELDS = ["id", "name_magic", "num_names", "names", "padding_1", "type_magic", "num_types", "types", "padding_2", "tlen_magic", "lengths", "padding_3", "strc_magic", "num_structs", "structs"]
         def __init__(self, _io, _parent=None, _root=None):

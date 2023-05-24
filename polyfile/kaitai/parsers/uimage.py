@@ -16,7 +16,7 @@ class Uimage(KaitaiStruct):
     with sha1 and md5 checksums.
     
     .. seealso::
-       Source - https://source.denx.de/u-boot/u-boot/-/raw/e4dba4b/include/image.h
+       Source - https://source.denx.de/u-boot/u-boot/-/raw/e4dba4ba6f/include/image.h
     """
 
     class UimageOs(Enum):

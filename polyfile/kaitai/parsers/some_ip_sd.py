@@ -9,8 +9,8 @@ import collections
 if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
     raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
 
-from polyfile.kaitai.parsers import some_ip_sd_entries
 from polyfile.kaitai.parsers import some_ip_sd_options
+from polyfile.kaitai.parsers import some_ip_sd_entries
 class SomeIpSd(KaitaiStruct):
     """The main tasks of the Service Discovery Protocol are communicating the
     availability of functional entities called services in the in-vehicle
@@ -20,7 +20,7 @@ class SomeIpSd(KaitaiStruct):
     (Scalable service-Oriented MiddlewarE over IP - Service Discovery).
     
     .. seealso::
-       Source - https://www.autosar.org/fileadmin/user_upload/standards/foundation/19-11/AUTOSAR_PRS_SOMEIPServiceDiscoveryProtocol.pdf
+       Source - https://www.autosar.org/fileadmin/standards/foundation/19-11/AUTOSAR_PRS_SOMEIPServiceDiscoveryProtocol.pdf
     """
     SEQ_FIELDS = ["flags", "reserved", "len_entries", "entries", "len_options", "options"]
     def __init__(self, _io, _parent=None, _root=None):

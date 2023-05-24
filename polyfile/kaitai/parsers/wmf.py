@@ -20,7 +20,7 @@ class Wmf(KaitaiStruct):
     printer, etc).
     
     .. seealso::
-       Source - http://www.digitalpreservation.gov/formats/digformatspecs/WindowsMetafileFormat(wmf)Specification.pdf
+       Source - https://www.loc.gov/preservation/digital/formats/digformatspecs/WindowsMetafileFormat(wmf)Specification.pdf
     """
 
     class Func(Enum):

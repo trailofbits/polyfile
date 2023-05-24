@@ -19,7 +19,7 @@ class AndroidDto(KaitaiStruct):
     partition images and decompile them with dtc (device tree compiler).
     
     .. seealso::
-       Source - https://source.android.com/devices/architecture/dto/partitions
+       Source - https://source.android.com/docs/core/architecture/dto/partitions
     
     
     .. seealso::

@@ -26,7 +26,7 @@ class Swf(KaitaiStruct):
     documented by Adobe.
     
     .. seealso::
-       Source - https://www.adobe.com/content/dam/acom/en/devnet/pdf/swf-file-format-spec.pdf
+       Source - https://open-flash.github.io/mirrors/swf-spec-19.pdf
     """
 
     class Compressions(Enum):

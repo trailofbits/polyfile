@@ -15,7 +15,7 @@ class SudoersTs(KaitaiStruct):
     such as /run/sudo/ts/$USER or /var/lib/sudo/ts/$USER.
     
     .. seealso::
-       Source - https://www.sudo.ws/man/1.8.27/sudoers_timestamp.man.html
+       Source - https://www.sudo.ws/docs/man/1.8.27/sudoers_timestamp.man/
     """
 
     class TsType(Enum):

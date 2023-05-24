@@ -21,7 +21,7 @@ class Gzip(KaitaiStruct):
     (without zlib header) in all gzipped files.
     
     .. seealso::
-       Source - https://tools.ietf.org/html/rfc1952
+       Source - https://www.rfc-editor.org/rfc/rfc1952
     """
 
     class CompressionMethods(Enum):

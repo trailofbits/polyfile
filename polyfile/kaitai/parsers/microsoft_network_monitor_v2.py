@@ -23,7 +23,7 @@ class MicrosoftNetworkMonitorV2(KaitaiStruct):
     v2. Netmon v3 seems to use the same file format as v1.
     
     .. seealso::
-       Source - https://docs.microsoft.com/en-us/windows/win32/netmon2/capturefile-header-values
+       Source - https://learn.microsoft.com/en-us/windows/win32/netmon2/capturefile-header-values
     """
 
     class Linktype(Enum):
@@ -258,7 +258,7 @@ class MicrosoftNetworkMonitorV2(KaitaiStruct):
         the original packet was actually written into the file.
         
         .. seealso::
-           Source - https://docs.microsoft.com/en-us/windows/win32/netmon2/frame
+           Source - https://learn.microsoft.com/en-us/windows/win32/netmon2/frame
         """
         SEQ_FIELDS = ["ts_delta", "orig_len", "inc_len", "body"]
         def __init__(self, _io, _parent=None, _root=None):

@@ -361,7 +361,10 @@ class Bson(KaitaiStruct):
 
 
     class ObjectId(KaitaiStruct):
-        """https://docs.mongodb.com/manual/reference/method/ObjectId/."""
+        """
+        .. seealso::
+           Source - https://www.mongodb.com/docs/manual/reference/method/ObjectId/
+        """
         SEQ_FIELDS = ["epoch_time", "machine_id", "process_id", "counter"]
         def __init__(self, _io, _parent=None, _root=None):
             self._io = _io

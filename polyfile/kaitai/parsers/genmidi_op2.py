@@ -25,11 +25,11 @@ class GenmidiOp2(KaitaiStruct):
     
     
     .. seealso::
-       Source - http://doom.wikia.com/wiki/GENMIDI
+       Source - https://doom.fandom.com/wiki/GENMIDI
     
     
     .. seealso::
-       Source - http://www.shikadi.net/moddingwiki/OP2_Bank_Format
+       Source - https://moddingwiki.shikadi.net/wiki/OP2_Bank_Format
     """
     SEQ_FIELDS = ["magic", "instruments", "instrument_names"]
     def __init__(self, _io, _parent=None, _root=None):

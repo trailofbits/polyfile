@@ -13,7 +13,7 @@ if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
 class VmwareVmdk(KaitaiStruct):
     """
     .. seealso::
-       Source - https://github.com/libyal/libvmdk/blob/master/documentation/VMWare%20Virtual%20Disk%20Format%20(VMDK).asciidoc#41-file-header
+       Source - https://github.com/libyal/libvmdk/blob/main/documentation/VMWare%20Virtual%20Disk%20Format%20(VMDK).asciidoc#41-file-header
     """
 
     class CompressionMethods(Enum):
@@ -76,7 +76,7 @@ class VmwareVmdk(KaitaiStruct):
     class HeaderFlags(KaitaiStruct):
         """
         .. seealso::
-           Source - https://github.com/libyal/libvmdk/blob/master/documentation/VMWare%20Virtual%20Disk%20Format%20(VMDK).asciidoc#411-flags
+           Source - https://github.com/libyal/libvmdk/blob/main/documentation/VMWare%20Virtual%20Disk%20Format%20(VMDK).asciidoc#411-flags
         """
         SEQ_FIELDS = ["reserved1", "zeroed_grain_table_entry", "use_secondary_grain_dir", "valid_new_line_detection_test", "reserved2", "reserved3", "has_metadata", "has_compressed_grain", "reserved4"]
         def __init__(self, _io, _parent=None, _root=None):

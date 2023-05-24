@@ -23,7 +23,7 @@ class GimpBrush(KaitaiStruct):
     and choose **Brushes** to see the recognized Brush Folders or to add new ones.
     
     .. seealso::
-       Source - https://gitlab.gnome.org/GNOME/gimp/-/raw/4416313/devel-docs/gbr.txt
+       Source - https://github.com/GNOME/gimp/blob/441631322b/devel-docs/gbr.txt
     """
 
     class ColorDepth(Enum):

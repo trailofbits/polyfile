@@ -21,7 +21,7 @@ class BroadcomTrx(KaitaiStruct):
     trx files not necessarily contain all these headers.
     
     .. seealso::
-       Source - https://github.com/openwrt/openwrt/blob/3f5619f/tools/firmware-utils/src/trx.c
+       Source - https://github.com/openwrt/firmware-utils/blob/a2c80c5/src/trx.c
     
     
     .. seealso::
