@@ -27,7 +27,7 @@ setup(
         "abnf~=2.2.0",
         "chardet~=5.0.0",
         "cint>=1.0.0",
-        "fickling>=0.0.6",
+        "fickling>=0.0.7",
         "graphviz>=0.20.1",
         "intervaltree>=2.4.0",
         "jinja2>=2.1.0",

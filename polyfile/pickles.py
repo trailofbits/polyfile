@@ -1,7 +1,7 @@
 from typing import Optional
 
 from fickling.analysis import Analyzer, Severity
-from fickling.pickle import Pickled, PickleDecodeError
+from fickling.fickle import Pickled, PickleDecodeError
 
 from .magic import AbsoluteOffset, DynamicMagicTest, FailedTest, MagicMatcher, MatchedTest, TestResult, TestType
 
