@@ -22,7 +22,7 @@ setup(
     author='Trail of Bits',
     version="0.5.3",
     packages=find_packages(exclude=("tests",)),
-    python_requires='>=3.7',
+    python_requires='>=3.8',
     install_requires=[
         "abnf~=2.2.0",
         "chardet~=5.0.0",
