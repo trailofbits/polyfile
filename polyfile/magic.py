@@ -13,6 +13,7 @@ from collections import defaultdict
 import csv
 from datetime import datetime
 from enum import Enum, IntFlag
+from importlib import resources
 from io import StringIO
 import json
 import logging
@@ -34,6 +35,8 @@ from .iterators import LazyIterableSet
 from .logger import getStatusLogger, TRACE
 from .repl import ANSIColor, ANSIWriter
 
+from . import magic_defs
+
 
 if sys.version_info < (3, 9):
     from typing import Pattern
@@ -43,12 +46,16 @@ else:
 
 log = getStatusLogger("libmagic")
 
-DEFS_DIR: Path = Path(__file__).absolute().parent / "magic_defs"
+
+def get_resource_path(name: str) -> Path:
+    with resources.path(magic_defs, name) as path:
+        return path
+
 
 MAGIC_DEFS: List[Path] = [
-    path
-    for path in DEFS_DIR.glob("*")
-    if path.name not in ("COPYING", "magic.mgc") and not path.name.startswith(".")
+    get_resource_path(resource_name)
+    for resource_name in resources.contents(magic_defs)
+    if resource_name not in ("COPYING", "magic.mgc", "__pycache__") and not resource_name.startswith(".")
 ]
 
 
