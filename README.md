@@ -112,6 +112,10 @@ with open("file_to_test", "rb") as f:
         ...
 ```
 
+## Extending PolyFile
+
+Instructions on extending PolyFile to support more file formats with new matchers and parsers is described [in the documentation]([in the documentation](docs/extending_polyfile.md)).
+
 ## License and Acknowledgements
 
 This research was developed by [Trail of
