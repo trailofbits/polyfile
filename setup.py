@@ -45,8 +45,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'polyfile = polyfile.__main__:main',
-            'polymerge = polymerge.__main__:main'
+            'polyfile = polyfile.__main__:main'
         ]
     },
     package_data={"polyfile": [

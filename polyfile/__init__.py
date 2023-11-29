@@ -12,4 +12,4 @@ from . import (
 )
 
 from .__main__ import main
-from .polyfile import __version__
+from .polyfile import __version__, InvalidMatch, Match, Matcher, Parser, PARSERS, register_parser, Submatch
