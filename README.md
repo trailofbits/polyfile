@@ -8,9 +8,10 @@
 [![Tests](https://github.com/trailofbits/polyfile/workflows/Tests/badge.svg)](https://github.com/trailofbits/polyfile/actions)
 [![Slack Status](https://slack.empirehacking.nyc/badge.svg)](https://slack.empirehacking.nyc)
 
-A utility to identify and map the semantic structure of files,
-including polyglots, chimeras, and schizophrenic files. It can be used
-in conjunction with its sister tool
+A utility to identify and map the semantic and syntactic structure of files,
+including polyglots, chimeras, and schizophrenic files. It has [a pure-Python implementation of libmagic](https://blog.trailofbits.com/2022/07/01/libmagic-the-blathering/) and can act as a drop-in replacement for the [`file` command](https://github.com/file/file). However, unlike `file`, PolyFile can recursively identify embedded files, like [binwalk](https://github.com/ReFirmLabs/binwalk).
+
+PolyFile can be used in conjunction with its sister tool
 [PolyTracker](https://github.com/trailofbits/polytracker) for
 _Automated Lexical Annotation and Navigation of Parsers_, a backronym
 devised solely for the purpose of collectively referring to the tools
