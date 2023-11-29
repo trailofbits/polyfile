@@ -56,7 +56,8 @@ if sys.version_info < (3, 11):
         return resources.contents(package)
 else:
     def get_resource_path(name: str) -> Path:
-        return resources.as_file(resources.files(magic_defs).joinpath(name))
+        with resources.as_file(resources.files(magic_defs).joinpath(name)) as f:
+            return f
 
     def get_resource_contents(package):
         return (resource.name for resource in resources.files(package).iterdir() if resource.is_file())
