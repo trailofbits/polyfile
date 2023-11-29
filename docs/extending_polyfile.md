@@ -143,6 +143,10 @@ def parse_example(file_stream, match):
     ...
 ```
 
+### Kaitai Struct Parsers
+
+
+
 ## Struct Parsing
 
 PolyFile has a convenience utility defined in [`structs.py`](../polyfile/structs.py) for defining and loading binary structures:
@@ -162,3 +166,34 @@ print(test.foo, test.bar, test.data)
 ```
 
 This can be used for both matching and parsing, as is demonstrated in the [ZIP matcher](../polyfile/zipmatcher.py).
+
+## Debugging Matchers and Parsers
+
+PolyFile implements an interactive debugger for stepping through the DSL specifications and parsers, modeled after
+GDB. You can enter this debugger by passing the `--debugger` or `-db` argument to PolyFile. It is useful for both
+implementing new `libmagic` DSLs, as well as figuring out why an existing DSL fails to match against a given file.
+```console
+$ polyfile -db input_file
+PolyFile 0.5.4
+Copyright ©2023 Trail of Bits
+Apache License Version 2.0 https://www.apache.org/licenses/
+
+For help, type "help".
+(polyfile) help
+breakpoint ......... list the current breakpoints or add a new one
+continue ........... continue execution until the next breakpoint is hit (aliases: run)
+debug_and_continue . continue while debugging in PDB (aliases: debug and debug_and_cont)
+debug_and_rerun .... re-run the last test and debug in PDB
+debug_and_step ..... step into the next magic test and debug in PDB
+delete ............. delete a breakpoint
+help ............... print this message
+next ............... continue execution until the next test that matches
+print .............. print the computed absolute offset of the following libmagic DSL offset
+profile ............ print current profiling results (to enable profiling, use `set profile True`)
+quit ............... exit the debugger
+set ................ modifies part of the debugger environment
+show ............... prints part of the debugger environment
+step ............... step through a single magic test
+test ............... test the following libmagic DSL test at the current position
+where .............. print the context of the current magic test (aliases: backtrace and info stack)
+```

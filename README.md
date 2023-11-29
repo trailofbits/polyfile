@@ -89,7 +89,7 @@ TrID matching code is still shipped with PolyFile and can be invoked programmati
 
 PolyFile has several options for outputting its results, specified by its `--format` option. For computer-readable output, PolyFile has an extension of the [SBuD](https://github.com/corkami/sbud) JSON format described [in the documentation](docs/json_format.md). Prior to version 0.5.0 this was the default output format of PolyFile. However, now the default output format is to mimic the behavior of the `file` command. To maintain the original behavior, use the `--format sbud` option.
 
-### libMagic Implementation
+### libmagic Implementation
 
 PolyFile has a cleanroom implementation of [libmagic (used in the `file` command)](https://github.com/file/file).
 It can be invoked programmatically by running:
@@ -110,32 +110,6 @@ matcher = MagicMatcher.parse(*list_of_paths_to_definitions)
 with open("file_to_test", "rb") as f:
     for match in matcher.match(f.read()):
         ...
-```
-
-### Debugging the libmagic DSL
-`libmagic` has an esoteric, poorly documented domain-specific language (DSL) for specifying its matching signatures.
-You can read the minimal and—as we have discovered in our cleanroom implementation—_incomplete_ documentation by running
-`man 5 magic`, or read [our blog post enumerating the DSL's idiosyncracies](https://blog.trailofbits.com/2022/07/01/libmagic-the-blathering/). PolyFile implements an interactive debugger for stepping through the DSL specifications, modeled after
-GDB. You can enter this debugger by passing the `--debugger` or `-db` argument to PolyFile. It is useful for both
-implementing new `libmagic` DSLs, as well as figuring out why an existing DSL fails to match against a given file.
-```console
-$ polyfile -db input_file
-PolyFile 0.3.5
-Copyright ©2021 Trail of Bits
-Apache License Version 2.0 https://www.apache.org/licenses/
-
-For help, type "help".
-(polyfile) help
-help ....... print this message
-continue ... continue execution until the next breakpoint is hit
-step ....... step through a single magic test
-next ....... continue execution until the next test that matches
-where ...... print the context of the current magic test (aliases: info stack and backtrace)
-test ....... test the following libmagic DSL test at the current position
-print ...... print the computed absolute offset of the following libmagic DSL offset
-breakpoint . list the current breakpoints or add a new one
-delete ..... delete a breakpoint
-quit ....... exit the debugger
 ```
 
 ## License and Acknowledgements
