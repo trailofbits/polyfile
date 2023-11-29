@@ -1,23 +1,30 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
+from importlib import resources
 import importlib.util
 import inspect
 from io import BufferedReader, BytesIO
 import json
 from pathlib import Path
+import sys
 from typing import Any, Dict, Iterator, List, Optional, Set, Type, Union
 
+from . import parsers
 from .compiler import CompiledKSY
 from ..fileutils import FileStream
 
 from kaitaistruct import KaitaiStruct
 
-PARSER_DIR: Path = Path(__file__).absolute().parent / "parsers"
-MANIFEST_FILE: Path = PARSER_DIR / "manifest.json"
+with resources.path(parsers, "manifest.json") as manifest_path:
+    PARSER_DIR: Path = manifest_path.parent
+if sys.version_info >= (3, 9):
+    with (resources.files(parsers) / "manifest.json").open("r") as f:
+        MANIFEST: Dict[str, Dict[str, Any]] = json.load(f)
+else:
+    with resources.open_text(parsers, "manifest.json") as f:
+        MANIFEST = json.load(f)
 
-with open(MANIFEST_FILE, "r") as f:
-    MANIFEST: Dict[str, Dict[str, Any]] = json.load(f)
 COMPILED_INFO_BY_KSY: Dict[str, CompiledKSY] = {
     ksy_path: CompiledKSY(
         class_name=component["class_name"],
