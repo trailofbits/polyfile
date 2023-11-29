@@ -48,7 +48,7 @@ DEFS_DIR: Path = Path(__file__).absolute().parent / "magic_defs"
 MAGIC_DEFS: List[Path] = [
     path
     for path in DEFS_DIR.glob("*")
-    if path.name not in ("COPYING", "magic.mgc") and not path.name.startswith(".")
+    if path.is_file() and path.name not in ("COPYING", "magic.mgc") and not path.name.startswith(".")
 ]
 
 
