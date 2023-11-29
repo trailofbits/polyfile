@@ -47,14 +47,24 @@ else:
 log = getStatusLogger("libmagic")
 
 
-def get_resource_path(name: str) -> Path:
-    with resources.path(magic_defs, name) as path:
-        return path
+if sys.version_info < (3, 11):
+    def get_resource_path(name: str) -> Path:
+        with resources.path(magic_defs, name) as path:
+            return path
+
+    def get_resource_contents(package):
+        return resources.contents(package)
+else:
+    def get_resource_path(name: str) -> Path:
+        return resources.as_file(resources.files(magic_defs).joinpath(name))
+
+    def get_resource_contents(package):
+        return (resource.name for resource in resources.files(package).iterdir() if resource.is_file())
 
 
 MAGIC_DEFS: List[Path] = [
     get_resource_path(resource_name)
-    for resource_name in resources.contents(magic_defs)
+    for resource_name in get_resource_contents(magic_defs)
     if resource_name not in ("COPYING", "magic.mgc", "__pycache__") and not resource_name.startswith(".")
 ]
 
