@@ -18,9 +18,6 @@ class JSONByteField(ByteField):
     @classmethod
     def read(cls: Type[T], struct: Struct, field_name: str, stream: BinaryIO, endianness: Endianness) -> T:
         raw_bytes = super().read(struct=struct, field_name=field_name, stream=stream, endianness=endianness)
-        # speed optimization: make sure the JSON starts with '{' before trying to decode/parse it!
-        if not raw_bytes.lstrip().startswith(b"{"):
-            raise StructReadError("JSON does not start with '{'")
         try:
             json_string = raw_bytes.decode("utf-8")
         except UnicodeDecodeError:
@@ -52,6 +49,17 @@ class SafeTensorsTest(MagicTest):
         return TestType.BINARY
 
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
+        # speed optimization: make sure the JSON starts with '{' before trying to decode/parse it!
+        for b in data[8:]:
+            if b == ord("{"):
+                # it looks like the start of JSON
+                break
+            elif b not in (ord(" "), ord("\t"), ord("\n"), ord("\r")):
+                # this is not whitespace
+                return FailedTest(self, offset=absolute_offset, message="JSON does not start with '{'")
+        else:
+            # we never found the starting "{"
+            return FailedTest(self, offset=absolute_offset, message="JSON does not start with '{'")
         bstream = BytesIO(data)
         setattr(bstream, "name", "SafetensorsBytes")
         stream = FileStream(bstream)
