@@ -8,7 +8,8 @@ from . import (
     kaitaimatcher,
     languagematcher,
     pickles,
-    polyfile
+    polyfile,
+    safetensors
 )
 
 from .__main__ import main
