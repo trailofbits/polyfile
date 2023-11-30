@@ -60,7 +60,7 @@ class ExampleMatcher(MagicTest):
             return FailedTest(self, offset=0, message="This is not an example file!")
 
 # Register the matcher so it always runs:
-MagicMatcher.DEFAULT_INSTANCE.add(RelaxedJarMatcher())
+MagicMatcher.DEFAULT_INSTANCE.add(ExampleMatcher())
 ```
 
 ## Parsing
