@@ -1,6 +1,7 @@
+import asyncio
 from pathlib import Path
-from typing import Callable, Optional
-from unittest import TestCase
+from typing import Callable, Iterator, Optional, Tuple
+from unittest import IsolatedAsyncioTestCase, TestCase
 
 # from polyfile import logger
 import polyfile.magic
@@ -10,6 +11,22 @@ from polyfile.magic import MagicMatcher, MAGIC_DEFS
 # logger.setLevel(logger.TRACE)
 
 FILE_TEST_DIR: Path = Path(__file__).parent.parent / "file" / "tests"
+
+
+def test_file_corpus() -> Iterator[Tuple[str, Path, Path, Path]]:
+    if not FILE_TEST_DIR.exists():
+        raise FileNotFoundError("Make sure to run `git submodule init && git submodule update` in the root of this "
+                                "repository.")
+    tests = sorted([
+        f.stem for f in FILE_TEST_DIR.glob("*.testfile")
+    ])
+
+    for test in tests:
+        testfile = FILE_TEST_DIR / f"{test}.testfile"
+        result = FILE_TEST_DIR / f"{test}.result"
+
+        if testfile.exists() and result.exists():
+            yield test, testfile, result, FILE_TEST_DIR / f"{test}.magic"
 
 
 class MagicTest(TestCase):
@@ -133,25 +150,10 @@ class MagicTest(TestCase):
         self.assertIn("application/x-sharedlib", matcher.mimetypes)
 
     def test_file_corpus(self):
-        self.assertTrue(FILE_TEST_DIR.exists(), "Make sure to run `git submodule init && git submodule update` in the "
-                                                "root of this repository.")
-
         default_matcher = MagicMatcher.DEFAULT_INSTANCE
 
-        tests = sorted([
-            f.stem for f in FILE_TEST_DIR.glob("*.testfile")
-        ])
-
-        for test in tests:
+        for test, testfile, result, magicfile in test_file_corpus():
             with self.subTest(test=test):
-                testfile = FILE_TEST_DIR / f"{test}.testfile"
-                result = FILE_TEST_DIR / f"{test}.result"
-
-                if not testfile.exists() or not result.exists():
-                    continue
-
-                magicfile = FILE_TEST_DIR / f"{test}.magic"
-
                 print(f"Testing: {test}")
 
                 if magicfile.exists():
@@ -187,3 +189,22 @@ class MagicTest(TestCase):
                                 self.assertTrue(any(m.endswith(expected) for m in matches))
                             else:
                                 self.assertIn(expected, matches)
+
+
+async def get_matches_async(path: Path):
+    with open(path, "rb") as f:
+        return list(MagicMatcher.DEFAULT_INSTANCE.match(f.read()))
+
+
+class ParallelMagicTest(IsolatedAsyncioTestCase):
+    async def test_parallelism(self):
+        files = []
+        for test, testfile, result, magicfile in test_file_corpus():
+            if magicfile.exists():
+                # only try files that work with the default matcher
+                continue
+            files.append(testfile)
+        await asyncio.gather(*(
+            asyncio.create_task(get_matches_async(file))
+            for file in files
+        ))
