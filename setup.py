@@ -25,7 +25,7 @@ setup(
     python_requires='>=3.8',
     install_requires=[
         "abnf~=2.2.0",
-        "chardet~=5.0.0",
+        "chardet>=5.0.0",
         "cint>=1.0.0",
         "fickling>=0.0.8",
         "graphviz>=0.20.1",
@@ -33,7 +33,7 @@ setup(
         "jinja2>=2.1.0",
         "kaitaistruct~=0.10",
         "networkx>=2.6.3",
-        "pdfminer.six==20220524",
+        "pdfminer.six>=20220524",
         "Pillow>=5.0.0",
         "pyreadline3;platform_system=='Windows'",
         "pyyaml>=3.13",
