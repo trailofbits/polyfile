@@ -42,6 +42,18 @@ label.tree_label { cursor: pointer; }
 
 label.tree_label:hover { color: #666; }
 
+.tree_label:hover > .download {
+  display: block;
+  float: right;
+}
+
+.download {
+  display: none;
+  color: blue;
+  padding-left: 1em;
+  padding-right: 1em;
+}
+
 label.tree_label:before {
   background: #000;
   color: #fff;

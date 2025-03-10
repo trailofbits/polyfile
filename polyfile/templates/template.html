@@ -31,8 +31,11 @@
 <span style="display:none;" id="clickinfo">Double-click to jump to an address</span>
 <br />
 
-{% macro render_match_name(match) -%}
-{{ match['name'] }}{% if match['decoded'] %}<br />
+{% macro render_match_name(match, first) -%}
+<a href="#" class="download" title="download" onclick="downloadFile({{ match['offset'] }}, {{ match['size'] }}, '{{ match['type'] }}', '{{ match['extension'] }}')">⇩</a>
+{{ match['name'] }}{% if not first %}<br />
+<small style="color: gray;">{{ match['size'] }} bytes @ {{ '0x%0X' % match['offset'] }}</small>
+{% endif %}{% if match['decoded'] %}<br />
 [<a href="#decoded{{ match['uid'] }}">Decode</a>]{% endif %}{% if match['img_data'] %}
         <span class="tree_custom">
             <img src="{{ match['img_data'] }}" style="max-width: 8em;" />
@@ -44,7 +47,7 @@
     {% if 'subEls' in match and match['subEls'] %}
     <input type="checkbox" {{'checked="checked" ' if first}}id="match{{ match['uid'] }}" />
     <label class="tree_label" for="match{{ match['uid'] }}" matchbyte="{{ match['offset'] }}" matchlength="{{ match['size'] }}">
-        {{ render_match_name(match) }}
+        {{ render_match_name(match, first) }}
     </label>
     <ul>
         {% for child in match['subEls'] %}
@@ -53,7 +56,7 @@
     </ul>
     {% else %}
     <span class="tree_label" matchbyte="{{ match['offset'] }}" matchlength="{{ match['size'] }}">
-        {{ render_match_name(match) }}
+        {{ render_match_name(match, first) }}
     </span>
     {% endif %}
 </li>

@@ -7,7 +7,7 @@ from typing import Dict, Set, Tuple
 
 from intervaltree import IntervalTree
 
-from polyfile import logger, version
+from polyfile import logger, __version__
 
 from . import polytracker
 from . import cfg
@@ -144,9 +144,9 @@ def filter_function_matches(type_dominators: cfg.DAG, matches: dict):
 def merge(polyfile_json_obj: dict, program_trace: polytracker.ProgramTrace) -> dict:
     ret = copy.deepcopy(polyfile_json_obj)
     if 'versions' in ret:
-        ret['versions']['polymerge'] = version.VERSION_STRING
+        ret['versions']['polymerge'] = __version__
     else:
-        ret['versions'] = {'polymerge': version.VERSION_STRING}
+        ret['versions'] = {'polymerge': __version__}
     intervals = None
     for match in ret['struc']:
         intervals = build_intervals(match, tree=intervals)

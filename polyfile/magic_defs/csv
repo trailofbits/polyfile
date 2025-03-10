@@ -1,0 +1,8 @@
+#------------------------------------------------------------------------------
+# This is a custom test created for PolyFile.
+# The original implementation of libmagic/file tests for certain filetypes like
+# CSV by using a parser written in C rather than the DSL.
+# Instead, PolyFile adds a new test type called `csv`:
+0   csv    x   CSV text (%s dialect)
+!:mime  text/csv
+!:ext   csv

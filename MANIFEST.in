@@ -1,0 +1,7 @@
+include compile_kaitai_parsers.py
+include CODEOWNERS
+graft kaitai_struct_formats
+graft file
+graft docs
+graft logo
+graft hooks

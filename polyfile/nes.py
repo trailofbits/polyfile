@@ -3,7 +3,7 @@ from io import BytesIO
 
 from PIL import Image, ImageDraw
 
-from .polyfile import submatcher, InvalidMatch, Match, Submatch
+from .polyfile import register_parser, InvalidMatch, Submatch
 
 
 def parse_ines_header(header, parent=None):
@@ -75,7 +75,8 @@ def parse_ines_header(header, parent=None):
     )
 
 
-def parse_ines(file_stream, parent=None):
+@register_parser("application/x-nes-rom")
+def parse_ines(file_stream, parent):
     header = file_stream.read(16)
     yield from parse_ines_header(header, parent)
     has_trainer = (header[6] & 0b100) != 0
@@ -141,9 +142,3 @@ def render_chr(chr_bytes: bytes) -> Image:
             pixel = 0xFF
         d.point((x, y), pixel)
     return img
-
-
-@submatcher('rom-nes.trid.xml')
-class INESMatcher(Match):
-    def submatch(self, file_stream):
-        yield from parse_ines(file_stream, parent=self)

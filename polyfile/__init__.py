@@ -1,4 +1,15 @@
-from . import nes, pdf, zipmatcher, trid, kaitaimatcher, polyfile
-from .__main__ import main
-from .version import __version__, VERSION_STRING
+from . import (
+    nes,
+    pdf,
+    jpeg,
+    zipmatcher,
+    nitf,
+    http,
+    kaitaimatcher,
+    languagematcher,
+    pickles,
+    polyfile
+)
 
+from .__main__ import main
+from .polyfile import __version__, InvalidMatch, Match, Matcher, Parser, PARSERS, register_parser, Submatch

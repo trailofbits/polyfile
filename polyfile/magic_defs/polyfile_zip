@@ -1,0 +1,5 @@
+# Additional ZIP tests for detecting polyglots
+-65536   search    PK\005\006
+>&20     uleshort  x          Zip archive data with %d byte comment
+#>(&16.l)	 use       zipcd
+!:mime application/zip
