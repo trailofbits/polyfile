@@ -423,21 +423,27 @@ class PDFDict(dict, PDFDict_Type):
 
 
 class PDFList(PSSequence, list):
-    @staticmethod
-    def load(iterable) -> "PDFList":
-        start_offset: Optional[int] = None
-        end_offset: Optional[int] = None
-        items = []
-        for item in iterable:
-            if hasattr(item, "pdf_offset") and hasattr(item, "pdf_bytes"):
-                if start_offset is None or start_offset > item.pdf_offset:
-                    start_offset = item.pdf_offset
-                if end_offset is None or end_offset < item.pdf_offset + item.pdf_bytes:
-                    end_offset = item.pdf_offset + item.pdf_bytes
-            items.append(item)
-        if start_offset is None or end_offset is None:
-            raise ValueError(f"Cannot determine PDF bounds for list {items!r}")
-        return PDFList(items, pdf_offset=start_offset, pdf_bytes=end_offset - start_offset)
+    @classmethod
+    def load(cls, items):
+        if not items:
+            # Empty list: zero‑length wrapper
+            return cls([], pdf_offset=0, pdf_bytes=0)
+            
+        # Get the first item's position if available
+        first_item = next((item for item in items if hasattr(item, "pdf_offset")), None)
+        if first_item:
+            start_offset = first_item.pdf_offset
+            end_offset = first_item.pdf_offset + first_item.pdf_bytes
+        else:
+            start_offset = 0
+            end_offset = 0
+            
+        # Use *all* elements to calculate the real span
+
+        start_offset = min(getattr(x, "pdf_offset", 0) for x in items)
+        end_offset   = max(getattr(x, "pdf_offset", 0) + getattr(x, "pdf_bytes", 0) for x in items)
+
+        return cls(list(items), pdf_offset=start_offset, pdf_bytes=end_offset - start_offset)
 
     def __str__(self):
         return list.__str__(self)
@@ -856,9 +862,20 @@ def parse_object(obj, matcher: Matcher, parent: Optional[Match] = None, pdf_head
         for key, value in obj.items():
             if not hasattr(value, "pdf_offset") or not hasattr(value, "pdf_bytes"):
                 if isinstance(value, list):
-                    value = PDFList.load(value)
+                    if not value:  # Skip empty lists
+                        continue
+                    if isinstance(value, list):
+                        try:
+                            wrapped = PDFList.load(value)
+                        except ValueError:
+                            # Skip truly malformed list values
+                            continue
+                        obj[key] = wrapped        # keep dict self‑consistent
+                        value = wrapped
                 else:
-                    raise ValueError(f"Unexpected PDF dictionary value {value!r}")
+                    # Skip unexpected values instead of raising an error
+                    log.warning(f"Unexpected PDF dictionary value {value!r}")
+                    continue
             pair = Submatch(
                 "KeyValuePair",
                 '',
