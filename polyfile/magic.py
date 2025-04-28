@@ -2579,8 +2579,12 @@ class Match:
                 # sometimes we parsed a negative value and want to print it as an unsigned int:
                 result_str = result_str % (result.value + 2**(8 * result.length),)
             elif "%" in result_str.replace("%%", ""):
-                result_str = result_str.replace("%lld", "%d")
-                result_str = result_str % (result.value,)
+                result_str = result_str.replace("%ll", "%")
+                result_str = result_str.replace("%#ll", "0x%")
+                try:
+                    result_str = result_str % (result.value,)
+                except ValueError as e:
+                    log.error(f"Error formatting message {result_str!r} with value {result.value!r}: {e!s}")
             result_str = result_str.replace("%%", "%")
             msg = f"{msg}{result_str}"
         return msg
