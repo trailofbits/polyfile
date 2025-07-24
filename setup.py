@@ -8,8 +8,6 @@ import compile_kaitai_parsers
 POLYFILE_DIR: Path = Path(__file__).absolute().parent
 README_PATH: Path = POLYFILE_DIR / "README.md"
 
-compile_kaitai_parsers.rebuild()
-
 with open(README_PATH, "r", encoding="utf8") as readme:
     README = readme.read()
 
@@ -66,3 +64,6 @@ setup(
         'Topic :: Utilities'
     ]
 )
+
+compile_kaitai_parsers.rebuild()
+
