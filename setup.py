@@ -40,7 +40,7 @@ setup(
         "Pillow>=5.0.0",
         "pyreadline3;platform_system=='Windows'",
         "pyyaml>=3.13",
-        "setuptools>=78.1.1"
+        "setuptools>=80.9.0"
     ],
     extras_require={
         'demangle': ['cxxfilt'],
@@ -51,7 +51,7 @@ setup(
             'polyfile = polyfile.__main__:main'
         ]
     },
-    package_data={"polyfile-weave": [
+    package_data={"polyfile": [
         os.path.join("templates", "*"),
         os.path.join("kaitai", "parsers", "*.py"),
         os.path.join("kaitai", "parsers", "manifest.json"),
