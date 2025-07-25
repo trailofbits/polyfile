@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: pypi
-      url: https://pypi.org/p/polyfile-weave
+      url: https://pypi.org/project/polyfile-weave
     permissions:
       id-token: write
     steps:
@@ -22,7 +22,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install setuptools wheel pyyaml
+          pip install setuptools wheel
       - name: Build package
         run: |
           python setup.py sdist bdist_wheel  # Could also be python -m build

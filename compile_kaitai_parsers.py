@@ -6,59 +6,20 @@ from pathlib import Path
 import subprocess
 import sys
 from typing import Any, Dict, List, Optional, Tuple
-import os
-import glob
-import yaml
-
-# Copyleft Licenses to exclude
-EXCLUDE_LICENSES = ['AGPL', 'EUPL', 'GPL', 'LGPL', 'OSL', 'ODbL', 'Ms-RL', 'GFDL']
-
 
 POLYFILE_DIR: Path = Path(__file__).absolute().parent
 COMPILE_SCRIPT: Path = POLYFILE_DIR / "polyfile" / "kaitai" / "compiler.py"
 KAITAI_FORMAT_LIBRARY: Path = POLYFILE_DIR / "kaitai_struct_formats"
 KAITAI_PARSERS_DIR: Path = POLYFILE_DIR / "polyfile" / "kaitai" / "parsers"
 MANIFEST_PATH: Path = KAITAI_PARSERS_DIR / "manifest.json"
+EXCLUDE = [
+    './kaitai_struct_formats/firmware/broadcom_trx.ksy',
+    './kaitai_struct_formats/filesystem/vdi.ksy',
+    './kaitai_struct_formats/filesystem/lvm2.ksy',
+    './kaitai_struct_formats/image/pif.ksy',
+    './kaitai_struct_formats/scientific/nt_mdt/nt_mdt.ksy'
+]
 
-
-def find_files_with_excluded_licenses(directory, license_list) -> List[str]:
-    """
-    Recursively scans a directory for files and identifies any that contain
-    a license from the excluded list.
-
-    The check is performed as a substring match (e.g., 'GPL' in the list
-    will match a license named 'GPL-3.0-or-later').
-    """
-    # Create the recursive search pattern
-    search_path = os.path.join(directory, '**', f'*.ksy')
-    file_paths = glob.glob(search_path, recursive=True)
-
-    if not file_paths:
-        return []
-
-    flagged_files = []
-
-    for file_path in file_paths:
-        try:
-            with open(file_path, 'r', encoding='utf-8') as f:
-                data = yaml.safe_load(f)
-                if data and isinstance(data, dict):
-                    license_val = data.get('meta', {}).get('license')
-                    if not license_val:
-                        continue
-
-                    # Check if any part of the license name is in our exclude list
-                    for excluded_license in license_list:
-                        if excluded_license in license_val:
-                            flagged_files.append(file_path)
-                            break # Found a match, no need to check other excluded licenses for this file
-
-        except yaml.YAMLError as e:
-            print(f"❌ Error parsing YAML in file '{file_path}': {e}")
-        except Exception as e:
-            print(f"❌ An unexpected error occurred with file '{file_path}': {e}")
-
-    return flagged_files
 
 
 # Make sure the ktaitai_struct_formats submodlue is cloned:
@@ -96,12 +57,7 @@ def mtime(path: Path) -> datetime:
 
 def rebuild(force: bool = False):
     # Get the list of copyleft-licensed files to exclude
-
-    excluded_files = find_files_with_excluded_licenses(
-        KAITAI_FORMAT_LIBRARY,
-        EXCLUDE_LICENSES
-    )
-    excluded_paths = {Path(f).absolute() for f in excluded_files}
+    excluded_paths = {Path(f).absolute() for f in EXCLUDE}
 
     # Remove the manifest file to force a rebuild:
     if force or not MANIFEST_PATH.exists():
