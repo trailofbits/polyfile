@@ -17,11 +17,11 @@ with open(README_PATH, "r", encoding="utf8") as readme:
     README = readme.read()
 
 setup(
-    name='polyfile',
+    name='polyfile-weave',
     description='A utility to recursively map the structure of a file.',
     long_description=README,
     long_description_content_type="text/markdown",
-    url='https://github.com/trailofbits/polyfile',
+    url='https://github.com/zbirenbaum/polyfile-weave',
     author='Trail of Bits',
     version="0.5.5",
     packages=find_packages(exclude=("tests",)),
