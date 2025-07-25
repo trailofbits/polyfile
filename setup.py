@@ -17,7 +17,7 @@ with open(README_PATH, "r", encoding="utf8") as readme:
     README = readme.read()
 
 setup(
-    name='polyfile-weave',
+    name='polyfile',
     description='A utility to recursively map the structure of a file.',
     long_description=README,
     long_description_content_type="text/markdown",
