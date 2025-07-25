@@ -21,7 +21,7 @@ KAITAI_PARSERS_DIR: Path = POLYFILE_DIR / "polyfile" / "kaitai" / "parsers"
 MANIFEST_PATH: Path = KAITAI_PARSERS_DIR / "manifest.json"
 
 
-def find_files_with_excluded_licenses(directory, license_list) -> list[str]:
+def find_files_with_excluded_licenses(directory, license_list) -> List[str]:
     """
     Recursively scans a directory for files and identifies any that contain
     a license from the excluded list.
