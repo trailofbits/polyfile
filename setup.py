@@ -40,7 +40,7 @@ setup(
         "Pillow>=5.0.0",
         "pyreadline3;platform_system=='Windows'",
         "pyyaml>=3.13",
-        "setuptools>=65.5.1"
+        "setuptools>=70.0.0"
     ],
     extras_require={
         'demangle': ['cxxfilt'],
