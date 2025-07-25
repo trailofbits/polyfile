@@ -17,7 +17,7 @@ with open(README_PATH, "r", encoding="utf8") as readme:
     README = readme.read()
 
 setup(
-    name='polyfile',
+    name='polyfile-weave',
     description='A utility to recursively map the structure of a file.',
     long_description=README,
     long_description_content_type="text/markdown",
@@ -51,7 +51,7 @@ setup(
             'polyfile = polyfile.__main__:main'
         ]
     },
-    package_data={"polyfile": [
+    package_data={"polyfile-weave": [
         os.path.join("templates", "*"),
         os.path.join("kaitai", "parsers", "*.py"),
         os.path.join("kaitai", "parsers", "manifest.json"),
