@@ -1163,7 +1163,7 @@ def pdf_obj_parser(file_stream, obj, objid: int, parent: Match, pdf_header_offse
     log.clear_status()
 
 
-@register_parser("application/pdf")
+# Note: PDF parser is registered lazily in __init__.py to defer pdfminer import
 def pdf_parser(file_stream, parent: Match):
     # pdfminer expects %PDF to be at byte offset zero in the file
     pdf_header_offset = file_stream.first_index_of(b"%PDF")
