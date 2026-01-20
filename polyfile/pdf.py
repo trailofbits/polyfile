@@ -423,21 +423,44 @@ class PDFDict(dict, PDFDict_Type):
 
 
 class PDFList(PSSequence, list):
-    @staticmethod
-    def load(iterable) -> "PDFList":
-        start_offset: Optional[int] = None
-        end_offset: Optional[int] = None
-        items = []
-        for item in iterable:
-            if hasattr(item, "pdf_offset") and hasattr(item, "pdf_bytes"):
-                if start_offset is None or start_offset > item.pdf_offset:
-                    start_offset = item.pdf_offset
-                if end_offset is None or end_offset < item.pdf_offset + item.pdf_bytes:
-                    end_offset = item.pdf_offset + item.pdf_bytes
-            items.append(item)
-        if start_offset is None or end_offset is None:
-            raise ValueError(f"Cannot determine PDF bounds for list {items!r}")
-        return PDFList(items, pdf_offset=start_offset, pdf_bytes=end_offset - start_offset)
+    @classmethod
+    def load(cls, items) -> "PDFList":
+        """Load a PDFList from an iterable of items.
+
+        Handles edge cases:
+        - Empty lists: returns zero-length wrapper at offset 0
+        - Items without offsets: filters them out, warns if all lack offsets
+
+        Args:
+            items: An iterable of PDF objects to load into a list
+
+        Returns:
+            A PDFList with calculated offset and byte length based on contained items
+        """
+        if not items:
+            # Empty list case: return zero-length wrapper
+            return cls([], pdf_offset=0, pdf_bytes=0)
+
+        items_list = list(items)
+
+        # Filter to items that have position information
+        items_with_offsets = [
+            x for x in items_list
+            if hasattr(x, "pdf_offset") and hasattr(x, "pdf_bytes")
+        ]
+
+        if not items_with_offsets:
+            # No items have offset information - log warning and return safe default
+            log.warning(
+                f"PDFList with {len(items_list)} items but none have offset information"
+            )
+            return cls(items_list, pdf_offset=0, pdf_bytes=0)
+
+        # Calculate bounds from items with position data
+        start_offset = min(x.pdf_offset for x in items_with_offsets)
+        end_offset = max(x.pdf_offset + x.pdf_bytes for x in items_with_offsets)
+
+        return cls(items_list, pdf_offset=start_offset, pdf_bytes=end_offset - start_offset)
 
     def __str__(self):
         return list.__str__(self)
@@ -856,9 +879,22 @@ def parse_object(obj, matcher: Matcher, parent: Optional[Match] = None, pdf_head
         for key, value in obj.items():
             if not hasattr(value, "pdf_offset") or not hasattr(value, "pdf_bytes"):
                 if isinstance(value, list):
-                    value = PDFList.load(value)
+                    if not value:
+                        # Empty list - skip it as there's no data to parse
+                        log.debug(f"Skipping empty list value for key {key}")
+                        continue
+                    try:
+                        value = PDFList.load(value)
+                        # Keep the dictionary self-consistent
+                        obj[key] = value
+                    except ValueError as e:
+                        # Skip malformed list values instead of crashing
+                        log.warning(f"Skipping malformed list value for key {key}: {e}")
+                        continue
                 else:
-                    raise ValueError(f"Unexpected PDF dictionary value {value!r}")
+                    # Unexpected value type - log warning and skip instead of raising error
+                    log.warning(f"Skipping unexpected PDF dictionary value {value!r} for key {key}")
+                    continue
             pair = Submatch(
                 "KeyValuePair",
                 '',
