@@ -11,6 +11,7 @@ details about the file.
 from abc import ABC, abstractmethod
 from collections import defaultdict
 import csv
+import functools
 from datetime import datetime
 from enum import Enum, IntFlag
 from importlib import resources
@@ -802,24 +803,31 @@ class MagicTest(ABC):
                 stack.append(test.parent)
                 history.add(test.parent)
 
-    def descendants(self) -> Iterator["MagicTest"]:
-        """
-        Yields all descendants of this test.
-        UseTests will also include all referenced NamedTests and their descendants.
-
-        """
+    def _compute_descendants(self) -> Tuple["MagicTest", ...]:
+        """Compute all descendants of this test (internal, called once)."""
+        result: List[MagicTest] = []
         stack: List[MagicTest] = [self]
         history: Set[MagicTest] = set(stack)
         while stack:
             test = stack.pop()
             if test is not self:
-                yield test
+                result.append(test)
             new_tests = [child for child in test.children if child not in history]
             stack.extend(reversed(new_tests))
             history |= set(new_tests)
             if isinstance(test, UseTest):
                 stack.append(test.referenced_test)
                 history.add(test.referenced_test)
+        return tuple(result)
+
+    @functools.cached_property
+    def descendants(self) -> Tuple["MagicTest", ...]:
+        """
+        Returns all descendants of this test (cached).
+        UseTests will also include all referenced NamedTests and their descendants.
+
+        """
+        return self._compute_descendants()
 
     def referenced_tests(self) -> Set["NamedTest"]:
         result: Set[NamedTest] = set()
@@ -853,29 +861,31 @@ class MagicTest(ABC):
         if self.mime is not None:
             yielded |= set(self.mime.possibilities())
             yield from yielded
-        for d in self.descendants():
+        for d in self.descendants:
             if d.mime is not None:
                 possibilities = set(d.mime.possibilities())
                 new_mimes = possibilities - yielded
                 yield from new_mimes
                 yielded |= new_mimes
 
-    def mimetypes(self) -> LazyIterableSet[str]:
-        """Returns the set of all possible MIME types that this test or any of its descendants could match against"""
-        return LazyIterableSet(self._mimetypes())
+    @functools.cached_property
+    def mimetypes(self) -> Tuple[str, ...]:
+        """Returns all possible MIME types that this test or any of its descendants could match against"""
+        return tuple(self._mimetypes())
 
     def _all_extensions(self) -> Iterator[str]:
         """Yields all possible extensions that this test or any of its descendants could match against"""
         yield from self.extensions
         yielded = set(self.extensions)
-        for d in self.descendants():
+        for d in self.descendants:
             new_extensions = d.extensions - yielded
             yield from new_extensions
             yielded |= new_extensions
 
-    def all_extensions(self) -> LazyIterableSet[str]:
-        """Returns the set of all possible extensions that this test or any of its descendants could match against"""
-        return LazyIterableSet(self._all_extensions())
+    @functools.cached_property
+    def all_extensions(self) -> Tuple[str, ...]:
+        """Returns all possible extensions that this test or any of its descendants could match against"""
+        return tuple(self._all_extensions())
 
     @abstractmethod
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
@@ -2695,9 +2705,9 @@ class MagicMatcher:
                 self._non_text_tests.add(test)
             if test.can_be_indirect:
                 self._tests_that_can_be_indirect.add(test)
-            for mime in test.mimetypes():
+            for mime in test.mimetypes:
                 self._tests_by_mime[mime].add(test)
-            for ext in test.all_extensions():
+            for ext in test.all_extensions:
                 self._tests_by_ext[ext].add(test)
 
     def only_match(
@@ -2716,7 +2726,7 @@ class MagicMatcher:
             return self
         tests: Set[MagicTest] = {
             indirect_test for indirect_test in self.tests_that_can_be_indirect
-            if not any(True for _ in indirect_test.mimetypes())
+            if not any(True for _ in indirect_test.mimetypes)
         }
         if mimetypes is not None:
             for mime in mimetypes:
