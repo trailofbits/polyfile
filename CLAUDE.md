@@ -89,6 +89,20 @@ pytest tests/test_corkami.py  # Polyglot corpus
 pip-audit
 ```
 
+### Pre-Commit Checklist
+Run all checks before committing changes:
+```bash
+# Lint
+flake8 polyfile polymerge --max-complexity=10 --max-line-length=127 \
+    --exclude=polyfile/kaitai/parsers
+
+# Security audit (checks for vulnerable dependencies)
+pip-audit
+
+# Tests
+pytest tests
+```
+
 ## Code Navigation
 
 ### Finding Matchers
