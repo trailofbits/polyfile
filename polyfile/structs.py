@@ -229,8 +229,8 @@ class StructMeta(ABCMeta):
 
     def __init__(cls, name, bases, clsdict):
         cls.fields = OrderedDict()
-        if "__annotations__" in clsdict:
-            for field_name, field_type in clsdict["__annotations__"].items():
+        if hasattr(cls, "__annotations__"):
+            for field_name, field_type in cls.__annotations__.items():
                 if isinstance(field_type, type) and issubclass(field_type, Field):
                     if field_name in cls.fields:
                         raise TypeError(f"Invalid redeclaration of struct field {field_name} in {cls.__name__}")
