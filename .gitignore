@@ -6,3 +6,4 @@ polyfile/trie_partial.gz
 *.pyc
 .vscode/
 .vscode/*
+*.egg-info/

@@ -358,7 +358,7 @@ class OpenpgpMessage(KaitaiStruct):
 
 
     class RevocationKey(KaitaiStruct):
-        SEQ_FIELDS = ["class", "public_key_algorithm", "fingerprint"]
+        SEQ_FIELDS = ["class_", "public_key_algorithm", "fingerprint"]
         def __init__(self, _io, _parent=None, _root=None):
             self._io = _io
             self._parent = _parent
@@ -366,9 +366,9 @@ class OpenpgpMessage(KaitaiStruct):
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
-            self._debug['class']['start'] = self._io.pos()
-            self.class = self._io.read_u1()
-            self._debug['class']['end'] = self._io.pos()
+            self._debug['class_']['start'] = self._io.pos()
+            self.class_ = self._io.read_u1()
+            self._debug['class_']['end'] = self._io.pos()
             self._debug['public_key_algorithm']['start'] = self._io.pos()
             self.public_key_algorithm = KaitaiStream.resolve_enum(OpenpgpMessage.PublicKeyAlgorithms, self._io.read_u1())
             self._debug['public_key_algorithm']['end'] = self._io.pos()
