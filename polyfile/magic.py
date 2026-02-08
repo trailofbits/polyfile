@@ -2064,6 +2064,22 @@ class NumericDataType(DataType[NumericValue]):
         else:
             return DataTypeMatch.INVALID
 
+    def flip_endianness(self) -> "NumericDataType":
+        """Return a copy with LITTLE/BIG endianness flipped."""
+        if self.endianness == Endianness.LITTLE:
+            new_endianness = Endianness.BIG
+        elif self.endianness == Endianness.BIG:
+            new_endianness = Endianness.LITTLE
+        else:
+            new_endianness = self.endianness  # NATIVE and PDP unchanged
+        return NumericDataType(
+            name=self.name,
+            base_type=self.base_type,
+            unsigned=self.unsigned,
+            endianness=new_endianness,
+            preprocess=self.preprocess
+        )
+
     @staticmethod
     def parse(fmt: str) -> "NumericDataType":
         name = fmt
@@ -2151,6 +2167,25 @@ class ConstantMatchTest(MagicTest, Generic[T]):
                 message=f"expected {self.constant!s}"
             )
 
+    def test_flip_endianness(
+            self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]
+    ) -> TestResult:
+        if isinstance(self.data_type, NumericDataType):
+            data_type = self.data_type.flip_endianness()
+        else:
+            data_type = self.data_type
+        match = data_type.match(data[absolute_offset:], self.constant)
+        if match:
+            return MatchedTest(self, offset=absolute_offset + match.initial_offset, length=len(match.raw_match),
+                               value=match.value, parent=parent_match)
+        else:
+            return FailedTest(
+                self,
+                offset=absolute_offset,
+                parent=parent_match,
+                message=f"expected {self.constant!s}"
+            )
+
 
 class OffsetMatchTest(MagicTest):
     def __init__(
@@ -2178,6 +2213,11 @@ class OffsetMatchTest(MagicTest):
                 parent=parent_match,
                 message=f"expected {self.value!r}"
             )
+
+    def test_flip_endianness(
+            self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]
+    ) -> TestResult:
+        return self.test(data, absolute_offset, parent_match)
 
 
 class IndirectResult(MatchedTest):
@@ -2227,6 +2267,11 @@ class IndirectTest(MagicTest):
                 )
             absolute_offset += parent_match.offset
         return IndirectResult(self, absolute_offset, parent_match)
+
+    def test_flip_endianness(
+            self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]
+    ) -> TestResult:
+        return self.test(data, absolute_offset, parent_match)
 
 
 class NamedTest(MagicTest):
@@ -2353,6 +2398,11 @@ class JSONTest(MagicTest):
     def subtest_type(self) -> TestType:
         return TestType.TEXT
 
+    def test_flip_endianness(
+            self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]
+    ) -> TestResult:
+        return self.test(data, absolute_offset, parent_match)
+
 
 class CSVTest(MagicTest):
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
@@ -2392,6 +2442,11 @@ class CSVTest(MagicTest):
     def subtest_type(self) -> TestType:
         return TestType.TEXT
 
+    def test_flip_endianness(
+            self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]
+    ) -> TestResult:
+        return self.test(data, absolute_offset, parent_match)
+
 
 class DefaultTest(MagicTest):
     def subtest_type(self) -> TestType:
@@ -2403,6 +2458,11 @@ class DefaultTest(MagicTest):
         else:
             return FailedTest(self, offset=absolute_offset, parent=parent_match, message="the parent test already "
                                                                                          "has a child that matched")
+
+    def test_flip_endianness(
+            self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]
+    ) -> TestResult:
+        return self.test(data, absolute_offset, parent_match)
 
 
 class ClearTest(MagicTest):
@@ -2416,6 +2476,11 @@ class ClearTest(MagicTest):
             parent_match.child_matched = False
             return MatchedTest(self, offset=absolute_offset, length=0, parent=parent_match, value=None)
 
+    def test_flip_endianness(
+            self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]
+    ) -> TestResult:
+        return self.test(data, absolute_offset, parent_match)
+
 
 class DERTest(MagicTest):
     def subtest_type(self) -> TestType:
@@ -2425,6 +2490,11 @@ class DERTest(MagicTest):
         raise NotImplementedError(
             "TODO: Implement support for the DER test (e.g., using the Kaitai asn1_der.py parser)"
         )
+
+    def test_flip_endianness(
+            self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]
+    ) -> TestResult:
+        return self.test(data, absolute_offset, parent_match)
 
 
 class PlainTextTest(MagicTest):
@@ -2469,6 +2539,11 @@ class PlainTextTest(MagicTest):
             return FailedTest(self, offset=absolute_offset, parent=parent_match, message="the data do not appear to "
                                                                                          "be encoded in a text format")
 
+    def test_flip_endianness(
+            self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]
+    ) -> TestResult:
+        return self.test(data, absolute_offset, parent_match)
+
 
 class OctetStreamTest(MagicTest):
     AUTO_REGISTER_TEST = False
@@ -2491,6 +2566,11 @@ class OctetStreamTest(MagicTest):
         # Everything is an octet stream!
         return MatchedTest(self, offset=absolute_offset, length=len(data) - absolute_offset, parent=parent_match,
                            value=data)
+
+    def test_flip_endianness(
+            self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]
+    ) -> TestResult:
+        return self.test(data, absolute_offset, parent_match)
 
 
 TEST_PATTERN: Pattern[str] = re.compile(
