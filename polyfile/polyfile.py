@@ -230,7 +230,7 @@ class Matcher:
             length = len(data) - offset
         extension: Optional[str] = None
         try:
-            extension = next(iter(match_obj.test.all_extensions()))
+            extension = next(iter(match_obj.test.all_extensions))
         except StopIteration:
             pass
         m = Match(

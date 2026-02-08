@@ -5,9 +5,6 @@ from typing import Dict, Iterator, List, Tuple, Type
 from kaitaistruct import KaitaiStruct, KaitaiStructError
 
 from .kaitai.parser import ASTNode, KaitaiParser, RootNode
-from .kaitai.parsers.gif import Gif
-from .kaitai.parsers.jpeg import Jpeg
-from .kaitai.parsers.png import Png
 from .logger import getStatusLogger
 from .polyfile import register_parser, InvalidMatch, Match, Parser, Submatch
 
@@ -83,31 +80,41 @@ def ast_to_matches(ast: RootNode, parent: Match) -> Iterator[Submatch]:
         stack.extend(reversed([(new_node, c) for c in node.children]))
 
 
+class LazyKaitaiParser:
+    """Parser that lazily loads the Kaitai struct parser on first use."""
+
+    def __init__(self, kaitai_path: str, mimetype: str):
+        self.kaitai_path = kaitai_path
+        self.mimetype = mimetype
+        self._kaitai_parser = None
+
+    @property
+    def kaitai_parser(self):
+        if self._kaitai_parser is None:
+            self._kaitai_parser = KaitaiParser.load(self.kaitai_path)
+            MIME_BY_PARSER[self._kaitai_parser.struct_type] = self.mimetype
+        return self._kaitai_parser
+
+    def __call__(self, stream, match):
+        try:
+            ast = self.kaitai_parser.parse(stream).ast
+        except KaitaiStructError as e:
+            log.warning(f"Error parsing {stream.name} using {self.kaitai_parser}: {e!s}")
+            raise InvalidMatch()
+        except Exception as e:
+            log.error(f"Unexpected exception parsing {stream.name} using {self.kaitai_parser}: {e!s}")
+            raise InvalidMatch()
+        yield from ast_to_matches(ast, parent=match)
+
+
 for mimetype, kaitai_path in KAITAI_MIME_MAPPING.items():
-    class parse_:
-        kaitai_parser = KaitaiParser.load(kaitai_path)
-
-        def __call__(self, stream, match):
-            try:
-                ast = self.kaitai_parser.parse(stream).ast
-            except KaitaiStructError as e:
-                log.warning(f"Error parsing {stream.name} using {self.kaitai_parser}: {e!s}")
-                raise InvalidMatch()
-            except Exception as e:
-                log.error(f"Unexpected exception parsing {stream.name} using {self.kaitai_parser}: {e!s}")
-                raise InvalidMatch()
-            yield from ast_to_matches(ast, parent=match)
-
     func_name = mimetype.replace("/", "_").replace("-", "_")
-
-    parse_.__name__ = f"{parse_.__name__}{func_name}"
-    parse_.__qualname__ = f"{parse_.__qualname__}{func_name}"
-
-    register_parser(mimetype)(parse_())
-
-    MIME_BY_PARSER[parse_.kaitai_parser.struct_type] = mimetype
+    parser = LazyKaitaiParser(kaitai_path, mimetype)
+    parser.__name__ = f"parse_{func_name}"
+    parser.__qualname__ = f"parse_{func_name}"
+    register_parser(mimetype)(parser)
 
 del func_name
 del kaitai_path
 del mimetype
-del parse_
+del parser
