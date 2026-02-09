@@ -45,6 +45,21 @@ class CompilationError(KaitaiError):
         return f"{self.ksy_file}: {super().__str__()}"
 
 
+def _fix_pkg_resources_import(python_path: Path) -> None:
+    """Replace deprecated pkg_resources import with packaging.version.
+
+    Kaitai Struct Compiler v0.9 generates code that imports parse_version from
+    pkg_resources, which is deprecated and unavailable on Python 3.12+.
+    """
+    content = python_path.read_text()
+    if "from pkg_resources import parse_version" in content:
+        content = content.replace(
+            "from pkg_resources import parse_version",
+            "from packaging.version import parse as parse_version"
+        )
+        python_path.write_text(content)
+
+
 class CompiledKSY:
     def __init__(self, class_name: str, python_path: Union[str, Path], dependencies: Iterable["CompiledKSY"] = ()):
         self.class_name: str = class_name
@@ -117,17 +132,26 @@ def compile(ksy_path: Union[str, Path], output_directory: Union[str, Path], auto
     if "errors" in first_spec:
         for error in first_spec["errors"]:
             raise CompilationError(ksy_file=error["file"], message=error["message"])
+
+    main_python_path = output_directory / first_spec["files"][0]["fileName"]
+    dependencies = [
+        CompiledKSY(
+            class_name=compiled["topLevelName"],
+            python_path=output_directory / compiled["files"][0]["fileName"]
+        )
+        for spec_name, compiled in result[ksy_path]["output"]["python"].items()
+        if spec_name != first_spec_name
+    ]
+
+    # Fix deprecated pkg_resources import in all generated files
+    _fix_pkg_resources_import(main_python_path)
+    for dep in dependencies:
+        _fix_pkg_resources_import(dep.python_path)
+
     return CompiledKSY(
         class_name=first_spec["topLevelName"],
-        python_path=output_directory / first_spec["files"][0]["fileName"],
-        dependencies=(
-            CompiledKSY(
-                class_name=compiled["topLevelName"],
-                python_path=output_directory / compiled["files"][0]["fileName"]
-            )
-            for spec_name, compiled in result[ksy_path]["output"]["python"].items()
-            if spec_name != first_spec_name
-        )
+        python_path=main_python_path,
+        dependencies=dependencies
     )
 
 

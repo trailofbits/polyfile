@@ -34,6 +34,7 @@ setup(
         "jinja2>=2.1.0",
         "kaitaistruct~=0.10",
         "networkx>=2.6.3",
+        "packaging>=21.0",
         "pdfminer.six>=20251230",
         "Pillow>=5.0.0",
         "pyreadline3;platform_system=='Windows'",
