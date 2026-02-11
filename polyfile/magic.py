@@ -64,11 +64,11 @@ else:
         return (resource.name for resource in resources.files(package).iterdir() if resource.is_file())
 
 
-MAGIC_DEFS: List[Path] = [
+MAGIC_DEFS: List[Path] = sorted([
     get_resource_path(resource_name)
     for resource_name in get_resource_contents(magic_defs)
     if resource_name not in ("COPYING", "magic.mgc", "__pycache__") and not resource_name.startswith(".")
-]
+], key=lambda p: p.name)
 
 
 WHITESPACE: bytes = b" \r\t\n\v\f"
@@ -264,6 +264,14 @@ class Endianness(Enum):
     LITTLE = "<"
     BIG = ">"
     PDP = "me"
+
+
+class StrengthOp(Enum):
+    NONE = ""
+    PLUS = "+"
+    MINUS = "-"
+    TIMES = "*"
+    DIV = "/"
 
 
 def parse_numeric(text: Union[str, bytes]) -> int:
@@ -733,6 +741,8 @@ class MagicTest(ABC):
         self.source_info: Optional[SourceInfo] = None
         self.comments: Tuple[Comment, ...] = tuple(comments)
         self._type: TestType = TestType.UNKNOWN
+        self.strength_op: StrengthOp = StrengthOp.NONE
+        self.strength_factor: int = 0
 
     def __init_subclass__(cls, **kwargs):
         if cls.AUTO_REGISTER_TEST:
@@ -782,6 +792,23 @@ class MagicTest(ABC):
     @abstractmethod
     def subtest_type(self) -> TestType:
         raise NotImplementedError()
+
+    def base_strength(self) -> int:
+        """Computes the base strength value before applying !:strength modifier."""
+        return 20
+
+    def compute_strength(self) -> int:
+        """Computes the test strength for sorting, mimicking libmagic's algorithm."""
+        val = self.base_strength()
+        if self.strength_op == StrengthOp.PLUS:
+            val += self.strength_factor
+        elif self.strength_op == StrengthOp.MINUS:
+            val -= self.strength_factor
+        elif self.strength_op == StrengthOp.TIMES:
+            val *= self.strength_factor
+        elif self.strength_op == StrengthOp.DIV and self.strength_factor != 0:
+            val //= self.strength_factor
+        return val
 
     @property
     def parent(self) -> Optional["MagicTest"]:
@@ -1087,10 +1114,16 @@ class DataType(ABC, Generic[T]):
             return TYPES_BY_NAME[fmt]
         elif fmt.startswith("string") or fmt.startswith("ustring"):
             dt = StringType.parse(fmt)
-        elif fmt == "lestring16":
-            dt = UTF16Type(endianness=Endianness.LITTLE)
-        elif fmt == "bestring16":
-            dt = UTF16Type(endianness=Endianness.BIG)
+        elif fmt == "lestring16" or fmt.startswith("lestring16/"):
+            num_bytes = None
+            if fmt.startswith("lestring16/"):
+                num_bytes = int(fmt[11:])
+            dt = UTF16Type(endianness=Endianness.LITTLE, num_bytes=num_bytes)
+        elif fmt == "bestring16" or fmt.startswith("bestring16/"):
+            num_bytes = None
+            if fmt.startswith("bestring16/"):
+                num_bytes = int(fmt[11:])
+            dt = UTF16Type(endianness=Endianness.BIG, num_bytes=num_bytes)
         elif fmt.startswith("pstring"):
             dt = PascalStringType.parse(fmt)
         elif fmt.startswith("search"):
@@ -1150,14 +1183,15 @@ class GUIDType(DataType[Union[UUID, UUIDWildcard]]):
 
 
 class UTF16Type(DataType[bytes]):
-    def __init__(self, endianness: Endianness):
-        if endianness == Endianness.LITTLE:
-            super().__init__("lestring16")
-        elif endianness == Endianness.BIG:
-            super().__init__("bestring16")
-        else:
+    def __init__(self, endianness: Endianness, num_bytes: Optional[int] = None):
+        name = "lestring16" if endianness == Endianness.LITTLE else "bestring16"
+        if num_bytes is not None:
+            name = f"{name}/{num_bytes}"
+        if endianness not in (Endianness.LITTLE, Endianness.BIG):
             raise ValueError(f"UTF16 strings only support big and little endianness, not {endianness!r}")
+        super().__init__(name)
         self.endianness: Endianness = endianness
+        self.num_bytes: Optional[int] = num_bytes
 
     def is_text(self, value: bytes) -> bool:
         return True
@@ -1170,6 +1204,8 @@ class UTF16Type(DataType[bytes]):
             return specification.encode("utf-16-be")
 
     def match(self, data: bytes, expected: bytes) -> DataTypeMatch:
+        if self.num_bytes is not None:
+            data = data[:self.num_bytes]
         if data.startswith(expected):
             if self.endianness == Endianness.LITTLE:
                 return DataTypeMatch(expected, expected.decode("utf-16-le"))
@@ -1218,7 +1254,6 @@ class StringTest(ABC):
               optional_blanks: bool = False,
               full_word_match: bool = False,
               num_bytes: Optional[int] = None) -> "StringTest":
-        original_spec = specification
         if specification.strip() == "x":
             return StringWildcard(trim=trim, compact_whitespace=compact_whitespace, num_bytes=num_bytes)
         if specification.startswith("!"):
@@ -1235,9 +1270,6 @@ class StringTest(ABC):
                 num_bytes=num_bytes,
             )
         else:
-            if num_bytes is not None:
-                raise ValueError(f"Invalid string match specification: {original_spec!r}: a string length limiter "
-                                 f"cannot be combined with an explicit string match")
             if specification.startswith("="):
                 specification = specification[1:]
             test = StringMatch(
@@ -1247,7 +1279,8 @@ class StringTest(ABC):
                 case_insensitive_lower=case_insensitive_lower,
                 case_insensitive_upper=case_insensitive_upper,
                 optional_blanks=optional_blanks,
-                full_word_match=full_word_match
+                full_word_match=full_word_match,
+                num_bytes=num_bytes
             )
         if negate:
             return NegatedStringTest(test)
@@ -1355,9 +1388,10 @@ class StringMatch(StringTest):
                  case_insensitive_lower: bool = False,
                  case_insensitive_upper: bool = False,
                  optional_blanks: bool = False,
-                 full_word_match: bool = False
+                 full_word_match: bool = False,
+                 num_bytes: Optional[int] = None
     ):
-        super().__init__(trim=trim, compact_whitespace=compact_whitespace)
+        super().__init__(trim=trim, compact_whitespace=compact_whitespace, num_bytes=num_bytes)
         self.raw_pattern: str = to_match
         self.string: bytes = unescape(to_match)
         self.case_insensitive_lower: bool = case_insensitive_lower
@@ -1442,12 +1476,16 @@ class StringMatch(StringTest):
         return self._is_always_text
 
     def matches(self, data: bytes) -> DataTypeMatch:
+        if self.num_bytes is not None:
+            data = data[:self.num_bytes]
         m = self.pattern.match(data)
         if m:
             return self.post_process(bytes(m.group(0)))
         return DataTypeMatch.INVALID
 
     def search(self, data: bytes) -> DataTypeMatch:
+        if self.num_bytes is not None:
+            data = data[:self.num_bytes]
         m = self.pattern.search(data)
         if m:
             return self.post_process(bytes(m.group(0)), initial_offset=m.start())
@@ -1678,9 +1716,14 @@ class PascalStringType(DataType[StringTest]):
             length -= self.byte_length
         if len(data) < self.byte_length + length:
             return DataTypeMatch.INVALID
-        m = expected.matches(data[self.byte_length:self.byte_length + length])
+        content = data[self.byte_length:self.byte_length + length]
+        m = expected.matches(content)
         if m:
-            m.raw_match = data[:self.byte_length + length]
+            # Use strlen (excluding null terminator) for match length to match libmagic behavior
+            # for relative offset calculations
+            null_pos = content.find(b'\x00')
+            effective_len = null_pos if null_pos != -1 else length
+            m.raw_match = data[:self.byte_length + effective_len]
         return m
 
     PSTRING_TYPE_FORMAT: Pattern[str] = re.compile(r"^pstring(/J?[BHhLl]?J?)?$")
@@ -1816,19 +1859,24 @@ class RegexType(DataType[Pattern[bytes]]):
             else:
                 return DataTypeMatch.INVALID
 
-    REGEX_TYPE_FORMAT: Pattern[str] = re.compile(r"^regex(/(?P<length>\d+)?(?P<flags>[cslT]*)(b\d*)?)?$")
+    REGEX_TYPE_FORMAT: Pattern[str] = re.compile(
+        r"^regex(/(?P<length>\d+)?(?P<flags1>[cslTt]*)(/(?P<flags2>[cslTt]*))?(b\d*)?)?$"
+    )
     # NOTE: some specification files like `cad` use `regex/b`, which is undocumented, and it's unclear from the libmagic
-    #       source code whether it is simply ignored or if it has a purpuse. We ignore it here.
+    #       source code whether it is simply ignored or if it has a purpose. We ignore it here.
+    # NOTE: the `t` flag (force text) is also supported but currently ignored as it's a hint for output formatting.
+    # NOTE: flags can appear either after length directly (regex/31cs) or with a slash (regex/31/cs).
 
     @classmethod
     def parse(cls, format_str: str) -> "RegexType":
         m = cls.REGEX_TYPE_FORMAT.match(format_str)
         if not m:
             raise ValueError(f"Invalid regex type declaration: {format_str!r}")
-        if m.group("flags") is None:
-            options: Iterable[str] = ()
-        else:
-            options = m.group("flags")
+        options: str = ""
+        if m.group("flags1") is not None:
+            options += m.group("flags1")
+        if m.group("flags2") is not None:
+            options += m.group("flags2")
         if m.group("length") is None:
             length: Optional[int] = None
         else:
@@ -1858,13 +1906,32 @@ def utc_date(ms_since_epoch: int) -> str:
     return strftime(DATETIME_FORMAT, gmtime(ms_since_epoch / 1000.0))
 
 
+MSDOS_DATE_FORMAT: str = "%b %d %Y"
+
+
 def msdos_date(value: int) -> str:
-    day = (value & 0b11111) + 1
+    day = value & 0b11111
     value >>= 5
-    month = (value & 0b1111) + 1
+    # MS-DOS stores month as 1-12, convert to 0-11 for datetime
+    month_raw = value & 0b1111
+    month = month_raw - 1
     value >>= 4
     year = 1980 + (value & 0b1111111)
-    return strftime(DATE_FORMAT, datetime(year, month, day).timetuple())
+    # Sanity check: clamp invalid months to 0 (January), matching libmagic behavior
+    if month < 0 or month > 11:
+        month = 0
+    # Clamp invalid day to valid range
+    if day < 1:
+        day = 1
+    if day > 31:
+        day = 31
+    # Convert back to 1-based month for datetime
+    month += 1
+    try:
+        return strftime(MSDOS_DATE_FORMAT, datetime(year, month, day).timetuple())
+    except ValueError:
+        # Handle invalid date combinations (e.g., Feb 31)
+        return f"{year}-{month:02d}-{day:02d}"
 
 
 def msdos_time(value: int) -> str:
@@ -2195,17 +2262,24 @@ class OffsetMatchTest(MagicTest):
             mime: Optional[str] = None,
             extensions: Iterable[str] = (),
             message: str = "",
-            parent: Optional["MagicTest"] = None
+            parent: Optional["MagicTest"] = None,
+            subtraction: int = 0,
+            modulo: int = 0
     ):
         super().__init__(offset=offset, mime=mime, extensions=extensions, message=message, parent=parent)
         self.value: IntegerValue = value
+        self.subtraction: int = subtraction
+        self.modulo: int = modulo
 
     def subtest_type(self) -> TestType:
         return TestType.UNKNOWN
 
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
-        if self.value.test(absolute_offset, unsigned=True, num_bytes=8):
-            return MatchedTest(self, offset=0, length=absolute_offset, value=absolute_offset, parent=parent_match)
+        computed_value = absolute_offset - self.subtraction
+        if self.modulo != 0:
+            computed_value = computed_value % self.modulo
+        if self.value.test(computed_value, unsigned=True, num_bytes=8):
+            return MatchedTest(self, offset=0, length=absolute_offset, value=computed_value, parent=parent_match)
         else:
             return FailedTest(
                 test=self,
@@ -2922,10 +2996,25 @@ class MagicMatcher:
                 if parent is None:
                     raise NotImplementedError("TODO: Add support for clear tests at level 0")
                 test = ClearTest(offset=offset, message=message, parent=parent)
-            elif data_type == "offset":
-                expected_value = IntegerValue.parse(test_str, num_bytes=8)
+            elif data_type == "offset" or data_type.startswith("offset-") or data_type.startswith("offset%"):
+                subtraction = 0
+                modulo = 0
+                if data_type.startswith("offset-"):
+                    try:
+                        subtraction = parse_numeric(data_type[7:])
+                    except ValueError:
+                        raise ValueError(f"{def_file!s} line {line_number}: Invalid offset type: {data_type!r}")
+                elif data_type.startswith("offset%"):
+                    try:
+                        modulo = parse_numeric(data_type[7:])
+                    except ValueError:
+                        raise ValueError(f"{def_file!s} line {line_number}: Invalid offset type: {data_type!r}")
+                if test_str.strip() == "x":
+                    expected_value: NumericValue = NumericWildcard()
+                else:
+                    expected_value = IntegerValue.parse(test_str, num_bytes=8)
                 test = OffsetMatchTest(offset=offset, value=expected_value, message=message,
-                                       parent=parent)
+                                       parent=parent, subtraction=subtraction, modulo=modulo)
             elif data_type == "json":
                 test = JSONTest(offset=offset, message=message, parent=parent)
             elif data_type == "csv":
@@ -3018,8 +3107,29 @@ class MagicMatcher:
                     except UnicodeDecodeError:
                         pass
                     continue
-                elif raw_line.startswith(b"!:apple") or raw_line.startswith(b"!:strength"):
-                    # ignore these directives for now
+                elif raw_line.startswith(b"!:apple"):
+                    continue
+                elif raw_line.startswith(b"!:strength"):
+                    if current_test is not None:
+                        strength_spec = raw_line[10:].strip().decode("utf-8")
+                        if strength_spec:
+                            op = strength_spec[0]
+                            factor_str = strength_spec[1:].strip()
+                            if op == '+':
+                                current_test.strength_op = StrengthOp.PLUS
+                            elif op == '-':
+                                current_test.strength_op = StrengthOp.MINUS
+                            elif op == '*':
+                                current_test.strength_op = StrengthOp.TIMES
+                            elif op == '/':
+                                current_test.strength_op = StrengthOp.DIV
+                            else:
+                                factor_str = strength_spec
+                                current_test.strength_op = StrengthOp.PLUS
+                            try:
+                                current_test.strength_factor = int(factor_str)
+                            except ValueError:
+                                pass
                     continue
                 try:
                     line = raw_line.decode("utf-8")
@@ -3090,6 +3200,8 @@ class MagicMatcher:
             assert test.can_match_mime
             for ancestor in test.ancestors():
                 ancestor.can_be_indirect = True
+        # Sort tests by strength (descending) for proper priority matching like libmagic
+        zero_level_tests.sort(key=lambda t: t.compute_strength(), reverse=True)
         for test in zero_level_tests:
             matcher.add(test)
         return matcher
