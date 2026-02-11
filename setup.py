@@ -20,7 +20,7 @@ setup(
     long_description_content_type="text/markdown",
     url='https://github.com/trailofbits/polyfile',
     author='Trail of Bits',
-    version="0.5.5",
+    version="0.5.6",
     packages=find_packages(exclude=("tests",)),
     python_requires='>=3.10',
     install_requires=[
