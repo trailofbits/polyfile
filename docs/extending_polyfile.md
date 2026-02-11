@@ -183,8 +183,8 @@ GDB. You can enter this debugger by passing the `--debugger` or `-db` argument t
 implementing new `libmagic` DSLs, as well as figuring out why an existing DSL fails to match against a given file.
 ```console
 $ polyfile -db input_file
-PolyFile 0.5.4
-Copyright ©2023 Trail of Bits
+PolyFile 0.5.6
+Copyright ©2023–2026 Trail of Bits
 Apache License Version 2.0 https://www.apache.org/licenses/
 
 For help, type "help".
