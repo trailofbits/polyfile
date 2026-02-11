@@ -64,11 +64,11 @@ else:
         return (resource.name for resource in resources.files(package).iterdir() if resource.is_file())
 
 
-MAGIC_DEFS: List[Path] = [
+MAGIC_DEFS: List[Path] = sorted([
     get_resource_path(resource_name)
     for resource_name in get_resource_contents(magic_defs)
     if resource_name not in ("COPYING", "magic.mgc", "__pycache__") and not resource_name.startswith(".")
-]
+], key=lambda p: p.name)
 
 
 WHITESPACE: bytes = b" \r\t\n\v\f"
@@ -264,6 +264,14 @@ class Endianness(Enum):
     LITTLE = "<"
     BIG = ">"
     PDP = "me"
+
+
+class StrengthOp(Enum):
+    NONE = ""
+    PLUS = "+"
+    MINUS = "-"
+    TIMES = "*"
+    DIV = "/"
 
 
 def parse_numeric(text: Union[str, bytes]) -> int:
@@ -733,6 +741,8 @@ class MagicTest(ABC):
         self.source_info: Optional[SourceInfo] = None
         self.comments: Tuple[Comment, ...] = tuple(comments)
         self._type: TestType = TestType.UNKNOWN
+        self.strength_op: StrengthOp = StrengthOp.NONE
+        self.strength_factor: int = 0
 
     def __init_subclass__(cls, **kwargs):
         if cls.AUTO_REGISTER_TEST:
@@ -782,6 +792,23 @@ class MagicTest(ABC):
     @abstractmethod
     def subtest_type(self) -> TestType:
         raise NotImplementedError()
+
+    def base_strength(self) -> int:
+        """Computes the base strength value before applying !:strength modifier."""
+        return 20
+
+    def compute_strength(self) -> int:
+        """Computes the test strength for sorting, mimicking libmagic's algorithm."""
+        val = self.base_strength()
+        if self.strength_op == StrengthOp.PLUS:
+            val += self.strength_factor
+        elif self.strength_op == StrengthOp.MINUS:
+            val -= self.strength_factor
+        elif self.strength_op == StrengthOp.TIMES:
+            val *= self.strength_factor
+        elif self.strength_op == StrengthOp.DIV and self.strength_factor != 0:
+            val //= self.strength_factor
+        return val
 
     @property
     def parent(self) -> Optional["MagicTest"]:
@@ -1689,9 +1716,14 @@ class PascalStringType(DataType[StringTest]):
             length -= self.byte_length
         if len(data) < self.byte_length + length:
             return DataTypeMatch.INVALID
-        m = expected.matches(data[self.byte_length:self.byte_length + length])
+        content = data[self.byte_length:self.byte_length + length]
+        m = expected.matches(content)
         if m:
-            m.raw_match = data[:self.byte_length + length]
+            # Use strlen (excluding null terminator) for match length to match libmagic behavior
+            # for relative offset calculations
+            null_pos = content.find(b'\x00')
+            effective_len = null_pos if null_pos != -1 else length
+            m.raw_match = data[:self.byte_length + effective_len]
         return m
 
     PSTRING_TYPE_FORMAT: Pattern[str] = re.compile(r"^pstring(/J?[BHhLl]?J?)?$")
@@ -3075,8 +3107,29 @@ class MagicMatcher:
                     except UnicodeDecodeError:
                         pass
                     continue
-                elif raw_line.startswith(b"!:apple") or raw_line.startswith(b"!:strength"):
-                    # ignore these directives for now
+                elif raw_line.startswith(b"!:apple"):
+                    continue
+                elif raw_line.startswith(b"!:strength"):
+                    if current_test is not None:
+                        strength_spec = raw_line[10:].strip().decode("utf-8")
+                        if strength_spec:
+                            op = strength_spec[0]
+                            factor_str = strength_spec[1:].strip()
+                            if op == '+':
+                                current_test.strength_op = StrengthOp.PLUS
+                            elif op == '-':
+                                current_test.strength_op = StrengthOp.MINUS
+                            elif op == '*':
+                                current_test.strength_op = StrengthOp.TIMES
+                            elif op == '/':
+                                current_test.strength_op = StrengthOp.DIV
+                            else:
+                                factor_str = strength_spec
+                                current_test.strength_op = StrengthOp.PLUS
+                            try:
+                                current_test.strength_factor = int(factor_str)
+                            except ValueError:
+                                pass
                     continue
                 try:
                     line = raw_line.decode("utf-8")
@@ -3147,6 +3200,8 @@ class MagicMatcher:
             assert test.can_match_mime
             for ancestor in test.ancestors():
                 ancestor.can_be_indirect = True
+        # Sort tests by strength (descending) for proper priority matching like libmagic
+        zero_level_tests.sort(key=lambda t: t.compute_strength(), reverse=True)
         for test in zero_level_tests:
             matcher.add(test)
         return matcher
