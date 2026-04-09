@@ -2600,7 +2600,7 @@ class PlainTextTest(MagicTest):
             detector.feed(data[offset:offset+1024])
             offset += 1024
         detector.close()
-        if detector.result["confidence"] >= self.minimum_encoding_confidence:
+        if detector.result["confidence"] >= self.minimum_encoding_confidence and detector.result["encoding"] is not None:
             encoding = detector.result["encoding"]
             try:
                 value = data[absolute_offset:].decode(encoding)
