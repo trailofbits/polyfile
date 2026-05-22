@@ -20,7 +20,25 @@ FILE_PATH = FILE_DIR / "src" / "file"
 MAGIC_FILE_PATH = SCRIPT_DIR / "magic.mgc"
 
 KNOWN_BAD_FILES = {
+    "4789632eef115af5e901b30d220c6e1c",  # arj.bin
+                                         # `file` incorrectly classifies this as `text/plain`
+                                         # while PolyFile more correctly classifies it as application/octet-stream
+    "79f509d30245f6c7574a1ace1696be1a",  # card.bin
+                                         # `file` incorrectly classifies this as `text/plain`
+                                         # while PolyFile more correctly classifies it as application/octet-stream
+    "cef57430e7dcc950f3582285f1307521",  # dex035.bin
+                                         # `file` incorrectly classifies this as `text/plain`
+                                         # while PolyFile more correctly classifies it as application/octet-stream
+    "d1531b1622de54fe3a0187c3344600e9",  # elf.bin
+                                         # `file` incorrectly classifies this as `text/plain`
+                                         # while PolyFile more correctly classifies it as application/octet-stream
+    "c0f44879dc0d4eae7b3f0b3e801e373c",  # id3v2.bin
+                                         # `file` incorrectly classifies this as `text/plain`
+                                         # while PolyFile more correctly classifies it as application/octet-stream
     "1d52f82b2a240cb618effe344bb1e579",  # jpg.bin
+                                         # `file` incorrectly classifies this as `text/plain`
+                                         # while PolyFile more correctly classifies it as application/octet-stream
+    "e9dd2797018cad79186e03e8c5aec8dc",  # png.bin
                                          # `file` incorrectly classifies this as `text/plain`
                                          # while PolyFile more correctly classifies it as application/octet-stream
     "bdb7963176bdaa12a17d98db9cbf384b",  # make.py
