@@ -20,11 +20,11 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-    - uses: actions/checkout@v6.0.2
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       with:
         submodules: recursive
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v6
+      uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
       with:
         python-version: ${{ matrix.python-version }}
     - name: Install Python Dependencies
@@ -33,7 +33,7 @@ jobs:
         pip install setuptools
         pip install .[dev]
     - name: Scan with pip-audit
-      uses: trailofbits/gh-action-pip-audit@v1.1.0
+      uses: trailofbits/gh-action-pip-audit@1220774d901786e6f652ae159f7b6bc8fea6d266 # v1.1.0
     - name: Lint with flake8
       run: |
         # stop the build if there are Python syntax errors or undefined names
