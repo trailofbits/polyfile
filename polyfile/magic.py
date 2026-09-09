@@ -31,6 +31,7 @@ from uuid import UUID
 from chardet.universaldetector import UniversalDetector
 
 from .arithmetic import CStyleInt, make_c_style_int
+from .der import DERHeader, DERSpecification, InvalidDER
 from .fileutils import Streamable
 from .iterators import LazyIterableSet
 from .logger import getStatusLogger, TRACE
@@ -208,6 +209,22 @@ class MatchedTest(TestResult):
         super().__init__(test=test, offset=offset, parent=parent)
         self.value: Any = value
         self.length: int = length
+        self._relative_base: Optional[int] = None
+
+    @property
+    def relative_base(self) -> int:
+        """The absolute offset that a relative (``&``) offset in a subsequent test resolves against.
+
+        This is the end of this match unless a test moves it. The ``der`` tests move it past the DER
+        object they matched, so that the following test at the same level reads the next DER object.
+        """
+        if self._relative_base is None:
+            return self.offset + self.length
+        return self._relative_base
+
+    @relative_base.setter
+    def relative_base(self, absolute_offset: int):
+        self._relative_base = absolute_offset
 
     def explain(self, writer: ANSIWriter, file: Streamable):
         if self.parent is not None:
@@ -398,7 +415,7 @@ class RelativeOffset(Offset):
         if not isinstance(last_match, MatchedTest):
             raise InvalidOffsetError(f"The last test was expected to be a match, but instead got {last_match!s}",
                                      offset=self)
-        offset = last_match.offset + last_match.length + difference
+        offset = last_match.relative_base + difference
         if not allow_invalid and len(data) < offset < 0:
             raise InvalidOffsetError(offset=self)
         return offset
@@ -2599,13 +2616,36 @@ class ClearTest(MagicTest):
 
 
 class DERTest(MagicTest):
+    """Matches one Distinguished Encoding Rules object against a :class:`polyfile.der.DERSpecification`."""
+
+    def __init__(
+            self,
+            offset: Offset,
+            specification: DERSpecification,
+            mime: Optional[Union[str, TernaryExecutableMessage]] = None,
+            extensions: Iterable[str] = (),
+            message: Union[str, Message] = "",
+            parent: Optional["MagicTest"] = None,
+            comments: Iterable[Comment] = ()
+    ):
+        super().__init__(offset=offset, mime=mime, extensions=extensions, message=message, parent=parent,
+                         comments=comments)
+        self.specification: DERSpecification = specification
+
     def subtest_type(self) -> TestType:
         return TestType.BINARY
 
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
-        raise NotImplementedError(
-            "TODO: Implement support for the DER test (e.g., using the Kaitai asn1_der.py parser)"
-        )
+        try:
+            header = DERHeader.parse(data, absolute_offset)
+            value = self.specification.match(header, data)
+        except InvalidDER as e:
+            return FailedTest(self, offset=absolute_offset, parent=parent_match, message=str(e))
+        if isinstance(parent_match, MatchedTest):
+            # The next test at this level reads the DER object that follows the one we just matched.
+            parent_match.relative_base = header.end
+        return MatchedTest(self, value=value, offset=absolute_offset, length=header.header_length,
+                           parent=parent_match)
 
     def test_flip_endianness(
             self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]
@@ -3222,8 +3262,8 @@ class MagicMatcher:
                     late_binding=late_binding
                 )
             elif data_type == "der":
-                # TODO: Update this as necessary once we fully implement the DERTest
-                test = DERTest(offset=offset, message=message, parent=parent)
+                test = DERTest(offset=offset, specification=DERSpecification(test_str), message=message,
+                               parent=parent)
             else:
                 try:
                     data_type = DataType.parse(data_type)
