@@ -55,6 +55,8 @@ Found a file of type application/zip at byte offset 0
 Found a file of type application/java-archive at byte offset 0
 Saved HTML output to output.html
 ```
+The viewer renders any byte that no match describes in gray on a diagonal hatch, and reports how many
+such bytes the file has above the hex dump.
 
 Run `polyfile --help` for full usage instructions.
 
