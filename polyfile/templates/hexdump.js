@@ -1,5 +1,6 @@
 const rawBytes = atob("{{ encoded }}");
 const ROWS = Math.max(Math.ceil(rawBytes.length / 16), 1);
+const UNDESCRIBED_REGIONS = {{ undescribed_regions }};
 let BYTE_HEIGHT;
 let ROW_OFFSET = 0;
 let VISIBLE_ROWS = 0;
@@ -9,6 +10,18 @@ let LINE_DIGITS = 1;
 let $bytes = [];
 let $ascii = [];
 let $rbytes = [];
+
+function buildUndescribedMap() {
+    const map = new Uint8Array(rawBytes.length);
+    for(let i=0; i<UNDESCRIBED_REGIONS.length; ++i) {
+        const region = UNDESCRIBED_REGIONS[i];
+        map.fill(1, region[0], region[0] + region[1]);
+    }
+    return map;
+}
+
+/* Expanded once at load so that rendering a row costs one array read per byte. */
+const undescribedMap = buildUndescribedMap();
 
 function getByte(index) {
     if(index < $bytes.length && index >= 0) {
@@ -398,12 +411,26 @@ function updateRendering() {
         } else {
             html += '<span id="rbyte'
                 + (i - startOffset)
+                + (undescribedMap[i] === 1 ? '" class="undescribed' : '')
                 + '" onmouseover="mouseOverByte(' + i + ')">'
                 + formatChar(rawBytes[i], false) + "</span>";
         }
     }
 
     $('.readablebytes').html(html).scrollTop(0);
+}
+
+function renderByteCells(startOffset) {
+    for(let i=startOffset; i < startOffset + VISIBLE_ROWS * 16; ++i) {
+        const present = i < rawBytes.length;
+        const undescribed = present && undescribedMap[i] === 1;
+        getByte(i - startOffset)
+            .text(present ? rawBytes.charCodeAt(i).toString(16).padStart(2, '0') : '')
+            .toggleClass('undescribed', undescribed);
+        getAscii(i - startOffset)
+            .html(present ? formatChar(rawBytes[i]) : '')
+            .toggleClass('undescribed', undescribed);
+    }
 }
 
 function scrollToRow(row) {
@@ -418,20 +445,7 @@ function scrollToRow(row) {
     }
     $byteLabelCache.clear();
     ROW_OFFSET = row;
-    const startOffset = ROW_OFFSET * 16;
-    for(let i=startOffset; i < startOffset + VISIBLE_ROWS * 16; ++i) {
-        let bytecode;
-        let bytestring;
-        if(i >= rawBytes.length) {
-            bytecode = '';
-            bytestring = '';
-        } else {
-            bytecode = rawBytes.charCodeAt(i).toString(16).padStart(2, '0');
-            bytestring = formatChar(rawBytes[i]);
-        }
-        getByte(i - startOffset).text(bytecode);
-        getAscii(i - startOffset).html(bytestring);
-    }
+    renderByteCells(ROW_OFFSET * 16);
     /* update the row labels */
     const requiredDigits = Math.ceil(Math.log(rawBytes.length) / Math.log(16));
     for(let i=0; i<VISIBLE_ROWS; ++i) {

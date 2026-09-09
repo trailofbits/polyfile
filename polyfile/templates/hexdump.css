@@ -173,18 +173,41 @@ label.tree_label:after { border-bottom: 0; }
   color: gray;
 }
 
+.undescribed {
+  color: #6a6a6a;
+  background-image: repeating-linear-gradient(
+    45deg, transparent, transparent 2px, #dcdcdc 2px, #dcdcdc 4px);
+}
+
+.coverage {
+  margin: 1em 0 0.5em 0;
+  font-size: 0.9em;
+}
+
+.coverage .swatch {
+  display: inline-block;
+  width: 2.5em;
+  height: 1em;
+  vertical-align: -0.15em;
+  margin-right: 0.5em;
+  border: 1px solid #999;
+}
+
 .highlighted {
   background-color: #42bff5;
+  background-image: none;
   color: white;
 }
 
 .manually-focused {
   background-color: #FF0000;
+  background-image: none;
   color: white;
 }
 
 .cursor {
   background-color: #0000FF;
+  background-image: none;
   color: white;
   cursor: none;
 }
@@ -219,6 +242,7 @@ label.tree_label:after { border-bottom: 0; }
     -moz-box-shadow: 0 0 20px #FFFF00;
     box-shadow:0 0 20px #FFFF00;
     background-color:#FFFF00;
+    background-image: none;
 }
 
 .overlay {
