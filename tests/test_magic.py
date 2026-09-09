@@ -139,8 +139,9 @@ class MagicTest(TestCase):
     def test_text_character_classes(self):
         """Tests that text membership follows libmagic's character classes, not chardet's guess."""
         self.assertEqual("ascii", polyfile.magic.detect_text_encoding(b"plain ASCII\n"))
-        self.assertEqual("utf-8", polyfile.magic.detect_text_encoding("héllo wörld".encode("utf-8")))
-        self.assertEqual("utf-16le", polyfile.magic.detect_text_encoding(b"\xff\xfe" + "hi".encode("utf-16-le")))
+        self.assertEqual("utf-8", polyfile.magic.detect_text_encoding("héllo wörld".encode()))
+        utf16 = b"\xff\xfe" + "hi".encode("utf-16-le")
+        self.assertEqual("utf-16le", polyfile.magic.detect_text_encoding(utf16))
         self.assertEqual("unknown-8bit", polyfile.magic.detect_text_encoding(b"text\x80\x9f"))
         self.assertIsNone(polyfile.magic.detect_text_encoding(b"text\x00\x01\x02"))
         self.assertIsNone(polyfile.magic.detect_text_encoding(b"a"))

@@ -2602,7 +2602,9 @@ _ISO_8859_BYTES: bytes = bytes(
     b for b in range(256) if TEXT_CHAR_CLASSES[b] in (TEXT_CHAR_ASCII, TEXT_CHAR_ISO_8859)
 )
 _TEXT_BYTES: bytes = bytes(b for b in range(256) if TEXT_CHAR_CLASSES[b] != TEXT_CHAR_NONE)
-_UTF8_SAFE_BYTES: bytes = bytes(b for b in range(256) if b >= 0x80 or TEXT_CHAR_CLASSES[b] == TEXT_CHAR_ASCII)
+_UTF8_SAFE_BYTES: bytes = bytes(
+    b for b in range(256) if b >= 0x80 or TEXT_CHAR_CLASSES[b] == TEXT_CHAR_ASCII
+)
 
 _UCS_BYTE_ORDER_MARKS: Tuple[Tuple[bytes, str, int], ...] = (
     (b"\xff\xfe\x00\x00", "utf-32le", 4),
@@ -2636,7 +2638,8 @@ def _looks_like_ucs(data: bytes) -> Optional[str]:
             decoded = body.decode(encoding)
         except UnicodeDecodeError:
             continue
-        if all(char >= "\x80" or TEXT_CHAR_CLASSES[ord(char)] == TEXT_CHAR_ASCII for char in decoded):
+        if all(char >= "\x80" or TEXT_CHAR_CLASSES[ord(char)] == TEXT_CHAR_ASCII
+               for char in decoded):
             return encoding
     return None
 
@@ -2732,7 +2735,8 @@ class PlainTextTest(MagicTest):
         except (UnicodeDecodeError, LookupError):
             value = content
         self.message = ConstantMessage(f"{encoding} text")
-        return MatchedTest(self, offset=absolute_offset, length=len(content), parent=parent_match, value=value)
+        return MatchedTest(self, offset=absolute_offset, length=len(content), parent=parent_match,
+                           value=value)
 
     def test_flip_endianness(
             self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]
