@@ -1,14 +1,14 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
+# type: ignore
 
-from packaging.version import parse as parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
-from enum import Enum
+from enum import IntEnum
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
-    raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
+    raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class TrDosImage(KaitaiStruct):
     """.trd file is a raw dump of TR-DOS (ZX-Spectrum) floppy. .trd files are
@@ -31,42 +31,277 @@ class TrDosImage(KaitaiStruct):
     empty (contain no file data) they can be omitted.
     """
 
-    class DiskType(Enum):
+    class DiskType(IntEnum):
         type_80_tracks_double_side = 22
         type_40_tracks_double_side = 23
         type_80_tracks_single_side = 24
         type_40_tracks_single_side = 25
     SEQ_FIELDS = ["files"]
     def __init__(self, _io, _parent=None, _root=None):
-        self._io = _io
+        super(TrDosImage, self).__init__(_io)
         self._parent = _parent
-        self._root = _root if _root else self
+        self._root = _root or self
         self._debug = collections.defaultdict(dict)
 
     def _read(self):
         self._debug['files']['start'] = self._io.pos()
+        self._debug['files']['arr'] = []
         self.files = []
         i = 0
         while True:
-            if not 'arr' in self._debug['files']:
-                self._debug['files']['arr'] = []
             self._debug['files']['arr'].append({'start': self._io.pos()})
             _t_files = TrDosImage.File(self._io, self, self._root)
-            _t_files._read()
-            _ = _t_files
-            self.files.append(_)
+            try:
+                _t_files._read()
+            finally:
+                _ = _t_files
+                self.files.append(_)
             self._debug['files']['arr'][len(self.files) - 1]['end'] = self._io.pos()
             if _.is_terminator:
                 break
             i += 1
         self._debug['files']['end'] = self._io.pos()
 
+
+    def _fetch_instances(self):
+        pass
+        for i in range(len(self.files)):
+            pass
+            self.files[i]._fetch_instances()
+
+        _ = self.volume_info
+        if hasattr(self, '_m_volume_info'):
+            pass
+            self._m_volume_info._fetch_instances()
+
+
+    class File(KaitaiStruct):
+        SEQ_FIELDS = ["name", "extension", "position_and_length", "length_sectors", "starting_sector", "starting_track"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(TrDosImage.File, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['name']['start'] = self._io.pos()
+            self._raw_name = self._io.read_bytes(8)
+            _io__raw_name = KaitaiStream(BytesIO(self._raw_name))
+            self.name = TrDosImage.Filename(_io__raw_name, self, self._root)
+            self.name._read()
+            self._debug['name']['end'] = self._io.pos()
+            self._debug['extension']['start'] = self._io.pos()
+            self.extension = self._io.read_u1()
+            self._debug['extension']['end'] = self._io.pos()
+            self._debug['position_and_length']['start'] = self._io.pos()
+            _on = self.extension
+            if _on == 35:
+                pass
+                self.position_and_length = TrDosImage.PositionAndLengthPrint(self._io, self, self._root)
+                self.position_and_length._read()
+            elif _on == 66:
+                pass
+                self.position_and_length = TrDosImage.PositionAndLengthBasic(self._io, self, self._root)
+                self.position_and_length._read()
+            elif _on == 67:
+                pass
+                self.position_and_length = TrDosImage.PositionAndLengthCode(self._io, self, self._root)
+                self.position_and_length._read()
+            else:
+                pass
+                self.position_and_length = TrDosImage.PositionAndLengthGeneric(self._io, self, self._root)
+                self.position_and_length._read()
+            self._debug['position_and_length']['end'] = self._io.pos()
+            self._debug['length_sectors']['start'] = self._io.pos()
+            self.length_sectors = self._io.read_u1()
+            self._debug['length_sectors']['end'] = self._io.pos()
+            self._debug['starting_sector']['start'] = self._io.pos()
+            self.starting_sector = self._io.read_u1()
+            self._debug['starting_sector']['end'] = self._io.pos()
+            self._debug['starting_track']['start'] = self._io.pos()
+            self.starting_track = self._io.read_u1()
+            self._debug['starting_track']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            self.name._fetch_instances()
+            _on = self.extension
+            if _on == 35:
+                pass
+                self.position_and_length._fetch_instances()
+            elif _on == 66:
+                pass
+                self.position_and_length._fetch_instances()
+            elif _on == 67:
+                pass
+                self.position_and_length._fetch_instances()
+            else:
+                pass
+                self.position_and_length._fetch_instances()
+            _ = self.contents
+            if hasattr(self, '_m_contents'):
+                pass
+
+
+        @property
+        def contents(self):
+            if hasattr(self, '_m_contents'):
+                return self._m_contents
+
+            _pos = self._io.pos()
+            self._io.seek((self.starting_track * 256) * 16 + self.starting_sector * 256)
+            self._debug['_m_contents']['start'] = self._io.pos()
+            self._m_contents = self._io.read_bytes(self.length_sectors * 256)
+            self._debug['_m_contents']['end'] = self._io.pos()
+            self._io.seek(_pos)
+            return getattr(self, '_m_contents', None)
+
+        @property
+        def is_deleted(self):
+            if hasattr(self, '_m_is_deleted'):
+                return self._m_is_deleted
+
+            self._m_is_deleted = self.name.first_byte == 1
+            return getattr(self, '_m_is_deleted', None)
+
+        @property
+        def is_terminator(self):
+            if hasattr(self, '_m_is_terminator'):
+                return self._m_is_terminator
+
+            self._m_is_terminator = self.name.first_byte == 0
+            return getattr(self, '_m_is_terminator', None)
+
+
+    class Filename(KaitaiStruct):
+        SEQ_FIELDS = ["name"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(TrDosImage.Filename, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['name']['start'] = self._io.pos()
+            self.name = self._io.read_bytes(8)
+            self._debug['name']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            _ = self.first_byte
+            if hasattr(self, '_m_first_byte'):
+                pass
+
+
+        @property
+        def first_byte(self):
+            if hasattr(self, '_m_first_byte'):
+                return self._m_first_byte
+
+            _pos = self._io.pos()
+            self._io.seek(0)
+            self._debug['_m_first_byte']['start'] = self._io.pos()
+            self._m_first_byte = self._io.read_u1()
+            self._debug['_m_first_byte']['end'] = self._io.pos()
+            self._io.seek(_pos)
+            return getattr(self, '_m_first_byte', None)
+
+
+    class PositionAndLengthBasic(KaitaiStruct):
+        SEQ_FIELDS = ["program_and_data_length", "program_length"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(TrDosImage.PositionAndLengthBasic, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['program_and_data_length']['start'] = self._io.pos()
+            self.program_and_data_length = self._io.read_u2le()
+            self._debug['program_and_data_length']['end'] = self._io.pos()
+            self._debug['program_length']['start'] = self._io.pos()
+            self.program_length = self._io.read_u2le()
+            self._debug['program_length']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+
+
+    class PositionAndLengthCode(KaitaiStruct):
+        SEQ_FIELDS = ["start_address", "length"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(TrDosImage.PositionAndLengthCode, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['start_address']['start'] = self._io.pos()
+            self.start_address = self._io.read_u2le()
+            self._debug['start_address']['end'] = self._io.pos()
+            self._debug['length']['start'] = self._io.pos()
+            self.length = self._io.read_u2le()
+            self._debug['length']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+
+
+    class PositionAndLengthGeneric(KaitaiStruct):
+        SEQ_FIELDS = ["reserved", "length"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(TrDosImage.PositionAndLengthGeneric, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['reserved']['start'] = self._io.pos()
+            self.reserved = self._io.read_u2le()
+            self._debug['reserved']['end'] = self._io.pos()
+            self._debug['length']['start'] = self._io.pos()
+            self.length = self._io.read_u2le()
+            self._debug['length']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+
+
+    class PositionAndLengthPrint(KaitaiStruct):
+        SEQ_FIELDS = ["extent_no", "reserved", "length"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(TrDosImage.PositionAndLengthPrint, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['extent_no']['start'] = self._io.pos()
+            self.extent_no = self._io.read_u1()
+            self._debug['extent_no']['end'] = self._io.pos()
+            self._debug['reserved']['start'] = self._io.pos()
+            self.reserved = self._io.read_u1()
+            self._debug['reserved']['end'] = self._io.pos()
+            self._debug['length']['start'] = self._io.pos()
+            self.length = self._io.read_u2le()
+            self._debug['length']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+
+
     class VolumeInfo(KaitaiStruct):
         SEQ_FIELDS = ["catalog_end", "unused", "first_free_sector_sector", "first_free_sector_track", "disk_type", "num_files", "num_free_sectors", "tr_dos_id", "unused_2", "password", "unused_3", "num_deleted_files", "label", "unused_4"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(TrDosImage.VolumeInfo, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -117,198 +352,31 @@ class TrDosImage(KaitaiStruct):
             self.unused_4 = self._io.read_bytes(3)
             self._debug['unused_4']['end'] = self._io.pos()
 
-        @property
-        def num_tracks(self):
-            if hasattr(self, '_m_num_tracks'):
-                return self._m_num_tracks if hasattr(self, '_m_num_tracks') else None
 
-            self._m_num_tracks = (40 if (self.disk_type.value & 1) != 0 else 80)
-            return self._m_num_tracks if hasattr(self, '_m_num_tracks') else None
+        def _fetch_instances(self):
+            pass
 
         @property
         def num_sides(self):
             if hasattr(self, '_m_num_sides'):
-                return self._m_num_sides if hasattr(self, '_m_num_sides') else None
+                return self._m_num_sides
 
-            self._m_num_sides = (1 if (self.disk_type.value & 8) != 0 else 2)
-            return self._m_num_sides if hasattr(self, '_m_num_sides') else None
-
-
-    class PositionAndLengthCode(KaitaiStruct):
-        SEQ_FIELDS = ["start_address", "length"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['start_address']['start'] = self._io.pos()
-            self.start_address = self._io.read_u2le()
-            self._debug['start_address']['end'] = self._io.pos()
-            self._debug['length']['start'] = self._io.pos()
-            self.length = self._io.read_u2le()
-            self._debug['length']['end'] = self._io.pos()
-
-
-    class Filename(KaitaiStruct):
-        SEQ_FIELDS = ["name"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['name']['start'] = self._io.pos()
-            self.name = self._io.read_bytes(8)
-            self._debug['name']['end'] = self._io.pos()
+            self._m_num_sides = (1 if int(self.disk_type) & 8 != 0 else 2)
+            return getattr(self, '_m_num_sides', None)
 
         @property
-        def first_byte(self):
-            if hasattr(self, '_m_first_byte'):
-                return self._m_first_byte if hasattr(self, '_m_first_byte') else None
+        def num_tracks(self):
+            if hasattr(self, '_m_num_tracks'):
+                return self._m_num_tracks
 
-            _pos = self._io.pos()
-            self._io.seek(0)
-            self._debug['_m_first_byte']['start'] = self._io.pos()
-            self._m_first_byte = self._io.read_u1()
-            self._debug['_m_first_byte']['end'] = self._io.pos()
-            self._io.seek(_pos)
-            return self._m_first_byte if hasattr(self, '_m_first_byte') else None
-
-
-    class PositionAndLengthPrint(KaitaiStruct):
-        SEQ_FIELDS = ["extent_no", "reserved", "length"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['extent_no']['start'] = self._io.pos()
-            self.extent_no = self._io.read_u1()
-            self._debug['extent_no']['end'] = self._io.pos()
-            self._debug['reserved']['start'] = self._io.pos()
-            self.reserved = self._io.read_u1()
-            self._debug['reserved']['end'] = self._io.pos()
-            self._debug['length']['start'] = self._io.pos()
-            self.length = self._io.read_u2le()
-            self._debug['length']['end'] = self._io.pos()
-
-
-    class PositionAndLengthGeneric(KaitaiStruct):
-        SEQ_FIELDS = ["reserved", "length"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['reserved']['start'] = self._io.pos()
-            self.reserved = self._io.read_u2le()
-            self._debug['reserved']['end'] = self._io.pos()
-            self._debug['length']['start'] = self._io.pos()
-            self.length = self._io.read_u2le()
-            self._debug['length']['end'] = self._io.pos()
-
-
-    class PositionAndLengthBasic(KaitaiStruct):
-        SEQ_FIELDS = ["program_and_data_length", "program_length"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['program_and_data_length']['start'] = self._io.pos()
-            self.program_and_data_length = self._io.read_u2le()
-            self._debug['program_and_data_length']['end'] = self._io.pos()
-            self._debug['program_length']['start'] = self._io.pos()
-            self.program_length = self._io.read_u2le()
-            self._debug['program_length']['end'] = self._io.pos()
-
-
-    class File(KaitaiStruct):
-        SEQ_FIELDS = ["name", "extension", "position_and_length", "length_sectors", "starting_sector", "starting_track"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['name']['start'] = self._io.pos()
-            self._raw_name = self._io.read_bytes(8)
-            _io__raw_name = KaitaiStream(BytesIO(self._raw_name))
-            self.name = TrDosImage.Filename(_io__raw_name, self, self._root)
-            self.name._read()
-            self._debug['name']['end'] = self._io.pos()
-            self._debug['extension']['start'] = self._io.pos()
-            self.extension = self._io.read_u1()
-            self._debug['extension']['end'] = self._io.pos()
-            self._debug['position_and_length']['start'] = self._io.pos()
-            _on = self.extension
-            if _on == 66:
-                self.position_and_length = TrDosImage.PositionAndLengthBasic(self._io, self, self._root)
-                self.position_and_length._read()
-            elif _on == 67:
-                self.position_and_length = TrDosImage.PositionAndLengthCode(self._io, self, self._root)
-                self.position_and_length._read()
-            elif _on == 35:
-                self.position_and_length = TrDosImage.PositionAndLengthPrint(self._io, self, self._root)
-                self.position_and_length._read()
-            else:
-                self.position_and_length = TrDosImage.PositionAndLengthGeneric(self._io, self, self._root)
-                self.position_and_length._read()
-            self._debug['position_and_length']['end'] = self._io.pos()
-            self._debug['length_sectors']['start'] = self._io.pos()
-            self.length_sectors = self._io.read_u1()
-            self._debug['length_sectors']['end'] = self._io.pos()
-            self._debug['starting_sector']['start'] = self._io.pos()
-            self.starting_sector = self._io.read_u1()
-            self._debug['starting_sector']['end'] = self._io.pos()
-            self._debug['starting_track']['start'] = self._io.pos()
-            self.starting_track = self._io.read_u1()
-            self._debug['starting_track']['end'] = self._io.pos()
-
-        @property
-        def is_deleted(self):
-            if hasattr(self, '_m_is_deleted'):
-                return self._m_is_deleted if hasattr(self, '_m_is_deleted') else None
-
-            self._m_is_deleted = self.name.first_byte == 1
-            return self._m_is_deleted if hasattr(self, '_m_is_deleted') else None
-
-        @property
-        def is_terminator(self):
-            if hasattr(self, '_m_is_terminator'):
-                return self._m_is_terminator if hasattr(self, '_m_is_terminator') else None
-
-            self._m_is_terminator = self.name.first_byte == 0
-            return self._m_is_terminator if hasattr(self, '_m_is_terminator') else None
-
-        @property
-        def contents(self):
-            if hasattr(self, '_m_contents'):
-                return self._m_contents if hasattr(self, '_m_contents') else None
-
-            _pos = self._io.pos()
-            self._io.seek((((self.starting_track * 256) * 16) + (self.starting_sector * 256)))
-            self._debug['_m_contents']['start'] = self._io.pos()
-            self._m_contents = self._io.read_bytes((self.length_sectors * 256))
-            self._debug['_m_contents']['end'] = self._io.pos()
-            self._io.seek(_pos)
-            return self._m_contents if hasattr(self, '_m_contents') else None
+            self._m_num_tracks = (40 if int(self.disk_type) & 1 != 0 else 80)
+            return getattr(self, '_m_num_tracks', None)
 
 
     @property
     def volume_info(self):
         if hasattr(self, '_m_volume_info'):
-            return self._m_volume_info if hasattr(self, '_m_volume_info') else None
+            return self._m_volume_info
 
         _pos = self._io.pos()
         self._io.seek(2048)
@@ -317,6 +385,6 @@ class TrDosImage(KaitaiStruct):
         self._m_volume_info._read()
         self._debug['_m_volume_info']['end'] = self._io.pos()
         self._io.seek(_pos)
-        return self._m_volume_info if hasattr(self, '_m_volume_info') else None
+        return getattr(self, '_m_volume_info', None)
 
 

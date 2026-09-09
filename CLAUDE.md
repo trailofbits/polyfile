@@ -7,7 +7,7 @@ PolyFile is a file analysis utility that identifies and maps the semantic and sy
 **Key capabilities:**
 - Pure-Python libmagic implementation (263+ MIME types)
 - Recursive embedded file detection (like binwalk)
-- Parsers for PDF, ZIP, JPEG, iNES, and 188 Kaitai Struct formats
+- Parsers for PDF, ZIP, JPEG, iNES, and 183 Kaitai Struct formats
 - Interactive HTML hex viewer with structure mapping
 - Drop-in replacement for Unix `file` command
 
@@ -46,8 +46,8 @@ def parse_pdf(file_stream, match):
 ```
 polyfile/
 ├── polyfile/              # Main package
-│   ├── magic_defs/        # 354 libmagic definition files
-│   ├── kaitai/parsers/    # 188 auto-generated Kaitai parsers (excluded from lint)
+│   ├── magic_defs/        # 363 libmagic definition files
+│   ├── kaitai/parsers/    # 183 auto-generated Kaitai parsers (excluded from lint)
 │   └── templates/         # HTML output templates
 ├── polymerge/             # Companion merge tool
 ├── tests/                 # Test suite
@@ -182,9 +182,11 @@ class MyParser(Parser):
 ```
 
 ### Adding Kaitai Struct Format
-1. Add `.ksy` file to `kaitai_struct_formats/`
-2. Map MIME type in `polyfile/kaitai/parsers/__init__.py`
+1. Add the `.ksy` file to the `kaitai_struct_formats/` submodule (upstream, or a local commit)
+2. Map the MIME type in `polyfile.kaitaimatcher.KAITAI_MIME_MAPPING`
 3. Rebuild: `python compile_kaitai_parsers.py`
+
+Only specifications under a permissive license are compiled—see the licensing policy below.
 
 See `docs/extending_polyfile.md` for detailed guide.
 
@@ -203,7 +205,24 @@ See `docs/extending_polyfile.md` for detailed guide.
 - Raise `InvalidMatch` when parser cannot process data
 - Matchers return `None` for non-matching data
 
+### Kaitai Licensing Policy
+
+A generated parser is a derivative work of its `.ksy` specification, and PolyFile ships under
+Apache 2.0. `compile_kaitai_parsers.py` therefore compiles a spec only if its `license` is in
+`PERMISSIVE_LICENSES`; everything else is skipped and kept out of the sdist by `MANIFEST.in`.
+
+```bash
+# List the specs that are excluded, and why
+python compile_kaitai_parsers.py --audit
+```
+
+Run the audit after every `kaitai_struct_formats` bump. `tests/test_licensing.py` fails if a parser
+from an excluded spec reaches the package, or if `MANIFEST.in` drifts from the allowlist.
+
 ### Gotchas
 - `polyfile/kaitai/parsers/` is auto-generated—never edit manually
 - Java required at install time for Kaitai compilation
+- `compile_kaitai_parsers.py` runs at build time and must stay standard-library only
+- The downloaded `polyfile/kaitai/kaitai-struct-compiler-*/` is gitignored; it bundles its own
+  copy of the format gallery, copyleft specs included
 - libmagic DSL has quirks—see [blog post](https://blog.trailofbits.com/2022/07/01/libmagic-the-blathering/)

@@ -32,14 +32,14 @@ setup(
         "graphviz>=0.20.1",
         "intervaltree>=2.4.0",
         "jinja2>=2.1.0",
-        "kaitaistruct~=0.10",
+        "kaitaistruct~=0.11",
         "networkx>=2.6.3",
         "packaging>=21.0",
         "pdfminer.six>=20251230",
         "Pillow>=5.0.0",
         "pyreadline3;platform_system=='Windows'",
         "pyyaml>=3.13",
-        "setuptools>=65.5.1"
+        "setuptools>=83.0.0"
     ],
     extras_require={
         'demangle': ['cxxfilt'],

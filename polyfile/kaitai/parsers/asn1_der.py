@@ -1,14 +1,14 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
+# type: ignore
 
-from packaging.version import parse as parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
-from enum import Enum
+from enum import IntEnum
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
-    raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
+    raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class Asn1Der(KaitaiStruct):
     """ASN.1 (Abstract Syntax Notation One) DER (Distinguished Encoding
@@ -39,7 +39,7 @@ class Asn1Der(KaitaiStruct):
        Source - https://www.itu.int/itu-t/recommendations/rec.aspx?rec=12483&lang=en
     """
 
-    class TypeTag(Enum):
+    class TypeTag(IntEnum):
         end_of_content = 0
         boolean = 1
         integer = 2
@@ -61,9 +61,9 @@ class Asn1Der(KaitaiStruct):
         set = 49
     SEQ_FIELDS = ["type_tag", "len", "body"]
     def __init__(self, _io, _parent=None, _root=None):
-        self._io = _io
+        super(Asn1Der, self).__init__(_io)
         self._parent = _parent
-        self._root = _root if _root else self
+        self._root = _root or self
         self._debug = collections.defaultdict(dict)
 
     def _read(self):
@@ -76,78 +76,72 @@ class Asn1Der(KaitaiStruct):
         self._debug['len']['end'] = self._io.pos()
         self._debug['body']['start'] = self._io.pos()
         _on = self.type_tag
-        if _on == Asn1Der.TypeTag.printable_string:
+        if _on == Asn1Der.TypeTag.object_id:
+            pass
+            self._raw_body = self._io.read_bytes(self.len.result)
+            _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
+            self.body = Asn1Der.BodyObjectId(_io__raw_body, self, self._root)
+            self.body._read()
+        elif _on == Asn1Der.TypeTag.printable_string:
+            pass
             self._raw_body = self._io.read_bytes(self.len.result)
             _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
             self.body = Asn1Der.BodyPrintableString(_io__raw_body, self, self._root)
             self.body._read()
         elif _on == Asn1Der.TypeTag.sequence_10:
-            self._raw_body = self._io.read_bytes(self.len.result)
-            _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
-            self.body = Asn1Der.BodySequence(_io__raw_body, self, self._root)
-            self.body._read()
-        elif _on == Asn1Der.TypeTag.set:
+            pass
             self._raw_body = self._io.read_bytes(self.len.result)
             _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
             self.body = Asn1Der.BodySequence(_io__raw_body, self, self._root)
             self.body._read()
         elif _on == Asn1Der.TypeTag.sequence_30:
+            pass
+            self._raw_body = self._io.read_bytes(self.len.result)
+            _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
+            self.body = Asn1Der.BodySequence(_io__raw_body, self, self._root)
+            self.body._read()
+        elif _on == Asn1Der.TypeTag.set:
+            pass
             self._raw_body = self._io.read_bytes(self.len.result)
             _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
             self.body = Asn1Der.BodySequence(_io__raw_body, self, self._root)
             self.body._read()
         elif _on == Asn1Der.TypeTag.utf8string:
+            pass
             self._raw_body = self._io.read_bytes(self.len.result)
             _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
             self.body = Asn1Der.BodyUtf8string(_io__raw_body, self, self._root)
             self.body._read()
-        elif _on == Asn1Der.TypeTag.object_id:
-            self._raw_body = self._io.read_bytes(self.len.result)
-            _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
-            self.body = Asn1Der.BodyObjectId(_io__raw_body, self, self._root)
-            self.body._read()
         else:
+            pass
             self.body = self._io.read_bytes(self.len.result)
         self._debug['body']['end'] = self._io.pos()
 
-    class BodySequence(KaitaiStruct):
-        SEQ_FIELDS = ["entries"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
 
-        def _read(self):
-            self._debug['entries']['start'] = self._io.pos()
-            self.entries = []
-            i = 0
-            while not self._io.is_eof():
-                if not 'arr' in self._debug['entries']:
-                    self._debug['entries']['arr'] = []
-                self._debug['entries']['arr'].append({'start': self._io.pos()})
-                _t_entries = Asn1Der(self._io)
-                _t_entries._read()
-                self.entries.append(_t_entries)
-                self._debug['entries']['arr'][len(self.entries) - 1]['end'] = self._io.pos()
-                i += 1
-
-            self._debug['entries']['end'] = self._io.pos()
-
-
-    class BodyUtf8string(KaitaiStruct):
-        SEQ_FIELDS = ["str"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['str']['start'] = self._io.pos()
-            self.str = (self._io.read_bytes_full()).decode(u"UTF-8")
-            self._debug['str']['end'] = self._io.pos()
-
+    def _fetch_instances(self):
+        pass
+        self.len._fetch_instances()
+        _on = self.type_tag
+        if _on == Asn1Der.TypeTag.object_id:
+            pass
+            self.body._fetch_instances()
+        elif _on == Asn1Der.TypeTag.printable_string:
+            pass
+            self.body._fetch_instances()
+        elif _on == Asn1Der.TypeTag.sequence_10:
+            pass
+            self.body._fetch_instances()
+        elif _on == Asn1Der.TypeTag.sequence_30:
+            pass
+            self.body._fetch_instances()
+        elif _on == Asn1Der.TypeTag.set:
+            pass
+            self.body._fetch_instances()
+        elif _on == Asn1Der.TypeTag.utf8string:
+            pass
+            self.body._fetch_instances()
+        else:
+            pass
 
     class BodyObjectId(KaitaiStruct):
         """
@@ -156,9 +150,9 @@ class Asn1Der(KaitaiStruct):
         """
         SEQ_FIELDS = ["first_and_second", "rest"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Asn1Der.BodyObjectId, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -169,29 +163,103 @@ class Asn1Der(KaitaiStruct):
             self.rest = self._io.read_bytes_full()
             self._debug['rest']['end'] = self._io.pos()
 
+
+        def _fetch_instances(self):
+            pass
+
         @property
         def first(self):
             if hasattr(self, '_m_first'):
-                return self._m_first if hasattr(self, '_m_first') else None
+                return self._m_first
 
             self._m_first = self.first_and_second // 40
-            return self._m_first if hasattr(self, '_m_first') else None
+            return getattr(self, '_m_first', None)
 
         @property
         def second(self):
             if hasattr(self, '_m_second'):
-                return self._m_second if hasattr(self, '_m_second') else None
+                return self._m_second
 
-            self._m_second = (self.first_and_second % 40)
-            return self._m_second if hasattr(self, '_m_second') else None
+            self._m_second = self.first_and_second % 40
+            return getattr(self, '_m_second', None)
+
+
+    class BodyPrintableString(KaitaiStruct):
+        SEQ_FIELDS = ["str"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Asn1Der.BodyPrintableString, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['str']['start'] = self._io.pos()
+            self.str = (self._io.read_bytes_full()).decode(u"ASCII")
+            self._debug['str']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+
+
+    class BodySequence(KaitaiStruct):
+        SEQ_FIELDS = ["entries"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Asn1Der.BodySequence, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['entries']['start'] = self._io.pos()
+            self._debug['entries']['arr'] = []
+            self.entries = []
+            i = 0
+            while not self._io.is_eof():
+                self._debug['entries']['arr'].append({'start': self._io.pos()})
+                _t_entries = Asn1Der(self._io, self, self._root)
+                try:
+                    _t_entries._read()
+                finally:
+                    self.entries.append(_t_entries)
+                self._debug['entries']['arr'][len(self.entries) - 1]['end'] = self._io.pos()
+                i += 1
+
+            self._debug['entries']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            for i in range(len(self.entries)):
+                pass
+                self.entries[i]._fetch_instances()
+
+
+
+    class BodyUtf8string(KaitaiStruct):
+        SEQ_FIELDS = ["str"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Asn1Der.BodyUtf8string, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['str']['start'] = self._io.pos()
+            self.str = (self._io.read_bytes_full()).decode(u"UTF-8")
+            self._debug['str']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
 
 
     class LenEncoded(KaitaiStruct):
         SEQ_FIELDS = ["b1", "int2", "int1"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Asn1Der.LenEncoded, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -199,37 +267,35 @@ class Asn1Der(KaitaiStruct):
             self.b1 = self._io.read_u1()
             self._debug['b1']['end'] = self._io.pos()
             if self.b1 == 130:
+                pass
                 self._debug['int2']['start'] = self._io.pos()
                 self.int2 = self._io.read_u2be()
                 self._debug['int2']['end'] = self._io.pos()
 
             if self.b1 == 129:
+                pass
                 self._debug['int1']['start'] = self._io.pos()
                 self.int1 = self._io.read_u1()
                 self._debug['int1']['end'] = self._io.pos()
 
 
+
+        def _fetch_instances(self):
+            pass
+            if self.b1 == 130:
+                pass
+
+            if self.b1 == 129:
+                pass
+
+
         @property
         def result(self):
             if hasattr(self, '_m_result'):
-                return self._m_result if hasattr(self, '_m_result') else None
+                return self._m_result
 
             self._m_result = (self.int1 if self.b1 == 129 else (self.int2 if self.b1 == 130 else self.b1))
-            return self._m_result if hasattr(self, '_m_result') else None
-
-
-    class BodyPrintableString(KaitaiStruct):
-        SEQ_FIELDS = ["str"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['str']['start'] = self._io.pos()
-            self.str = (self._io.read_bytes_full()).decode(u"ASCII")
-            self._debug['str']['end'] = self._io.pos()
+            return getattr(self, '_m_result', None)
 
 
 

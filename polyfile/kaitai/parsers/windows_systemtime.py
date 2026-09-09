@@ -1,13 +1,13 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
+# type: ignore
 
-from packaging.version import parse as parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
-    raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
+    raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class WindowsSystemtime(KaitaiStruct):
     """Microsoft Windows SYSTEMTIME structure, stores individual components
@@ -18,9 +18,9 @@ class WindowsSystemtime(KaitaiStruct):
     """
     SEQ_FIELDS = ["year", "month", "dow", "day", "hour", "min", "sec", "msec"]
     def __init__(self, _io, _parent=None, _root=None):
-        self._io = _io
+        super(WindowsSystemtime, self).__init__(_io)
         self._parent = _parent
-        self._root = _root if _root else self
+        self._root = _root or self
         self._debug = collections.defaultdict(dict)
 
     def _read(self):
@@ -48,5 +48,9 @@ class WindowsSystemtime(KaitaiStruct):
         self._debug['msec']['start'] = self._io.pos()
         self.msec = self._io.read_u2le()
         self._debug['msec']['end'] = self._io.pos()
+
+
+    def _fetch_instances(self):
+        pass
 
 

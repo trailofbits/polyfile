@@ -1,13 +1,13 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
+# type: ignore
 
-from packaging.version import parse as parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
-    raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
+    raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class MbrPartitionTable(KaitaiStruct):
     """MBR (Master Boot Record) partition table is a traditional way of
@@ -22,9 +22,9 @@ class MbrPartitionTable(KaitaiStruct):
     """
     SEQ_FIELDS = ["bootstrap_code", "partitions", "boot_signature"]
     def __init__(self, _io, _parent=None, _root=None):
-        self._io = _io
+        super(MbrPartitionTable, self).__init__(_io)
         self._parent = _parent
-        self._root = _root if _root else self
+        self._root = _root or self
         self._debug = collections.defaultdict(dict)
 
     def _read(self):
@@ -32,14 +32,15 @@ class MbrPartitionTable(KaitaiStruct):
         self.bootstrap_code = self._io.read_bytes(446)
         self._debug['bootstrap_code']['end'] = self._io.pos()
         self._debug['partitions']['start'] = self._io.pos()
-        self.partitions = [None] * (4)
+        self._debug['partitions']['arr'] = []
+        self.partitions = []
         for i in range(4):
-            if not 'arr' in self._debug['partitions']:
-                self._debug['partitions']['arr'] = []
             self._debug['partitions']['arr'].append({'start': self._io.pos()})
             _t_partitions = MbrPartitionTable.PartitionEntry(self._io, self, self._root)
-            _t_partitions._read()
-            self.partitions[i] = _t_partitions
+            try:
+                _t_partitions._read()
+            finally:
+                self.partitions.append(_t_partitions)
             self._debug['partitions']['arr'][i]['end'] = self._io.pos()
 
         self._debug['partitions']['end'] = self._io.pos()
@@ -49,12 +50,60 @@ class MbrPartitionTable(KaitaiStruct):
         if not self.boot_signature == b"\x55\xAA":
             raise kaitaistruct.ValidationNotEqualError(b"\x55\xAA", self.boot_signature, self._io, u"/seq/2")
 
+
+    def _fetch_instances(self):
+        pass
+        for i in range(len(self.partitions)):
+            pass
+            self.partitions[i]._fetch_instances()
+
+
+    class Chs(KaitaiStruct):
+        SEQ_FIELDS = ["head", "b2", "b3"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(MbrPartitionTable.Chs, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['head']['start'] = self._io.pos()
+            self.head = self._io.read_u1()
+            self._debug['head']['end'] = self._io.pos()
+            self._debug['b2']['start'] = self._io.pos()
+            self.b2 = self._io.read_u1()
+            self._debug['b2']['end'] = self._io.pos()
+            self._debug['b3']['start'] = self._io.pos()
+            self.b3 = self._io.read_u1()
+            self._debug['b3']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+
+        @property
+        def cylinder(self):
+            if hasattr(self, '_m_cylinder'):
+                return self._m_cylinder
+
+            self._m_cylinder = self.b3 + ((self.b2 & 192) << 2)
+            return getattr(self, '_m_cylinder', None)
+
+        @property
+        def sector(self):
+            if hasattr(self, '_m_sector'):
+                return self._m_sector
+
+            self._m_sector = self.b2 & 63
+            return getattr(self, '_m_sector', None)
+
+
     class PartitionEntry(KaitaiStruct):
         SEQ_FIELDS = ["status", "chs_start", "partition_type", "chs_end", "lba_start", "num_sectors"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(MbrPartitionTable.PartitionEntry, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -80,40 +129,10 @@ class MbrPartitionTable(KaitaiStruct):
             self._debug['num_sectors']['end'] = self._io.pos()
 
 
-    class Chs(KaitaiStruct):
-        SEQ_FIELDS = ["head", "b2", "b3"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['head']['start'] = self._io.pos()
-            self.head = self._io.read_u1()
-            self._debug['head']['end'] = self._io.pos()
-            self._debug['b2']['start'] = self._io.pos()
-            self.b2 = self._io.read_u1()
-            self._debug['b2']['end'] = self._io.pos()
-            self._debug['b3']['start'] = self._io.pos()
-            self.b3 = self._io.read_u1()
-            self._debug['b3']['end'] = self._io.pos()
-
-        @property
-        def sector(self):
-            if hasattr(self, '_m_sector'):
-                return self._m_sector if hasattr(self, '_m_sector') else None
-
-            self._m_sector = (self.b2 & 63)
-            return self._m_sector if hasattr(self, '_m_sector') else None
-
-        @property
-        def cylinder(self):
-            if hasattr(self, '_m_cylinder'):
-                return self._m_cylinder if hasattr(self, '_m_cylinder') else None
-
-            self._m_cylinder = (self.b3 + ((self.b2 & 192) << 2))
-            return self._m_cylinder if hasattr(self, '_m_cylinder') else None
+        def _fetch_instances(self):
+            pass
+            self.chs_start._fetch_instances()
+            self.chs_end._fetch_instances()
 
 
 

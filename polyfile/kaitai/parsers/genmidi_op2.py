@@ -1,13 +1,13 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
+# type: ignore
 
-from packaging.version import parse as parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
-    raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
+    raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class GenmidiOp2(KaitaiStruct):
     """GENMIDI.OP2 is a sound bank file used by players based on DMX sound
@@ -33,9 +33,9 @@ class GenmidiOp2(KaitaiStruct):
     """
     SEQ_FIELDS = ["magic", "instruments", "instrument_names"]
     def __init__(self, _io, _parent=None, _root=None):
-        self._io = _io
+        super(GenmidiOp2, self).__init__(_io)
         self._parent = _parent
-        self._root = _root if _root else self
+        self._root = _root or self
         self._debug = collections.defaultdict(dict)
 
     def _read(self):
@@ -45,66 +45,45 @@ class GenmidiOp2(KaitaiStruct):
         if not self.magic == b"\x23\x4F\x50\x4C\x5F\x49\x49\x23":
             raise kaitaistruct.ValidationNotEqualError(b"\x23\x4F\x50\x4C\x5F\x49\x49\x23", self.magic, self._io, u"/seq/0")
         self._debug['instruments']['start'] = self._io.pos()
-        self.instruments = [None] * (175)
+        self._debug['instruments']['arr'] = []
+        self.instruments = []
         for i in range(175):
-            if not 'arr' in self._debug['instruments']:
-                self._debug['instruments']['arr'] = []
             self._debug['instruments']['arr'].append({'start': self._io.pos()})
             _t_instruments = GenmidiOp2.InstrumentEntry(self._io, self, self._root)
-            _t_instruments._read()
-            self.instruments[i] = _t_instruments
+            try:
+                _t_instruments._read()
+            finally:
+                self.instruments.append(_t_instruments)
             self._debug['instruments']['arr'][i]['end'] = self._io.pos()
 
         self._debug['instruments']['end'] = self._io.pos()
         self._debug['instrument_names']['start'] = self._io.pos()
-        self.instrument_names = [None] * (175)
+        self._debug['instrument_names']['arr'] = []
+        self.instrument_names = []
         for i in range(175):
-            if not 'arr' in self._debug['instrument_names']:
-                self._debug['instrument_names']['arr'] = []
             self._debug['instrument_names']['arr'].append({'start': self._io.pos()})
-            self.instrument_names[i] = (KaitaiStream.bytes_terminate(KaitaiStream.bytes_strip_right(self._io.read_bytes(32), 0), 0, False)).decode(u"ASCII")
+            self.instrument_names.append((KaitaiStream.bytes_terminate(self._io.read_bytes(32), 0, False)).decode(u"ASCII"))
             self._debug['instrument_names']['arr'][i]['end'] = self._io.pos()
 
         self._debug['instrument_names']['end'] = self._io.pos()
 
-    class InstrumentEntry(KaitaiStruct):
-        SEQ_FIELDS = ["flags", "finetune", "note", "instruments"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
 
-        def _read(self):
-            self._debug['flags']['start'] = self._io.pos()
-            self.flags = self._io.read_u2le()
-            self._debug['flags']['end'] = self._io.pos()
-            self._debug['finetune']['start'] = self._io.pos()
-            self.finetune = self._io.read_u1()
-            self._debug['finetune']['end'] = self._io.pos()
-            self._debug['note']['start'] = self._io.pos()
-            self.note = self._io.read_u1()
-            self._debug['note']['end'] = self._io.pos()
-            self._debug['instruments']['start'] = self._io.pos()
-            self.instruments = [None] * (2)
-            for i in range(2):
-                if not 'arr' in self._debug['instruments']:
-                    self._debug['instruments']['arr'] = []
-                self._debug['instruments']['arr'].append({'start': self._io.pos()})
-                _t_instruments = GenmidiOp2.Instrument(self._io, self, self._root)
-                _t_instruments._read()
-                self.instruments[i] = _t_instruments
-                self._debug['instruments']['arr'][i]['end'] = self._io.pos()
+    def _fetch_instances(self):
+        pass
+        for i in range(len(self.instruments)):
+            pass
+            self.instruments[i]._fetch_instances()
 
-            self._debug['instruments']['end'] = self._io.pos()
+        for i in range(len(self.instrument_names)):
+            pass
 
 
     class Instrument(KaitaiStruct):
         SEQ_FIELDS = ["op1", "feedback", "op2", "unused", "base_note"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(GenmidiOp2.Instrument, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -127,14 +106,61 @@ class GenmidiOp2(KaitaiStruct):
             self._debug['base_note']['end'] = self._io.pos()
 
 
+        def _fetch_instances(self):
+            pass
+            self.op1._fetch_instances()
+            self.op2._fetch_instances()
+
+
+    class InstrumentEntry(KaitaiStruct):
+        SEQ_FIELDS = ["flags", "finetune", "note", "instruments"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(GenmidiOp2.InstrumentEntry, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['flags']['start'] = self._io.pos()
+            self.flags = self._io.read_u2le()
+            self._debug['flags']['end'] = self._io.pos()
+            self._debug['finetune']['start'] = self._io.pos()
+            self.finetune = self._io.read_u1()
+            self._debug['finetune']['end'] = self._io.pos()
+            self._debug['note']['start'] = self._io.pos()
+            self.note = self._io.read_u1()
+            self._debug['note']['end'] = self._io.pos()
+            self._debug['instruments']['start'] = self._io.pos()
+            self._debug['instruments']['arr'] = []
+            self.instruments = []
+            for i in range(2):
+                self._debug['instruments']['arr'].append({'start': self._io.pos()})
+                _t_instruments = GenmidiOp2.Instrument(self._io, self, self._root)
+                try:
+                    _t_instruments._read()
+                finally:
+                    self.instruments.append(_t_instruments)
+                self._debug['instruments']['arr'][i]['end'] = self._io.pos()
+
+            self._debug['instruments']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            for i in range(len(self.instruments)):
+                pass
+                self.instruments[i]._fetch_instances()
+
+
+
     class OpSettings(KaitaiStruct):
         """OPL2 settings for one operator (carrier or modulator)
         """
         SEQ_FIELDS = ["trem_vibr", "att_dec", "sust_rel", "wave", "scale", "level"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(GenmidiOp2.OpSettings, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -156,6 +182,10 @@ class GenmidiOp2(KaitaiStruct):
             self._debug['level']['start'] = self._io.pos()
             self.level = self._io.read_u1()
             self._debug['level']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
 
 
 

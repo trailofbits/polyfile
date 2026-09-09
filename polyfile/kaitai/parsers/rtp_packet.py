@@ -1,14 +1,14 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
+# type: ignore
 
-from packaging.version import parse as parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
-from enum import Enum
+from enum import IntEnum
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
-    raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
+    raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class RtpPacket(KaitaiStruct):
     """The Real-time Transport Protocol (RTP) is a widely used network
@@ -17,7 +17,7 @@ class RtpPacket(KaitaiStruct):
     Transmission Control Protocol (TCP) or User Datagram Protocol (UDP).
     """
 
-    class PayloadTypeEnum(Enum):
+    class PayloadTypeEnum(IntEnum):
         pcmu = 0
         reserved1 = 1
         reserved2 = 2
@@ -56,9 +56,9 @@ class RtpPacket(KaitaiStruct):
         mpeg_ps = 96
     SEQ_FIELDS = ["version", "has_padding", "has_extension", "csrc_count", "marker", "payload_type", "sequence_number", "timestamp", "ssrc", "header_extension", "data", "padding"]
     def __init__(self, _io, _parent=None, _root=None):
-        self._io = _io
+        super(RtpPacket, self).__init__(_io)
         self._parent = _parent
-        self._root = _root if _root else self
+        self._root = _root or self
         self._debug = collections.defaultdict(dict)
 
     def _read(self):
@@ -80,7 +80,6 @@ class RtpPacket(KaitaiStruct):
         self._debug['payload_type']['start'] = self._io.pos()
         self.payload_type = KaitaiStream.resolve_enum(RtpPacket.PayloadTypeEnum, self._io.read_bits_int_be(7))
         self._debug['payload_type']['end'] = self._io.pos()
-        self._io.align_to_byte()
         self._debug['sequence_number']['start'] = self._io.pos()
         self.sequence_number = self._io.read_u2be()
         self._debug['sequence_number']['end'] = self._io.pos()
@@ -91,24 +90,37 @@ class RtpPacket(KaitaiStruct):
         self.ssrc = self._io.read_u4be()
         self._debug['ssrc']['end'] = self._io.pos()
         if self.has_extension:
+            pass
             self._debug['header_extension']['start'] = self._io.pos()
             self.header_extension = RtpPacket.HeaderExtention(self._io, self, self._root)
             self.header_extension._read()
             self._debug['header_extension']['end'] = self._io.pos()
 
         self._debug['data']['start'] = self._io.pos()
-        self.data = self._io.read_bytes(((self._io.size() - self._io.pos()) - self.len_padding))
+        self.data = self._io.read_bytes((self._io.size() - self._io.pos()) - self.len_padding)
         self._debug['data']['end'] = self._io.pos()
         self._debug['padding']['start'] = self._io.pos()
         self.padding = self._io.read_bytes(self.len_padding)
         self._debug['padding']['end'] = self._io.pos()
 
+
+    def _fetch_instances(self):
+        pass
+        if self.has_extension:
+            pass
+            self.header_extension._fetch_instances()
+
+        _ = self.len_padding_if_exists
+        if hasattr(self, '_m_len_padding_if_exists'):
+            pass
+
+
     class HeaderExtention(KaitaiStruct):
         SEQ_FIELDS = ["id", "length"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(RtpPacket.HeaderExtention, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -120,31 +132,36 @@ class RtpPacket(KaitaiStruct):
             self._debug['length']['end'] = self._io.pos()
 
 
+        def _fetch_instances(self):
+            pass
+
+
+    @property
+    def len_padding(self):
+        """Always returns number of padding bytes to in the payload."""
+        if hasattr(self, '_m_len_padding'):
+            return self._m_len_padding
+
+        self._m_len_padding = (self.len_padding_if_exists if self.has_padding else 0)
+        return getattr(self, '_m_len_padding', None)
+
     @property
     def len_padding_if_exists(self):
         """If padding bit is enabled, last byte of data contains number of
         bytes appended to the payload as padding.
         """
         if hasattr(self, '_m_len_padding_if_exists'):
-            return self._m_len_padding_if_exists if hasattr(self, '_m_len_padding_if_exists') else None
+            return self._m_len_padding_if_exists
 
         if self.has_padding:
+            pass
             _pos = self._io.pos()
-            self._io.seek((self._io.size() - 1))
+            self._io.seek(self._io.size() - 1)
             self._debug['_m_len_padding_if_exists']['start'] = self._io.pos()
             self._m_len_padding_if_exists = self._io.read_u1()
             self._debug['_m_len_padding_if_exists']['end'] = self._io.pos()
             self._io.seek(_pos)
 
-        return self._m_len_padding_if_exists if hasattr(self, '_m_len_padding_if_exists') else None
-
-    @property
-    def len_padding(self):
-        """Always returns number of padding bytes to in the payload."""
-        if hasattr(self, '_m_len_padding'):
-            return self._m_len_padding if hasattr(self, '_m_len_padding') else None
-
-        self._m_len_padding = (self.len_padding_if_exists if self.has_padding else 0)
-        return self._m_len_padding if hasattr(self, '_m_len_padding') else None
+        return getattr(self, '_m_len_padding_if_exists', None)
 
 

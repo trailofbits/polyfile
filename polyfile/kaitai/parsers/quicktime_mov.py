@@ -1,14 +1,14 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
+# type: ignore
 
-from packaging.version import parse as parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
-from enum import Enum
+from enum import IntEnum
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
-    raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
+    raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class QuicktimeMov(KaitaiStruct):
     """
@@ -16,7 +16,7 @@ class QuicktimeMov(KaitaiStruct):
        Source - https://developer.apple.com/library/archive/documentation/QuickTime/QTFF/QTFFChap1/qtff1.html#//apple_ref/doc/uid/TP40000939-CH203-BBCGDDDF
     """
 
-    class AtomType(Enum):
+    class AtomType(IntEnum):
         xtra = 1484026465
         dinf = 1684631142
         dref = 1685218662
@@ -48,7 +48,7 @@ class QuicktimeMov(KaitaiStruct):
         udta = 1969517665
         vmhd = 1986881636
 
-    class Brand(Enum):
+    class Brand(IntEnum):
         x_3g2a = 862401121
         x_3ge6 = 862414134
         x_3ge7 = 862414135
@@ -306,9 +306,9 @@ class QuicktimeMov(KaitaiStruct):
         yt4 = 2037658656
     SEQ_FIELDS = ["atoms"]
     def __init__(self, _io, _parent=None, _root=None):
-        self._io = _io
+        super(QuicktimeMov, self).__init__(_io)
         self._parent = _parent
-        self._root = _root if _root else self
+        self._root = _root or self
         self._debug = collections.defaultdict(dict)
 
     def _read(self):
@@ -317,6 +317,274 @@ class QuicktimeMov(KaitaiStruct):
         self.atoms._read()
         self._debug['atoms']['end'] = self._io.pos()
 
+
+    def _fetch_instances(self):
+        pass
+        self.atoms._fetch_instances()
+
+    class Atom(KaitaiStruct):
+        SEQ_FIELDS = ["len32", "atom_type", "len64", "body"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(QuicktimeMov.Atom, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['len32']['start'] = self._io.pos()
+            self.len32 = self._io.read_u4be()
+            self._debug['len32']['end'] = self._io.pos()
+            self._debug['atom_type']['start'] = self._io.pos()
+            self.atom_type = KaitaiStream.resolve_enum(QuicktimeMov.AtomType, self._io.read_u4be())
+            self._debug['atom_type']['end'] = self._io.pos()
+            if self.len32 == 1:
+                pass
+                self._debug['len64']['start'] = self._io.pos()
+                self.len64 = self._io.read_u8be()
+                self._debug['len64']['end'] = self._io.pos()
+
+            self._debug['body']['start'] = self._io.pos()
+            _on = self.atom_type
+            if _on == QuicktimeMov.AtomType.dinf:
+                pass
+                self._raw_body = self._io.read_bytes(self.len)
+                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
+                self.body = QuicktimeMov.AtomList(_io__raw_body, self, self._root)
+                self.body._read()
+            elif _on == QuicktimeMov.AtomType.ftyp:
+                pass
+                self._raw_body = self._io.read_bytes(self.len)
+                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
+                self.body = QuicktimeMov.FtypBody(_io__raw_body, self, self._root)
+                self.body._read()
+            elif _on == QuicktimeMov.AtomType.mdia:
+                pass
+                self._raw_body = self._io.read_bytes(self.len)
+                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
+                self.body = QuicktimeMov.AtomList(_io__raw_body, self, self._root)
+                self.body._read()
+            elif _on == QuicktimeMov.AtomType.minf:
+                pass
+                self._raw_body = self._io.read_bytes(self.len)
+                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
+                self.body = QuicktimeMov.AtomList(_io__raw_body, self, self._root)
+                self.body._read()
+            elif _on == QuicktimeMov.AtomType.moof:
+                pass
+                self._raw_body = self._io.read_bytes(self.len)
+                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
+                self.body = QuicktimeMov.AtomList(_io__raw_body, self, self._root)
+                self.body._read()
+            elif _on == QuicktimeMov.AtomType.moov:
+                pass
+                self._raw_body = self._io.read_bytes(self.len)
+                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
+                self.body = QuicktimeMov.AtomList(_io__raw_body, self, self._root)
+                self.body._read()
+            elif _on == QuicktimeMov.AtomType.mvhd:
+                pass
+                self._raw_body = self._io.read_bytes(self.len)
+                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
+                self.body = QuicktimeMov.MvhdBody(_io__raw_body, self, self._root)
+                self.body._read()
+            elif _on == QuicktimeMov.AtomType.stbl:
+                pass
+                self._raw_body = self._io.read_bytes(self.len)
+                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
+                self.body = QuicktimeMov.AtomList(_io__raw_body, self, self._root)
+                self.body._read()
+            elif _on == QuicktimeMov.AtomType.tkhd:
+                pass
+                self._raw_body = self._io.read_bytes(self.len)
+                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
+                self.body = QuicktimeMov.TkhdBody(_io__raw_body, self, self._root)
+                self.body._read()
+            elif _on == QuicktimeMov.AtomType.traf:
+                pass
+                self._raw_body = self._io.read_bytes(self.len)
+                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
+                self.body = QuicktimeMov.AtomList(_io__raw_body, self, self._root)
+                self.body._read()
+            elif _on == QuicktimeMov.AtomType.trak:
+                pass
+                self._raw_body = self._io.read_bytes(self.len)
+                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
+                self.body = QuicktimeMov.AtomList(_io__raw_body, self, self._root)
+                self.body._read()
+            else:
+                pass
+                self.body = self._io.read_bytes(self.len)
+            self._debug['body']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            if self.len32 == 1:
+                pass
+
+            _on = self.atom_type
+            if _on == QuicktimeMov.AtomType.dinf:
+                pass
+                self.body._fetch_instances()
+            elif _on == QuicktimeMov.AtomType.ftyp:
+                pass
+                self.body._fetch_instances()
+            elif _on == QuicktimeMov.AtomType.mdia:
+                pass
+                self.body._fetch_instances()
+            elif _on == QuicktimeMov.AtomType.minf:
+                pass
+                self.body._fetch_instances()
+            elif _on == QuicktimeMov.AtomType.moof:
+                pass
+                self.body._fetch_instances()
+            elif _on == QuicktimeMov.AtomType.moov:
+                pass
+                self.body._fetch_instances()
+            elif _on == QuicktimeMov.AtomType.mvhd:
+                pass
+                self.body._fetch_instances()
+            elif _on == QuicktimeMov.AtomType.stbl:
+                pass
+                self.body._fetch_instances()
+            elif _on == QuicktimeMov.AtomType.tkhd:
+                pass
+                self.body._fetch_instances()
+            elif _on == QuicktimeMov.AtomType.traf:
+                pass
+                self.body._fetch_instances()
+            elif _on == QuicktimeMov.AtomType.trak:
+                pass
+                self.body._fetch_instances()
+            else:
+                pass
+
+        @property
+        def len(self):
+            if hasattr(self, '_m_len'):
+                return self._m_len
+
+            self._m_len = (self._io.size() - 8 if self.len32 == 0 else (self.len64 - 16 if self.len32 == 1 else self.len32 - 8))
+            return getattr(self, '_m_len', None)
+
+
+    class AtomList(KaitaiStruct):
+        SEQ_FIELDS = ["items"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(QuicktimeMov.AtomList, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['items']['start'] = self._io.pos()
+            self._debug['items']['arr'] = []
+            self.items = []
+            i = 0
+            while not self._io.is_eof():
+                self._debug['items']['arr'].append({'start': self._io.pos()})
+                _t_items = QuicktimeMov.Atom(self._io, self, self._root)
+                try:
+                    _t_items._read()
+                finally:
+                    self.items.append(_t_items)
+                self._debug['items']['arr'][len(self.items) - 1]['end'] = self._io.pos()
+                i += 1
+
+            self._debug['items']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            for i in range(len(self.items)):
+                pass
+                self.items[i]._fetch_instances()
+
+
+
+    class Fixed16(KaitaiStruct):
+        """Fixed-point 16-bit number."""
+        SEQ_FIELDS = ["int_part", "frac_part"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(QuicktimeMov.Fixed16, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['int_part']['start'] = self._io.pos()
+            self.int_part = self._io.read_s1()
+            self._debug['int_part']['end'] = self._io.pos()
+            self._debug['frac_part']['start'] = self._io.pos()
+            self.frac_part = self._io.read_u1()
+            self._debug['frac_part']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+
+
+    class Fixed32(KaitaiStruct):
+        """Fixed-point 32-bit number."""
+        SEQ_FIELDS = ["int_part", "frac_part"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(QuicktimeMov.Fixed32, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['int_part']['start'] = self._io.pos()
+            self.int_part = self._io.read_s2be()
+            self._debug['int_part']['end'] = self._io.pos()
+            self._debug['frac_part']['start'] = self._io.pos()
+            self.frac_part = self._io.read_u2be()
+            self._debug['frac_part']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+
+
+    class FtypBody(KaitaiStruct):
+        """
+        .. seealso::
+           Source - https://developer.apple.com/library/archive/documentation/QuickTime/QTFF/QTFFChap1/qtff1.html#//apple_ref/doc/uid/TP40000939-CH203-CJBCBIFF
+        """
+        SEQ_FIELDS = ["major_brand", "minor_version", "compatible_brands"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(QuicktimeMov.FtypBody, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['major_brand']['start'] = self._io.pos()
+            self.major_brand = KaitaiStream.resolve_enum(QuicktimeMov.Brand, self._io.read_u4be())
+            self._debug['major_brand']['end'] = self._io.pos()
+            self._debug['minor_version']['start'] = self._io.pos()
+            self.minor_version = self._io.read_bytes(4)
+            self._debug['minor_version']['end'] = self._io.pos()
+            self._debug['compatible_brands']['start'] = self._io.pos()
+            self._debug['compatible_brands']['arr'] = []
+            self.compatible_brands = []
+            i = 0
+            while not self._io.is_eof():
+                self._debug['compatible_brands']['arr'].append({'start': self._io.pos()})
+                self.compatible_brands.append(KaitaiStream.resolve_enum(QuicktimeMov.Brand, self._io.read_u4be()))
+                self._debug['compatible_brands']['arr'][len(self.compatible_brands) - 1]['end'] = self._io.pos()
+                i += 1
+
+            self._debug['compatible_brands']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            for i in range(len(self.compatible_brands)):
+                pass
+
+
+
     class MvhdBody(KaitaiStruct):
         """
         .. seealso::
@@ -324,9 +592,9 @@ class QuicktimeMov(KaitaiStruct):
         """
         SEQ_FIELDS = ["version", "flags", "creation_time", "modification_time", "time_scale", "duration", "preferred_rate", "preferred_volume", "reserved1", "matrix", "preview_time", "preview_duration", "poster_time", "selection_time", "selection_duration", "current_time", "next_track_id"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(QuicktimeMov.MvhdBody, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -385,163 +653,10 @@ class QuicktimeMov(KaitaiStruct):
             self._debug['next_track_id']['end'] = self._io.pos()
 
 
-    class FtypBody(KaitaiStruct):
-        """
-        .. seealso::
-           Source - https://developer.apple.com/library/archive/documentation/QuickTime/QTFF/QTFFChap1/qtff1.html#//apple_ref/doc/uid/TP40000939-CH203-CJBCBIFF
-        """
-        SEQ_FIELDS = ["major_brand", "minor_version", "compatible_brands"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['major_brand']['start'] = self._io.pos()
-            self.major_brand = KaitaiStream.resolve_enum(QuicktimeMov.Brand, self._io.read_u4be())
-            self._debug['major_brand']['end'] = self._io.pos()
-            self._debug['minor_version']['start'] = self._io.pos()
-            self.minor_version = self._io.read_bytes(4)
-            self._debug['minor_version']['end'] = self._io.pos()
-            self._debug['compatible_brands']['start'] = self._io.pos()
-            self.compatible_brands = []
-            i = 0
-            while not self._io.is_eof():
-                if not 'arr' in self._debug['compatible_brands']:
-                    self._debug['compatible_brands']['arr'] = []
-                self._debug['compatible_brands']['arr'].append({'start': self._io.pos()})
-                self.compatible_brands.append(KaitaiStream.resolve_enum(QuicktimeMov.Brand, self._io.read_u4be()))
-                self._debug['compatible_brands']['arr'][len(self.compatible_brands) - 1]['end'] = self._io.pos()
-                i += 1
-
-            self._debug['compatible_brands']['end'] = self._io.pos()
-
-
-    class Fixed32(KaitaiStruct):
-        """Fixed-point 32-bit number."""
-        SEQ_FIELDS = ["int_part", "frac_part"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['int_part']['start'] = self._io.pos()
-            self.int_part = self._io.read_s2be()
-            self._debug['int_part']['end'] = self._io.pos()
-            self._debug['frac_part']['start'] = self._io.pos()
-            self.frac_part = self._io.read_u2be()
-            self._debug['frac_part']['end'] = self._io.pos()
-
-
-    class Fixed16(KaitaiStruct):
-        """Fixed-point 16-bit number."""
-        SEQ_FIELDS = ["int_part", "frac_part"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['int_part']['start'] = self._io.pos()
-            self.int_part = self._io.read_s1()
-            self._debug['int_part']['end'] = self._io.pos()
-            self._debug['frac_part']['start'] = self._io.pos()
-            self.frac_part = self._io.read_u1()
-            self._debug['frac_part']['end'] = self._io.pos()
-
-
-    class Atom(KaitaiStruct):
-        SEQ_FIELDS = ["len32", "atom_type", "len64", "body"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['len32']['start'] = self._io.pos()
-            self.len32 = self._io.read_u4be()
-            self._debug['len32']['end'] = self._io.pos()
-            self._debug['atom_type']['start'] = self._io.pos()
-            self.atom_type = KaitaiStream.resolve_enum(QuicktimeMov.AtomType, self._io.read_u4be())
-            self._debug['atom_type']['end'] = self._io.pos()
-            if self.len32 == 1:
-                self._debug['len64']['start'] = self._io.pos()
-                self.len64 = self._io.read_u8be()
-                self._debug['len64']['end'] = self._io.pos()
-
-            self._debug['body']['start'] = self._io.pos()
-            _on = self.atom_type
-            if _on == QuicktimeMov.AtomType.moof:
-                self._raw_body = self._io.read_bytes(self.len)
-                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
-                self.body = QuicktimeMov.AtomList(_io__raw_body, self, self._root)
-                self.body._read()
-            elif _on == QuicktimeMov.AtomType.tkhd:
-                self._raw_body = self._io.read_bytes(self.len)
-                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
-                self.body = QuicktimeMov.TkhdBody(_io__raw_body, self, self._root)
-                self.body._read()
-            elif _on == QuicktimeMov.AtomType.stbl:
-                self._raw_body = self._io.read_bytes(self.len)
-                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
-                self.body = QuicktimeMov.AtomList(_io__raw_body, self, self._root)
-                self.body._read()
-            elif _on == QuicktimeMov.AtomType.traf:
-                self._raw_body = self._io.read_bytes(self.len)
-                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
-                self.body = QuicktimeMov.AtomList(_io__raw_body, self, self._root)
-                self.body._read()
-            elif _on == QuicktimeMov.AtomType.minf:
-                self._raw_body = self._io.read_bytes(self.len)
-                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
-                self.body = QuicktimeMov.AtomList(_io__raw_body, self, self._root)
-                self.body._read()
-            elif _on == QuicktimeMov.AtomType.trak:
-                self._raw_body = self._io.read_bytes(self.len)
-                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
-                self.body = QuicktimeMov.AtomList(_io__raw_body, self, self._root)
-                self.body._read()
-            elif _on == QuicktimeMov.AtomType.moov:
-                self._raw_body = self._io.read_bytes(self.len)
-                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
-                self.body = QuicktimeMov.AtomList(_io__raw_body, self, self._root)
-                self.body._read()
-            elif _on == QuicktimeMov.AtomType.mdia:
-                self._raw_body = self._io.read_bytes(self.len)
-                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
-                self.body = QuicktimeMov.AtomList(_io__raw_body, self, self._root)
-                self.body._read()
-            elif _on == QuicktimeMov.AtomType.dinf:
-                self._raw_body = self._io.read_bytes(self.len)
-                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
-                self.body = QuicktimeMov.AtomList(_io__raw_body, self, self._root)
-                self.body._read()
-            elif _on == QuicktimeMov.AtomType.mvhd:
-                self._raw_body = self._io.read_bytes(self.len)
-                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
-                self.body = QuicktimeMov.MvhdBody(_io__raw_body, self, self._root)
-                self.body._read()
-            elif _on == QuicktimeMov.AtomType.ftyp:
-                self._raw_body = self._io.read_bytes(self.len)
-                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
-                self.body = QuicktimeMov.FtypBody(_io__raw_body, self, self._root)
-                self.body._read()
-            else:
-                self.body = self._io.read_bytes(self.len)
-            self._debug['body']['end'] = self._io.pos()
-
-        @property
-        def len(self):
-            if hasattr(self, '_m_len'):
-                return self._m_len if hasattr(self, '_m_len') else None
-
-            self._m_len = ((self._io.size() - 8) if self.len32 == 0 else ((self.len64 - 16) if self.len32 == 1 else (self.len32 - 8)))
-            return self._m_len if hasattr(self, '_m_len') else None
+        def _fetch_instances(self):
+            pass
+            self.preferred_rate._fetch_instances()
+            self.preferred_volume._fetch_instances()
 
 
     class TkhdBody(KaitaiStruct):
@@ -551,9 +666,9 @@ class QuicktimeMov(KaitaiStruct):
         """
         SEQ_FIELDS = ["version", "flags", "creation_time", "modification_time", "track_id", "reserved1", "duration", "reserved2", "layer", "alternative_group", "volume", "reserved3", "matrix", "width", "height"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(QuicktimeMov.TkhdBody, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -606,29 +721,10 @@ class QuicktimeMov(KaitaiStruct):
             self._debug['height']['end'] = self._io.pos()
 
 
-    class AtomList(KaitaiStruct):
-        SEQ_FIELDS = ["items"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['items']['start'] = self._io.pos()
-            self.items = []
-            i = 0
-            while not self._io.is_eof():
-                if not 'arr' in self._debug['items']:
-                    self._debug['items']['arr'] = []
-                self._debug['items']['arr'].append({'start': self._io.pos()})
-                _t_items = QuicktimeMov.Atom(self._io, self, self._root)
-                _t_items._read()
-                self.items.append(_t_items)
-                self._debug['items']['arr'][len(self.items) - 1]['end'] = self._io.pos()
-                i += 1
-
-            self._debug['items']['end'] = self._io.pos()
+        def _fetch_instances(self):
+            pass
+            self.width._fetch_instances()
+            self.height._fetch_instances()
 
 
 

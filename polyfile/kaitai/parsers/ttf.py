@@ -1,14 +1,14 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
+# type: ignore
 
-from packaging.version import parse as parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
-from enum import Enum
+from enum import IntEnum
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
-    raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
+    raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class Ttf(KaitaiStruct):
     """A TrueType font file contains data, in table format, that comprises
@@ -19,9 +19,9 @@ class Ttf(KaitaiStruct):
     """
     SEQ_FIELDS = ["offset_table", "directory_table"]
     def __init__(self, _io, _parent=None, _root=None):
-        self._io = _io
+        super(Ttf, self).__init__(_io)
         self._parent = _parent
-        self._root = _root if _root else self
+        self._root = _root or self
         self._debug = collections.defaultdict(dict)
 
     def _read(self):
@@ -30,268 +30,756 @@ class Ttf(KaitaiStruct):
         self.offset_table._read()
         self._debug['offset_table']['end'] = self._io.pos()
         self._debug['directory_table']['start'] = self._io.pos()
-        self.directory_table = [None] * (self.offset_table.num_tables)
+        self._debug['directory_table']['arr'] = []
+        self.directory_table = []
         for i in range(self.offset_table.num_tables):
-            if not 'arr' in self._debug['directory_table']:
-                self._debug['directory_table']['arr'] = []
             self._debug['directory_table']['arr'].append({'start': self._io.pos()})
             _t_directory_table = Ttf.DirTableEntry(self._io, self, self._root)
-            _t_directory_table._read()
-            self.directory_table[i] = _t_directory_table
+            try:
+                _t_directory_table._read()
+            finally:
+                self.directory_table.append(_t_directory_table)
             self._debug['directory_table']['arr'][i]['end'] = self._io.pos()
 
         self._debug['directory_table']['end'] = self._io.pos()
 
-    class Post(KaitaiStruct):
-        SEQ_FIELDS = ["format", "italic_angle", "underline_position", "underline_thichness", "is_fixed_pitch", "min_mem_type42", "max_mem_type42", "min_mem_type1", "max_mem_type1", "format20"]
+
+    def _fetch_instances(self):
+        pass
+        self.offset_table._fetch_instances()
+        for i in range(len(self.directory_table)):
+            pass
+            self.directory_table[i]._fetch_instances()
+
+
+    class Cmap(KaitaiStruct):
+        """cmap - Character To Glyph Index Mapping Table This table defines the mapping of character codes to the glyph index values used in the font.
+        """
+        SEQ_FIELDS = ["version_number", "number_of_encoding_tables", "tables"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Ttf.Cmap, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
-            self._debug['format']['start'] = self._io.pos()
-            self.format = Ttf.Fixed(self._io, self, self._root)
-            self.format._read()
-            self._debug['format']['end'] = self._io.pos()
-            self._debug['italic_angle']['start'] = self._io.pos()
-            self.italic_angle = Ttf.Fixed(self._io, self, self._root)
-            self.italic_angle._read()
-            self._debug['italic_angle']['end'] = self._io.pos()
-            self._debug['underline_position']['start'] = self._io.pos()
-            self.underline_position = self._io.read_s2be()
-            self._debug['underline_position']['end'] = self._io.pos()
-            self._debug['underline_thichness']['start'] = self._io.pos()
-            self.underline_thichness = self._io.read_s2be()
-            self._debug['underline_thichness']['end'] = self._io.pos()
-            self._debug['is_fixed_pitch']['start'] = self._io.pos()
-            self.is_fixed_pitch = self._io.read_u4be()
-            self._debug['is_fixed_pitch']['end'] = self._io.pos()
-            self._debug['min_mem_type42']['start'] = self._io.pos()
-            self.min_mem_type42 = self._io.read_u4be()
-            self._debug['min_mem_type42']['end'] = self._io.pos()
-            self._debug['max_mem_type42']['start'] = self._io.pos()
-            self.max_mem_type42 = self._io.read_u4be()
-            self._debug['max_mem_type42']['end'] = self._io.pos()
-            self._debug['min_mem_type1']['start'] = self._io.pos()
-            self.min_mem_type1 = self._io.read_u4be()
-            self._debug['min_mem_type1']['end'] = self._io.pos()
-            self._debug['max_mem_type1']['start'] = self._io.pos()
-            self.max_mem_type1 = self._io.read_u4be()
-            self._debug['max_mem_type1']['end'] = self._io.pos()
-            if  ((self.format.major == 2) and (self.format.minor == 0)) :
-                self._debug['format20']['start'] = self._io.pos()
-                self.format20 = Ttf.Post.Format20(self._io, self, self._root)
-                self.format20._read()
-                self._debug['format20']['end'] = self._io.pos()
+            self._debug['version_number']['start'] = self._io.pos()
+            self.version_number = self._io.read_u2be()
+            self._debug['version_number']['end'] = self._io.pos()
+            self._debug['number_of_encoding_tables']['start'] = self._io.pos()
+            self.number_of_encoding_tables = self._io.read_u2be()
+            self._debug['number_of_encoding_tables']['end'] = self._io.pos()
+            self._debug['tables']['start'] = self._io.pos()
+            self._debug['tables']['arr'] = []
+            self.tables = []
+            for i in range(self.number_of_encoding_tables):
+                self._debug['tables']['arr'].append({'start': self._io.pos()})
+                _t_tables = Ttf.Cmap.SubtableHeader(self._io, self, self._root)
+                try:
+                    _t_tables._read()
+                finally:
+                    self.tables.append(_t_tables)
+                self._debug['tables']['arr'][i]['end'] = self._io.pos()
+
+            self._debug['tables']['end'] = self._io.pos()
 
 
-        class Format20(KaitaiStruct):
-            SEQ_FIELDS = ["number_of_glyphs", "glyph_name_index", "glyph_names"]
+        def _fetch_instances(self):
+            pass
+            for i in range(len(self.tables)):
+                pass
+                self.tables[i]._fetch_instances()
+
+
+        class Subtable(KaitaiStruct):
+
+            class SubtableFormat(IntEnum):
+                byte_encoding_table = 0
+                high_byte_mapping_through_table = 2
+                segment_mapping_to_delta_values = 4
+                trimmed_table_mapping = 6
+            SEQ_FIELDS = ["format", "length", "version", "value"]
             def __init__(self, _io, _parent=None, _root=None):
-                self._io = _io
+                super(Ttf.Cmap.Subtable, self).__init__(_io)
                 self._parent = _parent
-                self._root = _root if _root else self
+                self._root = _root
                 self._debug = collections.defaultdict(dict)
 
             def _read(self):
-                self._debug['number_of_glyphs']['start'] = self._io.pos()
-                self.number_of_glyphs = self._io.read_u2be()
-                self._debug['number_of_glyphs']['end'] = self._io.pos()
-                self._debug['glyph_name_index']['start'] = self._io.pos()
-                self.glyph_name_index = [None] * (self.number_of_glyphs)
-                for i in range(self.number_of_glyphs):
-                    if not 'arr' in self._debug['glyph_name_index']:
-                        self._debug['glyph_name_index']['arr'] = []
-                    self._debug['glyph_name_index']['arr'].append({'start': self._io.pos()})
-                    self.glyph_name_index[i] = self._io.read_u2be()
-                    self._debug['glyph_name_index']['arr'][i]['end'] = self._io.pos()
+                self._debug['format']['start'] = self._io.pos()
+                self.format = KaitaiStream.resolve_enum(Ttf.Cmap.Subtable.SubtableFormat, self._io.read_u2be())
+                self._debug['format']['end'] = self._io.pos()
+                self._debug['length']['start'] = self._io.pos()
+                self.length = self._io.read_u2be()
+                self._debug['length']['end'] = self._io.pos()
+                self._debug['version']['start'] = self._io.pos()
+                self.version = self._io.read_u2be()
+                self._debug['version']['end'] = self._io.pos()
+                self._debug['value']['start'] = self._io.pos()
+                _on = self.format
+                if _on == Ttf.Cmap.Subtable.SubtableFormat.byte_encoding_table:
+                    pass
+                    self._raw_value = self._io.read_bytes(self.length - 6)
+                    _io__raw_value = KaitaiStream(BytesIO(self._raw_value))
+                    self.value = Ttf.Cmap.Subtable.ByteEncodingTable(_io__raw_value, self, self._root)
+                    self.value._read()
+                elif _on == Ttf.Cmap.Subtable.SubtableFormat.high_byte_mapping_through_table:
+                    pass
+                    self._raw_value = self._io.read_bytes(self.length - 6)
+                    _io__raw_value = KaitaiStream(BytesIO(self._raw_value))
+                    self.value = Ttf.Cmap.Subtable.HighByteMappingThroughTable(_io__raw_value, self, self._root)
+                    self.value._read()
+                elif _on == Ttf.Cmap.Subtable.SubtableFormat.segment_mapping_to_delta_values:
+                    pass
+                    self._raw_value = self._io.read_bytes(self.length - 6)
+                    _io__raw_value = KaitaiStream(BytesIO(self._raw_value))
+                    self.value = Ttf.Cmap.Subtable.SegmentMappingToDeltaValues(_io__raw_value, self, self._root)
+                    self.value._read()
+                elif _on == Ttf.Cmap.Subtable.SubtableFormat.trimmed_table_mapping:
+                    pass
+                    self._raw_value = self._io.read_bytes(self.length - 6)
+                    _io__raw_value = KaitaiStream(BytesIO(self._raw_value))
+                    self.value = Ttf.Cmap.Subtable.TrimmedTableMapping(_io__raw_value, self, self._root)
+                    self.value._read()
+                else:
+                    pass
+                    self.value = self._io.read_bytes(self.length - 6)
+                self._debug['value']['end'] = self._io.pos()
 
-                self._debug['glyph_name_index']['end'] = self._io.pos()
-                self._debug['glyph_names']['start'] = self._io.pos()
-                self.glyph_names = []
-                i = 0
-                while True:
-                    if not 'arr' in self._debug['glyph_names']:
-                        self._debug['glyph_names']['arr'] = []
-                    self._debug['glyph_names']['arr'].append({'start': self._io.pos()})
-                    _t_glyph_names = Ttf.Post.Format20.PascalString(self._io, self, self._root)
-                    _t_glyph_names._read()
-                    _ = _t_glyph_names
-                    self.glyph_names.append(_)
-                    self._debug['glyph_names']['arr'][len(self.glyph_names) - 1]['end'] = self._io.pos()
-                    if  ((_.length == 0) or (self._io.is_eof())) :
-                        break
-                    i += 1
-                self._debug['glyph_names']['end'] = self._io.pos()
 
-            class PascalString(KaitaiStruct):
-                SEQ_FIELDS = ["length", "value"]
+            def _fetch_instances(self):
+                pass
+                _on = self.format
+                if _on == Ttf.Cmap.Subtable.SubtableFormat.byte_encoding_table:
+                    pass
+                    self.value._fetch_instances()
+                elif _on == Ttf.Cmap.Subtable.SubtableFormat.high_byte_mapping_through_table:
+                    pass
+                    self.value._fetch_instances()
+                elif _on == Ttf.Cmap.Subtable.SubtableFormat.segment_mapping_to_delta_values:
+                    pass
+                    self.value._fetch_instances()
+                elif _on == Ttf.Cmap.Subtable.SubtableFormat.trimmed_table_mapping:
+                    pass
+                    self.value._fetch_instances()
+                else:
+                    pass
+
+            class ByteEncodingTable(KaitaiStruct):
+                SEQ_FIELDS = ["glyph_id_array"]
                 def __init__(self, _io, _parent=None, _root=None):
-                    self._io = _io
+                    super(Ttf.Cmap.Subtable.ByteEncodingTable, self).__init__(_io)
                     self._parent = _parent
-                    self._root = _root if _root else self
+                    self._root = _root
                     self._debug = collections.defaultdict(dict)
 
                 def _read(self):
-                    self._debug['length']['start'] = self._io.pos()
-                    self.length = self._io.read_u1()
-                    self._debug['length']['end'] = self._io.pos()
-                    if self.length != 0:
-                        self._debug['value']['start'] = self._io.pos()
-                        self.value = (self._io.read_bytes(self.length)).decode(u"ascii")
-                        self._debug['value']['end'] = self._io.pos()
+                    self._debug['glyph_id_array']['start'] = self._io.pos()
+                    self.glyph_id_array = self._io.read_bytes(256)
+                    self._debug['glyph_id_array']['end'] = self._io.pos()
+
+
+                def _fetch_instances(self):
+                    pass
+
+
+            class HighByteMappingThroughTable(KaitaiStruct):
+                SEQ_FIELDS = ["sub_header_keys"]
+                def __init__(self, _io, _parent=None, _root=None):
+                    super(Ttf.Cmap.Subtable.HighByteMappingThroughTable, self).__init__(_io)
+                    self._parent = _parent
+                    self._root = _root
+                    self._debug = collections.defaultdict(dict)
+
+                def _read(self):
+                    self._debug['sub_header_keys']['start'] = self._io.pos()
+                    self._debug['sub_header_keys']['arr'] = []
+                    self.sub_header_keys = []
+                    for i in range(256):
+                        self._debug['sub_header_keys']['arr'].append({'start': self._io.pos()})
+                        self.sub_header_keys.append(self._io.read_u2be())
+                        self._debug['sub_header_keys']['arr'][i]['end'] = self._io.pos()
+
+                    self._debug['sub_header_keys']['end'] = self._io.pos()
+
+
+                def _fetch_instances(self):
+                    pass
+                    for i in range(len(self.sub_header_keys)):
+                        pass
+
+
+
+            class SegmentMappingToDeltaValues(KaitaiStruct):
+                SEQ_FIELDS = ["seg_count_x2", "search_range", "entry_selector", "range_shift", "end_count", "reserved_pad", "start_count", "id_delta", "id_range_offset", "glyph_id_array"]
+                def __init__(self, _io, _parent=None, _root=None):
+                    super(Ttf.Cmap.Subtable.SegmentMappingToDeltaValues, self).__init__(_io)
+                    self._parent = _parent
+                    self._root = _root
+                    self._debug = collections.defaultdict(dict)
+
+                def _read(self):
+                    self._debug['seg_count_x2']['start'] = self._io.pos()
+                    self.seg_count_x2 = self._io.read_u2be()
+                    self._debug['seg_count_x2']['end'] = self._io.pos()
+                    self._debug['search_range']['start'] = self._io.pos()
+                    self.search_range = self._io.read_u2be()
+                    self._debug['search_range']['end'] = self._io.pos()
+                    self._debug['entry_selector']['start'] = self._io.pos()
+                    self.entry_selector = self._io.read_u2be()
+                    self._debug['entry_selector']['end'] = self._io.pos()
+                    self._debug['range_shift']['start'] = self._io.pos()
+                    self.range_shift = self._io.read_u2be()
+                    self._debug['range_shift']['end'] = self._io.pos()
+                    self._debug['end_count']['start'] = self._io.pos()
+                    self._debug['end_count']['arr'] = []
+                    self.end_count = []
+                    for i in range(self.seg_count):
+                        self._debug['end_count']['arr'].append({'start': self._io.pos()})
+                        self.end_count.append(self._io.read_u2be())
+                        self._debug['end_count']['arr'][i]['end'] = self._io.pos()
+
+                    self._debug['end_count']['end'] = self._io.pos()
+                    self._debug['reserved_pad']['start'] = self._io.pos()
+                    self.reserved_pad = self._io.read_u2be()
+                    self._debug['reserved_pad']['end'] = self._io.pos()
+                    self._debug['start_count']['start'] = self._io.pos()
+                    self._debug['start_count']['arr'] = []
+                    self.start_count = []
+                    for i in range(self.seg_count):
+                        self._debug['start_count']['arr'].append({'start': self._io.pos()})
+                        self.start_count.append(self._io.read_u2be())
+                        self._debug['start_count']['arr'][i]['end'] = self._io.pos()
+
+                    self._debug['start_count']['end'] = self._io.pos()
+                    self._debug['id_delta']['start'] = self._io.pos()
+                    self._debug['id_delta']['arr'] = []
+                    self.id_delta = []
+                    for i in range(self.seg_count):
+                        self._debug['id_delta']['arr'].append({'start': self._io.pos()})
+                        self.id_delta.append(self._io.read_u2be())
+                        self._debug['id_delta']['arr'][i]['end'] = self._io.pos()
+
+                    self._debug['id_delta']['end'] = self._io.pos()
+                    self._debug['id_range_offset']['start'] = self._io.pos()
+                    self._debug['id_range_offset']['arr'] = []
+                    self.id_range_offset = []
+                    for i in range(self.seg_count):
+                        self._debug['id_range_offset']['arr'].append({'start': self._io.pos()})
+                        self.id_range_offset.append(self._io.read_u2be())
+                        self._debug['id_range_offset']['arr'][i]['end'] = self._io.pos()
+
+                    self._debug['id_range_offset']['end'] = self._io.pos()
+                    self._debug['glyph_id_array']['start'] = self._io.pos()
+                    self._debug['glyph_id_array']['arr'] = []
+                    self.glyph_id_array = []
+                    i = 0
+                    while not self._io.is_eof():
+                        self._debug['glyph_id_array']['arr'].append({'start': self._io.pos()})
+                        self.glyph_id_array.append(self._io.read_u2be())
+                        self._debug['glyph_id_array']['arr'][len(self.glyph_id_array) - 1]['end'] = self._io.pos()
+                        i += 1
+
+                    self._debug['glyph_id_array']['end'] = self._io.pos()
+
+
+                def _fetch_instances(self):
+                    pass
+                    for i in range(len(self.end_count)):
+                        pass
+
+                    for i in range(len(self.start_count)):
+                        pass
+
+                    for i in range(len(self.id_delta)):
+                        pass
+
+                    for i in range(len(self.id_range_offset)):
+                        pass
+
+                    for i in range(len(self.glyph_id_array)):
+                        pass
+
+
+                @property
+                def seg_count(self):
+                    if hasattr(self, '_m_seg_count'):
+                        return self._m_seg_count
+
+                    self._m_seg_count = self.seg_count_x2 // 2
+                    return getattr(self, '_m_seg_count', None)
+
+
+            class TrimmedTableMapping(KaitaiStruct):
+                SEQ_FIELDS = ["first_code", "entry_count", "glyph_id_array"]
+                def __init__(self, _io, _parent=None, _root=None):
+                    super(Ttf.Cmap.Subtable.TrimmedTableMapping, self).__init__(_io)
+                    self._parent = _parent
+                    self._root = _root
+                    self._debug = collections.defaultdict(dict)
+
+                def _read(self):
+                    self._debug['first_code']['start'] = self._io.pos()
+                    self.first_code = self._io.read_u2be()
+                    self._debug['first_code']['end'] = self._io.pos()
+                    self._debug['entry_count']['start'] = self._io.pos()
+                    self.entry_count = self._io.read_u2be()
+                    self._debug['entry_count']['end'] = self._io.pos()
+                    self._debug['glyph_id_array']['start'] = self._io.pos()
+                    self._debug['glyph_id_array']['arr'] = []
+                    self.glyph_id_array = []
+                    for i in range(self.entry_count):
+                        self._debug['glyph_id_array']['arr'].append({'start': self._io.pos()})
+                        self.glyph_id_array.append(self._io.read_u2be())
+                        self._debug['glyph_id_array']['arr'][i]['end'] = self._io.pos()
+
+                    self._debug['glyph_id_array']['end'] = self._io.pos()
+
+
+                def _fetch_instances(self):
+                    pass
+                    for i in range(len(self.glyph_id_array)):
+                        pass
 
 
 
 
-
-    class Name(KaitaiStruct):
-        """Name table is meant to include human-readable string metadata
-        that describes font: name of the font, its styles, copyright &
-        trademark notices, vendor and designer info, etc.
-        
-        The table includes a list of "name records", each of which
-        corresponds to a single metadata entry.
-        
-        .. seealso::
-           Source - https://developer.apple.com/fonts/TrueType-Reference-Manual/RM06/Chap6name.html
-        """
-
-        class Platforms(Enum):
-            unicode = 0
-            macintosh = 1
-            reserved_2 = 2
-            microsoft = 3
-
-        class Names(Enum):
-            copyright = 0
-            font_family = 1
-            font_subfamily = 2
-            unique_subfamily_id = 3
-            full_font_name = 4
-            name_table_version = 5
-            postscript_font_name = 6
-            trademark = 7
-            manufacturer = 8
-            designer = 9
-            description = 10
-            url_vendor = 11
-            url_designer = 12
-            license = 13
-            url_license = 14
-            reserved_15 = 15
-            preferred_family = 16
-            preferred_subfamily = 17
-            compatible_full_name = 18
-            sample_text = 19
-        SEQ_FIELDS = ["format_selector", "num_name_records", "ofs_strings", "name_records"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['format_selector']['start'] = self._io.pos()
-            self.format_selector = self._io.read_u2be()
-            self._debug['format_selector']['end'] = self._io.pos()
-            self._debug['num_name_records']['start'] = self._io.pos()
-            self.num_name_records = self._io.read_u2be()
-            self._debug['num_name_records']['end'] = self._io.pos()
-            self._debug['ofs_strings']['start'] = self._io.pos()
-            self.ofs_strings = self._io.read_u2be()
-            self._debug['ofs_strings']['end'] = self._io.pos()
-            self._debug['name_records']['start'] = self._io.pos()
-            self.name_records = [None] * (self.num_name_records)
-            for i in range(self.num_name_records):
-                if not 'arr' in self._debug['name_records']:
-                    self._debug['name_records']['arr'] = []
-                self._debug['name_records']['arr'].append({'start': self._io.pos()})
-                _t_name_records = Ttf.Name.NameRecord(self._io, self, self._root)
-                _t_name_records._read()
-                self.name_records[i] = _t_name_records
-                self._debug['name_records']['arr'][i]['end'] = self._io.pos()
-
-            self._debug['name_records']['end'] = self._io.pos()
-
-        class NameRecord(KaitaiStruct):
-            SEQ_FIELDS = ["platform_id", "encoding_id", "language_id", "name_id", "len_str", "ofs_str"]
+        class SubtableHeader(KaitaiStruct):
+            SEQ_FIELDS = ["platform_id", "encoding_id", "subtable_offset"]
             def __init__(self, _io, _parent=None, _root=None):
-                self._io = _io
+                super(Ttf.Cmap.SubtableHeader, self).__init__(_io)
                 self._parent = _parent
-                self._root = _root if _root else self
+                self._root = _root
                 self._debug = collections.defaultdict(dict)
 
             def _read(self):
                 self._debug['platform_id']['start'] = self._io.pos()
-                self.platform_id = KaitaiStream.resolve_enum(Ttf.Name.Platforms, self._io.read_u2be())
+                self.platform_id = self._io.read_u2be()
                 self._debug['platform_id']['end'] = self._io.pos()
                 self._debug['encoding_id']['start'] = self._io.pos()
                 self.encoding_id = self._io.read_u2be()
                 self._debug['encoding_id']['end'] = self._io.pos()
-                self._debug['language_id']['start'] = self._io.pos()
-                self.language_id = self._io.read_u2be()
-                self._debug['language_id']['end'] = self._io.pos()
-                self._debug['name_id']['start'] = self._io.pos()
-                self.name_id = KaitaiStream.resolve_enum(Ttf.Name.Names, self._io.read_u2be())
-                self._debug['name_id']['end'] = self._io.pos()
-                self._debug['len_str']['start'] = self._io.pos()
-                self.len_str = self._io.read_u2be()
-                self._debug['len_str']['end'] = self._io.pos()
-                self._debug['ofs_str']['start'] = self._io.pos()
-                self.ofs_str = self._io.read_u2be()
-                self._debug['ofs_str']['end'] = self._io.pos()
+                self._debug['subtable_offset']['start'] = self._io.pos()
+                self.subtable_offset = self._io.read_u4be()
+                self._debug['subtable_offset']['end'] = self._io.pos()
+
+
+            def _fetch_instances(self):
+                pass
+                _ = self.table
+                if hasattr(self, '_m_table'):
+                    pass
+                    self._m_table._fetch_instances()
+
 
             @property
-            def ascii_value(self):
-                if hasattr(self, '_m_ascii_value'):
-                    return self._m_ascii_value if hasattr(self, '_m_ascii_value') else None
+            def table(self):
+                if hasattr(self, '_m_table'):
+                    return self._m_table
 
                 io = self._parent._io
                 _pos = io.pos()
-                io.seek((self._parent.ofs_strings + self.ofs_str))
-                self._debug['_m_ascii_value']['start'] = io.pos()
-                self._m_ascii_value = (io.read_bytes(self.len_str)).decode(u"ascii")
-                self._debug['_m_ascii_value']['end'] = io.pos()
+                io.seek(self.subtable_offset)
+                self._debug['_m_table']['start'] = io.pos()
+                self._m_table = Ttf.Cmap.Subtable(io, self, self._root)
+                self._m_table._read()
+                self._debug['_m_table']['end'] = io.pos()
                 io.seek(_pos)
-                return self._m_ascii_value if hasattr(self, '_m_ascii_value') else None
+                return getattr(self, '_m_table', None)
+
+
+
+    class Cvt(KaitaiStruct):
+        """cvt  - Control Value Table This table contains a list of values that can be referenced by instructions. They can be used, among other things, to control characteristics for different glyphs.
+        """
+        SEQ_FIELDS = ["fwords"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Ttf.Cvt, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['fwords']['start'] = self._io.pos()
+            self._debug['fwords']['arr'] = []
+            self.fwords = []
+            i = 0
+            while not self._io.is_eof():
+                self._debug['fwords']['arr'].append({'start': self._io.pos()})
+                self.fwords.append(self._io.read_s2be())
+                self._debug['fwords']['arr'][len(self.fwords) - 1]['end'] = self._io.pos()
+                i += 1
+
+            self._debug['fwords']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            for i in range(len(self.fwords)):
+                pass
+
+
+
+    class DirTableEntry(KaitaiStruct):
+        SEQ_FIELDS = ["tag", "checksum", "offset", "length"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Ttf.DirTableEntry, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['tag']['start'] = self._io.pos()
+            self.tag = (self._io.read_bytes(4)).decode(u"ASCII")
+            self._debug['tag']['end'] = self._io.pos()
+            self._debug['checksum']['start'] = self._io.pos()
+            self.checksum = self._io.read_u4be()
+            self._debug['checksum']['end'] = self._io.pos()
+            self._debug['offset']['start'] = self._io.pos()
+            self.offset = self._io.read_u4be()
+            self._debug['offset']['end'] = self._io.pos()
+            self._debug['length']['start'] = self._io.pos()
+            self.length = self._io.read_u4be()
+            self._debug['length']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            _ = self.value
+            if hasattr(self, '_m_value'):
+                pass
+                _on = self.tag
+                if _on == u"OS/2":
+                    pass
+                    self._m_value._fetch_instances()
+                elif _on == u"cmap":
+                    pass
+                    self._m_value._fetch_instances()
+                elif _on == u"cvt ":
+                    pass
+                    self._m_value._fetch_instances()
+                elif _on == u"fpgm":
+                    pass
+                    self._m_value._fetch_instances()
+                elif _on == u"glyf":
+                    pass
+                    self._m_value._fetch_instances()
+                elif _on == u"head":
+                    pass
+                    self._m_value._fetch_instances()
+                elif _on == u"hhea":
+                    pass
+                    self._m_value._fetch_instances()
+                elif _on == u"kern":
+                    pass
+                    self._m_value._fetch_instances()
+                elif _on == u"maxp":
+                    pass
+                    self._m_value._fetch_instances()
+                elif _on == u"name":
+                    pass
+                    self._m_value._fetch_instances()
+                elif _on == u"post":
+                    pass
+                    self._m_value._fetch_instances()
+                elif _on == u"prep":
+                    pass
+                    self._m_value._fetch_instances()
+                else:
+                    pass
+
+
+        @property
+        def value(self):
+            if hasattr(self, '_m_value'):
+                return self._m_value
+
+            io = self._root._io
+            _pos = io.pos()
+            io.seek(self.offset)
+            self._debug['_m_value']['start'] = io.pos()
+            _on = self.tag
+            if _on == u"OS/2":
+                pass
+                self._raw__m_value = io.read_bytes(self.length)
+                _io__raw__m_value = KaitaiStream(BytesIO(self._raw__m_value))
+                self._m_value = Ttf.Os2(_io__raw__m_value, self, self._root)
+                self._m_value._read()
+            elif _on == u"cmap":
+                pass
+                self._raw__m_value = io.read_bytes(self.length)
+                _io__raw__m_value = KaitaiStream(BytesIO(self._raw__m_value))
+                self._m_value = Ttf.Cmap(_io__raw__m_value, self, self._root)
+                self._m_value._read()
+            elif _on == u"cvt ":
+                pass
+                self._raw__m_value = io.read_bytes(self.length)
+                _io__raw__m_value = KaitaiStream(BytesIO(self._raw__m_value))
+                self._m_value = Ttf.Cvt(_io__raw__m_value, self, self._root)
+                self._m_value._read()
+            elif _on == u"fpgm":
+                pass
+                self._raw__m_value = io.read_bytes(self.length)
+                _io__raw__m_value = KaitaiStream(BytesIO(self._raw__m_value))
+                self._m_value = Ttf.Fpgm(_io__raw__m_value, self, self._root)
+                self._m_value._read()
+            elif _on == u"glyf":
+                pass
+                self._raw__m_value = io.read_bytes(self.length)
+                _io__raw__m_value = KaitaiStream(BytesIO(self._raw__m_value))
+                self._m_value = Ttf.Glyf(_io__raw__m_value, self, self._root)
+                self._m_value._read()
+            elif _on == u"head":
+                pass
+                self._raw__m_value = io.read_bytes(self.length)
+                _io__raw__m_value = KaitaiStream(BytesIO(self._raw__m_value))
+                self._m_value = Ttf.Head(_io__raw__m_value, self, self._root)
+                self._m_value._read()
+            elif _on == u"hhea":
+                pass
+                self._raw__m_value = io.read_bytes(self.length)
+                _io__raw__m_value = KaitaiStream(BytesIO(self._raw__m_value))
+                self._m_value = Ttf.Hhea(_io__raw__m_value, self, self._root)
+                self._m_value._read()
+            elif _on == u"kern":
+                pass
+                self._raw__m_value = io.read_bytes(self.length)
+                _io__raw__m_value = KaitaiStream(BytesIO(self._raw__m_value))
+                self._m_value = Ttf.Kern(_io__raw__m_value, self, self._root)
+                self._m_value._read()
+            elif _on == u"maxp":
+                pass
+                self._raw__m_value = io.read_bytes(self.length)
+                _io__raw__m_value = KaitaiStream(BytesIO(self._raw__m_value))
+                self._m_value = Ttf.Maxp(_io__raw__m_value, self, self._root)
+                self._m_value._read()
+            elif _on == u"name":
+                pass
+                self._raw__m_value = io.read_bytes(self.length)
+                _io__raw__m_value = KaitaiStream(BytesIO(self._raw__m_value))
+                self._m_value = Ttf.Name(_io__raw__m_value, self, self._root)
+                self._m_value._read()
+            elif _on == u"post":
+                pass
+                self._raw__m_value = io.read_bytes(self.length)
+                _io__raw__m_value = KaitaiStream(BytesIO(self._raw__m_value))
+                self._m_value = Ttf.Post(_io__raw__m_value, self, self._root)
+                self._m_value._read()
+            elif _on == u"prep":
+                pass
+                self._raw__m_value = io.read_bytes(self.length)
+                _io__raw__m_value = KaitaiStream(BytesIO(self._raw__m_value))
+                self._m_value = Ttf.Prep(_io__raw__m_value, self, self._root)
+                self._m_value._read()
+            else:
+                pass
+                self._m_value = io.read_bytes(self.length)
+            self._debug['_m_value']['end'] = io.pos()
+            io.seek(_pos)
+            return getattr(self, '_m_value', None)
+
+
+    class Fixed(KaitaiStruct):
+        SEQ_FIELDS = ["major", "minor"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Ttf.Fixed, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['major']['start'] = self._io.pos()
+            self.major = self._io.read_u2be()
+            self._debug['major']['end'] = self._io.pos()
+            self._debug['minor']['start'] = self._io.pos()
+            self.minor = self._io.read_u2be()
+            self._debug['minor']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+
+
+    class Fpgm(KaitaiStruct):
+        SEQ_FIELDS = ["instructions"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Ttf.Fpgm, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['instructions']['start'] = self._io.pos()
+            self.instructions = self._io.read_bytes_full()
+            self._debug['instructions']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+
+
+    class Glyf(KaitaiStruct):
+        SEQ_FIELDS = ["number_of_contours", "x_min", "y_min", "x_max", "y_max", "value"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Ttf.Glyf, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['number_of_contours']['start'] = self._io.pos()
+            self.number_of_contours = self._io.read_s2be()
+            self._debug['number_of_contours']['end'] = self._io.pos()
+            self._debug['x_min']['start'] = self._io.pos()
+            self.x_min = self._io.read_s2be()
+            self._debug['x_min']['end'] = self._io.pos()
+            self._debug['y_min']['start'] = self._io.pos()
+            self.y_min = self._io.read_s2be()
+            self._debug['y_min']['end'] = self._io.pos()
+            self._debug['x_max']['start'] = self._io.pos()
+            self.x_max = self._io.read_s2be()
+            self._debug['x_max']['end'] = self._io.pos()
+            self._debug['y_max']['start'] = self._io.pos()
+            self.y_max = self._io.read_s2be()
+            self._debug['y_max']['end'] = self._io.pos()
+            if self.number_of_contours > 0:
+                pass
+                self._debug['value']['start'] = self._io.pos()
+                self.value = Ttf.Glyf.SimpleGlyph(self._io, self, self._root)
+                self.value._read()
+                self._debug['value']['end'] = self._io.pos()
+
+
+
+        def _fetch_instances(self):
+            pass
+            if self.number_of_contours > 0:
+                pass
+                self.value._fetch_instances()
+
+
+        class SimpleGlyph(KaitaiStruct):
+            SEQ_FIELDS = ["end_pts_of_contours", "instruction_length", "instructions", "flags"]
+            def __init__(self, _io, _parent=None, _root=None):
+                super(Ttf.Glyf.SimpleGlyph, self).__init__(_io)
+                self._parent = _parent
+                self._root = _root
+                self._debug = collections.defaultdict(dict)
+
+            def _read(self):
+                self._debug['end_pts_of_contours']['start'] = self._io.pos()
+                self._debug['end_pts_of_contours']['arr'] = []
+                self.end_pts_of_contours = []
+                for i in range(self._parent.number_of_contours):
+                    self._debug['end_pts_of_contours']['arr'].append({'start': self._io.pos()})
+                    self.end_pts_of_contours.append(self._io.read_u2be())
+                    self._debug['end_pts_of_contours']['arr'][i]['end'] = self._io.pos()
+
+                self._debug['end_pts_of_contours']['end'] = self._io.pos()
+                self._debug['instruction_length']['start'] = self._io.pos()
+                self.instruction_length = self._io.read_u2be()
+                self._debug['instruction_length']['end'] = self._io.pos()
+                self._debug['instructions']['start'] = self._io.pos()
+                self.instructions = self._io.read_bytes(self.instruction_length)
+                self._debug['instructions']['end'] = self._io.pos()
+                self._debug['flags']['start'] = self._io.pos()
+                self._debug['flags']['arr'] = []
+                self.flags = []
+                for i in range(self.point_count):
+                    self._debug['flags']['arr'].append({'start': self._io.pos()})
+                    _t_flags = Ttf.Glyf.SimpleGlyph.Flag(self._io, self, self._root)
+                    try:
+                        _t_flags._read()
+                    finally:
+                        self.flags.append(_t_flags)
+                    self._debug['flags']['arr'][i]['end'] = self._io.pos()
+
+                self._debug['flags']['end'] = self._io.pos()
+
+
+            def _fetch_instances(self):
+                pass
+                for i in range(len(self.end_pts_of_contours)):
+                    pass
+
+                for i in range(len(self.flags)):
+                    pass
+                    self.flags[i]._fetch_instances()
+
+
+            class Flag(KaitaiStruct):
+                SEQ_FIELDS = ["reserved", "y_is_same", "x_is_same", "repeat", "y_short_vector", "x_short_vector", "on_curve", "repeat_value"]
+                def __init__(self, _io, _parent=None, _root=None):
+                    super(Ttf.Glyf.SimpleGlyph.Flag, self).__init__(_io)
+                    self._parent = _parent
+                    self._root = _root
+                    self._debug = collections.defaultdict(dict)
+
+                def _read(self):
+                    self._debug['reserved']['start'] = self._io.pos()
+                    self.reserved = self._io.read_bits_int_be(2)
+                    self._debug['reserved']['end'] = self._io.pos()
+                    self._debug['y_is_same']['start'] = self._io.pos()
+                    self.y_is_same = self._io.read_bits_int_be(1) != 0
+                    self._debug['y_is_same']['end'] = self._io.pos()
+                    self._debug['x_is_same']['start'] = self._io.pos()
+                    self.x_is_same = self._io.read_bits_int_be(1) != 0
+                    self._debug['x_is_same']['end'] = self._io.pos()
+                    self._debug['repeat']['start'] = self._io.pos()
+                    self.repeat = self._io.read_bits_int_be(1) != 0
+                    self._debug['repeat']['end'] = self._io.pos()
+                    self._debug['y_short_vector']['start'] = self._io.pos()
+                    self.y_short_vector = self._io.read_bits_int_be(1) != 0
+                    self._debug['y_short_vector']['end'] = self._io.pos()
+                    self._debug['x_short_vector']['start'] = self._io.pos()
+                    self.x_short_vector = self._io.read_bits_int_be(1) != 0
+                    self._debug['x_short_vector']['end'] = self._io.pos()
+                    self._debug['on_curve']['start'] = self._io.pos()
+                    self.on_curve = self._io.read_bits_int_be(1) != 0
+                    self._debug['on_curve']['end'] = self._io.pos()
+                    if self.repeat:
+                        pass
+                        self._debug['repeat_value']['start'] = self._io.pos()
+                        self.repeat_value = self._io.read_u1()
+                        self._debug['repeat_value']['end'] = self._io.pos()
+
+
+
+                def _fetch_instances(self):
+                    pass
+                    if self.repeat:
+                        pass
+
+
 
             @property
-            def unicode_value(self):
-                if hasattr(self, '_m_unicode_value'):
-                    return self._m_unicode_value if hasattr(self, '_m_unicode_value') else None
+            def point_count(self):
+                if hasattr(self, '_m_point_count'):
+                    return self._m_point_count
 
-                io = self._parent._io
-                _pos = io.pos()
-                io.seek((self._parent.ofs_strings + self.ofs_str))
-                self._debug['_m_unicode_value']['start'] = io.pos()
-                self._m_unicode_value = (io.read_bytes(self.len_str)).decode(u"utf-16be")
-                self._debug['_m_unicode_value']['end'] = io.pos()
-                io.seek(_pos)
-                return self._m_unicode_value if hasattr(self, '_m_unicode_value') else None
+                self._m_point_count = max(self.end_pts_of_contours) + 1
+                return getattr(self, '_m_point_count', None)
 
 
 
     class Head(KaitaiStruct):
 
-        class Flags(Enum):
+        class Flags(IntEnum):
             baseline_at_y0 = 1
             left_sidebearing_at_x0 = 2
             flag_depend_on_point_size = 4
             flag_force_ppem = 8
             flag_may_advance_width = 16
 
-        class FontDirectionHint(Enum):
+        class FontDirectionHint(IntEnum):
             fully_mixed_directional_glyphs = 0
             only_strongly_left_to_right = 1
             strongly_left_to_right_and_neutrals = 2
         SEQ_FIELDS = ["version", "font_revision", "checksum_adjustment", "magic_number", "flags", "units_per_em", "created", "modified", "x_min", "y_min", "x_max", "y_max", "mac_style", "lowest_rec_ppem", "font_direction_hint", "index_to_loc_format", "glyph_data_format"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Ttf.Head, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -352,26 +840,18 @@ class Ttf(KaitaiStruct):
             self._debug['glyph_data_format']['end'] = self._io.pos()
 
 
-    class Prep(KaitaiStruct):
-        SEQ_FIELDS = ["instructions"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['instructions']['start'] = self._io.pos()
-            self.instructions = self._io.read_bytes_full()
-            self._debug['instructions']['end'] = self._io.pos()
+        def _fetch_instances(self):
+            pass
+            self.version._fetch_instances()
+            self.font_revision._fetch_instances()
 
 
     class Hhea(KaitaiStruct):
         SEQ_FIELDS = ["version", "ascender", "descender", "line_gap", "advance_width_max", "min_left_side_bearing", "min_right_side_bearing", "x_max_extend", "caret_slope_rise", "caret_slope_run", "reserved", "metric_data_format", "number_of_hmetrics"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Ttf.Hhea, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -419,26 +899,17 @@ class Ttf(KaitaiStruct):
             self._debug['number_of_hmetrics']['end'] = self._io.pos()
 
 
-    class Fpgm(KaitaiStruct):
-        SEQ_FIELDS = ["instructions"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['instructions']['start'] = self._io.pos()
-            self.instructions = self._io.read_bytes_full()
-            self._debug['instructions']['end'] = self._io.pos()
+        def _fetch_instances(self):
+            pass
+            self.version._fetch_instances()
 
 
     class Kern(KaitaiStruct):
         SEQ_FIELDS = ["version", "subtable_count", "subtables"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Ttf.Kern, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -449,24 +920,33 @@ class Ttf(KaitaiStruct):
             self.subtable_count = self._io.read_u2be()
             self._debug['subtable_count']['end'] = self._io.pos()
             self._debug['subtables']['start'] = self._io.pos()
-            self.subtables = [None] * (self.subtable_count)
+            self._debug['subtables']['arr'] = []
+            self.subtables = []
             for i in range(self.subtable_count):
-                if not 'arr' in self._debug['subtables']:
-                    self._debug['subtables']['arr'] = []
                 self._debug['subtables']['arr'].append({'start': self._io.pos()})
                 _t_subtables = Ttf.Kern.Subtable(self._io, self, self._root)
-                _t_subtables._read()
-                self.subtables[i] = _t_subtables
+                try:
+                    _t_subtables._read()
+                finally:
+                    self.subtables.append(_t_subtables)
                 self._debug['subtables']['arr'][i]['end'] = self._io.pos()
 
             self._debug['subtables']['end'] = self._io.pos()
 
+
+        def _fetch_instances(self):
+            pass
+            for i in range(len(self.subtables)):
+                pass
+                self.subtables[i]._fetch_instances()
+
+
         class Subtable(KaitaiStruct):
             SEQ_FIELDS = ["version", "length", "format", "reserved", "is_override", "is_cross_stream", "is_minimum", "is_horizontal", "format0"]
             def __init__(self, _io, _parent=None, _root=None):
-                self._io = _io
+                super(Ttf.Kern.Subtable, self).__init__(_io)
                 self._parent = _parent
-                self._root = _root if _root else self
+                self._root = _root
                 self._debug = collections.defaultdict(dict)
 
             def _read(self):
@@ -494,20 +974,28 @@ class Ttf(KaitaiStruct):
                 self._debug['is_horizontal']['start'] = self._io.pos()
                 self.is_horizontal = self._io.read_bits_int_be(1) != 0
                 self._debug['is_horizontal']['end'] = self._io.pos()
-                self._io.align_to_byte()
                 if self.format == 0:
+                    pass
                     self._debug['format0']['start'] = self._io.pos()
                     self.format0 = Ttf.Kern.Subtable.Format0(self._io, self, self._root)
                     self.format0._read()
                     self._debug['format0']['end'] = self._io.pos()
 
 
+
+            def _fetch_instances(self):
+                pass
+                if self.format == 0:
+                    pass
+                    self.format0._fetch_instances()
+
+
             class Format0(KaitaiStruct):
                 SEQ_FIELDS = ["pair_count", "search_range", "entry_selector", "range_shift", "kerning_pairs"]
                 def __init__(self, _io, _parent=None, _root=None):
-                    self._io = _io
+                    super(Ttf.Kern.Subtable.Format0, self).__init__(_io)
                     self._parent = _parent
-                    self._root = _root if _root else self
+                    self._root = _root
                     self._debug = collections.defaultdict(dict)
 
                 def _read(self):
@@ -524,24 +1012,33 @@ class Ttf(KaitaiStruct):
                     self.range_shift = self._io.read_u2be()
                     self._debug['range_shift']['end'] = self._io.pos()
                     self._debug['kerning_pairs']['start'] = self._io.pos()
-                    self.kerning_pairs = [None] * (self.pair_count)
+                    self._debug['kerning_pairs']['arr'] = []
+                    self.kerning_pairs = []
                     for i in range(self.pair_count):
-                        if not 'arr' in self._debug['kerning_pairs']:
-                            self._debug['kerning_pairs']['arr'] = []
                         self._debug['kerning_pairs']['arr'].append({'start': self._io.pos()})
                         _t_kerning_pairs = Ttf.Kern.Subtable.Format0.KerningPair(self._io, self, self._root)
-                        _t_kerning_pairs._read()
-                        self.kerning_pairs[i] = _t_kerning_pairs
+                        try:
+                            _t_kerning_pairs._read()
+                        finally:
+                            self.kerning_pairs.append(_t_kerning_pairs)
                         self._debug['kerning_pairs']['arr'][i]['end'] = self._io.pos()
 
                     self._debug['kerning_pairs']['end'] = self._io.pos()
 
+
+                def _fetch_instances(self):
+                    pass
+                    for i in range(len(self.kerning_pairs)):
+                        pass
+                        self.kerning_pairs[i]._fetch_instances()
+
+
                 class KerningPair(KaitaiStruct):
                     SEQ_FIELDS = ["left", "right", "value"]
                     def __init__(self, _io, _parent=None, _root=None):
-                        self._io = _io
+                        super(Ttf.Kern.Subtable.Format0.KerningPair, self).__init__(_io)
                         self._parent = _parent
-                        self._root = _root if _root else self
+                        self._root = _root
                         self._debug = collections.defaultdict(dict)
 
                     def _read(self):
@@ -556,112 +1053,307 @@ class Ttf(KaitaiStruct):
                         self._debug['value']['end'] = self._io.pos()
 
 
+                    def _fetch_instances(self):
+                        pass
 
 
 
-    class DirTableEntry(KaitaiStruct):
-        SEQ_FIELDS = ["tag", "checksum", "offset", "length"]
+
+
+    class Maxp(KaitaiStruct):
+        SEQ_FIELDS = ["table_version_number", "num_glyphs", "version10_body"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Ttf.Maxp, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
-            self._debug['tag']['start'] = self._io.pos()
-            self.tag = (self._io.read_bytes(4)).decode(u"ascii")
-            self._debug['tag']['end'] = self._io.pos()
-            self._debug['checksum']['start'] = self._io.pos()
-            self.checksum = self._io.read_u4be()
-            self._debug['checksum']['end'] = self._io.pos()
-            self._debug['offset']['start'] = self._io.pos()
-            self.offset = self._io.read_u4be()
-            self._debug['offset']['end'] = self._io.pos()
-            self._debug['length']['start'] = self._io.pos()
-            self.length = self._io.read_u4be()
-            self._debug['length']['end'] = self._io.pos()
+            self._debug['table_version_number']['start'] = self._io.pos()
+            self.table_version_number = Ttf.Fixed(self._io, self, self._root)
+            self.table_version_number._read()
+            self._debug['table_version_number']['end'] = self._io.pos()
+            self._debug['num_glyphs']['start'] = self._io.pos()
+            self.num_glyphs = self._io.read_u2be()
+            self._debug['num_glyphs']['end'] = self._io.pos()
+            if self.is_version10:
+                pass
+                self._debug['version10_body']['start'] = self._io.pos()
+                self.version10_body = Ttf.MaxpVersion10Body(self._io, self, self._root)
+                self.version10_body._read()
+                self._debug['version10_body']['end'] = self._io.pos()
+
+
+
+        def _fetch_instances(self):
+            pass
+            self.table_version_number._fetch_instances()
+            if self.is_version10:
+                pass
+                self.version10_body._fetch_instances()
+
 
         @property
-        def value(self):
-            if hasattr(self, '_m_value'):
-                return self._m_value if hasattr(self, '_m_value') else None
+        def is_version10(self):
+            if hasattr(self, '_m_is_version10'):
+                return self._m_is_version10
 
-            io = self._root._io
-            _pos = io.pos()
-            io.seek(self.offset)
-            self._debug['_m_value']['start'] = io.pos()
-            _on = self.tag
-            if _on == u"head":
-                self._raw__m_value = io.read_bytes(self.length)
-                _io__raw__m_value = KaitaiStream(BytesIO(self._raw__m_value))
-                self._m_value = Ttf.Head(_io__raw__m_value, self, self._root)
-                self._m_value._read()
-            elif _on == u"cvt ":
-                self._raw__m_value = io.read_bytes(self.length)
-                _io__raw__m_value = KaitaiStream(BytesIO(self._raw__m_value))
-                self._m_value = Ttf.Cvt(_io__raw__m_value, self, self._root)
-                self._m_value._read()
-            elif _on == u"prep":
-                self._raw__m_value = io.read_bytes(self.length)
-                _io__raw__m_value = KaitaiStream(BytesIO(self._raw__m_value))
-                self._m_value = Ttf.Prep(_io__raw__m_value, self, self._root)
-                self._m_value._read()
-            elif _on == u"kern":
-                self._raw__m_value = io.read_bytes(self.length)
-                _io__raw__m_value = KaitaiStream(BytesIO(self._raw__m_value))
-                self._m_value = Ttf.Kern(_io__raw__m_value, self, self._root)
-                self._m_value._read()
-            elif _on == u"hhea":
-                self._raw__m_value = io.read_bytes(self.length)
-                _io__raw__m_value = KaitaiStream(BytesIO(self._raw__m_value))
-                self._m_value = Ttf.Hhea(_io__raw__m_value, self, self._root)
-                self._m_value._read()
-            elif _on == u"post":
-                self._raw__m_value = io.read_bytes(self.length)
-                _io__raw__m_value = KaitaiStream(BytesIO(self._raw__m_value))
-                self._m_value = Ttf.Post(_io__raw__m_value, self, self._root)
-                self._m_value._read()
-            elif _on == u"OS/2":
-                self._raw__m_value = io.read_bytes(self.length)
-                _io__raw__m_value = KaitaiStream(BytesIO(self._raw__m_value))
-                self._m_value = Ttf.Os2(_io__raw__m_value, self, self._root)
-                self._m_value._read()
-            elif _on == u"name":
-                self._raw__m_value = io.read_bytes(self.length)
-                _io__raw__m_value = KaitaiStream(BytesIO(self._raw__m_value))
-                self._m_value = Ttf.Name(_io__raw__m_value, self, self._root)
-                self._m_value._read()
-            elif _on == u"maxp":
-                self._raw__m_value = io.read_bytes(self.length)
-                _io__raw__m_value = KaitaiStream(BytesIO(self._raw__m_value))
-                self._m_value = Ttf.Maxp(_io__raw__m_value, self, self._root)
-                self._m_value._read()
-            elif _on == u"glyf":
-                self._raw__m_value = io.read_bytes(self.length)
-                _io__raw__m_value = KaitaiStream(BytesIO(self._raw__m_value))
-                self._m_value = Ttf.Glyf(_io__raw__m_value, self, self._root)
-                self._m_value._read()
-            elif _on == u"fpgm":
-                self._raw__m_value = io.read_bytes(self.length)
-                _io__raw__m_value = KaitaiStream(BytesIO(self._raw__m_value))
-                self._m_value = Ttf.Fpgm(_io__raw__m_value, self, self._root)
-                self._m_value._read()
-            elif _on == u"cmap":
-                self._raw__m_value = io.read_bytes(self.length)
-                _io__raw__m_value = KaitaiStream(BytesIO(self._raw__m_value))
-                self._m_value = Ttf.Cmap(_io__raw__m_value, self, self._root)
-                self._m_value._read()
-            else:
-                self._m_value = io.read_bytes(self.length)
-            self._debug['_m_value']['end'] = io.pos()
-            io.seek(_pos)
-            return self._m_value if hasattr(self, '_m_value') else None
+            self._m_is_version10 =  ((self.table_version_number.major == 1) and (self.table_version_number.minor == 0)) 
+            return getattr(self, '_m_is_version10', None)
+
+
+    class MaxpVersion10Body(KaitaiStruct):
+        SEQ_FIELDS = ["max_points", "max_contours", "max_composite_points", "max_composite_contours", "max_zones", "max_twilight_points", "max_storage", "max_function_defs", "max_instruction_defs", "max_stack_elements", "max_size_of_instructions", "max_component_elements", "max_component_depth"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Ttf.MaxpVersion10Body, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['max_points']['start'] = self._io.pos()
+            self.max_points = self._io.read_u2be()
+            self._debug['max_points']['end'] = self._io.pos()
+            self._debug['max_contours']['start'] = self._io.pos()
+            self.max_contours = self._io.read_u2be()
+            self._debug['max_contours']['end'] = self._io.pos()
+            self._debug['max_composite_points']['start'] = self._io.pos()
+            self.max_composite_points = self._io.read_u2be()
+            self._debug['max_composite_points']['end'] = self._io.pos()
+            self._debug['max_composite_contours']['start'] = self._io.pos()
+            self.max_composite_contours = self._io.read_u2be()
+            self._debug['max_composite_contours']['end'] = self._io.pos()
+            self._debug['max_zones']['start'] = self._io.pos()
+            self.max_zones = self._io.read_u2be()
+            self._debug['max_zones']['end'] = self._io.pos()
+            self._debug['max_twilight_points']['start'] = self._io.pos()
+            self.max_twilight_points = self._io.read_u2be()
+            self._debug['max_twilight_points']['end'] = self._io.pos()
+            self._debug['max_storage']['start'] = self._io.pos()
+            self.max_storage = self._io.read_u2be()
+            self._debug['max_storage']['end'] = self._io.pos()
+            self._debug['max_function_defs']['start'] = self._io.pos()
+            self.max_function_defs = self._io.read_u2be()
+            self._debug['max_function_defs']['end'] = self._io.pos()
+            self._debug['max_instruction_defs']['start'] = self._io.pos()
+            self.max_instruction_defs = self._io.read_u2be()
+            self._debug['max_instruction_defs']['end'] = self._io.pos()
+            self._debug['max_stack_elements']['start'] = self._io.pos()
+            self.max_stack_elements = self._io.read_u2be()
+            self._debug['max_stack_elements']['end'] = self._io.pos()
+            self._debug['max_size_of_instructions']['start'] = self._io.pos()
+            self.max_size_of_instructions = self._io.read_u2be()
+            self._debug['max_size_of_instructions']['end'] = self._io.pos()
+            self._debug['max_component_elements']['start'] = self._io.pos()
+            self.max_component_elements = self._io.read_u2be()
+            self._debug['max_component_elements']['end'] = self._io.pos()
+            self._debug['max_component_depth']['start'] = self._io.pos()
+            self.max_component_depth = self._io.read_u2be()
+            self._debug['max_component_depth']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+
+
+    class Name(KaitaiStruct):
+        """Name table is meant to include human-readable string metadata
+        that describes font: name of the font, its styles, copyright &
+        trademark notices, vendor and designer info, etc.
+        
+        The table includes a list of "name records", each of which
+        corresponds to a single metadata entry.
+        
+        .. seealso::
+           Source - https://developer.apple.com/fonts/TrueType-Reference-Manual/RM06/Chap6name.html
+        """
+
+        class Names(IntEnum):
+            copyright = 0
+            font_family = 1
+            font_subfamily = 2
+            unique_subfamily_id = 3
+            full_font_name = 4
+            name_table_version = 5
+            postscript_font_name = 6
+            trademark = 7
+            manufacturer = 8
+            designer = 9
+            description = 10
+            url_vendor = 11
+            url_designer = 12
+            license = 13
+            url_license = 14
+            reserved_15 = 15
+            preferred_family = 16
+            preferred_subfamily = 17
+            compatible_full_name = 18
+            sample_text = 19
+
+        class Platforms(IntEnum):
+            unicode = 0
+            macintosh = 1
+            reserved_2 = 2
+            microsoft = 3
+        SEQ_FIELDS = ["format_selector", "num_name_records", "ofs_strings", "name_records"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Ttf.Name, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['format_selector']['start'] = self._io.pos()
+            self.format_selector = self._io.read_u2be()
+            self._debug['format_selector']['end'] = self._io.pos()
+            self._debug['num_name_records']['start'] = self._io.pos()
+            self.num_name_records = self._io.read_u2be()
+            self._debug['num_name_records']['end'] = self._io.pos()
+            self._debug['ofs_strings']['start'] = self._io.pos()
+            self.ofs_strings = self._io.read_u2be()
+            self._debug['ofs_strings']['end'] = self._io.pos()
+            self._debug['name_records']['start'] = self._io.pos()
+            self._debug['name_records']['arr'] = []
+            self.name_records = []
+            for i in range(self.num_name_records):
+                self._debug['name_records']['arr'].append({'start': self._io.pos()})
+                _t_name_records = Ttf.Name.NameRecord(self._io, self, self._root)
+                try:
+                    _t_name_records._read()
+                finally:
+                    self.name_records.append(_t_name_records)
+                self._debug['name_records']['arr'][i]['end'] = self._io.pos()
+
+            self._debug['name_records']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            for i in range(len(self.name_records)):
+                pass
+                self.name_records[i]._fetch_instances()
+
+
+        class NameRecord(KaitaiStruct):
+            SEQ_FIELDS = ["platform_id", "encoding_id", "language_id", "name_id", "len_str", "ofs_str"]
+            def __init__(self, _io, _parent=None, _root=None):
+                super(Ttf.Name.NameRecord, self).__init__(_io)
+                self._parent = _parent
+                self._root = _root
+                self._debug = collections.defaultdict(dict)
+
+            def _read(self):
+                self._debug['platform_id']['start'] = self._io.pos()
+                self.platform_id = KaitaiStream.resolve_enum(Ttf.Name.Platforms, self._io.read_u2be())
+                self._debug['platform_id']['end'] = self._io.pos()
+                self._debug['encoding_id']['start'] = self._io.pos()
+                self.encoding_id = self._io.read_u2be()
+                self._debug['encoding_id']['end'] = self._io.pos()
+                self._debug['language_id']['start'] = self._io.pos()
+                self.language_id = self._io.read_u2be()
+                self._debug['language_id']['end'] = self._io.pos()
+                self._debug['name_id']['start'] = self._io.pos()
+                self.name_id = KaitaiStream.resolve_enum(Ttf.Name.Names, self._io.read_u2be())
+                self._debug['name_id']['end'] = self._io.pos()
+                self._debug['len_str']['start'] = self._io.pos()
+                self.len_str = self._io.read_u2be()
+                self._debug['len_str']['end'] = self._io.pos()
+                self._debug['ofs_str']['start'] = self._io.pos()
+                self.ofs_str = self._io.read_u2be()
+                self._debug['ofs_str']['end'] = self._io.pos()
+
+
+            def _fetch_instances(self):
+                pass
+                _ = self.ascii_value
+                if hasattr(self, '_m_ascii_value'):
+                    pass
+
+                _ = self.unicode_value
+                if hasattr(self, '_m_unicode_value'):
+                    pass
+
+
+            @property
+            def ascii_value(self):
+                if hasattr(self, '_m_ascii_value'):
+                    return self._m_ascii_value
+
+                io = self._parent._io
+                _pos = io.pos()
+                io.seek(self._parent.ofs_strings + self.ofs_str)
+                self._debug['_m_ascii_value']['start'] = io.pos()
+                self._m_ascii_value = (io.read_bytes(self.len_str)).decode(u"ASCII")
+                self._debug['_m_ascii_value']['end'] = io.pos()
+                io.seek(_pos)
+                return getattr(self, '_m_ascii_value', None)
+
+            @property
+            def unicode_value(self):
+                if hasattr(self, '_m_unicode_value'):
+                    return self._m_unicode_value
+
+                io = self._parent._io
+                _pos = io.pos()
+                io.seek(self._parent.ofs_strings + self.ofs_str)
+                self._debug['_m_unicode_value']['start'] = io.pos()
+                self._m_unicode_value = (io.read_bytes(self.len_str)).decode(u"UTF-16BE")
+                self._debug['_m_unicode_value']['end'] = io.pos()
+                io.seek(_pos)
+                return getattr(self, '_m_unicode_value', None)
+
+
+
+    class OffsetTable(KaitaiStruct):
+        SEQ_FIELDS = ["sfnt_version", "num_tables", "search_range", "entry_selector", "range_shift"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Ttf.OffsetTable, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['sfnt_version']['start'] = self._io.pos()
+            self.sfnt_version = Ttf.Fixed(self._io, self, self._root)
+            self.sfnt_version._read()
+            self._debug['sfnt_version']['end'] = self._io.pos()
+            self._debug['num_tables']['start'] = self._io.pos()
+            self.num_tables = self._io.read_u2be()
+            self._debug['num_tables']['end'] = self._io.pos()
+            self._debug['search_range']['start'] = self._io.pos()
+            self.search_range = self._io.read_u2be()
+            self._debug['search_range']['end'] = self._io.pos()
+            self._debug['entry_selector']['start'] = self._io.pos()
+            self.entry_selector = self._io.read_u2be()
+            self._debug['entry_selector']['end'] = self._io.pos()
+            self._debug['range_shift']['start'] = self._io.pos()
+            self.range_shift = self._io.read_u2be()
+            self._debug['range_shift']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            self.sfnt_version._fetch_instances()
 
 
     class Os2(KaitaiStruct):
         """The OS/2 table consists of a set of metrics that are required by Windows and OS/2."""
 
-        class WeightClass(Enum):
+        class FsSelection(IntEnum):
+            italic = 1
+            underscore = 2
+            negative = 4
+            outlined = 8
+            strikeout = 16
+            bold = 32
+            regular = 64
+
+        class FsType(IntEnum):
+            restricted_license_embedding = 2
+            preview_and_print_embedding = 4
+            editable_embedding = 8
+
+        class WeightClass(IntEnum):
             thin = 100
             extra_light = 200
             light = 300
@@ -672,7 +1364,7 @@ class Ttf(KaitaiStruct):
             extra_bold = 800
             black = 900
 
-        class WidthClass(Enum):
+        class WidthClass(IntEnum):
             ultra_condensed = 1
             extra_condensed = 2
             condensed = 3
@@ -682,25 +1374,11 @@ class Ttf(KaitaiStruct):
             expanded = 7
             extra_expanded = 8
             ultra_expanded = 9
-
-        class FsType(Enum):
-            restricted_license_embedding = 2
-            preview_and_print_embedding = 4
-            editable_embedding = 8
-
-        class FsSelection(Enum):
-            italic = 1
-            underscore = 2
-            negative = 4
-            outlined = 8
-            strikeout = 16
-            bold = 32
-            regular = 64
         SEQ_FIELDS = ["version", "x_avg_char_width", "weight_class", "width_class", "fs_type", "y_subscript_x_size", "y_subscript_y_size", "y_subscript_x_offset", "y_subscript_y_offset", "y_superscript_x_size", "y_superscript_y_size", "y_superscript_x_offset", "y_superscript_y_offset", "y_strikeout_size", "y_strikeout_position", "s_family_class", "panose", "unicode_range", "ach_vend_id", "selection", "first_char_index", "last_char_index", "typo_ascender", "typo_descender", "typo_line_gap", "win_ascent", "win_descent", "code_page_range"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Ttf.Os2, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -761,7 +1439,7 @@ class Ttf(KaitaiStruct):
             self.unicode_range._read()
             self._debug['unicode_range']['end'] = self._io.pos()
             self._debug['ach_vend_id']['start'] = self._io.pos()
-            self.ach_vend_id = (self._io.read_bytes(4)).decode(u"ascii")
+            self.ach_vend_id = (self._io.read_bytes(4)).decode(u"ASCII")
             self._debug['ach_vend_id']['end'] = self._io.pos()
             self._debug['selection']['start'] = self._io.pos()
             self.selection = KaitaiStream.resolve_enum(Ttf.Os2.FsSelection, self._io.read_u2be())
@@ -792,35 +1470,165 @@ class Ttf(KaitaiStruct):
             self.code_page_range._read()
             self._debug['code_page_range']['end'] = self._io.pos()
 
+
+        def _fetch_instances(self):
+            pass
+            self.panose._fetch_instances()
+            self.unicode_range._fetch_instances()
+            self.code_page_range._fetch_instances()
+
+        class CodePageRange(KaitaiStruct):
+            SEQ_FIELDS = ["symbol_character_set", "oem_character_set", "macintosh_character_set", "reserved_for_alternate_ansi_oem", "cp1361_korean_johab", "cp950_chinese_traditional_chars_taiwan_and_hong_kong", "cp949_korean_wansung", "cp936_chinese_simplified_chars_prc_and_singapore", "cp932_jis_japan", "cp874_thai", "reserved_for_alternate_ansi", "cp1257_windows_baltic", "cp1256_arabic", "cp1255_hebrew", "cp1254_turkish", "cp1253_greek", "cp1251_cyrillic", "cp1250_latin_2_eastern_europe", "cp1252_latin_1", "cp437_us", "cp850_we_latin_1", "cp708_arabic_asmo_708", "cp737_greek_former_437_g", "cp775_ms_dos_baltic", "cp852_latin_2", "cp855_ibm_cyrillic_primarily_russian", "cp857_ibm_turkish", "cp860_ms_dos_portuguese", "cp861_ms_dos_icelandic", "cp862_hebrew", "cp863_ms_dos_canadian_french", "cp864_arabic", "cp865_ms_dos_nordic", "cp866_ms_dos_russian", "cp869_ibm_greek", "reserved_for_oem"]
+            def __init__(self, _io, _parent=None, _root=None):
+                super(Ttf.Os2.CodePageRange, self).__init__(_io)
+                self._parent = _parent
+                self._root = _root
+                self._debug = collections.defaultdict(dict)
+
+            def _read(self):
+                self._debug['symbol_character_set']['start'] = self._io.pos()
+                self.symbol_character_set = self._io.read_bits_int_be(1) != 0
+                self._debug['symbol_character_set']['end'] = self._io.pos()
+                self._debug['oem_character_set']['start'] = self._io.pos()
+                self.oem_character_set = self._io.read_bits_int_be(1) != 0
+                self._debug['oem_character_set']['end'] = self._io.pos()
+                self._debug['macintosh_character_set']['start'] = self._io.pos()
+                self.macintosh_character_set = self._io.read_bits_int_be(1) != 0
+                self._debug['macintosh_character_set']['end'] = self._io.pos()
+                self._debug['reserved_for_alternate_ansi_oem']['start'] = self._io.pos()
+                self.reserved_for_alternate_ansi_oem = self._io.read_bits_int_be(7)
+                self._debug['reserved_for_alternate_ansi_oem']['end'] = self._io.pos()
+                self._debug['cp1361_korean_johab']['start'] = self._io.pos()
+                self.cp1361_korean_johab = self._io.read_bits_int_be(1) != 0
+                self._debug['cp1361_korean_johab']['end'] = self._io.pos()
+                self._debug['cp950_chinese_traditional_chars_taiwan_and_hong_kong']['start'] = self._io.pos()
+                self.cp950_chinese_traditional_chars_taiwan_and_hong_kong = self._io.read_bits_int_be(1) != 0
+                self._debug['cp950_chinese_traditional_chars_taiwan_and_hong_kong']['end'] = self._io.pos()
+                self._debug['cp949_korean_wansung']['start'] = self._io.pos()
+                self.cp949_korean_wansung = self._io.read_bits_int_be(1) != 0
+                self._debug['cp949_korean_wansung']['end'] = self._io.pos()
+                self._debug['cp936_chinese_simplified_chars_prc_and_singapore']['start'] = self._io.pos()
+                self.cp936_chinese_simplified_chars_prc_and_singapore = self._io.read_bits_int_be(1) != 0
+                self._debug['cp936_chinese_simplified_chars_prc_and_singapore']['end'] = self._io.pos()
+                self._debug['cp932_jis_japan']['start'] = self._io.pos()
+                self.cp932_jis_japan = self._io.read_bits_int_be(1) != 0
+                self._debug['cp932_jis_japan']['end'] = self._io.pos()
+                self._debug['cp874_thai']['start'] = self._io.pos()
+                self.cp874_thai = self._io.read_bits_int_be(1) != 0
+                self._debug['cp874_thai']['end'] = self._io.pos()
+                self._debug['reserved_for_alternate_ansi']['start'] = self._io.pos()
+                self.reserved_for_alternate_ansi = self._io.read_bits_int_be(8)
+                self._debug['reserved_for_alternate_ansi']['end'] = self._io.pos()
+                self._debug['cp1257_windows_baltic']['start'] = self._io.pos()
+                self.cp1257_windows_baltic = self._io.read_bits_int_be(1) != 0
+                self._debug['cp1257_windows_baltic']['end'] = self._io.pos()
+                self._debug['cp1256_arabic']['start'] = self._io.pos()
+                self.cp1256_arabic = self._io.read_bits_int_be(1) != 0
+                self._debug['cp1256_arabic']['end'] = self._io.pos()
+                self._debug['cp1255_hebrew']['start'] = self._io.pos()
+                self.cp1255_hebrew = self._io.read_bits_int_be(1) != 0
+                self._debug['cp1255_hebrew']['end'] = self._io.pos()
+                self._debug['cp1254_turkish']['start'] = self._io.pos()
+                self.cp1254_turkish = self._io.read_bits_int_be(1) != 0
+                self._debug['cp1254_turkish']['end'] = self._io.pos()
+                self._debug['cp1253_greek']['start'] = self._io.pos()
+                self.cp1253_greek = self._io.read_bits_int_be(1) != 0
+                self._debug['cp1253_greek']['end'] = self._io.pos()
+                self._debug['cp1251_cyrillic']['start'] = self._io.pos()
+                self.cp1251_cyrillic = self._io.read_bits_int_be(1) != 0
+                self._debug['cp1251_cyrillic']['end'] = self._io.pos()
+                self._debug['cp1250_latin_2_eastern_europe']['start'] = self._io.pos()
+                self.cp1250_latin_2_eastern_europe = self._io.read_bits_int_be(1) != 0
+                self._debug['cp1250_latin_2_eastern_europe']['end'] = self._io.pos()
+                self._debug['cp1252_latin_1']['start'] = self._io.pos()
+                self.cp1252_latin_1 = self._io.read_bits_int_be(1) != 0
+                self._debug['cp1252_latin_1']['end'] = self._io.pos()
+                self._debug['cp437_us']['start'] = self._io.pos()
+                self.cp437_us = self._io.read_bits_int_be(1) != 0
+                self._debug['cp437_us']['end'] = self._io.pos()
+                self._debug['cp850_we_latin_1']['start'] = self._io.pos()
+                self.cp850_we_latin_1 = self._io.read_bits_int_be(1) != 0
+                self._debug['cp850_we_latin_1']['end'] = self._io.pos()
+                self._debug['cp708_arabic_asmo_708']['start'] = self._io.pos()
+                self.cp708_arabic_asmo_708 = self._io.read_bits_int_be(1) != 0
+                self._debug['cp708_arabic_asmo_708']['end'] = self._io.pos()
+                self._debug['cp737_greek_former_437_g']['start'] = self._io.pos()
+                self.cp737_greek_former_437_g = self._io.read_bits_int_be(1) != 0
+                self._debug['cp737_greek_former_437_g']['end'] = self._io.pos()
+                self._debug['cp775_ms_dos_baltic']['start'] = self._io.pos()
+                self.cp775_ms_dos_baltic = self._io.read_bits_int_be(1) != 0
+                self._debug['cp775_ms_dos_baltic']['end'] = self._io.pos()
+                self._debug['cp852_latin_2']['start'] = self._io.pos()
+                self.cp852_latin_2 = self._io.read_bits_int_be(1) != 0
+                self._debug['cp852_latin_2']['end'] = self._io.pos()
+                self._debug['cp855_ibm_cyrillic_primarily_russian']['start'] = self._io.pos()
+                self.cp855_ibm_cyrillic_primarily_russian = self._io.read_bits_int_be(1) != 0
+                self._debug['cp855_ibm_cyrillic_primarily_russian']['end'] = self._io.pos()
+                self._debug['cp857_ibm_turkish']['start'] = self._io.pos()
+                self.cp857_ibm_turkish = self._io.read_bits_int_be(1) != 0
+                self._debug['cp857_ibm_turkish']['end'] = self._io.pos()
+                self._debug['cp860_ms_dos_portuguese']['start'] = self._io.pos()
+                self.cp860_ms_dos_portuguese = self._io.read_bits_int_be(1) != 0
+                self._debug['cp860_ms_dos_portuguese']['end'] = self._io.pos()
+                self._debug['cp861_ms_dos_icelandic']['start'] = self._io.pos()
+                self.cp861_ms_dos_icelandic = self._io.read_bits_int_be(1) != 0
+                self._debug['cp861_ms_dos_icelandic']['end'] = self._io.pos()
+                self._debug['cp862_hebrew']['start'] = self._io.pos()
+                self.cp862_hebrew = self._io.read_bits_int_be(1) != 0
+                self._debug['cp862_hebrew']['end'] = self._io.pos()
+                self._debug['cp863_ms_dos_canadian_french']['start'] = self._io.pos()
+                self.cp863_ms_dos_canadian_french = self._io.read_bits_int_be(1) != 0
+                self._debug['cp863_ms_dos_canadian_french']['end'] = self._io.pos()
+                self._debug['cp864_arabic']['start'] = self._io.pos()
+                self.cp864_arabic = self._io.read_bits_int_be(1) != 0
+                self._debug['cp864_arabic']['end'] = self._io.pos()
+                self._debug['cp865_ms_dos_nordic']['start'] = self._io.pos()
+                self.cp865_ms_dos_nordic = self._io.read_bits_int_be(1) != 0
+                self._debug['cp865_ms_dos_nordic']['end'] = self._io.pos()
+                self._debug['cp866_ms_dos_russian']['start'] = self._io.pos()
+                self.cp866_ms_dos_russian = self._io.read_bits_int_be(1) != 0
+                self._debug['cp866_ms_dos_russian']['end'] = self._io.pos()
+                self._debug['cp869_ibm_greek']['start'] = self._io.pos()
+                self.cp869_ibm_greek = self._io.read_bits_int_be(1) != 0
+                self._debug['cp869_ibm_greek']['end'] = self._io.pos()
+                self._debug['reserved_for_oem']['start'] = self._io.pos()
+                self.reserved_for_oem = self._io.read_bits_int_be(16)
+                self._debug['reserved_for_oem']['end'] = self._io.pos()
+
+
+            def _fetch_instances(self):
+                pass
+
+
         class Panose(KaitaiStruct):
 
-            class Weight(Enum):
+            class ArmStyle(IntEnum):
                 any = 0
                 no_fit = 1
-                very_light = 2
-                light = 3
-                thin = 4
-                book = 5
+                straight_arms_horizontal = 2
+                straight_arms_wedge = 3
+                straight_arms_vertical = 4
+                straight_arms_single_serif = 5
+                straight_arms_double_serif = 6
+                non_straight_arms_horizontal = 7
+                non_straight_arms_wedge = 8
+                non_straight_arms_vertical = 9
+                non_straight_arms_single_serif = 10
+                non_straight_arms_double_serif = 11
+
+            class Contrast(IntEnum):
+                any = 0
+                no_fit = 1
+                none = 2
+                very_low = 3
+                low = 4
+                medium_low = 5
                 medium = 6
-                demi = 7
-                bold = 8
-                heavy = 9
-                black = 10
-                nord = 11
+                medium_high = 7
+                high = 8
+                very_high = 9
 
-            class Proportion(Enum):
-                any = 0
-                no_fit = 1
-                old_style = 2
-                modern = 3
-                even_width = 4
-                expanded = 5
-                condensed = 6
-                very_expanded = 7
-                very_condensed = 8
-                monospaced = 9
-
-            class FamilyKind(Enum):
+            class FamilyKind(IntEnum):
                 any = 0
                 no_fit = 1
                 text_and_display = 2
@@ -828,7 +1636,7 @@ class Ttf(KaitaiStruct):
                 decorative = 4
                 pictorial = 5
 
-            class LetterForm(Enum):
+            class LetterForm(IntEnum):
                 any = 0
                 no_fit = 1
                 normal_contact = 2
@@ -846,7 +1654,35 @@ class Ttf(KaitaiStruct):
                 oblique_off_center = 14
                 oblique_square = 15
 
-            class SerifStyle(Enum):
+            class Midline(IntEnum):
+                any = 0
+                no_fit = 1
+                standard_trimmed = 2
+                standard_pointed = 3
+                standard_serifed = 4
+                high_trimmed = 5
+                high_pointed = 6
+                high_serifed = 7
+                constant_trimmed = 8
+                constant_pointed = 9
+                constant_serifed = 10
+                low_trimmed = 11
+                low_pointed = 12
+                low_serifed = 13
+
+            class Proportion(IntEnum):
+                any = 0
+                no_fit = 1
+                old_style = 2
+                modern = 3
+                even_width = 4
+                expanded = 5
+                condensed = 6
+                very_expanded = 7
+                very_condensed = 8
+                monospaced = 9
+
+            class SerifStyle(IntEnum):
                 any = 0
                 no_fit = 1
                 cove = 2
@@ -864,31 +1700,7 @@ class Ttf(KaitaiStruct):
                 flared = 14
                 rounded = 15
 
-            class XHeight(Enum):
-                any = 0
-                no_fit = 1
-                constant_small = 2
-                constant_standard = 3
-                constant_large = 4
-                ducking_small = 5
-                ducking_standard = 6
-                ducking_large = 7
-
-            class ArmStyle(Enum):
-                any = 0
-                no_fit = 1
-                straight_arms_horizontal = 2
-                straight_arms_wedge = 3
-                straight_arms_vertical = 4
-                straight_arms_single_serif = 5
-                straight_arms_double_serif = 6
-                non_straight_arms_horizontal = 7
-                non_straight_arms_wedge = 8
-                non_straight_arms_vertical = 9
-                non_straight_arms_single_serif = 10
-                non_straight_arms_double_serif = 11
-
-            class StrokeVariation(Enum):
+            class StrokeVariation(IntEnum):
                 any = 0
                 no_fit = 1
                 gradual_diagonal = 2
@@ -899,38 +1711,34 @@ class Ttf(KaitaiStruct):
                 rapid_horizontal = 7
                 instant_vertical = 8
 
-            class Contrast(Enum):
+            class Weight(IntEnum):
                 any = 0
                 no_fit = 1
-                none = 2
-                very_low = 3
-                low = 4
-                medium_low = 5
+                very_light = 2
+                light = 3
+                thin = 4
+                book = 5
                 medium = 6
-                medium_high = 7
-                high = 8
-                very_high = 9
+                demi = 7
+                bold = 8
+                heavy = 9
+                black = 10
+                nord = 11
 
-            class Midline(Enum):
+            class XHeight(IntEnum):
                 any = 0
                 no_fit = 1
-                standard_trimmed = 2
-                standard_pointed = 3
-                standard_serifed = 4
-                high_trimmed = 5
-                high_pointed = 6
-                high_serifed = 7
-                constant_trimmed = 8
-                constant_pointed = 9
-                constant_serifed = 10
-                low_trimmed = 11
-                low_pointed = 12
-                low_serifed = 13
+                constant_small = 2
+                constant_standard = 3
+                constant_large = 4
+                ducking_small = 5
+                ducking_standard = 6
+                ducking_large = 7
             SEQ_FIELDS = ["family_type", "serif_style", "weight", "proportion", "contrast", "stroke_variation", "arm_style", "letter_form", "midline", "x_height"]
             def __init__(self, _io, _parent=None, _root=None):
-                self._io = _io
+                super(Ttf.Os2.Panose, self).__init__(_io)
                 self._parent = _parent
-                self._root = _root if _root else self
+                self._root = _root
                 self._debug = collections.defaultdict(dict)
 
             def _read(self):
@@ -966,12 +1774,16 @@ class Ttf(KaitaiStruct):
                 self._debug['x_height']['end'] = self._io.pos()
 
 
+            def _fetch_instances(self):
+                pass
+
+
         class UnicodeRange(KaitaiStruct):
             SEQ_FIELDS = ["basic_latin", "latin_1_supplement", "latin_extended_a", "latin_extended_b", "ipa_extensions", "spacing_modifier_letters", "combining_diacritical_marks", "basic_greek", "greek_symbols_and_coptic", "cyrillic", "armenian", "basic_hebrew", "hebrew_extended", "basic_arabic", "arabic_extended", "devanagari", "bengali", "gurmukhi", "gujarati", "oriya", "tamil", "telugu", "kannada", "malayalam", "thai", "lao", "basic_georgian", "georgian_extended", "hangul_jamo", "latin_extended_additional", "greek_extended", "general_punctuation", "superscripts_and_subscripts", "currency_symbols", "combining_diacritical_marks_for_symbols", "letterlike_symbols", "number_forms", "arrows", "mathematical_operators", "miscellaneous_technical", "control_pictures", "optical_character_recognition", "enclosed_alphanumerics", "box_drawing", "block_elements", "geometric_shapes", "miscellaneous_symbols", "dingbats", "cjk_symbols_and_punctuation", "hiragana", "katakana", "bopomofo", "hangul_compatibility_jamo", "cjk_miscellaneous", "enclosed_cjk_letters_and_months", "cjk_compatibility", "hangul", "reserved_for_unicode_subranges1", "reserved_for_unicode_subranges2", "cjk_unified_ideographs", "private_use_area", "cjk_compatibility_ideographs", "alphabetic_presentation_forms", "arabic_presentation_forms_a", "combining_half_marks", "cjk_compatibility_forms", "small_form_variants", "arabic_presentation_forms_b", "halfwidth_and_fullwidth_forms", "specials", "reserved"]
             def __init__(self, _io, _parent=None, _root=None):
-                self._io = _io
+                super(Ttf.Os2.UnicodeRange, self).__init__(_io)
                 self._parent = _parent
-                self._root = _root if _root else self
+                self._root = _root
                 self._debug = collections.defaultdict(dict)
 
             def _read(self):
@@ -1185,663 +1997,167 @@ class Ttf(KaitaiStruct):
                 self._debug['specials']['start'] = self._io.pos()
                 self.specials = self._io.read_bits_int_be(1) != 0
                 self._debug['specials']['end'] = self._io.pos()
-                self._io.align_to_byte()
                 self._debug['reserved']['start'] = self._io.pos()
                 self.reserved = self._io.read_bytes(7)
                 self._debug['reserved']['end'] = self._io.pos()
 
 
-        class CodePageRange(KaitaiStruct):
-            SEQ_FIELDS = ["symbol_character_set", "oem_character_set", "macintosh_character_set", "reserved_for_alternate_ansi_oem", "cp1361_korean_johab", "cp950_chinese_traditional_chars_taiwan_and_hong_kong", "cp949_korean_wansung", "cp936_chinese_simplified_chars_prc_and_singapore", "cp932_jis_japan", "cp874_thai", "reserved_for_alternate_ansi", "cp1257_windows_baltic", "cp1256_arabic", "cp1255_hebrew", "cp1254_turkish", "cp1253_greek", "cp1251_cyrillic", "cp1250_latin_2_eastern_europe", "cp1252_latin_1", "cp437_us", "cp850_we_latin_1", "cp708_arabic_asmo_708", "cp737_greek_former_437_g", "cp775_ms_dos_baltic", "cp852_latin_2", "cp855_ibm_cyrillic_primarily_russian", "cp857_ibm_turkish", "cp860_ms_dos_portuguese", "cp861_ms_dos_icelandic", "cp862_hebrew", "cp863_ms_dos_canadian_french", "cp864_arabic", "cp865_ms_dos_nordic", "cp866_ms_dos_russian", "cp869_ibm_greek", "reserved_for_oem"]
+            def _fetch_instances(self):
+                pass
+
+
+
+    class Post(KaitaiStruct):
+        SEQ_FIELDS = ["format", "italic_angle", "underline_position", "underline_thichness", "is_fixed_pitch", "min_mem_type42", "max_mem_type42", "min_mem_type1", "max_mem_type1", "format20"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Ttf.Post, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['format']['start'] = self._io.pos()
+            self.format = Ttf.Fixed(self._io, self, self._root)
+            self.format._read()
+            self._debug['format']['end'] = self._io.pos()
+            self._debug['italic_angle']['start'] = self._io.pos()
+            self.italic_angle = Ttf.Fixed(self._io, self, self._root)
+            self.italic_angle._read()
+            self._debug['italic_angle']['end'] = self._io.pos()
+            self._debug['underline_position']['start'] = self._io.pos()
+            self.underline_position = self._io.read_s2be()
+            self._debug['underline_position']['end'] = self._io.pos()
+            self._debug['underline_thichness']['start'] = self._io.pos()
+            self.underline_thichness = self._io.read_s2be()
+            self._debug['underline_thichness']['end'] = self._io.pos()
+            self._debug['is_fixed_pitch']['start'] = self._io.pos()
+            self.is_fixed_pitch = self._io.read_u4be()
+            self._debug['is_fixed_pitch']['end'] = self._io.pos()
+            self._debug['min_mem_type42']['start'] = self._io.pos()
+            self.min_mem_type42 = self._io.read_u4be()
+            self._debug['min_mem_type42']['end'] = self._io.pos()
+            self._debug['max_mem_type42']['start'] = self._io.pos()
+            self.max_mem_type42 = self._io.read_u4be()
+            self._debug['max_mem_type42']['end'] = self._io.pos()
+            self._debug['min_mem_type1']['start'] = self._io.pos()
+            self.min_mem_type1 = self._io.read_u4be()
+            self._debug['min_mem_type1']['end'] = self._io.pos()
+            self._debug['max_mem_type1']['start'] = self._io.pos()
+            self.max_mem_type1 = self._io.read_u4be()
+            self._debug['max_mem_type1']['end'] = self._io.pos()
+            if  ((self.format.major == 2) and (self.format.minor == 0)) :
+                pass
+                self._debug['format20']['start'] = self._io.pos()
+                self.format20 = Ttf.Post.Format20(self._io, self, self._root)
+                self.format20._read()
+                self._debug['format20']['end'] = self._io.pos()
+
+
+
+        def _fetch_instances(self):
+            pass
+            self.format._fetch_instances()
+            self.italic_angle._fetch_instances()
+            if  ((self.format.major == 2) and (self.format.minor == 0)) :
+                pass
+                self.format20._fetch_instances()
+
+
+        class Format20(KaitaiStruct):
+            SEQ_FIELDS = ["number_of_glyphs", "glyph_name_index", "glyph_names"]
             def __init__(self, _io, _parent=None, _root=None):
-                self._io = _io
+                super(Ttf.Post.Format20, self).__init__(_io)
                 self._parent = _parent
-                self._root = _root if _root else self
+                self._root = _root
                 self._debug = collections.defaultdict(dict)
 
             def _read(self):
-                self._debug['symbol_character_set']['start'] = self._io.pos()
-                self.symbol_character_set = self._io.read_bits_int_be(1) != 0
-                self._debug['symbol_character_set']['end'] = self._io.pos()
-                self._debug['oem_character_set']['start'] = self._io.pos()
-                self.oem_character_set = self._io.read_bits_int_be(1) != 0
-                self._debug['oem_character_set']['end'] = self._io.pos()
-                self._debug['macintosh_character_set']['start'] = self._io.pos()
-                self.macintosh_character_set = self._io.read_bits_int_be(1) != 0
-                self._debug['macintosh_character_set']['end'] = self._io.pos()
-                self._debug['reserved_for_alternate_ansi_oem']['start'] = self._io.pos()
-                self.reserved_for_alternate_ansi_oem = self._io.read_bits_int_be(7)
-                self._debug['reserved_for_alternate_ansi_oem']['end'] = self._io.pos()
-                self._debug['cp1361_korean_johab']['start'] = self._io.pos()
-                self.cp1361_korean_johab = self._io.read_bits_int_be(1) != 0
-                self._debug['cp1361_korean_johab']['end'] = self._io.pos()
-                self._debug['cp950_chinese_traditional_chars_taiwan_and_hong_kong']['start'] = self._io.pos()
-                self.cp950_chinese_traditional_chars_taiwan_and_hong_kong = self._io.read_bits_int_be(1) != 0
-                self._debug['cp950_chinese_traditional_chars_taiwan_and_hong_kong']['end'] = self._io.pos()
-                self._debug['cp949_korean_wansung']['start'] = self._io.pos()
-                self.cp949_korean_wansung = self._io.read_bits_int_be(1) != 0
-                self._debug['cp949_korean_wansung']['end'] = self._io.pos()
-                self._debug['cp936_chinese_simplified_chars_prc_and_singapore']['start'] = self._io.pos()
-                self.cp936_chinese_simplified_chars_prc_and_singapore = self._io.read_bits_int_be(1) != 0
-                self._debug['cp936_chinese_simplified_chars_prc_and_singapore']['end'] = self._io.pos()
-                self._debug['cp932_jis_japan']['start'] = self._io.pos()
-                self.cp932_jis_japan = self._io.read_bits_int_be(1) != 0
-                self._debug['cp932_jis_japan']['end'] = self._io.pos()
-                self._debug['cp874_thai']['start'] = self._io.pos()
-                self.cp874_thai = self._io.read_bits_int_be(1) != 0
-                self._debug['cp874_thai']['end'] = self._io.pos()
-                self._debug['reserved_for_alternate_ansi']['start'] = self._io.pos()
-                self.reserved_for_alternate_ansi = self._io.read_bits_int_be(8)
-                self._debug['reserved_for_alternate_ansi']['end'] = self._io.pos()
-                self._debug['cp1257_windows_baltic']['start'] = self._io.pos()
-                self.cp1257_windows_baltic = self._io.read_bits_int_be(1) != 0
-                self._debug['cp1257_windows_baltic']['end'] = self._io.pos()
-                self._debug['cp1256_arabic']['start'] = self._io.pos()
-                self.cp1256_arabic = self._io.read_bits_int_be(1) != 0
-                self._debug['cp1256_arabic']['end'] = self._io.pos()
-                self._debug['cp1255_hebrew']['start'] = self._io.pos()
-                self.cp1255_hebrew = self._io.read_bits_int_be(1) != 0
-                self._debug['cp1255_hebrew']['end'] = self._io.pos()
-                self._debug['cp1254_turkish']['start'] = self._io.pos()
-                self.cp1254_turkish = self._io.read_bits_int_be(1) != 0
-                self._debug['cp1254_turkish']['end'] = self._io.pos()
-                self._debug['cp1253_greek']['start'] = self._io.pos()
-                self.cp1253_greek = self._io.read_bits_int_be(1) != 0
-                self._debug['cp1253_greek']['end'] = self._io.pos()
-                self._debug['cp1251_cyrillic']['start'] = self._io.pos()
-                self.cp1251_cyrillic = self._io.read_bits_int_be(1) != 0
-                self._debug['cp1251_cyrillic']['end'] = self._io.pos()
-                self._debug['cp1250_latin_2_eastern_europe']['start'] = self._io.pos()
-                self.cp1250_latin_2_eastern_europe = self._io.read_bits_int_be(1) != 0
-                self._debug['cp1250_latin_2_eastern_europe']['end'] = self._io.pos()
-                self._debug['cp1252_latin_1']['start'] = self._io.pos()
-                self.cp1252_latin_1 = self._io.read_bits_int_be(1) != 0
-                self._debug['cp1252_latin_1']['end'] = self._io.pos()
-                self._debug['cp437_us']['start'] = self._io.pos()
-                self.cp437_us = self._io.read_bits_int_be(1) != 0
-                self._debug['cp437_us']['end'] = self._io.pos()
-                self._debug['cp850_we_latin_1']['start'] = self._io.pos()
-                self.cp850_we_latin_1 = self._io.read_bits_int_be(1) != 0
-                self._debug['cp850_we_latin_1']['end'] = self._io.pos()
-                self._debug['cp708_arabic_asmo_708']['start'] = self._io.pos()
-                self.cp708_arabic_asmo_708 = self._io.read_bits_int_be(1) != 0
-                self._debug['cp708_arabic_asmo_708']['end'] = self._io.pos()
-                self._debug['cp737_greek_former_437_g']['start'] = self._io.pos()
-                self.cp737_greek_former_437_g = self._io.read_bits_int_be(1) != 0
-                self._debug['cp737_greek_former_437_g']['end'] = self._io.pos()
-                self._debug['cp775_ms_dos_baltic']['start'] = self._io.pos()
-                self.cp775_ms_dos_baltic = self._io.read_bits_int_be(1) != 0
-                self._debug['cp775_ms_dos_baltic']['end'] = self._io.pos()
-                self._debug['cp852_latin_2']['start'] = self._io.pos()
-                self.cp852_latin_2 = self._io.read_bits_int_be(1) != 0
-                self._debug['cp852_latin_2']['end'] = self._io.pos()
-                self._debug['cp855_ibm_cyrillic_primarily_russian']['start'] = self._io.pos()
-                self.cp855_ibm_cyrillic_primarily_russian = self._io.read_bits_int_be(1) != 0
-                self._debug['cp855_ibm_cyrillic_primarily_russian']['end'] = self._io.pos()
-                self._debug['cp857_ibm_turkish']['start'] = self._io.pos()
-                self.cp857_ibm_turkish = self._io.read_bits_int_be(1) != 0
-                self._debug['cp857_ibm_turkish']['end'] = self._io.pos()
-                self._debug['cp860_ms_dos_portuguese']['start'] = self._io.pos()
-                self.cp860_ms_dos_portuguese = self._io.read_bits_int_be(1) != 0
-                self._debug['cp860_ms_dos_portuguese']['end'] = self._io.pos()
-                self._debug['cp861_ms_dos_icelandic']['start'] = self._io.pos()
-                self.cp861_ms_dos_icelandic = self._io.read_bits_int_be(1) != 0
-                self._debug['cp861_ms_dos_icelandic']['end'] = self._io.pos()
-                self._debug['cp862_hebrew']['start'] = self._io.pos()
-                self.cp862_hebrew = self._io.read_bits_int_be(1) != 0
-                self._debug['cp862_hebrew']['end'] = self._io.pos()
-                self._debug['cp863_ms_dos_canadian_french']['start'] = self._io.pos()
-                self.cp863_ms_dos_canadian_french = self._io.read_bits_int_be(1) != 0
-                self._debug['cp863_ms_dos_canadian_french']['end'] = self._io.pos()
-                self._debug['cp864_arabic']['start'] = self._io.pos()
-                self.cp864_arabic = self._io.read_bits_int_be(1) != 0
-                self._debug['cp864_arabic']['end'] = self._io.pos()
-                self._debug['cp865_ms_dos_nordic']['start'] = self._io.pos()
-                self.cp865_ms_dos_nordic = self._io.read_bits_int_be(1) != 0
-                self._debug['cp865_ms_dos_nordic']['end'] = self._io.pos()
-                self._debug['cp866_ms_dos_russian']['start'] = self._io.pos()
-                self.cp866_ms_dos_russian = self._io.read_bits_int_be(1) != 0
-                self._debug['cp866_ms_dos_russian']['end'] = self._io.pos()
-                self._debug['cp869_ibm_greek']['start'] = self._io.pos()
-                self.cp869_ibm_greek = self._io.read_bits_int_be(1) != 0
-                self._debug['cp869_ibm_greek']['end'] = self._io.pos()
-                self._debug['reserved_for_oem']['start'] = self._io.pos()
-                self.reserved_for_oem = self._io.read_bits_int_be(16)
-                self._debug['reserved_for_oem']['end'] = self._io.pos()
+                self._debug['number_of_glyphs']['start'] = self._io.pos()
+                self.number_of_glyphs = self._io.read_u2be()
+                self._debug['number_of_glyphs']['end'] = self._io.pos()
+                self._debug['glyph_name_index']['start'] = self._io.pos()
+                self._debug['glyph_name_index']['arr'] = []
+                self.glyph_name_index = []
+                for i in range(self.number_of_glyphs):
+                    self._debug['glyph_name_index']['arr'].append({'start': self._io.pos()})
+                    self.glyph_name_index.append(self._io.read_u2be())
+                    self._debug['glyph_name_index']['arr'][i]['end'] = self._io.pos()
+
+                self._debug['glyph_name_index']['end'] = self._io.pos()
+                self._debug['glyph_names']['start'] = self._io.pos()
+                self._debug['glyph_names']['arr'] = []
+                self.glyph_names = []
+                i = 0
+                while True:
+                    self._debug['glyph_names']['arr'].append({'start': self._io.pos()})
+                    _t_glyph_names = Ttf.Post.Format20.PascalString(self._io, self, self._root)
+                    try:
+                        _t_glyph_names._read()
+                    finally:
+                        _ = _t_glyph_names
+                        self.glyph_names.append(_)
+                    self._debug['glyph_names']['arr'][len(self.glyph_names) - 1]['end'] = self._io.pos()
+                    if  ((_.length == 0) or (self._io.is_eof())) :
+                        break
+                    i += 1
+                self._debug['glyph_names']['end'] = self._io.pos()
 
 
+            def _fetch_instances(self):
+                pass
+                for i in range(len(self.glyph_name_index)):
+                    pass
 
-    class Fixed(KaitaiStruct):
-        SEQ_FIELDS = ["major", "minor"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['major']['start'] = self._io.pos()
-            self.major = self._io.read_u2be()
-            self._debug['major']['end'] = self._io.pos()
-            self._debug['minor']['start'] = self._io.pos()
-            self.minor = self._io.read_u2be()
-            self._debug['minor']['end'] = self._io.pos()
+                for i in range(len(self.glyph_names)):
+                    pass
+                    self.glyph_names[i]._fetch_instances()
 
 
-    class Glyf(KaitaiStruct):
-        SEQ_FIELDS = ["number_of_contours", "x_min", "y_min", "x_max", "y_max", "value"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['number_of_contours']['start'] = self._io.pos()
-            self.number_of_contours = self._io.read_s2be()
-            self._debug['number_of_contours']['end'] = self._io.pos()
-            self._debug['x_min']['start'] = self._io.pos()
-            self.x_min = self._io.read_s2be()
-            self._debug['x_min']['end'] = self._io.pos()
-            self._debug['y_min']['start'] = self._io.pos()
-            self.y_min = self._io.read_s2be()
-            self._debug['y_min']['end'] = self._io.pos()
-            self._debug['x_max']['start'] = self._io.pos()
-            self.x_max = self._io.read_s2be()
-            self._debug['x_max']['end'] = self._io.pos()
-            self._debug['y_max']['start'] = self._io.pos()
-            self.y_max = self._io.read_s2be()
-            self._debug['y_max']['end'] = self._io.pos()
-            if self.number_of_contours > 0:
-                self._debug['value']['start'] = self._io.pos()
-                self.value = Ttf.Glyf.SimpleGlyph(self._io, self, self._root)
-                self.value._read()
-                self._debug['value']['end'] = self._io.pos()
-
-
-        class SimpleGlyph(KaitaiStruct):
-            SEQ_FIELDS = ["end_pts_of_contours", "instruction_length", "instructions", "flags"]
-            def __init__(self, _io, _parent=None, _root=None):
-                self._io = _io
-                self._parent = _parent
-                self._root = _root if _root else self
-                self._debug = collections.defaultdict(dict)
-
-            def _read(self):
-                self._debug['end_pts_of_contours']['start'] = self._io.pos()
-                self.end_pts_of_contours = [None] * (self._parent.number_of_contours)
-                for i in range(self._parent.number_of_contours):
-                    if not 'arr' in self._debug['end_pts_of_contours']:
-                        self._debug['end_pts_of_contours']['arr'] = []
-                    self._debug['end_pts_of_contours']['arr'].append({'start': self._io.pos()})
-                    self.end_pts_of_contours[i] = self._io.read_u2be()
-                    self._debug['end_pts_of_contours']['arr'][i]['end'] = self._io.pos()
-
-                self._debug['end_pts_of_contours']['end'] = self._io.pos()
-                self._debug['instruction_length']['start'] = self._io.pos()
-                self.instruction_length = self._io.read_u2be()
-                self._debug['instruction_length']['end'] = self._io.pos()
-                self._debug['instructions']['start'] = self._io.pos()
-                self.instructions = self._io.read_bytes(self.instruction_length)
-                self._debug['instructions']['end'] = self._io.pos()
-                self._debug['flags']['start'] = self._io.pos()
-                self.flags = [None] * (self.point_count)
-                for i in range(self.point_count):
-                    if not 'arr' in self._debug['flags']:
-                        self._debug['flags']['arr'] = []
-                    self._debug['flags']['arr'].append({'start': self._io.pos()})
-                    _t_flags = Ttf.Glyf.SimpleGlyph.Flag(self._io, self, self._root)
-                    _t_flags._read()
-                    self.flags[i] = _t_flags
-                    self._debug['flags']['arr'][i]['end'] = self._io.pos()
-
-                self._debug['flags']['end'] = self._io.pos()
-
-            class Flag(KaitaiStruct):
-                SEQ_FIELDS = ["reserved", "y_is_same", "x_is_same", "repeat", "y_short_vector", "x_short_vector", "on_curve", "repeat_value"]
+            class PascalString(KaitaiStruct):
+                SEQ_FIELDS = ["length", "value"]
                 def __init__(self, _io, _parent=None, _root=None):
-                    self._io = _io
+                    super(Ttf.Post.Format20.PascalString, self).__init__(_io)
                     self._parent = _parent
-                    self._root = _root if _root else self
+                    self._root = _root
                     self._debug = collections.defaultdict(dict)
 
                 def _read(self):
-                    self._debug['reserved']['start'] = self._io.pos()
-                    self.reserved = self._io.read_bits_int_be(2)
-                    self._debug['reserved']['end'] = self._io.pos()
-                    self._debug['y_is_same']['start'] = self._io.pos()
-                    self.y_is_same = self._io.read_bits_int_be(1) != 0
-                    self._debug['y_is_same']['end'] = self._io.pos()
-                    self._debug['x_is_same']['start'] = self._io.pos()
-                    self.x_is_same = self._io.read_bits_int_be(1) != 0
-                    self._debug['x_is_same']['end'] = self._io.pos()
-                    self._debug['repeat']['start'] = self._io.pos()
-                    self.repeat = self._io.read_bits_int_be(1) != 0
-                    self._debug['repeat']['end'] = self._io.pos()
-                    self._debug['y_short_vector']['start'] = self._io.pos()
-                    self.y_short_vector = self._io.read_bits_int_be(1) != 0
-                    self._debug['y_short_vector']['end'] = self._io.pos()
-                    self._debug['x_short_vector']['start'] = self._io.pos()
-                    self.x_short_vector = self._io.read_bits_int_be(1) != 0
-                    self._debug['x_short_vector']['end'] = self._io.pos()
-                    self._debug['on_curve']['start'] = self._io.pos()
-                    self.on_curve = self._io.read_bits_int_be(1) != 0
-                    self._debug['on_curve']['end'] = self._io.pos()
-                    self._io.align_to_byte()
-                    if self.repeat:
-                        self._debug['repeat_value']['start'] = self._io.pos()
-                        self.repeat_value = self._io.read_u1()
-                        self._debug['repeat_value']['end'] = self._io.pos()
+                    self._debug['length']['start'] = self._io.pos()
+                    self.length = self._io.read_u1()
+                    self._debug['length']['end'] = self._io.pos()
+                    if self.length != 0:
+                        pass
+                        self._debug['value']['start'] = self._io.pos()
+                        self.value = (self._io.read_bytes(self.length)).decode(u"ASCII")
+                        self._debug['value']['end'] = self._io.pos()
 
 
 
-            @property
-            def point_count(self):
-                if hasattr(self, '_m_point_count'):
-                    return self._m_point_count if hasattr(self, '_m_point_count') else None
-
-                self._m_point_count = (max(self.end_pts_of_contours) + 1)
-                return self._m_point_count if hasattr(self, '_m_point_count') else None
+                def _fetch_instances(self):
+                    pass
+                    if self.length != 0:
+                        pass
 
 
 
-    class Cvt(KaitaiStruct):
-        """cvt  - Control Value Table This table contains a list of values that can be referenced by instructions. They can be used, among other things, to control characteristics for different glyphs.
-        """
-        SEQ_FIELDS = ["fwords"]
+
+
+    class Prep(KaitaiStruct):
+        SEQ_FIELDS = ["instructions"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Ttf.Prep, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
-            self._debug['fwords']['start'] = self._io.pos()
-            self.fwords = []
-            i = 0
-            while not self._io.is_eof():
-                if not 'arr' in self._debug['fwords']:
-                    self._debug['fwords']['arr'] = []
-                self._debug['fwords']['arr'].append({'start': self._io.pos()})
-                self.fwords.append(self._io.read_s2be())
-                self._debug['fwords']['arr'][len(self.fwords) - 1]['end'] = self._io.pos()
-                i += 1
-
-            self._debug['fwords']['end'] = self._io.pos()
+            self._debug['instructions']['start'] = self._io.pos()
+            self.instructions = self._io.read_bytes_full()
+            self._debug['instructions']['end'] = self._io.pos()
 
 
-    class Maxp(KaitaiStruct):
-        SEQ_FIELDS = ["table_version_number", "num_glyphs", "version10_body"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['table_version_number']['start'] = self._io.pos()
-            self.table_version_number = Ttf.Fixed(self._io, self, self._root)
-            self.table_version_number._read()
-            self._debug['table_version_number']['end'] = self._io.pos()
-            self._debug['num_glyphs']['start'] = self._io.pos()
-            self.num_glyphs = self._io.read_u2be()
-            self._debug['num_glyphs']['end'] = self._io.pos()
-            if self.is_version10:
-                self._debug['version10_body']['start'] = self._io.pos()
-                self.version10_body = Ttf.MaxpVersion10Body(self._io, self, self._root)
-                self.version10_body._read()
-                self._debug['version10_body']['end'] = self._io.pos()
-
-
-        @property
-        def is_version10(self):
-            if hasattr(self, '_m_is_version10'):
-                return self._m_is_version10 if hasattr(self, '_m_is_version10') else None
-
-            self._m_is_version10 =  ((self.table_version_number.major == 1) and (self.table_version_number.minor == 0)) 
-            return self._m_is_version10 if hasattr(self, '_m_is_version10') else None
-
-
-    class MaxpVersion10Body(KaitaiStruct):
-        SEQ_FIELDS = ["max_points", "max_contours", "max_composite_points", "max_composite_contours", "max_zones", "max_twilight_points", "max_storage", "max_function_defs", "max_instruction_defs", "max_stack_elements", "max_size_of_instructions", "max_component_elements", "max_component_depth"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['max_points']['start'] = self._io.pos()
-            self.max_points = self._io.read_u2be()
-            self._debug['max_points']['end'] = self._io.pos()
-            self._debug['max_contours']['start'] = self._io.pos()
-            self.max_contours = self._io.read_u2be()
-            self._debug['max_contours']['end'] = self._io.pos()
-            self._debug['max_composite_points']['start'] = self._io.pos()
-            self.max_composite_points = self._io.read_u2be()
-            self._debug['max_composite_points']['end'] = self._io.pos()
-            self._debug['max_composite_contours']['start'] = self._io.pos()
-            self.max_composite_contours = self._io.read_u2be()
-            self._debug['max_composite_contours']['end'] = self._io.pos()
-            self._debug['max_zones']['start'] = self._io.pos()
-            self.max_zones = self._io.read_u2be()
-            self._debug['max_zones']['end'] = self._io.pos()
-            self._debug['max_twilight_points']['start'] = self._io.pos()
-            self.max_twilight_points = self._io.read_u2be()
-            self._debug['max_twilight_points']['end'] = self._io.pos()
-            self._debug['max_storage']['start'] = self._io.pos()
-            self.max_storage = self._io.read_u2be()
-            self._debug['max_storage']['end'] = self._io.pos()
-            self._debug['max_function_defs']['start'] = self._io.pos()
-            self.max_function_defs = self._io.read_u2be()
-            self._debug['max_function_defs']['end'] = self._io.pos()
-            self._debug['max_instruction_defs']['start'] = self._io.pos()
-            self.max_instruction_defs = self._io.read_u2be()
-            self._debug['max_instruction_defs']['end'] = self._io.pos()
-            self._debug['max_stack_elements']['start'] = self._io.pos()
-            self.max_stack_elements = self._io.read_u2be()
-            self._debug['max_stack_elements']['end'] = self._io.pos()
-            self._debug['max_size_of_instructions']['start'] = self._io.pos()
-            self.max_size_of_instructions = self._io.read_u2be()
-            self._debug['max_size_of_instructions']['end'] = self._io.pos()
-            self._debug['max_component_elements']['start'] = self._io.pos()
-            self.max_component_elements = self._io.read_u2be()
-            self._debug['max_component_elements']['end'] = self._io.pos()
-            self._debug['max_component_depth']['start'] = self._io.pos()
-            self.max_component_depth = self._io.read_u2be()
-            self._debug['max_component_depth']['end'] = self._io.pos()
-
-
-    class OffsetTable(KaitaiStruct):
-        SEQ_FIELDS = ["sfnt_version", "num_tables", "search_range", "entry_selector", "range_shift"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['sfnt_version']['start'] = self._io.pos()
-            self.sfnt_version = Ttf.Fixed(self._io, self, self._root)
-            self.sfnt_version._read()
-            self._debug['sfnt_version']['end'] = self._io.pos()
-            self._debug['num_tables']['start'] = self._io.pos()
-            self.num_tables = self._io.read_u2be()
-            self._debug['num_tables']['end'] = self._io.pos()
-            self._debug['search_range']['start'] = self._io.pos()
-            self.search_range = self._io.read_u2be()
-            self._debug['search_range']['end'] = self._io.pos()
-            self._debug['entry_selector']['start'] = self._io.pos()
-            self.entry_selector = self._io.read_u2be()
-            self._debug['entry_selector']['end'] = self._io.pos()
-            self._debug['range_shift']['start'] = self._io.pos()
-            self.range_shift = self._io.read_u2be()
-            self._debug['range_shift']['end'] = self._io.pos()
-
-
-    class Cmap(KaitaiStruct):
-        """cmap - Character To Glyph Index Mapping Table This table defines the mapping of character codes to the glyph index values used in the font.
-        """
-        SEQ_FIELDS = ["version_number", "number_of_encoding_tables", "tables"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['version_number']['start'] = self._io.pos()
-            self.version_number = self._io.read_u2be()
-            self._debug['version_number']['end'] = self._io.pos()
-            self._debug['number_of_encoding_tables']['start'] = self._io.pos()
-            self.number_of_encoding_tables = self._io.read_u2be()
-            self._debug['number_of_encoding_tables']['end'] = self._io.pos()
-            self._debug['tables']['start'] = self._io.pos()
-            self.tables = [None] * (self.number_of_encoding_tables)
-            for i in range(self.number_of_encoding_tables):
-                if not 'arr' in self._debug['tables']:
-                    self._debug['tables']['arr'] = []
-                self._debug['tables']['arr'].append({'start': self._io.pos()})
-                _t_tables = Ttf.Cmap.SubtableHeader(self._io, self, self._root)
-                _t_tables._read()
-                self.tables[i] = _t_tables
-                self._debug['tables']['arr'][i]['end'] = self._io.pos()
-
-            self._debug['tables']['end'] = self._io.pos()
-
-        class SubtableHeader(KaitaiStruct):
-            SEQ_FIELDS = ["platform_id", "encoding_id", "subtable_offset"]
-            def __init__(self, _io, _parent=None, _root=None):
-                self._io = _io
-                self._parent = _parent
-                self._root = _root if _root else self
-                self._debug = collections.defaultdict(dict)
-
-            def _read(self):
-                self._debug['platform_id']['start'] = self._io.pos()
-                self.platform_id = self._io.read_u2be()
-                self._debug['platform_id']['end'] = self._io.pos()
-                self._debug['encoding_id']['start'] = self._io.pos()
-                self.encoding_id = self._io.read_u2be()
-                self._debug['encoding_id']['end'] = self._io.pos()
-                self._debug['subtable_offset']['start'] = self._io.pos()
-                self.subtable_offset = self._io.read_u4be()
-                self._debug['subtable_offset']['end'] = self._io.pos()
-
-            @property
-            def table(self):
-                if hasattr(self, '_m_table'):
-                    return self._m_table if hasattr(self, '_m_table') else None
-
-                io = self._parent._io
-                _pos = io.pos()
-                io.seek(self.subtable_offset)
-                self._debug['_m_table']['start'] = io.pos()
-                self._m_table = Ttf.Cmap.Subtable(io, self, self._root)
-                self._m_table._read()
-                self._debug['_m_table']['end'] = io.pos()
-                io.seek(_pos)
-                return self._m_table if hasattr(self, '_m_table') else None
-
-
-        class Subtable(KaitaiStruct):
-
-            class SubtableFormat(Enum):
-                byte_encoding_table = 0
-                high_byte_mapping_through_table = 2
-                segment_mapping_to_delta_values = 4
-                trimmed_table_mapping = 6
-            SEQ_FIELDS = ["format", "length", "version", "value"]
-            def __init__(self, _io, _parent=None, _root=None):
-                self._io = _io
-                self._parent = _parent
-                self._root = _root if _root else self
-                self._debug = collections.defaultdict(dict)
-
-            def _read(self):
-                self._debug['format']['start'] = self._io.pos()
-                self.format = KaitaiStream.resolve_enum(Ttf.Cmap.Subtable.SubtableFormat, self._io.read_u2be())
-                self._debug['format']['end'] = self._io.pos()
-                self._debug['length']['start'] = self._io.pos()
-                self.length = self._io.read_u2be()
-                self._debug['length']['end'] = self._io.pos()
-                self._debug['version']['start'] = self._io.pos()
-                self.version = self._io.read_u2be()
-                self._debug['version']['end'] = self._io.pos()
-                self._debug['value']['start'] = self._io.pos()
-                _on = self.format
-                if _on == Ttf.Cmap.Subtable.SubtableFormat.byte_encoding_table:
-                    self._raw_value = self._io.read_bytes((self.length - 6))
-                    _io__raw_value = KaitaiStream(BytesIO(self._raw_value))
-                    self.value = Ttf.Cmap.Subtable.ByteEncodingTable(_io__raw_value, self, self._root)
-                    self.value._read()
-                elif _on == Ttf.Cmap.Subtable.SubtableFormat.segment_mapping_to_delta_values:
-                    self._raw_value = self._io.read_bytes((self.length - 6))
-                    _io__raw_value = KaitaiStream(BytesIO(self._raw_value))
-                    self.value = Ttf.Cmap.Subtable.SegmentMappingToDeltaValues(_io__raw_value, self, self._root)
-                    self.value._read()
-                elif _on == Ttf.Cmap.Subtable.SubtableFormat.high_byte_mapping_through_table:
-                    self._raw_value = self._io.read_bytes((self.length - 6))
-                    _io__raw_value = KaitaiStream(BytesIO(self._raw_value))
-                    self.value = Ttf.Cmap.Subtable.HighByteMappingThroughTable(_io__raw_value, self, self._root)
-                    self.value._read()
-                elif _on == Ttf.Cmap.Subtable.SubtableFormat.trimmed_table_mapping:
-                    self._raw_value = self._io.read_bytes((self.length - 6))
-                    _io__raw_value = KaitaiStream(BytesIO(self._raw_value))
-                    self.value = Ttf.Cmap.Subtable.TrimmedTableMapping(_io__raw_value, self, self._root)
-                    self.value._read()
-                else:
-                    self.value = self._io.read_bytes((self.length - 6))
-                self._debug['value']['end'] = self._io.pos()
-
-            class ByteEncodingTable(KaitaiStruct):
-                SEQ_FIELDS = ["glyph_id_array"]
-                def __init__(self, _io, _parent=None, _root=None):
-                    self._io = _io
-                    self._parent = _parent
-                    self._root = _root if _root else self
-                    self._debug = collections.defaultdict(dict)
-
-                def _read(self):
-                    self._debug['glyph_id_array']['start'] = self._io.pos()
-                    self.glyph_id_array = self._io.read_bytes(256)
-                    self._debug['glyph_id_array']['end'] = self._io.pos()
-
-
-            class HighByteMappingThroughTable(KaitaiStruct):
-                SEQ_FIELDS = ["sub_header_keys"]
-                def __init__(self, _io, _parent=None, _root=None):
-                    self._io = _io
-                    self._parent = _parent
-                    self._root = _root if _root else self
-                    self._debug = collections.defaultdict(dict)
-
-                def _read(self):
-                    self._debug['sub_header_keys']['start'] = self._io.pos()
-                    self.sub_header_keys = [None] * (256)
-                    for i in range(256):
-                        if not 'arr' in self._debug['sub_header_keys']:
-                            self._debug['sub_header_keys']['arr'] = []
-                        self._debug['sub_header_keys']['arr'].append({'start': self._io.pos()})
-                        self.sub_header_keys[i] = self._io.read_u2be()
-                        self._debug['sub_header_keys']['arr'][i]['end'] = self._io.pos()
-
-                    self._debug['sub_header_keys']['end'] = self._io.pos()
-
-
-            class SegmentMappingToDeltaValues(KaitaiStruct):
-                SEQ_FIELDS = ["seg_count_x2", "search_range", "entry_selector", "range_shift", "end_count", "reserved_pad", "start_count", "id_delta", "id_range_offset", "glyph_id_array"]
-                def __init__(self, _io, _parent=None, _root=None):
-                    self._io = _io
-                    self._parent = _parent
-                    self._root = _root if _root else self
-                    self._debug = collections.defaultdict(dict)
-
-                def _read(self):
-                    self._debug['seg_count_x2']['start'] = self._io.pos()
-                    self.seg_count_x2 = self._io.read_u2be()
-                    self._debug['seg_count_x2']['end'] = self._io.pos()
-                    self._debug['search_range']['start'] = self._io.pos()
-                    self.search_range = self._io.read_u2be()
-                    self._debug['search_range']['end'] = self._io.pos()
-                    self._debug['entry_selector']['start'] = self._io.pos()
-                    self.entry_selector = self._io.read_u2be()
-                    self._debug['entry_selector']['end'] = self._io.pos()
-                    self._debug['range_shift']['start'] = self._io.pos()
-                    self.range_shift = self._io.read_u2be()
-                    self._debug['range_shift']['end'] = self._io.pos()
-                    self._debug['end_count']['start'] = self._io.pos()
-                    self.end_count = [None] * (self.seg_count)
-                    for i in range(self.seg_count):
-                        if not 'arr' in self._debug['end_count']:
-                            self._debug['end_count']['arr'] = []
-                        self._debug['end_count']['arr'].append({'start': self._io.pos()})
-                        self.end_count[i] = self._io.read_u2be()
-                        self._debug['end_count']['arr'][i]['end'] = self._io.pos()
-
-                    self._debug['end_count']['end'] = self._io.pos()
-                    self._debug['reserved_pad']['start'] = self._io.pos()
-                    self.reserved_pad = self._io.read_u2be()
-                    self._debug['reserved_pad']['end'] = self._io.pos()
-                    self._debug['start_count']['start'] = self._io.pos()
-                    self.start_count = [None] * (self.seg_count)
-                    for i in range(self.seg_count):
-                        if not 'arr' in self._debug['start_count']:
-                            self._debug['start_count']['arr'] = []
-                        self._debug['start_count']['arr'].append({'start': self._io.pos()})
-                        self.start_count[i] = self._io.read_u2be()
-                        self._debug['start_count']['arr'][i]['end'] = self._io.pos()
-
-                    self._debug['start_count']['end'] = self._io.pos()
-                    self._debug['id_delta']['start'] = self._io.pos()
-                    self.id_delta = [None] * (self.seg_count)
-                    for i in range(self.seg_count):
-                        if not 'arr' in self._debug['id_delta']:
-                            self._debug['id_delta']['arr'] = []
-                        self._debug['id_delta']['arr'].append({'start': self._io.pos()})
-                        self.id_delta[i] = self._io.read_u2be()
-                        self._debug['id_delta']['arr'][i]['end'] = self._io.pos()
-
-                    self._debug['id_delta']['end'] = self._io.pos()
-                    self._debug['id_range_offset']['start'] = self._io.pos()
-                    self.id_range_offset = [None] * (self.seg_count)
-                    for i in range(self.seg_count):
-                        if not 'arr' in self._debug['id_range_offset']:
-                            self._debug['id_range_offset']['arr'] = []
-                        self._debug['id_range_offset']['arr'].append({'start': self._io.pos()})
-                        self.id_range_offset[i] = self._io.read_u2be()
-                        self._debug['id_range_offset']['arr'][i]['end'] = self._io.pos()
-
-                    self._debug['id_range_offset']['end'] = self._io.pos()
-                    self._debug['glyph_id_array']['start'] = self._io.pos()
-                    self.glyph_id_array = []
-                    i = 0
-                    while not self._io.is_eof():
-                        if not 'arr' in self._debug['glyph_id_array']:
-                            self._debug['glyph_id_array']['arr'] = []
-                        self._debug['glyph_id_array']['arr'].append({'start': self._io.pos()})
-                        self.glyph_id_array.append(self._io.read_u2be())
-                        self._debug['glyph_id_array']['arr'][len(self.glyph_id_array) - 1]['end'] = self._io.pos()
-                        i += 1
-
-                    self._debug['glyph_id_array']['end'] = self._io.pos()
-
-                @property
-                def seg_count(self):
-                    if hasattr(self, '_m_seg_count'):
-                        return self._m_seg_count if hasattr(self, '_m_seg_count') else None
-
-                    self._m_seg_count = self.seg_count_x2 // 2
-                    return self._m_seg_count if hasattr(self, '_m_seg_count') else None
-
-
-            class TrimmedTableMapping(KaitaiStruct):
-                SEQ_FIELDS = ["first_code", "entry_count", "glyph_id_array"]
-                def __init__(self, _io, _parent=None, _root=None):
-                    self._io = _io
-                    self._parent = _parent
-                    self._root = _root if _root else self
-                    self._debug = collections.defaultdict(dict)
-
-                def _read(self):
-                    self._debug['first_code']['start'] = self._io.pos()
-                    self.first_code = self._io.read_u2be()
-                    self._debug['first_code']['end'] = self._io.pos()
-                    self._debug['entry_count']['start'] = self._io.pos()
-                    self.entry_count = self._io.read_u2be()
-                    self._debug['entry_count']['end'] = self._io.pos()
-                    self._debug['glyph_id_array']['start'] = self._io.pos()
-                    self.glyph_id_array = [None] * (self.entry_count)
-                    for i in range(self.entry_count):
-                        if not 'arr' in self._debug['glyph_id_array']:
-                            self._debug['glyph_id_array']['arr'] = []
-                        self._debug['glyph_id_array']['arr'].append({'start': self._io.pos()})
-                        self.glyph_id_array[i] = self._io.read_u2be()
-                        self._debug['glyph_id_array']['arr'][i]['end'] = self._io.pos()
-
-                    self._debug['glyph_id_array']['end'] = self._io.pos()
-
-
+        def _fetch_instances(self):
+            pass
 
 
 

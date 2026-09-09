@@ -1,14 +1,14 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
+# type: ignore
 
-from packaging.version import parse as parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
-from enum import Enum
+from enum import IntEnum
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
-    raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
+    raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class Specpr(KaitaiStruct):
     """Specpr records are fixed format, 1536 bytes/record. Record number
@@ -22,40 +22,102 @@ class Specpr(KaitaiStruct):
     ftp://ftpext.cr.usgs.gov/pub/cr/co/denver/speclab/pub/spectral.library/splib06.library/
     """
 
-    class RecordType(Enum):
+    class RecordType(IntEnum):
         data_initial = 0
         text_initial = 1
         data_continuation = 2
         text_continuation = 3
     SEQ_FIELDS = ["records"]
     def __init__(self, _io, _parent=None, _root=None):
-        self._io = _io
+        super(Specpr, self).__init__(_io)
         self._parent = _parent
-        self._root = _root if _root else self
+        self._root = _root or self
         self._debug = collections.defaultdict(dict)
 
     def _read(self):
         self._debug['records']['start'] = self._io.pos()
+        self._debug['records']['arr'] = []
         self.records = []
         i = 0
         while not self._io.is_eof():
-            if not 'arr' in self._debug['records']:
-                self._debug['records']['arr'] = []
             self._debug['records']['arr'].append({'start': self._io.pos()})
             _t_records = Specpr.Record(self._io, self, self._root)
-            _t_records._read()
-            self.records.append(_t_records)
+            try:
+                _t_records._read()
+            finally:
+                self.records.append(_t_records)
             self._debug['records']['arr'][len(self.records) - 1]['end'] = self._io.pos()
             i += 1
 
         self._debug['records']['end'] = self._io.pos()
 
+
+    def _fetch_instances(self):
+        pass
+        for i in range(len(self.records)):
+            pass
+            self.records[i]._fetch_instances()
+
+
+    class CoarseTimestamp(KaitaiStruct):
+        SEQ_FIELDS = ["scaled_seconds"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Specpr.CoarseTimestamp, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['scaled_seconds']['start'] = self._io.pos()
+            self.scaled_seconds = self._io.read_s4be()
+            self._debug['scaled_seconds']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+
+        @property
+        def seconds(self):
+            if hasattr(self, '_m_seconds'):
+                return self._m_seconds
+
+            self._m_seconds = self.scaled_seconds * 24000
+            return getattr(self, '_m_seconds', None)
+
+
+    class DataContinuation(KaitaiStruct):
+        SEQ_FIELDS = ["cdata"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Specpr.DataContinuation, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['cdata']['start'] = self._io.pos()
+            self._debug['cdata']['arr'] = []
+            self.cdata = []
+            for i in range(383):
+                self._debug['cdata']['arr'].append({'start': self._io.pos()})
+                self.cdata.append(self._io.read_f4be())
+                self._debug['cdata']['arr'][i]['end'] = self._io.pos()
+
+            self._debug['cdata']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            for i in range(len(self.cdata)):
+                pass
+
+
+
     class DataInitial(KaitaiStruct):
         SEQ_FIELDS = ["ids", "iscta", "isctb", "jdatea", "jdateb", "istb", "isra", "isdec", "itchan", "irmas", "revs", "iband", "irwav", "irespt", "irecno", "itpntr", "ihist", "mhist", "nruns", "siangl", "seangl", "sphase", "iwtrns", "itimch", "xnrm", "scatim", "timint", "tempd", "data"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Specpr.DataInitial, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -97,12 +159,11 @@ class Specpr(KaitaiStruct):
             self.revs = self._io.read_s4be()
             self._debug['revs']['end'] = self._io.pos()
             self._debug['iband']['start'] = self._io.pos()
-            self.iband = [None] * (2)
+            self._debug['iband']['arr'] = []
+            self.iband = []
             for i in range(2):
-                if not 'arr' in self._debug['iband']:
-                    self._debug['iband']['arr'] = []
                 self._debug['iband']['arr'].append({'start': self._io.pos()})
-                self.iband[i] = self._io.read_s4be()
+                self.iband.append(self._io.read_s4be())
                 self._debug['iband']['arr'][i]['end'] = self._io.pos()
 
             self._debug['iband']['end'] = self._io.pos()
@@ -119,15 +180,14 @@ class Specpr(KaitaiStruct):
             self.itpntr = self._io.read_s4be()
             self._debug['itpntr']['end'] = self._io.pos()
             self._debug['ihist']['start'] = self._io.pos()
-            self.ihist = (KaitaiStream.bytes_strip_right(self._io.read_bytes(60), 32)).decode(u"ascii")
+            self.ihist = (KaitaiStream.bytes_strip_right(self._io.read_bytes(60), 32)).decode(u"ASCII")
             self._debug['ihist']['end'] = self._io.pos()
             self._debug['mhist']['start'] = self._io.pos()
-            self.mhist = [None] * (4)
+            self._debug['mhist']['arr'] = []
+            self.mhist = []
             for i in range(4):
-                if not 'arr' in self._debug['mhist']:
-                    self._debug['mhist']['arr'] = []
                 self._debug['mhist']['arr'].append({'start': self._io.pos()})
-                self.mhist[i] = (self._io.read_bytes(74)).decode(u"ascii")
+                self.mhist.append((self._io.read_bytes(74)).decode(u"ASCII"))
                 self._debug['mhist']['arr'][i]['end'] = self._io.pos()
 
             self._debug['mhist']['end'] = self._io.pos()
@@ -164,55 +224,51 @@ class Specpr(KaitaiStruct):
             self.tempd = self._io.read_f4be()
             self._debug['tempd']['end'] = self._io.pos()
             self._debug['data']['start'] = self._io.pos()
-            self.data = [None] * (256)
+            self._debug['data']['arr'] = []
+            self.data = []
             for i in range(256):
-                if not 'arr' in self._debug['data']:
-                    self._debug['data']['arr'] = []
                 self._debug['data']['arr'].append({'start': self._io.pos()})
-                self.data[i] = self._io.read_f4be()
+                self.data.append(self._io.read_f4be())
                 self._debug['data']['arr'][i]['end'] = self._io.pos()
 
             self._debug['data']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            self.ids._fetch_instances()
+            self.iscta._fetch_instances()
+            self.isctb._fetch_instances()
+            self.istb._fetch_instances()
+            for i in range(len(self.iband)):
+                pass
+
+            for i in range(len(self.mhist)):
+                pass
+
+            self.siangl._fetch_instances()
+            self.seangl._fetch_instances()
+            for i in range(len(self.data)):
+                pass
+
 
         @property
         def phase_angle_arcsec(self):
             """The phase angle between iangl and eangl in seconds."""
             if hasattr(self, '_m_phase_angle_arcsec'):
-                return self._m_phase_angle_arcsec if hasattr(self, '_m_phase_angle_arcsec') else None
+                return self._m_phase_angle_arcsec
 
-            self._m_phase_angle_arcsec = (self.sphase / 1500)
-            return self._m_phase_angle_arcsec if hasattr(self, '_m_phase_angle_arcsec') else None
-
-
-    class CoarseTimestamp(KaitaiStruct):
-        SEQ_FIELDS = ["scaled_seconds"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['scaled_seconds']['start'] = self._io.pos()
-            self.scaled_seconds = self._io.read_s4be()
-            self._debug['scaled_seconds']['end'] = self._io.pos()
-
-        @property
-        def seconds(self):
-            if hasattr(self, '_m_seconds'):
-                return self._m_seconds if hasattr(self, '_m_seconds') else None
-
-            self._m_seconds = (self.scaled_seconds * 24000)
-            return self._m_seconds if hasattr(self, '_m_seconds') else None
+            self._m_phase_angle_arcsec = self.sphase / 1500
+            return getattr(self, '_m_phase_angle_arcsec', None)
 
 
     class Icflag(KaitaiStruct):
         """it is big endian."""
         SEQ_FIELDS = ["reserved", "isctb_type", "iscta_type", "coordinate_mode", "errors", "text", "continuation"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Specpr.Icflag, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -238,59 +294,46 @@ class Specpr(KaitaiStruct):
             self.continuation = self._io.read_bits_int_be(1) != 0
             self._debug['continuation']['end'] = self._io.pos()
 
+
+        def _fetch_instances(self):
+            pass
+
         @property
         def type(self):
             if hasattr(self, '_m_type'):
-                return self._m_type if hasattr(self, '_m_type') else None
+                return self._m_type
 
-            self._m_type = KaitaiStream.resolve_enum(Specpr.RecordType, ((int(self.text) * 1) + (int(self.continuation) * 2)))
-            return self._m_type if hasattr(self, '_m_type') else None
-
-
-    class DataContinuation(KaitaiStruct):
-        SEQ_FIELDS = ["cdata"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['cdata']['start'] = self._io.pos()
-            self.cdata = [None] * (383)
-            for i in range(383):
-                if not 'arr' in self._debug['cdata']:
-                    self._debug['cdata']['arr'] = []
-                self._debug['cdata']['arr'].append({'start': self._io.pos()})
-                self.cdata[i] = self._io.read_f4be()
-                self._debug['cdata']['arr'][i]['end'] = self._io.pos()
-
-            self._debug['cdata']['end'] = self._io.pos()
+            self._m_type = KaitaiStream.resolve_enum(Specpr.RecordType, int(self.text) * 1 + int(self.continuation) * 2)
+            return getattr(self, '_m_type', None)
 
 
     class Identifiers(KaitaiStruct):
         SEQ_FIELDS = ["ititle", "usernm"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Specpr.Identifiers, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
             self._debug['ititle']['start'] = self._io.pos()
-            self.ititle = (KaitaiStream.bytes_strip_right(self._io.read_bytes(40), 32)).decode(u"ascii")
+            self.ititle = (KaitaiStream.bytes_strip_right(self._io.read_bytes(40), 32)).decode(u"ASCII")
             self._debug['ititle']['end'] = self._io.pos()
             self._debug['usernm']['start'] = self._io.pos()
-            self.usernm = (self._io.read_bytes(8)).decode(u"ascii")
+            self.usernm = (self._io.read_bytes(8)).decode(u"ASCII")
             self._debug['usernm']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
 
 
     class IllumAngle(KaitaiStruct):
         SEQ_FIELDS = ["angl"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Specpr.IllumAngle, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -298,37 +341,124 @@ class Specpr(KaitaiStruct):
             self.angl = self._io.read_s4be()
             self._debug['angl']['end'] = self._io.pos()
 
-        @property
-        def seconds_total(self):
-            if hasattr(self, '_m_seconds_total'):
-                return self._m_seconds_total if hasattr(self, '_m_seconds_total') else None
 
-            self._m_seconds_total = self.angl // 6000
-            return self._m_seconds_total if hasattr(self, '_m_seconds_total') else None
-
-        @property
-        def minutes_total(self):
-            if hasattr(self, '_m_minutes_total'):
-                return self._m_minutes_total if hasattr(self, '_m_minutes_total') else None
-
-            self._m_minutes_total = self.seconds_total // 60
-            return self._m_minutes_total if hasattr(self, '_m_minutes_total') else None
+        def _fetch_instances(self):
+            pass
 
         @property
         def degrees_total(self):
             if hasattr(self, '_m_degrees_total'):
-                return self._m_degrees_total if hasattr(self, '_m_degrees_total') else None
+                return self._m_degrees_total
 
             self._m_degrees_total = self.minutes_total // 60
-            return self._m_degrees_total if hasattr(self, '_m_degrees_total') else None
+            return getattr(self, '_m_degrees_total', None)
+
+        @property
+        def minutes_total(self):
+            if hasattr(self, '_m_minutes_total'):
+                return self._m_minutes_total
+
+            self._m_minutes_total = self.seconds_total // 60
+            return getattr(self, '_m_minutes_total', None)
+
+        @property
+        def seconds_total(self):
+            if hasattr(self, '_m_seconds_total'):
+                return self._m_seconds_total
+
+            self._m_seconds_total = self.angl // 6000
+            return getattr(self, '_m_seconds_total', None)
+
+
+    class Record(KaitaiStruct):
+        SEQ_FIELDS = ["icflag", "content"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Specpr.Record, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['icflag']['start'] = self._io.pos()
+            self.icflag = Specpr.Icflag(self._io, self, self._root)
+            self.icflag._read()
+            self._debug['icflag']['end'] = self._io.pos()
+            self._debug['content']['start'] = self._io.pos()
+            _on = self.icflag.type
+            if _on == Specpr.RecordType.data_continuation:
+                pass
+                self._raw_content = self._io.read_bytes(1536 - 4)
+                _io__raw_content = KaitaiStream(BytesIO(self._raw_content))
+                self.content = Specpr.DataContinuation(_io__raw_content, self, self._root)
+                self.content._read()
+            elif _on == Specpr.RecordType.data_initial:
+                pass
+                self._raw_content = self._io.read_bytes(1536 - 4)
+                _io__raw_content = KaitaiStream(BytesIO(self._raw_content))
+                self.content = Specpr.DataInitial(_io__raw_content, self, self._root)
+                self.content._read()
+            elif _on == Specpr.RecordType.text_continuation:
+                pass
+                self._raw_content = self._io.read_bytes(1536 - 4)
+                _io__raw_content = KaitaiStream(BytesIO(self._raw_content))
+                self.content = Specpr.TextContinuation(_io__raw_content, self, self._root)
+                self.content._read()
+            elif _on == Specpr.RecordType.text_initial:
+                pass
+                self._raw_content = self._io.read_bytes(1536 - 4)
+                _io__raw_content = KaitaiStream(BytesIO(self._raw_content))
+                self.content = Specpr.TextInitial(_io__raw_content, self, self._root)
+                self.content._read()
+            else:
+                pass
+                self.content = self._io.read_bytes(1536 - 4)
+            self._debug['content']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            self.icflag._fetch_instances()
+            _on = self.icflag.type
+            if _on == Specpr.RecordType.data_continuation:
+                pass
+                self.content._fetch_instances()
+            elif _on == Specpr.RecordType.data_initial:
+                pass
+                self.content._fetch_instances()
+            elif _on == Specpr.RecordType.text_continuation:
+                pass
+                self.content._fetch_instances()
+            elif _on == Specpr.RecordType.text_initial:
+                pass
+                self.content._fetch_instances()
+            else:
+                pass
+
+
+    class TextContinuation(KaitaiStruct):
+        SEQ_FIELDS = ["tdata"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Specpr.TextContinuation, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['tdata']['start'] = self._io.pos()
+            self.tdata = (self._io.read_bytes(1532)).decode(u"ASCII")
+            self._debug['tdata']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
 
 
     class TextInitial(KaitaiStruct):
         SEQ_FIELDS = ["ids", "itxtpt", "itxtch", "itext"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Specpr.TextInitial, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -343,62 +473,13 @@ class Specpr(KaitaiStruct):
             self.itxtch = self._io.read_s4be()
             self._debug['itxtch']['end'] = self._io.pos()
             self._debug['itext']['start'] = self._io.pos()
-            self.itext = (self._io.read_bytes(1476)).decode(u"ascii")
+            self.itext = (self._io.read_bytes(1476)).decode(u"ASCII")
             self._debug['itext']['end'] = self._io.pos()
 
 
-    class Record(KaitaiStruct):
-        SEQ_FIELDS = ["icflag", "content"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['icflag']['start'] = self._io.pos()
-            self.icflag = Specpr.Icflag(self._io, self, self._root)
-            self.icflag._read()
-            self._debug['icflag']['end'] = self._io.pos()
-            self._debug['content']['start'] = self._io.pos()
-            _on = self.icflag.type
-            if _on == Specpr.RecordType.data_initial:
-                self._raw_content = self._io.read_bytes((1536 - 4))
-                _io__raw_content = KaitaiStream(BytesIO(self._raw_content))
-                self.content = Specpr.DataInitial(_io__raw_content, self, self._root)
-                self.content._read()
-            elif _on == Specpr.RecordType.data_continuation:
-                self._raw_content = self._io.read_bytes((1536 - 4))
-                _io__raw_content = KaitaiStream(BytesIO(self._raw_content))
-                self.content = Specpr.DataContinuation(_io__raw_content, self, self._root)
-                self.content._read()
-            elif _on == Specpr.RecordType.text_continuation:
-                self._raw_content = self._io.read_bytes((1536 - 4))
-                _io__raw_content = KaitaiStream(BytesIO(self._raw_content))
-                self.content = Specpr.TextContinuation(_io__raw_content, self, self._root)
-                self.content._read()
-            elif _on == Specpr.RecordType.text_initial:
-                self._raw_content = self._io.read_bytes((1536 - 4))
-                _io__raw_content = KaitaiStream(BytesIO(self._raw_content))
-                self.content = Specpr.TextInitial(_io__raw_content, self, self._root)
-                self.content._read()
-            else:
-                self.content = self._io.read_bytes((1536 - 4))
-            self._debug['content']['end'] = self._io.pos()
-
-
-    class TextContinuation(KaitaiStruct):
-        SEQ_FIELDS = ["tdata"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['tdata']['start'] = self._io.pos()
-            self.tdata = (self._io.read_bytes(1532)).decode(u"ascii")
-            self._debug['tdata']['end'] = self._io.pos()
+        def _fetch_instances(self):
+            pass
+            self.ids._fetch_instances()
 
 
 

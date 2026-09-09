@@ -1,16 +1,16 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
+# type: ignore
 
-from packaging.version import parse as parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
-from enum import Enum
+from polyfile.kaitai.parsers import vlq_base128_be
+from enum import IntEnum
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
-    raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
+    raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
-from polyfile.kaitai.parsers import vlq_base128_be
 class Sqlite3(KaitaiStruct):
     """SQLite3 is a popular serverless SQL engine, implemented as a library
     to be used within other applications. It keeps its databases as
@@ -30,19 +30,19 @@ class Sqlite3(KaitaiStruct):
        Source - https://www.sqlite.org/fileformat.html
     """
 
-    class Versions(Enum):
-        legacy = 1
-        wal = 2
-
-    class Encodings(Enum):
+    class Encodings(IntEnum):
         utf_8 = 1
         utf_16le = 2
         utf_16be = 3
+
+    class Versions(IntEnum):
+        legacy = 1
+        wal = 2
     SEQ_FIELDS = ["magic", "len_page_mod", "write_version", "read_version", "reserved_space", "max_payload_frac", "min_payload_frac", "leaf_payload_frac", "file_change_counter", "num_pages", "first_freelist_trunk_page", "num_freelist_pages", "schema_cookie", "schema_format", "def_page_cache_size", "largest_root_page", "text_encoding", "user_version", "is_incremental_vacuum", "application_id", "reserved", "version_valid_for", "sqlite_version_number", "root_page"]
     def __init__(self, _io, _parent=None, _root=None):
-        self._io = _io
+        super(Sqlite3, self).__init__(_io)
         self._parent = _parent
-        self._root = _root if _root else self
+        self._root = _root or self
         self._debug = collections.defaultdict(dict)
 
     def _read(self):
@@ -122,53 +122,17 @@ class Sqlite3(KaitaiStruct):
         self.root_page._read()
         self._debug['root_page']['end'] = self._io.pos()
 
-    class Serial(KaitaiStruct):
-        SEQ_FIELDS = ["code"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
 
-        def _read(self):
-            self._debug['code']['start'] = self._io.pos()
-            self.code = vlq_base128_be.VlqBase128Be(self._io)
-            self.code._read()
-            self._debug['code']['end'] = self._io.pos()
-
-        @property
-        def is_blob(self):
-            if hasattr(self, '_m_is_blob'):
-                return self._m_is_blob if hasattr(self, '_m_is_blob') else None
-
-            self._m_is_blob =  ((self.code.value >= 12) and ((self.code.value % 2) == 0)) 
-            return self._m_is_blob if hasattr(self, '_m_is_blob') else None
-
-        @property
-        def is_string(self):
-            if hasattr(self, '_m_is_string'):
-                return self._m_is_string if hasattr(self, '_m_is_string') else None
-
-            self._m_is_string =  ((self.code.value >= 13) and ((self.code.value % 2) == 1)) 
-            return self._m_is_string if hasattr(self, '_m_is_string') else None
-
-        @property
-        def len_content(self):
-            if hasattr(self, '_m_len_content'):
-                return self._m_len_content if hasattr(self, '_m_len_content') else None
-
-            if self.code.value >= 12:
-                self._m_len_content = (self.code.value - 12) // 2
-
-            return self._m_len_content if hasattr(self, '_m_len_content') else None
-
+    def _fetch_instances(self):
+        pass
+        self.root_page._fetch_instances()
 
     class BtreePage(KaitaiStruct):
         SEQ_FIELDS = ["page_type", "first_freeblock", "num_cells", "ofs_cells", "num_frag_free_bytes", "right_ptr", "cells"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Sqlite3.BtreePage, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -188,160 +152,35 @@ class Sqlite3(KaitaiStruct):
             self.num_frag_free_bytes = self._io.read_u1()
             self._debug['num_frag_free_bytes']['end'] = self._io.pos()
             if  ((self.page_type == 2) or (self.page_type == 5)) :
+                pass
                 self._debug['right_ptr']['start'] = self._io.pos()
                 self.right_ptr = self._io.read_u4be()
                 self._debug['right_ptr']['end'] = self._io.pos()
 
             self._debug['cells']['start'] = self._io.pos()
-            self.cells = [None] * (self.num_cells)
+            self._debug['cells']['arr'] = []
+            self.cells = []
             for i in range(self.num_cells):
-                if not 'arr' in self._debug['cells']:
-                    self._debug['cells']['arr'] = []
                 self._debug['cells']['arr'].append({'start': self._io.pos()})
                 _t_cells = Sqlite3.RefCell(self._io, self, self._root)
-                _t_cells._read()
-                self.cells[i] = _t_cells
+                try:
+                    _t_cells._read()
+                finally:
+                    self.cells.append(_t_cells)
                 self._debug['cells']['arr'][i]['end'] = self._io.pos()
 
             self._debug['cells']['end'] = self._io.pos()
 
 
-    class CellIndexLeaf(KaitaiStruct):
-        """
-        .. seealso::
-           Source - https://www.sqlite.org/fileformat.html#b_tree_pages
-        """
-        SEQ_FIELDS = ["len_payload", "payload"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
+        def _fetch_instances(self):
+            pass
+            if  ((self.page_type == 2) or (self.page_type == 5)) :
+                pass
 
-        def _read(self):
-            self._debug['len_payload']['start'] = self._io.pos()
-            self.len_payload = vlq_base128_be.VlqBase128Be(self._io)
-            self.len_payload._read()
-            self._debug['len_payload']['end'] = self._io.pos()
-            self._debug['payload']['start'] = self._io.pos()
-            self._raw_payload = self._io.read_bytes(self.len_payload.value)
-            _io__raw_payload = KaitaiStream(BytesIO(self._raw_payload))
-            self.payload = Sqlite3.CellPayload(_io__raw_payload, self, self._root)
-            self.payload._read()
-            self._debug['payload']['end'] = self._io.pos()
+            for i in range(len(self.cells)):
+                pass
+                self.cells[i]._fetch_instances()
 
-
-    class Serials(KaitaiStruct):
-        SEQ_FIELDS = ["entries"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['entries']['start'] = self._io.pos()
-            self.entries = []
-            i = 0
-            while not self._io.is_eof():
-                if not 'arr' in self._debug['entries']:
-                    self._debug['entries']['arr'] = []
-                self._debug['entries']['arr'].append({'start': self._io.pos()})
-                _t_entries = vlq_base128_be.VlqBase128Be(self._io)
-                _t_entries._read()
-                self.entries.append(_t_entries)
-                self._debug['entries']['arr'][len(self.entries) - 1]['end'] = self._io.pos()
-                i += 1
-
-            self._debug['entries']['end'] = self._io.pos()
-
-
-    class CellTableLeaf(KaitaiStruct):
-        """
-        .. seealso::
-           Source - https://www.sqlite.org/fileformat.html#b_tree_pages
-        """
-        SEQ_FIELDS = ["len_payload", "row_id", "payload"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['len_payload']['start'] = self._io.pos()
-            self.len_payload = vlq_base128_be.VlqBase128Be(self._io)
-            self.len_payload._read()
-            self._debug['len_payload']['end'] = self._io.pos()
-            self._debug['row_id']['start'] = self._io.pos()
-            self.row_id = vlq_base128_be.VlqBase128Be(self._io)
-            self.row_id._read()
-            self._debug['row_id']['end'] = self._io.pos()
-            self._debug['payload']['start'] = self._io.pos()
-            self._raw_payload = self._io.read_bytes(self.len_payload.value)
-            _io__raw_payload = KaitaiStream(BytesIO(self._raw_payload))
-            self.payload = Sqlite3.CellPayload(_io__raw_payload, self, self._root)
-            self.payload._read()
-            self._debug['payload']['end'] = self._io.pos()
-
-
-    class CellPayload(KaitaiStruct):
-        """
-        .. seealso::
-           Source - https://sqlite.org/fileformat2.html#record_format
-        """
-        SEQ_FIELDS = ["len_header_and_len", "column_serials", "column_contents"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['len_header_and_len']['start'] = self._io.pos()
-            self.len_header_and_len = vlq_base128_be.VlqBase128Be(self._io)
-            self.len_header_and_len._read()
-            self._debug['len_header_and_len']['end'] = self._io.pos()
-            self._debug['column_serials']['start'] = self._io.pos()
-            self._raw_column_serials = self._io.read_bytes((self.len_header_and_len.value - 1))
-            _io__raw_column_serials = KaitaiStream(BytesIO(self._raw_column_serials))
-            self.column_serials = Sqlite3.Serials(_io__raw_column_serials, self, self._root)
-            self.column_serials._read()
-            self._debug['column_serials']['end'] = self._io.pos()
-            self._debug['column_contents']['start'] = self._io.pos()
-            self.column_contents = [None] * (len(self.column_serials.entries))
-            for i in range(len(self.column_serials.entries)):
-                if not 'arr' in self._debug['column_contents']:
-                    self._debug['column_contents']['arr'] = []
-                self._debug['column_contents']['arr'].append({'start': self._io.pos()})
-                _t_column_contents = Sqlite3.ColumnContent(self.column_serials.entries[i], self._io, self, self._root)
-                _t_column_contents._read()
-                self.column_contents[i] = _t_column_contents
-                self._debug['column_contents']['arr'][i]['end'] = self._io.pos()
-
-            self._debug['column_contents']['end'] = self._io.pos()
-
-
-    class CellTableInterior(KaitaiStruct):
-        """
-        .. seealso::
-           Source - https://www.sqlite.org/fileformat.html#b_tree_pages
-        """
-        SEQ_FIELDS = ["left_child_page", "row_id"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['left_child_page']['start'] = self._io.pos()
-            self.left_child_page = self._io.read_u4be()
-            self._debug['left_child_page']['end'] = self._io.pos()
-            self._debug['row_id']['start'] = self._io.pos()
-            self.row_id = vlq_base128_be.VlqBase128Be(self._io)
-            self.row_id._read()
-            self._debug['row_id']['end'] = self._io.pos()
 
 
     class CellIndexInterior(KaitaiStruct):
@@ -351,9 +190,9 @@ class Sqlite3(KaitaiStruct):
         """
         SEQ_FIELDS = ["left_child_page", "len_payload", "payload"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Sqlite3.CellIndexInterior, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -372,39 +211,196 @@ class Sqlite3(KaitaiStruct):
             self._debug['payload']['end'] = self._io.pos()
 
 
+        def _fetch_instances(self):
+            pass
+            self.len_payload._fetch_instances()
+            self.payload._fetch_instances()
+
+
+    class CellIndexLeaf(KaitaiStruct):
+        """
+        .. seealso::
+           Source - https://www.sqlite.org/fileformat.html#b_tree_pages
+        """
+        SEQ_FIELDS = ["len_payload", "payload"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Sqlite3.CellIndexLeaf, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['len_payload']['start'] = self._io.pos()
+            self.len_payload = vlq_base128_be.VlqBase128Be(self._io)
+            self.len_payload._read()
+            self._debug['len_payload']['end'] = self._io.pos()
+            self._debug['payload']['start'] = self._io.pos()
+            self._raw_payload = self._io.read_bytes(self.len_payload.value)
+            _io__raw_payload = KaitaiStream(BytesIO(self._raw_payload))
+            self.payload = Sqlite3.CellPayload(_io__raw_payload, self, self._root)
+            self.payload._read()
+            self._debug['payload']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            self.len_payload._fetch_instances()
+            self.payload._fetch_instances()
+
+
+    class CellPayload(KaitaiStruct):
+        """
+        .. seealso::
+           Source - https://sqlite.org/fileformat2.html#record_format
+        """
+        SEQ_FIELDS = ["len_header_and_len", "column_serials", "column_contents"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Sqlite3.CellPayload, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['len_header_and_len']['start'] = self._io.pos()
+            self.len_header_and_len = vlq_base128_be.VlqBase128Be(self._io)
+            self.len_header_and_len._read()
+            self._debug['len_header_and_len']['end'] = self._io.pos()
+            self._debug['column_serials']['start'] = self._io.pos()
+            self._raw_column_serials = self._io.read_bytes(self.len_header_and_len.value - 1)
+            _io__raw_column_serials = KaitaiStream(BytesIO(self._raw_column_serials))
+            self.column_serials = Sqlite3.Serials(_io__raw_column_serials, self, self._root)
+            self.column_serials._read()
+            self._debug['column_serials']['end'] = self._io.pos()
+            self._debug['column_contents']['start'] = self._io.pos()
+            self._debug['column_contents']['arr'] = []
+            self.column_contents = []
+            for i in range(len(self.column_serials.entries)):
+                self._debug['column_contents']['arr'].append({'start': self._io.pos()})
+                _t_column_contents = Sqlite3.ColumnContent(self.column_serials.entries[i], self._io, self, self._root)
+                try:
+                    _t_column_contents._read()
+                finally:
+                    self.column_contents.append(_t_column_contents)
+                self._debug['column_contents']['arr'][i]['end'] = self._io.pos()
+
+            self._debug['column_contents']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            self.len_header_and_len._fetch_instances()
+            self.column_serials._fetch_instances()
+            for i in range(len(self.column_contents)):
+                pass
+                self.column_contents[i]._fetch_instances()
+
+
+
+    class CellTableInterior(KaitaiStruct):
+        """
+        .. seealso::
+           Source - https://www.sqlite.org/fileformat.html#b_tree_pages
+        """
+        SEQ_FIELDS = ["left_child_page", "row_id"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Sqlite3.CellTableInterior, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['left_child_page']['start'] = self._io.pos()
+            self.left_child_page = self._io.read_u4be()
+            self._debug['left_child_page']['end'] = self._io.pos()
+            self._debug['row_id']['start'] = self._io.pos()
+            self.row_id = vlq_base128_be.VlqBase128Be(self._io)
+            self.row_id._read()
+            self._debug['row_id']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            self.row_id._fetch_instances()
+
+
+    class CellTableLeaf(KaitaiStruct):
+        """
+        .. seealso::
+           Source - https://www.sqlite.org/fileformat.html#b_tree_pages
+        """
+        SEQ_FIELDS = ["len_payload", "row_id", "payload"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Sqlite3.CellTableLeaf, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['len_payload']['start'] = self._io.pos()
+            self.len_payload = vlq_base128_be.VlqBase128Be(self._io)
+            self.len_payload._read()
+            self._debug['len_payload']['end'] = self._io.pos()
+            self._debug['row_id']['start'] = self._io.pos()
+            self.row_id = vlq_base128_be.VlqBase128Be(self._io)
+            self.row_id._read()
+            self._debug['row_id']['end'] = self._io.pos()
+            self._debug['payload']['start'] = self._io.pos()
+            self._raw_payload = self._io.read_bytes(self.len_payload.value)
+            _io__raw_payload = KaitaiStream(BytesIO(self._raw_payload))
+            self.payload = Sqlite3.CellPayload(_io__raw_payload, self, self._root)
+            self.payload._read()
+            self._debug['payload']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            self.len_payload._fetch_instances()
+            self.row_id._fetch_instances()
+            self.payload._fetch_instances()
+
+
     class ColumnContent(KaitaiStruct):
         SEQ_FIELDS = ["as_int", "as_float", "as_blob", "as_str"]
-        def __init__(self, ser, _io, _parent=None, _root=None):
-            self._io = _io
+        def __init__(self, serial_type, _io, _parent=None, _root=None):
+            super(Sqlite3.ColumnContent, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
-            self.ser = ser
+            self._root = _root
+            self.serial_type = serial_type
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
             if  ((self.serial_type.code.value >= 1) and (self.serial_type.code.value <= 6)) :
+                pass
                 self._debug['as_int']['start'] = self._io.pos()
                 _on = self.serial_type.code.value
-                if _on == 4:
-                    self.as_int = self._io.read_u4be()
-                elif _on == 6:
-                    self.as_int = self._io.read_u8be()
-                elif _on == 1:
+                if _on == 1:
+                    pass
                     self.as_int = self._io.read_u1()
-                elif _on == 3:
-                    self.as_int = self._io.read_bits_int_be(24)
-                elif _on == 5:
-                    self.as_int = self._io.read_bits_int_be(48)
                 elif _on == 2:
+                    pass
                     self.as_int = self._io.read_u2be()
+                elif _on == 3:
+                    pass
+                    self.as_int = self._io.read_bits_int_be(24)
+                elif _on == 4:
+                    pass
+                    self.as_int = self._io.read_u4be()
+                elif _on == 5:
+                    pass
+                    self.as_int = self._io.read_bits_int_be(48)
+                elif _on == 6:
+                    pass
+                    self.as_int = self._io.read_u8be()
                 self._debug['as_int']['end'] = self._io.pos()
 
             if self.serial_type.code.value == 7:
+                pass
                 self._debug['as_float']['start'] = self._io.pos()
                 self.as_float = self._io.read_f8be()
                 self._debug['as_float']['end'] = self._io.pos()
 
             if self.serial_type.is_blob:
+                pass
                 self._debug['as_blob']['start'] = self._io.pos()
                 self.as_blob = self._io.read_bytes(self.serial_type.len_content)
                 self._debug['as_blob']['end'] = self._io.pos()
@@ -413,21 +409,39 @@ class Sqlite3(KaitaiStruct):
             self.as_str = (self._io.read_bytes(self.serial_type.len_content)).decode(u"UTF-8")
             self._debug['as_str']['end'] = self._io.pos()
 
-        @property
-        def serial_type(self):
-            if hasattr(self, '_m_serial_type'):
-                return self._m_serial_type if hasattr(self, '_m_serial_type') else None
 
-            self._m_serial_type = self.ser
-            return self._m_serial_type if hasattr(self, '_m_serial_type') else None
+        def _fetch_instances(self):
+            pass
+            if  ((self.serial_type.code.value >= 1) and (self.serial_type.code.value <= 6)) :
+                pass
+                _on = self.serial_type.code.value
+                if _on == 1:
+                    pass
+                elif _on == 2:
+                    pass
+                elif _on == 3:
+                    pass
+                elif _on == 4:
+                    pass
+                elif _on == 5:
+                    pass
+                elif _on == 6:
+                    pass
+
+            if self.serial_type.code.value == 7:
+                pass
+
+            if self.serial_type.is_blob:
+                pass
+
 
 
     class RefCell(KaitaiStruct):
         SEQ_FIELDS = ["ofs_body"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Sqlite3.RefCell, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -435,38 +449,144 @@ class Sqlite3(KaitaiStruct):
             self.ofs_body = self._io.read_u2be()
             self._debug['ofs_body']['end'] = self._io.pos()
 
+
+        def _fetch_instances(self):
+            pass
+            _ = self.body
+            if hasattr(self, '_m_body'):
+                pass
+                _on = self._parent.page_type
+                if _on == 10:
+                    pass
+                    self._m_body._fetch_instances()
+                elif _on == 13:
+                    pass
+                    self._m_body._fetch_instances()
+                elif _on == 2:
+                    pass
+                    self._m_body._fetch_instances()
+                elif _on == 5:
+                    pass
+                    self._m_body._fetch_instances()
+
+
         @property
         def body(self):
             if hasattr(self, '_m_body'):
-                return self._m_body if hasattr(self, '_m_body') else None
+                return self._m_body
 
             _pos = self._io.pos()
             self._io.seek(self.ofs_body)
             self._debug['_m_body']['start'] = self._io.pos()
             _on = self._parent.page_type
-            if _on == 13:
-                self._m_body = Sqlite3.CellTableLeaf(self._io, self, self._root)
-                self._m_body._read()
-            elif _on == 5:
-                self._m_body = Sqlite3.CellTableInterior(self._io, self, self._root)
-                self._m_body._read()
-            elif _on == 10:
+            if _on == 10:
+                pass
                 self._m_body = Sqlite3.CellIndexLeaf(self._io, self, self._root)
                 self._m_body._read()
+            elif _on == 13:
+                pass
+                self._m_body = Sqlite3.CellTableLeaf(self._io, self, self._root)
+                self._m_body._read()
             elif _on == 2:
+                pass
                 self._m_body = Sqlite3.CellIndexInterior(self._io, self, self._root)
+                self._m_body._read()
+            elif _on == 5:
+                pass
+                self._m_body = Sqlite3.CellTableInterior(self._io, self, self._root)
                 self._m_body._read()
             self._debug['_m_body']['end'] = self._io.pos()
             self._io.seek(_pos)
-            return self._m_body if hasattr(self, '_m_body') else None
+            return getattr(self, '_m_body', None)
+
+
+    class Serial(KaitaiStruct):
+        SEQ_FIELDS = ["code"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Sqlite3.Serial, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['code']['start'] = self._io.pos()
+            self.code = vlq_base128_be.VlqBase128Be(self._io)
+            self.code._read()
+            self._debug['code']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            self.code._fetch_instances()
+
+        @property
+        def is_blob(self):
+            if hasattr(self, '_m_is_blob'):
+                return self._m_is_blob
+
+            self._m_is_blob =  ((self.code.value >= 12) and (self.code.value % 2 == 0)) 
+            return getattr(self, '_m_is_blob', None)
+
+        @property
+        def is_string(self):
+            if hasattr(self, '_m_is_string'):
+                return self._m_is_string
+
+            self._m_is_string =  ((self.code.value >= 13) and (self.code.value % 2 == 1)) 
+            return getattr(self, '_m_is_string', None)
+
+        @property
+        def len_content(self):
+            if hasattr(self, '_m_len_content'):
+                return self._m_len_content
+
+            if self.code.value >= 12:
+                pass
+                self._m_len_content = (self.code.value - 12) // 2
+
+            return getattr(self, '_m_len_content', None)
+
+
+    class Serials(KaitaiStruct):
+        SEQ_FIELDS = ["entries"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Sqlite3.Serials, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['entries']['start'] = self._io.pos()
+            self._debug['entries']['arr'] = []
+            self.entries = []
+            i = 0
+            while not self._io.is_eof():
+                self._debug['entries']['arr'].append({'start': self._io.pos()})
+                _t_entries = Sqlite3.Serial(self._io, self, self._root)
+                try:
+                    _t_entries._read()
+                finally:
+                    self.entries.append(_t_entries)
+                self._debug['entries']['arr'][len(self.entries) - 1]['end'] = self._io.pos()
+                i += 1
+
+            self._debug['entries']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            for i in range(len(self.entries)):
+                pass
+                self.entries[i]._fetch_instances()
+
 
 
     @property
     def len_page(self):
         if hasattr(self, '_m_len_page'):
-            return self._m_len_page if hasattr(self, '_m_len_page') else None
+            return self._m_len_page
 
         self._m_len_page = (65536 if self.len_page_mod == 1 else self.len_page_mod)
-        return self._m_len_page if hasattr(self, '_m_len_page') else None
+        return getattr(self, '_m_len_page', None)
 
 

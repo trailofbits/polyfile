@@ -1,13 +1,13 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
+# type: ignore
 
-from packaging.version import parse as parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
-    raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
+    raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class MonomakhSaprChg(KaitaiStruct):
     """CHG is a container format file used by
@@ -22,41 +22,50 @@ class MonomakhSaprChg(KaitaiStruct):
     """
     SEQ_FIELDS = ["title", "ent"]
     def __init__(self, _io, _parent=None, _root=None):
-        self._io = _io
+        super(MonomakhSaprChg, self).__init__(_io)
         self._parent = _parent
-        self._root = _root if _root else self
+        self._root = _root or self
         self._debug = collections.defaultdict(dict)
 
     def _read(self):
         self._debug['title']['start'] = self._io.pos()
-        self.title = (self._io.read_bytes(10)).decode(u"ascii")
+        self.title = (self._io.read_bytes(10)).decode(u"ASCII")
         self._debug['title']['end'] = self._io.pos()
         self._debug['ent']['start'] = self._io.pos()
+        self._debug['ent']['arr'] = []
         self.ent = []
         i = 0
         while not self._io.is_eof():
-            if not 'arr' in self._debug['ent']:
-                self._debug['ent']['arr'] = []
             self._debug['ent']['arr'].append({'start': self._io.pos()})
             _t_ent = MonomakhSaprChg.Block(self._io, self, self._root)
-            _t_ent._read()
-            self.ent.append(_t_ent)
+            try:
+                _t_ent._read()
+            finally:
+                self.ent.append(_t_ent)
             self._debug['ent']['arr'][len(self.ent) - 1]['end'] = self._io.pos()
             i += 1
 
         self._debug['ent']['end'] = self._io.pos()
 
+
+    def _fetch_instances(self):
+        pass
+        for i in range(len(self.ent)):
+            pass
+            self.ent[i]._fetch_instances()
+
+
     class Block(KaitaiStruct):
         SEQ_FIELDS = ["header", "file_size", "file"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(MonomakhSaprChg.Block, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
             self._debug['header']['start'] = self._io.pos()
-            self.header = (self._io.read_bytes(13)).decode(u"ascii")
+            self.header = (self._io.read_bytes(13)).decode(u"ASCII")
             self._debug['header']['end'] = self._io.pos()
             self._debug['file_size']['start'] = self._io.pos()
             self.file_size = self._io.read_u8le()
@@ -64,6 +73,10 @@ class MonomakhSaprChg(KaitaiStruct):
             self._debug['file']['start'] = self._io.pos()
             self.file = self._io.read_bytes(self.file_size)
             self._debug['file']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
 
 
 

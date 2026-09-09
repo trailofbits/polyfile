@@ -1,21 +1,21 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
+# type: ignore
 
-from packaging.version import parse as parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
-from enum import Enum
+from enum import IntEnum
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
-    raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
+    raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class MicrosoftCfb(KaitaiStruct):
     SEQ_FIELDS = ["header"]
     def __init__(self, _io, _parent=None, _root=None):
-        self._io = _io
+        super(MicrosoftCfb, self).__init__(_io)
         self._parent = _parent
-        self._root = _root if _root else self
+        self._root = _root or self
         self._debug = collections.defaultdict(dict)
 
     def _read(self):
@@ -24,12 +24,27 @@ class MicrosoftCfb(KaitaiStruct):
         self.header._read()
         self._debug['header']['end'] = self._io.pos()
 
+
+    def _fetch_instances(self):
+        pass
+        self.header._fetch_instances()
+        _ = self.dir
+        if hasattr(self, '_m_dir'):
+            pass
+            self._m_dir._fetch_instances()
+
+        _ = self.fat
+        if hasattr(self, '_m_fat'):
+            pass
+            self._m_fat._fetch_instances()
+
+
     class CfbHeader(KaitaiStruct):
         SEQ_FIELDS = ["signature", "clsid", "version_minor", "version_major", "byte_order", "sector_shift", "mini_sector_shift", "reserved1", "size_dir", "size_fat", "ofs_dir", "transaction_seq", "mini_stream_cutoff_size", "ofs_mini_fat", "size_mini_fat", "ofs_difat", "size_difat", "difat"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(MicrosoftCfb.CfbHeader, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -91,56 +106,39 @@ class MicrosoftCfb(KaitaiStruct):
             self.size_difat = self._io.read_s4le()
             self._debug['size_difat']['end'] = self._io.pos()
             self._debug['difat']['start'] = self._io.pos()
-            self.difat = [None] * (109)
+            self._debug['difat']['arr'] = []
+            self.difat = []
             for i in range(109):
-                if not 'arr' in self._debug['difat']:
-                    self._debug['difat']['arr'] = []
                 self._debug['difat']['arr'].append({'start': self._io.pos()})
-                self.difat[i] = self._io.read_s4le()
+                self.difat.append(self._io.read_s4le())
                 self._debug['difat']['arr'][i]['end'] = self._io.pos()
 
             self._debug['difat']['end'] = self._io.pos()
 
 
-    class FatEntries(KaitaiStruct):
-        SEQ_FIELDS = ["entries"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
+        def _fetch_instances(self):
+            pass
+            for i in range(len(self.difat)):
+                pass
 
-        def _read(self):
-            self._debug['entries']['start'] = self._io.pos()
-            self.entries = []
-            i = 0
-            while not self._io.is_eof():
-                if not 'arr' in self._debug['entries']:
-                    self._debug['entries']['arr'] = []
-                self._debug['entries']['arr'].append({'start': self._io.pos()})
-                self.entries.append(self._io.read_s4le())
-                self._debug['entries']['arr'][len(self.entries) - 1]['end'] = self._io.pos()
-                i += 1
-
-            self._debug['entries']['end'] = self._io.pos()
 
 
     class DirEntry(KaitaiStruct):
 
-        class ObjType(Enum):
+        class ObjType(IntEnum):
             unknown = 0
             storage = 1
             stream = 2
             root_storage = 5
 
-        class RbColor(Enum):
+        class RbColor(IntEnum):
             red = 0
             black = 1
         SEQ_FIELDS = ["name", "name_len", "object_type", "color_flag", "left_sibling_id", "right_sibling_id", "child_id", "clsid", "state", "time_create", "time_mod", "ofs", "size"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(MicrosoftCfb.DirEntry, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -184,110 +182,166 @@ class MicrosoftCfb(KaitaiStruct):
             self.size = self._io.read_u8le()
             self._debug['size']['end'] = self._io.pos()
 
-        @property
-        def mini_stream(self):
+
+        def _fetch_instances(self):
+            pass
+            _ = self.child
+            if hasattr(self, '_m_child'):
+                pass
+                self._m_child._fetch_instances()
+
+            _ = self.left_sibling
+            if hasattr(self, '_m_left_sibling'):
+                pass
+                self._m_left_sibling._fetch_instances()
+
+            _ = self.mini_stream
             if hasattr(self, '_m_mini_stream'):
-                return self._m_mini_stream if hasattr(self, '_m_mini_stream') else None
+                pass
 
-            if self.object_type == MicrosoftCfb.DirEntry.ObjType.root_storage:
-                io = self._root._io
-                _pos = io.pos()
-                io.seek(((self.ofs + 1) * self._root.sector_size))
-                self._debug['_m_mini_stream']['start'] = io.pos()
-                self._m_mini_stream = io.read_bytes(self.size)
-                self._debug['_m_mini_stream']['end'] = io.pos()
-                io.seek(_pos)
+            _ = self.right_sibling
+            if hasattr(self, '_m_right_sibling'):
+                pass
+                self._m_right_sibling._fetch_instances()
 
-            return self._m_mini_stream if hasattr(self, '_m_mini_stream') else None
 
         @property
         def child(self):
             if hasattr(self, '_m_child'):
-                return self._m_child if hasattr(self, '_m_child') else None
+                return self._m_child
 
             if self.child_id != -1:
+                pass
                 io = self._root._io
                 _pos = io.pos()
-                io.seek((((self._root.header.ofs_dir + 1) * self._root.sector_size) + (self.child_id * 128)))
+                io.seek((self._root.header.ofs_dir + 1) * self._root.sector_size + self.child_id * 128)
                 self._debug['_m_child']['start'] = io.pos()
                 self._m_child = MicrosoftCfb.DirEntry(io, self, self._root)
                 self._m_child._read()
                 self._debug['_m_child']['end'] = io.pos()
                 io.seek(_pos)
 
-            return self._m_child if hasattr(self, '_m_child') else None
+            return getattr(self, '_m_child', None)
 
         @property
         def left_sibling(self):
             if hasattr(self, '_m_left_sibling'):
-                return self._m_left_sibling if hasattr(self, '_m_left_sibling') else None
+                return self._m_left_sibling
 
             if self.left_sibling_id != -1:
+                pass
                 io = self._root._io
                 _pos = io.pos()
-                io.seek((((self._root.header.ofs_dir + 1) * self._root.sector_size) + (self.left_sibling_id * 128)))
+                io.seek((self._root.header.ofs_dir + 1) * self._root.sector_size + self.left_sibling_id * 128)
                 self._debug['_m_left_sibling']['start'] = io.pos()
                 self._m_left_sibling = MicrosoftCfb.DirEntry(io, self, self._root)
                 self._m_left_sibling._read()
                 self._debug['_m_left_sibling']['end'] = io.pos()
                 io.seek(_pos)
 
-            return self._m_left_sibling if hasattr(self, '_m_left_sibling') else None
+            return getattr(self, '_m_left_sibling', None)
+
+        @property
+        def mini_stream(self):
+            if hasattr(self, '_m_mini_stream'):
+                return self._m_mini_stream
+
+            if self.object_type == MicrosoftCfb.DirEntry.ObjType.root_storage:
+                pass
+                io = self._root._io
+                _pos = io.pos()
+                io.seek((self.ofs + 1) * self._root.sector_size)
+                self._debug['_m_mini_stream']['start'] = io.pos()
+                self._m_mini_stream = io.read_bytes(self.size)
+                self._debug['_m_mini_stream']['end'] = io.pos()
+                io.seek(_pos)
+
+            return getattr(self, '_m_mini_stream', None)
 
         @property
         def right_sibling(self):
             if hasattr(self, '_m_right_sibling'):
-                return self._m_right_sibling if hasattr(self, '_m_right_sibling') else None
+                return self._m_right_sibling
 
             if self.right_sibling_id != -1:
+                pass
                 io = self._root._io
                 _pos = io.pos()
-                io.seek((((self._root.header.ofs_dir + 1) * self._root.sector_size) + (self.right_sibling_id * 128)))
+                io.seek((self._root.header.ofs_dir + 1) * self._root.sector_size + self.right_sibling_id * 128)
                 self._debug['_m_right_sibling']['start'] = io.pos()
                 self._m_right_sibling = MicrosoftCfb.DirEntry(io, self, self._root)
                 self._m_right_sibling._read()
                 self._debug['_m_right_sibling']['end'] = io.pos()
                 io.seek(_pos)
 
-            return self._m_right_sibling if hasattr(self, '_m_right_sibling') else None
+            return getattr(self, '_m_right_sibling', None)
 
 
-    @property
-    def sector_size(self):
-        if hasattr(self, '_m_sector_size'):
-            return self._m_sector_size if hasattr(self, '_m_sector_size') else None
+    class FatEntries(KaitaiStruct):
+        SEQ_FIELDS = ["entries"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(MicrosoftCfb.FatEntries, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
 
-        self._m_sector_size = (1 << self.header.sector_shift)
-        return self._m_sector_size if hasattr(self, '_m_sector_size') else None
+        def _read(self):
+            self._debug['entries']['start'] = self._io.pos()
+            self._debug['entries']['arr'] = []
+            self.entries = []
+            i = 0
+            while not self._io.is_eof():
+                self._debug['entries']['arr'].append({'start': self._io.pos()})
+                self.entries.append(self._io.read_s4le())
+                self._debug['entries']['arr'][len(self.entries) - 1]['end'] = self._io.pos()
+                i += 1
 
-    @property
-    def fat(self):
-        if hasattr(self, '_m_fat'):
-            return self._m_fat if hasattr(self, '_m_fat') else None
+            self._debug['entries']['end'] = self._io.pos()
 
-        _pos = self._io.pos()
-        self._io.seek(self.sector_size)
-        self._debug['_m_fat']['start'] = self._io.pos()
-        self._raw__m_fat = self._io.read_bytes((self.header.size_fat * self.sector_size))
-        _io__raw__m_fat = KaitaiStream(BytesIO(self._raw__m_fat))
-        self._m_fat = MicrosoftCfb.FatEntries(_io__raw__m_fat, self, self._root)
-        self._m_fat._read()
-        self._debug['_m_fat']['end'] = self._io.pos()
-        self._io.seek(_pos)
-        return self._m_fat if hasattr(self, '_m_fat') else None
+
+        def _fetch_instances(self):
+            pass
+            for i in range(len(self.entries)):
+                pass
+
+
 
     @property
     def dir(self):
         if hasattr(self, '_m_dir'):
-            return self._m_dir if hasattr(self, '_m_dir') else None
+            return self._m_dir
 
         _pos = self._io.pos()
-        self._io.seek(((self.header.ofs_dir + 1) * self.sector_size))
+        self._io.seek((self.header.ofs_dir + 1) * self.sector_size)
         self._debug['_m_dir']['start'] = self._io.pos()
         self._m_dir = MicrosoftCfb.DirEntry(self._io, self, self._root)
         self._m_dir._read()
         self._debug['_m_dir']['end'] = self._io.pos()
         self._io.seek(_pos)
-        return self._m_dir if hasattr(self, '_m_dir') else None
+        return getattr(self, '_m_dir', None)
+
+    @property
+    def fat(self):
+        if hasattr(self, '_m_fat'):
+            return self._m_fat
+
+        _pos = self._io.pos()
+        self._io.seek(self.sector_size)
+        self._debug['_m_fat']['start'] = self._io.pos()
+        self._raw__m_fat = self._io.read_bytes(self.header.size_fat * self.sector_size)
+        _io__raw__m_fat = KaitaiStream(BytesIO(self._raw__m_fat))
+        self._m_fat = MicrosoftCfb.FatEntries(_io__raw__m_fat, self, self._root)
+        self._m_fat._read()
+        self._debug['_m_fat']['end'] = self._io.pos()
+        self._io.seek(_pos)
+        return getattr(self, '_m_fat', None)
+
+    @property
+    def sector_size(self):
+        if hasattr(self, '_m_sector_size'):
+            return self._m_sector_size
+
+        self._m_sector_size = 1 << self.header.sector_shift
+        return getattr(self, '_m_sector_size', None)
 
 

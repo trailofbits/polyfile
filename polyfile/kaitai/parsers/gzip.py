@@ -1,14 +1,14 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
+# type: ignore
 
-from packaging.version import parse as parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
-from enum import Enum
+from enum import IntEnum
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
-    raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
+    raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class Gzip(KaitaiStruct):
     """Gzip is a popular and standard single-file archiving format. It
@@ -24,10 +24,10 @@ class Gzip(KaitaiStruct):
        Source - https://www.rfc-editor.org/rfc/rfc1952
     """
 
-    class CompressionMethods(Enum):
+    class CompressionMethods(IntEnum):
         deflate = 8
 
-    class Oses(Enum):
+    class Oses(IntEnum):
         fat = 0
         amiga = 1
         vms = 2
@@ -45,9 +45,9 @@ class Gzip(KaitaiStruct):
         unknown = 255
     SEQ_FIELDS = ["magic", "compression_method", "flags", "mod_time", "extra_flags", "os", "extras", "name", "comment", "header_crc16", "body", "body_crc32", "len_uncompressed"]
     def __init__(self, _io, _parent=None, _root=None):
-        self._io = _io
+        super(Gzip, self).__init__(_io)
         self._parent = _parent
-        self._root = _root if _root else self
+        self._root = _root or self
         self._debug = collections.defaultdict(dict)
 
     def _read(self):
@@ -69,6 +69,7 @@ class Gzip(KaitaiStruct):
         self._debug['extra_flags']['start'] = self._io.pos()
         _on = self.compression_method
         if _on == Gzip.CompressionMethods.deflate:
+            pass
             self.extra_flags = Gzip.ExtraFlagsDeflate(self._io, self, self._root)
             self.extra_flags._read()
         self._debug['extra_flags']['end'] = self._io.pos()
@@ -76,28 +77,32 @@ class Gzip(KaitaiStruct):
         self.os = KaitaiStream.resolve_enum(Gzip.Oses, self._io.read_u1())
         self._debug['os']['end'] = self._io.pos()
         if self.flags.has_extra:
+            pass
             self._debug['extras']['start'] = self._io.pos()
             self.extras = Gzip.Extras(self._io, self, self._root)
             self.extras._read()
             self._debug['extras']['end'] = self._io.pos()
 
         if self.flags.has_name:
+            pass
             self._debug['name']['start'] = self._io.pos()
             self.name = self._io.read_bytes_term(0, False, True, True)
             self._debug['name']['end'] = self._io.pos()
 
         if self.flags.has_comment:
+            pass
             self._debug['comment']['start'] = self._io.pos()
             self.comment = self._io.read_bytes_term(0, False, True, True)
             self._debug['comment']['end'] = self._io.pos()
 
         if self.flags.has_header_crc:
+            pass
             self._debug['header_crc16']['start'] = self._io.pos()
             self.header_crc16 = self._io.read_u2le()
             self._debug['header_crc16']['end'] = self._io.pos()
 
         self._debug['body']['start'] = self._io.pos()
-        self.body = self._io.read_bytes(((self._io.size() - self._io.pos()) - 8))
+        self.body = self._io.read_bytes((self._io.size() - self._io.pos()) - 8)
         self._debug['body']['end'] = self._io.pos()
         self._debug['body_crc32']['start'] = self._io.pos()
         self.body_crc32 = self._io.read_u4le()
@@ -106,12 +111,81 @@ class Gzip(KaitaiStruct):
         self.len_uncompressed = self._io.read_u4le()
         self._debug['len_uncompressed']['end'] = self._io.pos()
 
+
+    def _fetch_instances(self):
+        pass
+        self.flags._fetch_instances()
+        _on = self.compression_method
+        if _on == Gzip.CompressionMethods.deflate:
+            pass
+            self.extra_flags._fetch_instances()
+        if self.flags.has_extra:
+            pass
+            self.extras._fetch_instances()
+
+        if self.flags.has_name:
+            pass
+
+        if self.flags.has_comment:
+            pass
+
+        if self.flags.has_header_crc:
+            pass
+
+
+    class ExtraFlagsDeflate(KaitaiStruct):
+
+        class CompressionStrengths(IntEnum):
+            best = 2
+            fast = 4
+        SEQ_FIELDS = ["compression_strength"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Gzip.ExtraFlagsDeflate, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['compression_strength']['start'] = self._io.pos()
+            self.compression_strength = KaitaiStream.resolve_enum(Gzip.ExtraFlagsDeflate.CompressionStrengths, self._io.read_u1())
+            self._debug['compression_strength']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+
+
+    class Extras(KaitaiStruct):
+        SEQ_FIELDS = ["len_subfields", "subfields"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Gzip.Extras, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['len_subfields']['start'] = self._io.pos()
+            self.len_subfields = self._io.read_u2le()
+            self._debug['len_subfields']['end'] = self._io.pos()
+            self._debug['subfields']['start'] = self._io.pos()
+            self._raw_subfields = self._io.read_bytes(self.len_subfields)
+            _io__raw_subfields = KaitaiStream(BytesIO(self._raw_subfields))
+            self.subfields = Gzip.Subfields(_io__raw_subfields, self, self._root)
+            self.subfields._read()
+            self._debug['subfields']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            self.subfields._fetch_instances()
+
+
     class Flags(KaitaiStruct):
         SEQ_FIELDS = ["reserved1", "has_comment", "has_name", "has_extra", "has_header_crc", "is_text"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Gzip.Flags, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -135,49 +209,8 @@ class Gzip(KaitaiStruct):
             self._debug['is_text']['end'] = self._io.pos()
 
 
-    class ExtraFlagsDeflate(KaitaiStruct):
-
-        class CompressionStrengths(Enum):
-            best = 2
-            fast = 4
-        SEQ_FIELDS = ["compression_strength"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['compression_strength']['start'] = self._io.pos()
-            self.compression_strength = KaitaiStream.resolve_enum(Gzip.ExtraFlagsDeflate.CompressionStrengths, self._io.read_u1())
-            self._debug['compression_strength']['end'] = self._io.pos()
-
-
-    class Subfields(KaitaiStruct):
-        """Container for many subfields, constrained by size of stream.
-        """
-        SEQ_FIELDS = ["entries"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['entries']['start'] = self._io.pos()
-            self.entries = []
-            i = 0
-            while not self._io.is_eof():
-                if not 'arr' in self._debug['entries']:
-                    self._debug['entries']['arr'] = []
-                self._debug['entries']['arr'].append({'start': self._io.pos()})
-                _t_entries = Gzip.Subfield(self._io, self, self._root)
-                _t_entries._read()
-                self.entries.append(_t_entries)
-                self._debug['entries']['arr'][len(self.entries) - 1]['end'] = self._io.pos()
-                i += 1
-
-            self._debug['entries']['end'] = self._io.pos()
+        def _fetch_instances(self):
+            pass
 
 
     class Subfield(KaitaiStruct):
@@ -192,9 +225,9 @@ class Gzip(KaitaiStruct):
         """
         SEQ_FIELDS = ["id", "len_data", "data"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Gzip.Subfield, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -209,24 +242,44 @@ class Gzip(KaitaiStruct):
             self._debug['data']['end'] = self._io.pos()
 
 
-    class Extras(KaitaiStruct):
-        SEQ_FIELDS = ["len_subfields", "subfields"]
+        def _fetch_instances(self):
+            pass
+
+
+    class Subfields(KaitaiStruct):
+        """Container for many subfields, constrained by size of stream.
+        """
+        SEQ_FIELDS = ["entries"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Gzip.Subfields, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
-            self._debug['len_subfields']['start'] = self._io.pos()
-            self.len_subfields = self._io.read_u2le()
-            self._debug['len_subfields']['end'] = self._io.pos()
-            self._debug['subfields']['start'] = self._io.pos()
-            self._raw_subfields = self._io.read_bytes(self.len_subfields)
-            _io__raw_subfields = KaitaiStream(BytesIO(self._raw_subfields))
-            self.subfields = Gzip.Subfields(_io__raw_subfields, self, self._root)
-            self.subfields._read()
-            self._debug['subfields']['end'] = self._io.pos()
+            self._debug['entries']['start'] = self._io.pos()
+            self._debug['entries']['arr'] = []
+            self.entries = []
+            i = 0
+            while not self._io.is_eof():
+                self._debug['entries']['arr'].append({'start': self._io.pos()})
+                _t_entries = Gzip.Subfield(self._io, self, self._root)
+                try:
+                    _t_entries._read()
+                finally:
+                    self.entries.append(_t_entries)
+                self._debug['entries']['arr'][len(self.entries) - 1]['end'] = self._io.pos()
+                i += 1
+
+            self._debug['entries']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            for i in range(len(self.entries)):
+                pass
+                self.entries[i]._fetch_instances()
+
 
 
 

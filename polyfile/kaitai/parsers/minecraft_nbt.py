@@ -1,26 +1,26 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
+# type: ignore
 
-from packaging.version import parse as parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
-from enum import Enum
+from enum import IntEnum
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
-    raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
+    raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class MinecraftNbt(KaitaiStruct):
     """A structured binary format native to Minecraft for saving game data and transferring
     it over the network (in multiplayer), such as player data
-    ([`<player>.dat`](https://minecraft.fandom.com/wiki/Player.dat_format); contains
+    ([`<player>.dat`](https://minecraft.wiki/w/Player.dat_format); contains
     e.g. player's inventory and location), saved worlds
     ([`level.dat`](
-      https://minecraft.fandom.com/wiki/Java_Edition_level_format#level.dat_format
-    ) and [Chunk format](https://minecraft.fandom.com/wiki/Chunk_format#NBT_structure)),
+      https://minecraft.wiki/w/Java_Edition_level_format#level.dat_format
+    ) and [Chunk format](https://minecraft.wiki/w/Chunk_format#NBT_structure)),
     list of saved multiplayer servers
-    ([`servers.dat`](https://minecraft.fandom.com/wiki/Servers.dat_format)) and so on -
-    see <https://minecraft.fandom.com/wiki/NBT_format#Uses>.
+    ([`servers.dat`](https://minecraft.wiki/w/Servers.dat_format)) and so on -
+    see <https://minecraft.wiki/w/NBT_format#Uses>.
     
     The entire file should be _gzip_-compressed (in accordance with the original
     specification [NBT.txt](
@@ -89,10 +89,10 @@ class MinecraftNbt(KaitaiStruct):
     
     
     .. seealso::
-       Source - https://minecraft.fandom.com/wiki/NBT_format
+       Source - https://minecraft.wiki/w/NBT_format
     """
 
-    class Tag(Enum):
+    class Tag(IntEnum):
         end = 0
         byte = 1
         short = 2
@@ -108,13 +108,14 @@ class MinecraftNbt(KaitaiStruct):
         long_array = 12
     SEQ_FIELDS = ["root_check", "root"]
     def __init__(self, _io, _parent=None, _root=None):
-        self._io = _io
+        super(MinecraftNbt, self).__init__(_io)
         self._parent = _parent
-        self._root = _root if _root else self
+        self._root = _root or self
         self._debug = collections.defaultdict(dict)
 
     def _read(self):
         if  ((self.root_type == MinecraftNbt.Tag.end) and (False)) :
+            pass
             self._debug['root_check']['start'] = self._io.pos()
             self.root_check = self._io.read_bytes(0)
             self._debug['root_check']['end'] = self._io.pos()
@@ -124,44 +125,143 @@ class MinecraftNbt(KaitaiStruct):
         self.root._read()
         self._debug['root']['end'] = self._io.pos()
 
-    class TagLongArray(KaitaiStruct):
-        SEQ_FIELDS = ["num_tags", "tags"]
+
+    def _fetch_instances(self):
+        pass
+        if  ((self.root_type == MinecraftNbt.Tag.end) and (False)) :
+            pass
+
+        self.root._fetch_instances()
+        _ = self.root_type
+        if hasattr(self, '_m_root_type'):
+            pass
+
+
+    class NamedTag(KaitaiStruct):
+        SEQ_FIELDS = ["type", "name", "payload"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(MinecraftNbt.NamedTag, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
-            self._debug['num_tags']['start'] = self._io.pos()
-            self.num_tags = self._io.read_s4be()
-            self._debug['num_tags']['end'] = self._io.pos()
-            self._debug['tags']['start'] = self._io.pos()
-            self.tags = [None] * (self.num_tags)
-            for i in range(self.num_tags):
-                if not 'arr' in self._debug['tags']:
-                    self._debug['tags']['arr'] = []
-                self._debug['tags']['arr'].append({'start': self._io.pos()})
-                self.tags[i] = self._io.read_s8be()
-                self._debug['tags']['arr'][i]['end'] = self._io.pos()
+            self._debug['type']['start'] = self._io.pos()
+            self.type = KaitaiStream.resolve_enum(MinecraftNbt.Tag, self._io.read_u1())
+            self._debug['type']['end'] = self._io.pos()
+            if (not (self.is_tag_end)):
+                pass
+                self._debug['name']['start'] = self._io.pos()
+                self.name = MinecraftNbt.TagString(self._io, self, self._root)
+                self.name._read()
+                self._debug['name']['end'] = self._io.pos()
 
-            self._debug['tags']['end'] = self._io.pos()
+            if (not (self.is_tag_end)):
+                pass
+                self._debug['payload']['start'] = self._io.pos()
+                _on = self.type
+                if _on == MinecraftNbt.Tag.byte:
+                    pass
+                    self.payload = self._io.read_s1()
+                elif _on == MinecraftNbt.Tag.byte_array:
+                    pass
+                    self.payload = MinecraftNbt.TagByteArray(self._io, self, self._root)
+                    self.payload._read()
+                elif _on == MinecraftNbt.Tag.compound:
+                    pass
+                    self.payload = MinecraftNbt.TagCompound(self._io, self, self._root)
+                    self.payload._read()
+                elif _on == MinecraftNbt.Tag.double:
+                    pass
+                    self.payload = self._io.read_f8be()
+                elif _on == MinecraftNbt.Tag.float:
+                    pass
+                    self.payload = self._io.read_f4be()
+                elif _on == MinecraftNbt.Tag.int:
+                    pass
+                    self.payload = self._io.read_s4be()
+                elif _on == MinecraftNbt.Tag.int_array:
+                    pass
+                    self.payload = MinecraftNbt.TagIntArray(self._io, self, self._root)
+                    self.payload._read()
+                elif _on == MinecraftNbt.Tag.list:
+                    pass
+                    self.payload = MinecraftNbt.TagList(self._io, self, self._root)
+                    self.payload._read()
+                elif _on == MinecraftNbt.Tag.long:
+                    pass
+                    self.payload = self._io.read_s8be()
+                elif _on == MinecraftNbt.Tag.long_array:
+                    pass
+                    self.payload = MinecraftNbt.TagLongArray(self._io, self, self._root)
+                    self.payload._read()
+                elif _on == MinecraftNbt.Tag.short:
+                    pass
+                    self.payload = self._io.read_s2be()
+                elif _on == MinecraftNbt.Tag.string:
+                    pass
+                    self.payload = MinecraftNbt.TagString(self._io, self, self._root)
+                    self.payload._read()
+                self._debug['payload']['end'] = self._io.pos()
+
+
+
+        def _fetch_instances(self):
+            pass
+            if (not (self.is_tag_end)):
+                pass
+                self.name._fetch_instances()
+
+            if (not (self.is_tag_end)):
+                pass
+                _on = self.type
+                if _on == MinecraftNbt.Tag.byte:
+                    pass
+                elif _on == MinecraftNbt.Tag.byte_array:
+                    pass
+                    self.payload._fetch_instances()
+                elif _on == MinecraftNbt.Tag.compound:
+                    pass
+                    self.payload._fetch_instances()
+                elif _on == MinecraftNbt.Tag.double:
+                    pass
+                elif _on == MinecraftNbt.Tag.float:
+                    pass
+                elif _on == MinecraftNbt.Tag.int:
+                    pass
+                elif _on == MinecraftNbt.Tag.int_array:
+                    pass
+                    self.payload._fetch_instances()
+                elif _on == MinecraftNbt.Tag.list:
+                    pass
+                    self.payload._fetch_instances()
+                elif _on == MinecraftNbt.Tag.long:
+                    pass
+                elif _on == MinecraftNbt.Tag.long_array:
+                    pass
+                    self.payload._fetch_instances()
+                elif _on == MinecraftNbt.Tag.short:
+                    pass
+                elif _on == MinecraftNbt.Tag.string:
+                    pass
+                    self.payload._fetch_instances()
+
 
         @property
-        def tags_type(self):
-            if hasattr(self, '_m_tags_type'):
-                return self._m_tags_type if hasattr(self, '_m_tags_type') else None
+        def is_tag_end(self):
+            if hasattr(self, '_m_is_tag_end'):
+                return self._m_is_tag_end
 
-            self._m_tags_type = MinecraftNbt.Tag.long
-            return self._m_tags_type if hasattr(self, '_m_tags_type') else None
+            self._m_is_tag_end = self.type == MinecraftNbt.Tag.end
+            return getattr(self, '_m_is_tag_end', None)
 
 
     class TagByteArray(KaitaiStruct):
         SEQ_FIELDS = ["len_data", "data"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(MinecraftNbt.TagByteArray, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -173,12 +273,60 @@ class MinecraftNbt(KaitaiStruct):
             self._debug['data']['end'] = self._io.pos()
 
 
+        def _fetch_instances(self):
+            pass
+
+
+    class TagCompound(KaitaiStruct):
+        SEQ_FIELDS = ["tags"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(MinecraftNbt.TagCompound, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['tags']['start'] = self._io.pos()
+            self._debug['tags']['arr'] = []
+            self.tags = []
+            i = 0
+            while True:
+                self._debug['tags']['arr'].append({'start': self._io.pos()})
+                _t_tags = MinecraftNbt.NamedTag(self._io, self, self._root)
+                try:
+                    _t_tags._read()
+                finally:
+                    _ = _t_tags
+                    self.tags.append(_)
+                self._debug['tags']['arr'][len(self.tags) - 1]['end'] = self._io.pos()
+                if _.is_tag_end:
+                    break
+                i += 1
+            self._debug['tags']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            for i in range(len(self.tags)):
+                pass
+                self.tags[i]._fetch_instances()
+
+
+        @property
+        def dump_num_tags(self):
+            if hasattr(self, '_m_dump_num_tags'):
+                return self._m_dump_num_tags
+
+            self._m_dump_num_tags = len(self.tags) - (1 if  ((len(self.tags) >= 1) and (self.tags[-1].is_tag_end))  else 0)
+            return getattr(self, '_m_dump_num_tags', None)
+
+
     class TagIntArray(KaitaiStruct):
         SEQ_FIELDS = ["num_tags", "tags"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(MinecraftNbt.TagIntArray, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -186,31 +334,37 @@ class MinecraftNbt(KaitaiStruct):
             self.num_tags = self._io.read_s4be()
             self._debug['num_tags']['end'] = self._io.pos()
             self._debug['tags']['start'] = self._io.pos()
-            self.tags = [None] * (self.num_tags)
+            self._debug['tags']['arr'] = []
+            self.tags = []
             for i in range(self.num_tags):
-                if not 'arr' in self._debug['tags']:
-                    self._debug['tags']['arr'] = []
                 self._debug['tags']['arr'].append({'start': self._io.pos()})
-                self.tags[i] = self._io.read_s4be()
+                self.tags.append(self._io.read_s4be())
                 self._debug['tags']['arr'][i]['end'] = self._io.pos()
 
             self._debug['tags']['end'] = self._io.pos()
 
+
+        def _fetch_instances(self):
+            pass
+            for i in range(len(self.tags)):
+                pass
+
+
         @property
         def tags_type(self):
             if hasattr(self, '_m_tags_type'):
-                return self._m_tags_type if hasattr(self, '_m_tags_type') else None
+                return self._m_tags_type
 
             self._m_tags_type = MinecraftNbt.Tag.int
-            return self._m_tags_type if hasattr(self, '_m_tags_type') else None
+            return getattr(self, '_m_tags_type', None)
 
 
     class TagList(KaitaiStruct):
         SEQ_FIELDS = ["tags_type", "num_tags", "tags"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(MinecraftNbt.TagList, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -221,107 +375,158 @@ class MinecraftNbt(KaitaiStruct):
             self.num_tags = self._io.read_s4be()
             self._debug['num_tags']['end'] = self._io.pos()
             self._debug['tags']['start'] = self._io.pos()
-            self.tags = [None] * (self.num_tags)
+            self._debug['tags']['arr'] = []
+            self.tags = []
             for i in range(self.num_tags):
-                if not 'arr' in self._debug['tags']:
-                    self._debug['tags']['arr'] = []
                 self._debug['tags']['arr'].append({'start': self._io.pos()})
                 _on = self.tags_type
-                if _on == MinecraftNbt.Tag.long_array:
-                    if not 'arr' in self._debug['tags']:
-                        self._debug['tags']['arr'] = []
-                    self._debug['tags']['arr'].append({'start': self._io.pos()})
-                    _t_tags = MinecraftNbt.TagLongArray(self._io, self, self._root)
-                    _t_tags._read()
-                    self.tags[i] = _t_tags
-                    self._debug['tags']['arr'][i]['end'] = self._io.pos()
-                elif _on == MinecraftNbt.Tag.compound:
-                    if not 'arr' in self._debug['tags']:
-                        self._debug['tags']['arr'] = []
-                    self._debug['tags']['arr'].append({'start': self._io.pos()})
-                    _t_tags = MinecraftNbt.TagCompound(self._io, self, self._root)
-                    _t_tags._read()
-                    self.tags[i] = _t_tags
-                    self._debug['tags']['arr'][i]['end'] = self._io.pos()
-                elif _on == MinecraftNbt.Tag.double:
-                    if not 'arr' in self._debug['tags']:
-                        self._debug['tags']['arr'] = []
-                    self._debug['tags']['arr'].append({'start': self._io.pos()})
-                    self.tags[i] = self._io.read_f8be()
-                    self._debug['tags']['arr'][i]['end'] = self._io.pos()
-                elif _on == MinecraftNbt.Tag.list:
-                    if not 'arr' in self._debug['tags']:
-                        self._debug['tags']['arr'] = []
-                    self._debug['tags']['arr'].append({'start': self._io.pos()})
-                    _t_tags = MinecraftNbt.TagList(self._io, self, self._root)
-                    _t_tags._read()
-                    self.tags[i] = _t_tags
-                    self._debug['tags']['arr'][i]['end'] = self._io.pos()
-                elif _on == MinecraftNbt.Tag.float:
-                    if not 'arr' in self._debug['tags']:
-                        self._debug['tags']['arr'] = []
-                    self._debug['tags']['arr'].append({'start': self._io.pos()})
-                    self.tags[i] = self._io.read_f4be()
-                    self._debug['tags']['arr'][i]['end'] = self._io.pos()
-                elif _on == MinecraftNbt.Tag.short:
-                    if not 'arr' in self._debug['tags']:
-                        self._debug['tags']['arr'] = []
-                    self._debug['tags']['arr'].append({'start': self._io.pos()})
-                    self.tags[i] = self._io.read_s2be()
-                    self._debug['tags']['arr'][i]['end'] = self._io.pos()
-                elif _on == MinecraftNbt.Tag.int:
-                    if not 'arr' in self._debug['tags']:
-                        self._debug['tags']['arr'] = []
-                    self._debug['tags']['arr'].append({'start': self._io.pos()})
-                    self.tags[i] = self._io.read_s4be()
-                    self._debug['tags']['arr'][i]['end'] = self._io.pos()
+                if _on == MinecraftNbt.Tag.byte:
+                    pass
+                    self.tags.append(self._io.read_s1())
                 elif _on == MinecraftNbt.Tag.byte_array:
-                    if not 'arr' in self._debug['tags']:
-                        self._debug['tags']['arr'] = []
-                    self._debug['tags']['arr'].append({'start': self._io.pos()})
+                    pass
                     _t_tags = MinecraftNbt.TagByteArray(self._io, self, self._root)
-                    _t_tags._read()
-                    self.tags[i] = _t_tags
-                    self._debug['tags']['arr'][i]['end'] = self._io.pos()
-                elif _on == MinecraftNbt.Tag.byte:
-                    if not 'arr' in self._debug['tags']:
-                        self._debug['tags']['arr'] = []
-                    self._debug['tags']['arr'].append({'start': self._io.pos()})
-                    self.tags[i] = self._io.read_s1()
-                    self._debug['tags']['arr'][i]['end'] = self._io.pos()
+                    try:
+                        _t_tags._read()
+                    finally:
+                        self.tags.append(_t_tags)
+                elif _on == MinecraftNbt.Tag.compound:
+                    pass
+                    _t_tags = MinecraftNbt.TagCompound(self._io, self, self._root)
+                    try:
+                        _t_tags._read()
+                    finally:
+                        self.tags.append(_t_tags)
+                elif _on == MinecraftNbt.Tag.double:
+                    pass
+                    self.tags.append(self._io.read_f8be())
+                elif _on == MinecraftNbt.Tag.float:
+                    pass
+                    self.tags.append(self._io.read_f4be())
+                elif _on == MinecraftNbt.Tag.int:
+                    pass
+                    self.tags.append(self._io.read_s4be())
                 elif _on == MinecraftNbt.Tag.int_array:
-                    if not 'arr' in self._debug['tags']:
-                        self._debug['tags']['arr'] = []
-                    self._debug['tags']['arr'].append({'start': self._io.pos()})
+                    pass
                     _t_tags = MinecraftNbt.TagIntArray(self._io, self, self._root)
-                    _t_tags._read()
-                    self.tags[i] = _t_tags
-                    self._debug['tags']['arr'][i]['end'] = self._io.pos()
-                elif _on == MinecraftNbt.Tag.string:
-                    if not 'arr' in self._debug['tags']:
-                        self._debug['tags']['arr'] = []
-                    self._debug['tags']['arr'].append({'start': self._io.pos()})
-                    _t_tags = MinecraftNbt.TagString(self._io, self, self._root)
-                    _t_tags._read()
-                    self.tags[i] = _t_tags
-                    self._debug['tags']['arr'][i]['end'] = self._io.pos()
+                    try:
+                        _t_tags._read()
+                    finally:
+                        self.tags.append(_t_tags)
+                elif _on == MinecraftNbt.Tag.list:
+                    pass
+                    _t_tags = MinecraftNbt.TagList(self._io, self, self._root)
+                    try:
+                        _t_tags._read()
+                    finally:
+                        self.tags.append(_t_tags)
                 elif _on == MinecraftNbt.Tag.long:
-                    if not 'arr' in self._debug['tags']:
-                        self._debug['tags']['arr'] = []
-                    self._debug['tags']['arr'].append({'start': self._io.pos()})
-                    self.tags[i] = self._io.read_s8be()
-                    self._debug['tags']['arr'][i]['end'] = self._io.pos()
+                    pass
+                    self.tags.append(self._io.read_s8be())
+                elif _on == MinecraftNbt.Tag.long_array:
+                    pass
+                    _t_tags = MinecraftNbt.TagLongArray(self._io, self, self._root)
+                    try:
+                        _t_tags._read()
+                    finally:
+                        self.tags.append(_t_tags)
+                elif _on == MinecraftNbt.Tag.short:
+                    pass
+                    self.tags.append(self._io.read_s2be())
+                elif _on == MinecraftNbt.Tag.string:
+                    pass
+                    _t_tags = MinecraftNbt.TagString(self._io, self, self._root)
+                    try:
+                        _t_tags._read()
+                    finally:
+                        self.tags.append(_t_tags)
                 self._debug['tags']['arr'][i]['end'] = self._io.pos()
 
             self._debug['tags']['end'] = self._io.pos()
 
 
+        def _fetch_instances(self):
+            pass
+            for i in range(len(self.tags)):
+                pass
+                _on = self.tags_type
+                if _on == MinecraftNbt.Tag.byte:
+                    pass
+                elif _on == MinecraftNbt.Tag.byte_array:
+                    pass
+                    self.tags[i]._fetch_instances()
+                elif _on == MinecraftNbt.Tag.compound:
+                    pass
+                    self.tags[i]._fetch_instances()
+                elif _on == MinecraftNbt.Tag.double:
+                    pass
+                elif _on == MinecraftNbt.Tag.float:
+                    pass
+                elif _on == MinecraftNbt.Tag.int:
+                    pass
+                elif _on == MinecraftNbt.Tag.int_array:
+                    pass
+                    self.tags[i]._fetch_instances()
+                elif _on == MinecraftNbt.Tag.list:
+                    pass
+                    self.tags[i]._fetch_instances()
+                elif _on == MinecraftNbt.Tag.long:
+                    pass
+                elif _on == MinecraftNbt.Tag.long_array:
+                    pass
+                    self.tags[i]._fetch_instances()
+                elif _on == MinecraftNbt.Tag.short:
+                    pass
+                elif _on == MinecraftNbt.Tag.string:
+                    pass
+                    self.tags[i]._fetch_instances()
+
+
+
+    class TagLongArray(KaitaiStruct):
+        SEQ_FIELDS = ["num_tags", "tags"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(MinecraftNbt.TagLongArray, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['num_tags']['start'] = self._io.pos()
+            self.num_tags = self._io.read_s4be()
+            self._debug['num_tags']['end'] = self._io.pos()
+            self._debug['tags']['start'] = self._io.pos()
+            self._debug['tags']['arr'] = []
+            self.tags = []
+            for i in range(self.num_tags):
+                self._debug['tags']['arr'].append({'start': self._io.pos()})
+                self.tags.append(self._io.read_s8be())
+                self._debug['tags']['arr'][i]['end'] = self._io.pos()
+
+            self._debug['tags']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            for i in range(len(self.tags)):
+                pass
+
+
+        @property
+        def tags_type(self):
+            if hasattr(self, '_m_tags_type'):
+                return self._m_tags_type
+
+            self._m_tags_type = MinecraftNbt.Tag.long
+            return getattr(self, '_m_tags_type', None)
+
+
     class TagString(KaitaiStruct):
         SEQ_FIELDS = ["len_data", "data"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(MinecraftNbt.TagString, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -329,121 +534,27 @@ class MinecraftNbt(KaitaiStruct):
             self.len_data = self._io.read_u2be()
             self._debug['len_data']['end'] = self._io.pos()
             self._debug['data']['start'] = self._io.pos()
-            self.data = (self._io.read_bytes(self.len_data)).decode(u"utf-8")
+            self.data = (self._io.read_bytes(self.len_data)).decode(u"UTF-8")
             self._debug['data']['end'] = self._io.pos()
 
 
-    class TagCompound(KaitaiStruct):
-        SEQ_FIELDS = ["tags"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['tags']['start'] = self._io.pos()
-            self.tags = []
-            i = 0
-            while True:
-                if not 'arr' in self._debug['tags']:
-                    self._debug['tags']['arr'] = []
-                self._debug['tags']['arr'].append({'start': self._io.pos()})
-                _t_tags = MinecraftNbt.NamedTag(self._io, self, self._root)
-                _t_tags._read()
-                _ = _t_tags
-                self.tags.append(_)
-                self._debug['tags']['arr'][len(self.tags) - 1]['end'] = self._io.pos()
-                if _.is_tag_end:
-                    break
-                i += 1
-            self._debug['tags']['end'] = self._io.pos()
-
-        @property
-        def dump_num_tags(self):
-            if hasattr(self, '_m_dump_num_tags'):
-                return self._m_dump_num_tags if hasattr(self, '_m_dump_num_tags') else None
-
-            self._m_dump_num_tags = (len(self.tags) - (1 if  ((len(self.tags) >= 1) and (self.tags[-1].is_tag_end))  else 0))
-            return self._m_dump_num_tags if hasattr(self, '_m_dump_num_tags') else None
-
-
-    class NamedTag(KaitaiStruct):
-        SEQ_FIELDS = ["type", "name", "payload"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['type']['start'] = self._io.pos()
-            self.type = KaitaiStream.resolve_enum(MinecraftNbt.Tag, self._io.read_u1())
-            self._debug['type']['end'] = self._io.pos()
-            if not (self.is_tag_end):
-                self._debug['name']['start'] = self._io.pos()
-                self.name = MinecraftNbt.TagString(self._io, self, self._root)
-                self.name._read()
-                self._debug['name']['end'] = self._io.pos()
-
-            if not (self.is_tag_end):
-                self._debug['payload']['start'] = self._io.pos()
-                _on = self.type
-                if _on == MinecraftNbt.Tag.long_array:
-                    self.payload = MinecraftNbt.TagLongArray(self._io, self, self._root)
-                    self.payload._read()
-                elif _on == MinecraftNbt.Tag.compound:
-                    self.payload = MinecraftNbt.TagCompound(self._io, self, self._root)
-                    self.payload._read()
-                elif _on == MinecraftNbt.Tag.double:
-                    self.payload = self._io.read_f8be()
-                elif _on == MinecraftNbt.Tag.list:
-                    self.payload = MinecraftNbt.TagList(self._io, self, self._root)
-                    self.payload._read()
-                elif _on == MinecraftNbt.Tag.float:
-                    self.payload = self._io.read_f4be()
-                elif _on == MinecraftNbt.Tag.short:
-                    self.payload = self._io.read_s2be()
-                elif _on == MinecraftNbt.Tag.int:
-                    self.payload = self._io.read_s4be()
-                elif _on == MinecraftNbt.Tag.byte_array:
-                    self.payload = MinecraftNbt.TagByteArray(self._io, self, self._root)
-                    self.payload._read()
-                elif _on == MinecraftNbt.Tag.byte:
-                    self.payload = self._io.read_s1()
-                elif _on == MinecraftNbt.Tag.int_array:
-                    self.payload = MinecraftNbt.TagIntArray(self._io, self, self._root)
-                    self.payload._read()
-                elif _on == MinecraftNbt.Tag.string:
-                    self.payload = MinecraftNbt.TagString(self._io, self, self._root)
-                    self.payload._read()
-                elif _on == MinecraftNbt.Tag.long:
-                    self.payload = self._io.read_s8be()
-                self._debug['payload']['end'] = self._io.pos()
-
-
-        @property
-        def is_tag_end(self):
-            if hasattr(self, '_m_is_tag_end'):
-                return self._m_is_tag_end if hasattr(self, '_m_is_tag_end') else None
-
-            self._m_is_tag_end = self.type == MinecraftNbt.Tag.end
-            return self._m_is_tag_end if hasattr(self, '_m_is_tag_end') else None
+        def _fetch_instances(self):
+            pass
 
 
     @property
     def root_type(self):
         if hasattr(self, '_m_root_type'):
-            return self._m_root_type if hasattr(self, '_m_root_type') else None
+            return self._m_root_type
 
         _pos = self._io.pos()
         self._io.seek(0)
         self._debug['_m_root_type']['start'] = self._io.pos()
         self._m_root_type = KaitaiStream.resolve_enum(MinecraftNbt.Tag, self._io.read_u1())
         self._debug['_m_root_type']['end'] = self._io.pos()
+        if not self._m_root_type == MinecraftNbt.Tag.compound:
+            raise kaitaistruct.ValidationNotEqualError(MinecraftNbt.Tag.compound, self._m_root_type, self._io, u"/instances/root_type")
         self._io.seek(_pos)
-        if not self.root_type == MinecraftNbt.Tag.compound:
-            raise kaitaistruct.ValidationNotEqualError(MinecraftNbt.Tag.compound, self.root_type, self._io, u"/instances/root_type")
-        return self._m_root_type if hasattr(self, '_m_root_type') else None
+        return getattr(self, '_m_root_type', None)
 
 

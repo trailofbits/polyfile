@@ -1,16 +1,16 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
+# type: ignore
 
-from packaging.version import parse as parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
-import collections
-from enum import Enum
-
-
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
-    raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
-
 from polyfile.kaitai.parsers import vlq_base128_be
+import collections
+from enum import IntEnum
+
+
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
+    raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
+
 class StandardMidiFile(KaitaiStruct):
     """Standard MIDI file, typically known just as "MID", is a standard way
     to serialize series of MIDI events, which is a protocol used in many
@@ -29,9 +29,9 @@ class StandardMidiFile(KaitaiStruct):
     """
     SEQ_FIELDS = ["hdr", "tracks"]
     def __init__(self, _io, _parent=None, _root=None):
-        self._io = _io
+        super(StandardMidiFile, self).__init__(_io)
         self._parent = _parent
-        self._root = _root if _root else self
+        self._root = _root or self
         self._debug = collections.defaultdict(dict)
 
     def _read(self):
@@ -40,265 +40,52 @@ class StandardMidiFile(KaitaiStruct):
         self.hdr._read()
         self._debug['hdr']['end'] = self._io.pos()
         self._debug['tracks']['start'] = self._io.pos()
-        self.tracks = [None] * (self.hdr.num_tracks)
+        self._debug['tracks']['arr'] = []
+        self.tracks = []
         for i in range(self.hdr.num_tracks):
-            if not 'arr' in self._debug['tracks']:
-                self._debug['tracks']['arr'] = []
             self._debug['tracks']['arr'].append({'start': self._io.pos()})
             _t_tracks = StandardMidiFile.Track(self._io, self, self._root)
-            _t_tracks._read()
-            self.tracks[i] = _t_tracks
+            try:
+                _t_tracks._read()
+            finally:
+                self.tracks.append(_t_tracks)
             self._debug['tracks']['arr'][i]['end'] = self._io.pos()
 
         self._debug['tracks']['end'] = self._io.pos()
 
-    class TrackEvents(KaitaiStruct):
-        SEQ_FIELDS = ["event"]
+
+    def _fetch_instances(self):
+        pass
+        self.hdr._fetch_instances()
+        for i in range(len(self.tracks)):
+            pass
+            self.tracks[i]._fetch_instances()
+
+
+    class ChannelPressureEvent(KaitaiStruct):
+        SEQ_FIELDS = ["pressure"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(StandardMidiFile.ChannelPressureEvent, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
-            self._debug['event']['start'] = self._io.pos()
-            self.event = []
-            i = 0
-            while not self._io.is_eof():
-                if not 'arr' in self._debug['event']:
-                    self._debug['event']['arr'] = []
-                self._debug['event']['arr'].append({'start': self._io.pos()})
-                _t_event = StandardMidiFile.TrackEvent(self._io, self, self._root)
-                _t_event._read()
-                self.event.append(_t_event)
-                self._debug['event']['arr'][len(self.event) - 1]['end'] = self._io.pos()
-                i += 1
-
-            self._debug['event']['end'] = self._io.pos()
-
-
-    class TrackEvent(KaitaiStruct):
-        SEQ_FIELDS = ["v_time", "event_header", "meta_event_body", "sysex_body", "event_body"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['v_time']['start'] = self._io.pos()
-            self.v_time = vlq_base128_be.VlqBase128Be(self._io)
-            self.v_time._read()
-            self._debug['v_time']['end'] = self._io.pos()
-            self._debug['event_header']['start'] = self._io.pos()
-            self.event_header = self._io.read_u1()
-            self._debug['event_header']['end'] = self._io.pos()
-            if self.event_header == 255:
-                self._debug['meta_event_body']['start'] = self._io.pos()
-                self.meta_event_body = StandardMidiFile.MetaEventBody(self._io, self, self._root)
-                self.meta_event_body._read()
-                self._debug['meta_event_body']['end'] = self._io.pos()
-
-            if self.event_header == 240:
-                self._debug['sysex_body']['start'] = self._io.pos()
-                self.sysex_body = StandardMidiFile.SysexEventBody(self._io, self, self._root)
-                self.sysex_body._read()
-                self._debug['sysex_body']['end'] = self._io.pos()
-
-            self._debug['event_body']['start'] = self._io.pos()
-            _on = self.event_type
-            if _on == 224:
-                self.event_body = StandardMidiFile.PitchBendEvent(self._io, self, self._root)
-                self.event_body._read()
-            elif _on == 144:
-                self.event_body = StandardMidiFile.NoteOnEvent(self._io, self, self._root)
-                self.event_body._read()
-            elif _on == 208:
-                self.event_body = StandardMidiFile.ChannelPressureEvent(self._io, self, self._root)
-                self.event_body._read()
-            elif _on == 192:
-                self.event_body = StandardMidiFile.ProgramChangeEvent(self._io, self, self._root)
-                self.event_body._read()
-            elif _on == 160:
-                self.event_body = StandardMidiFile.PolyphonicPressureEvent(self._io, self, self._root)
-                self.event_body._read()
-            elif _on == 176:
-                self.event_body = StandardMidiFile.ControllerEvent(self._io, self, self._root)
-                self.event_body._read()
-            elif _on == 128:
-                self.event_body = StandardMidiFile.NoteOffEvent(self._io, self, self._root)
-                self.event_body._read()
-            self._debug['event_body']['end'] = self._io.pos()
-
-        @property
-        def event_type(self):
-            if hasattr(self, '_m_event_type'):
-                return self._m_event_type if hasattr(self, '_m_event_type') else None
-
-            self._m_event_type = (self.event_header & 240)
-            return self._m_event_type if hasattr(self, '_m_event_type') else None
-
-        @property
-        def channel(self):
-            if hasattr(self, '_m_channel'):
-                return self._m_channel if hasattr(self, '_m_channel') else None
-
-            if self.event_type != 240:
-                self._m_channel = (self.event_header & 15)
-
-            return self._m_channel if hasattr(self, '_m_channel') else None
-
-
-    class PitchBendEvent(KaitaiStruct):
-        SEQ_FIELDS = ["b1", "b2"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['b1']['start'] = self._io.pos()
-            self.b1 = self._io.read_u1()
-            self._debug['b1']['end'] = self._io.pos()
-            self._debug['b2']['start'] = self._io.pos()
-            self.b2 = self._io.read_u1()
-            self._debug['b2']['end'] = self._io.pos()
-
-        @property
-        def bend_value(self):
-            if hasattr(self, '_m_bend_value'):
-                return self._m_bend_value if hasattr(self, '_m_bend_value') else None
-
-            self._m_bend_value = (((self.b2 << 7) + self.b1) - 16384)
-            return self._m_bend_value if hasattr(self, '_m_bend_value') else None
-
-        @property
-        def adj_bend_value(self):
-            if hasattr(self, '_m_adj_bend_value'):
-                return self._m_adj_bend_value if hasattr(self, '_m_adj_bend_value') else None
-
-            self._m_adj_bend_value = (self.bend_value - 16384)
-            return self._m_adj_bend_value if hasattr(self, '_m_adj_bend_value') else None
-
-
-    class ProgramChangeEvent(KaitaiStruct):
-        SEQ_FIELDS = ["program"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['program']['start'] = self._io.pos()
-            self.program = self._io.read_u1()
-            self._debug['program']['end'] = self._io.pos()
-
-
-    class NoteOnEvent(KaitaiStruct):
-        SEQ_FIELDS = ["note", "velocity"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['note']['start'] = self._io.pos()
-            self.note = self._io.read_u1()
-            self._debug['note']['end'] = self._io.pos()
-            self._debug['velocity']['start'] = self._io.pos()
-            self.velocity = self._io.read_u1()
-            self._debug['velocity']['end'] = self._io.pos()
-
-
-    class PolyphonicPressureEvent(KaitaiStruct):
-        SEQ_FIELDS = ["note", "pressure"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['note']['start'] = self._io.pos()
-            self.note = self._io.read_u1()
-            self._debug['note']['end'] = self._io.pos()
             self._debug['pressure']['start'] = self._io.pos()
             self.pressure = self._io.read_u1()
             self._debug['pressure']['end'] = self._io.pos()
 
 
-    class Track(KaitaiStruct):
-        SEQ_FIELDS = ["magic", "len_events", "events"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['magic']['start'] = self._io.pos()
-            self.magic = self._io.read_bytes(4)
-            self._debug['magic']['end'] = self._io.pos()
-            if not self.magic == b"\x4D\x54\x72\x6B":
-                raise kaitaistruct.ValidationNotEqualError(b"\x4D\x54\x72\x6B", self.magic, self._io, u"/types/track/seq/0")
-            self._debug['len_events']['start'] = self._io.pos()
-            self.len_events = self._io.read_u4be()
-            self._debug['len_events']['end'] = self._io.pos()
-            self._debug['events']['start'] = self._io.pos()
-            self._raw_events = self._io.read_bytes(self.len_events)
-            _io__raw_events = KaitaiStream(BytesIO(self._raw_events))
-            self.events = StandardMidiFile.TrackEvents(_io__raw_events, self, self._root)
-            self.events._read()
-            self._debug['events']['end'] = self._io.pos()
-
-
-    class MetaEventBody(KaitaiStruct):
-
-        class MetaTypeEnum(Enum):
-            sequence_number = 0
-            text_event = 1
-            copyright = 2
-            sequence_track_name = 3
-            instrument_name = 4
-            lyric_text = 5
-            marker_text = 6
-            cue_point = 7
-            midi_channel_prefix_assignment = 32
-            end_of_track = 47
-            tempo = 81
-            smpte_offset = 84
-            time_signature = 88
-            key_signature = 89
-            sequencer_specific_event = 127
-        SEQ_FIELDS = ["meta_type", "len", "body"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['meta_type']['start'] = self._io.pos()
-            self.meta_type = KaitaiStream.resolve_enum(StandardMidiFile.MetaEventBody.MetaTypeEnum, self._io.read_u1())
-            self._debug['meta_type']['end'] = self._io.pos()
-            self._debug['len']['start'] = self._io.pos()
-            self.len = vlq_base128_be.VlqBase128Be(self._io)
-            self.len._read()
-            self._debug['len']['end'] = self._io.pos()
-            self._debug['body']['start'] = self._io.pos()
-            self.body = self._io.read_bytes(self.len.value)
-            self._debug['body']['end'] = self._io.pos()
+        def _fetch_instances(self):
+            pass
 
 
     class ControllerEvent(KaitaiStruct):
         SEQ_FIELDS = ["controller", "value"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(StandardMidiFile.ControllerEvent, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -310,12 +97,16 @@ class StandardMidiFile(KaitaiStruct):
             self._debug['value']['end'] = self._io.pos()
 
 
+        def _fetch_instances(self):
+            pass
+
+
     class Header(KaitaiStruct):
         SEQ_FIELDS = ["magic", "len_header", "format", "num_tracks", "division"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(StandardMidiFile.Header, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -338,12 +129,177 @@ class StandardMidiFile(KaitaiStruct):
             self._debug['division']['end'] = self._io.pos()
 
 
+        def _fetch_instances(self):
+            pass
+
+
+    class MetaEventBody(KaitaiStruct):
+
+        class MetaTypeEnum(IntEnum):
+            sequence_number = 0
+            text_event = 1
+            copyright = 2
+            sequence_track_name = 3
+            instrument_name = 4
+            lyric_text = 5
+            marker_text = 6
+            cue_point = 7
+            midi_channel_prefix_assignment = 32
+            end_of_track = 47
+            tempo = 81
+            smpte_offset = 84
+            time_signature = 88
+            key_signature = 89
+            sequencer_specific_event = 127
+        SEQ_FIELDS = ["meta_type", "len", "body"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(StandardMidiFile.MetaEventBody, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['meta_type']['start'] = self._io.pos()
+            self.meta_type = KaitaiStream.resolve_enum(StandardMidiFile.MetaEventBody.MetaTypeEnum, self._io.read_u1())
+            self._debug['meta_type']['end'] = self._io.pos()
+            self._debug['len']['start'] = self._io.pos()
+            self.len = vlq_base128_be.VlqBase128Be(self._io)
+            self.len._read()
+            self._debug['len']['end'] = self._io.pos()
+            self._debug['body']['start'] = self._io.pos()
+            self.body = self._io.read_bytes(self.len.value)
+            self._debug['body']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            self.len._fetch_instances()
+
+
+    class NoteOffEvent(KaitaiStruct):
+        SEQ_FIELDS = ["note", "velocity"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(StandardMidiFile.NoteOffEvent, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['note']['start'] = self._io.pos()
+            self.note = self._io.read_u1()
+            self._debug['note']['end'] = self._io.pos()
+            self._debug['velocity']['start'] = self._io.pos()
+            self.velocity = self._io.read_u1()
+            self._debug['velocity']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+
+
+    class NoteOnEvent(KaitaiStruct):
+        SEQ_FIELDS = ["note", "velocity"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(StandardMidiFile.NoteOnEvent, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['note']['start'] = self._io.pos()
+            self.note = self._io.read_u1()
+            self._debug['note']['end'] = self._io.pos()
+            self._debug['velocity']['start'] = self._io.pos()
+            self.velocity = self._io.read_u1()
+            self._debug['velocity']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+
+
+    class PitchBendEvent(KaitaiStruct):
+        SEQ_FIELDS = ["b1", "b2"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(StandardMidiFile.PitchBendEvent, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['b1']['start'] = self._io.pos()
+            self.b1 = self._io.read_u1()
+            self._debug['b1']['end'] = self._io.pos()
+            self._debug['b2']['start'] = self._io.pos()
+            self.b2 = self._io.read_u1()
+            self._debug['b2']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+
+        @property
+        def adj_bend_value(self):
+            if hasattr(self, '_m_adj_bend_value'):
+                return self._m_adj_bend_value
+
+            self._m_adj_bend_value = self.bend_value - 16384
+            return getattr(self, '_m_adj_bend_value', None)
+
+        @property
+        def bend_value(self):
+            if hasattr(self, '_m_bend_value'):
+                return self._m_bend_value
+
+            self._m_bend_value = ((self.b2 << 7) + self.b1) - 16384
+            return getattr(self, '_m_bend_value', None)
+
+
+    class PolyphonicPressureEvent(KaitaiStruct):
+        SEQ_FIELDS = ["note", "pressure"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(StandardMidiFile.PolyphonicPressureEvent, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['note']['start'] = self._io.pos()
+            self.note = self._io.read_u1()
+            self._debug['note']['end'] = self._io.pos()
+            self._debug['pressure']['start'] = self._io.pos()
+            self.pressure = self._io.read_u1()
+            self._debug['pressure']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+
+
+    class ProgramChangeEvent(KaitaiStruct):
+        SEQ_FIELDS = ["program"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(StandardMidiFile.ProgramChangeEvent, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['program']['start'] = self._io.pos()
+            self.program = self._io.read_u1()
+            self._debug['program']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+
+
     class SysexEventBody(KaitaiStruct):
         SEQ_FIELDS = ["len", "data"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(StandardMidiFile.SysexEventBody, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -356,35 +312,190 @@ class StandardMidiFile(KaitaiStruct):
             self._debug['data']['end'] = self._io.pos()
 
 
-    class NoteOffEvent(KaitaiStruct):
-        SEQ_FIELDS = ["note", "velocity"]
+        def _fetch_instances(self):
+            pass
+            self.len._fetch_instances()
+
+
+    class Track(KaitaiStruct):
+        SEQ_FIELDS = ["magic", "len_events", "events"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(StandardMidiFile.Track, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
-            self._debug['note']['start'] = self._io.pos()
-            self.note = self._io.read_u1()
-            self._debug['note']['end'] = self._io.pos()
-            self._debug['velocity']['start'] = self._io.pos()
-            self.velocity = self._io.read_u1()
-            self._debug['velocity']['end'] = self._io.pos()
+            self._debug['magic']['start'] = self._io.pos()
+            self.magic = self._io.read_bytes(4)
+            self._debug['magic']['end'] = self._io.pos()
+            if not self.magic == b"\x4D\x54\x72\x6B":
+                raise kaitaistruct.ValidationNotEqualError(b"\x4D\x54\x72\x6B", self.magic, self._io, u"/types/track/seq/0")
+            self._debug['len_events']['start'] = self._io.pos()
+            self.len_events = self._io.read_u4be()
+            self._debug['len_events']['end'] = self._io.pos()
+            self._debug['events']['start'] = self._io.pos()
+            self._raw_events = self._io.read_bytes(self.len_events)
+            _io__raw_events = KaitaiStream(BytesIO(self._raw_events))
+            self.events = StandardMidiFile.TrackEvents(_io__raw_events, self, self._root)
+            self.events._read()
+            self._debug['events']['end'] = self._io.pos()
 
 
-    class ChannelPressureEvent(KaitaiStruct):
-        SEQ_FIELDS = ["pressure"]
+        def _fetch_instances(self):
+            pass
+            self.events._fetch_instances()
+
+
+    class TrackEvent(KaitaiStruct):
+        SEQ_FIELDS = ["v_time", "event_header", "meta_event_body", "sysex_body", "event_body"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(StandardMidiFile.TrackEvent, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
-            self._debug['pressure']['start'] = self._io.pos()
-            self.pressure = self._io.read_u1()
-            self._debug['pressure']['end'] = self._io.pos()
+            self._debug['v_time']['start'] = self._io.pos()
+            self.v_time = vlq_base128_be.VlqBase128Be(self._io)
+            self.v_time._read()
+            self._debug['v_time']['end'] = self._io.pos()
+            self._debug['event_header']['start'] = self._io.pos()
+            self.event_header = self._io.read_u1()
+            self._debug['event_header']['end'] = self._io.pos()
+            if self.event_header == 255:
+                pass
+                self._debug['meta_event_body']['start'] = self._io.pos()
+                self.meta_event_body = StandardMidiFile.MetaEventBody(self._io, self, self._root)
+                self.meta_event_body._read()
+                self._debug['meta_event_body']['end'] = self._io.pos()
+
+            if self.event_header == 240:
+                pass
+                self._debug['sysex_body']['start'] = self._io.pos()
+                self.sysex_body = StandardMidiFile.SysexEventBody(self._io, self, self._root)
+                self.sysex_body._read()
+                self._debug['sysex_body']['end'] = self._io.pos()
+
+            self._debug['event_body']['start'] = self._io.pos()
+            _on = self.event_type
+            if _on == 128:
+                pass
+                self.event_body = StandardMidiFile.NoteOffEvent(self._io, self, self._root)
+                self.event_body._read()
+            elif _on == 144:
+                pass
+                self.event_body = StandardMidiFile.NoteOnEvent(self._io, self, self._root)
+                self.event_body._read()
+            elif _on == 160:
+                pass
+                self.event_body = StandardMidiFile.PolyphonicPressureEvent(self._io, self, self._root)
+                self.event_body._read()
+            elif _on == 176:
+                pass
+                self.event_body = StandardMidiFile.ControllerEvent(self._io, self, self._root)
+                self.event_body._read()
+            elif _on == 192:
+                pass
+                self.event_body = StandardMidiFile.ProgramChangeEvent(self._io, self, self._root)
+                self.event_body._read()
+            elif _on == 208:
+                pass
+                self.event_body = StandardMidiFile.ChannelPressureEvent(self._io, self, self._root)
+                self.event_body._read()
+            elif _on == 224:
+                pass
+                self.event_body = StandardMidiFile.PitchBendEvent(self._io, self, self._root)
+                self.event_body._read()
+            self._debug['event_body']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            self.v_time._fetch_instances()
+            if self.event_header == 255:
+                pass
+                self.meta_event_body._fetch_instances()
+
+            if self.event_header == 240:
+                pass
+                self.sysex_body._fetch_instances()
+
+            _on = self.event_type
+            if _on == 128:
+                pass
+                self.event_body._fetch_instances()
+            elif _on == 144:
+                pass
+                self.event_body._fetch_instances()
+            elif _on == 160:
+                pass
+                self.event_body._fetch_instances()
+            elif _on == 176:
+                pass
+                self.event_body._fetch_instances()
+            elif _on == 192:
+                pass
+                self.event_body._fetch_instances()
+            elif _on == 208:
+                pass
+                self.event_body._fetch_instances()
+            elif _on == 224:
+                pass
+                self.event_body._fetch_instances()
+
+        @property
+        def channel(self):
+            if hasattr(self, '_m_channel'):
+                return self._m_channel
+
+            if self.event_type != 240:
+                pass
+                self._m_channel = self.event_header & 15
+
+            return getattr(self, '_m_channel', None)
+
+        @property
+        def event_type(self):
+            if hasattr(self, '_m_event_type'):
+                return self._m_event_type
+
+            self._m_event_type = self.event_header & 240
+            return getattr(self, '_m_event_type', None)
+
+
+    class TrackEvents(KaitaiStruct):
+        SEQ_FIELDS = ["event"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(StandardMidiFile.TrackEvents, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['event']['start'] = self._io.pos()
+            self._debug['event']['arr'] = []
+            self.event = []
+            i = 0
+            while not self._io.is_eof():
+                self._debug['event']['arr'].append({'start': self._io.pos()})
+                _t_event = StandardMidiFile.TrackEvent(self._io, self, self._root)
+                try:
+                    _t_event._read()
+                finally:
+                    self.event.append(_t_event)
+                self._debug['event']['arr'][len(self.event) - 1]['end'] = self._io.pos()
+                i += 1
+
+            self._debug['event']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            for i in range(len(self.event)):
+                pass
+                self.event[i]._fetch_instances()
+
 
 
 

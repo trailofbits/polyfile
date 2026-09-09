@@ -1,13 +1,13 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
+# type: ignore
 
-from packaging.version import parse as parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
-    raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
+    raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class AndroidDto(KaitaiStruct):
     """Format for Android DTB/DTBO partitions. It's kind of archive with
@@ -27,9 +27,9 @@ class AndroidDto(KaitaiStruct):
     """
     SEQ_FIELDS = ["header", "entries"]
     def __init__(self, _io, _parent=None, _root=None):
-        self._io = _io
+        super(AndroidDto, self).__init__(_io)
         self._parent = _parent
-        self._root = _root if _root else self
+        self._root = _root or self
         self._debug = collections.defaultdict(dict)
 
     def _read(self):
@@ -38,24 +38,92 @@ class AndroidDto(KaitaiStruct):
         self.header._read()
         self._debug['header']['end'] = self._io.pos()
         self._debug['entries']['start'] = self._io.pos()
-        self.entries = [None] * (self.header.dt_entry_count)
+        self._debug['entries']['arr'] = []
+        self.entries = []
         for i in range(self.header.dt_entry_count):
-            if not 'arr' in self._debug['entries']:
-                self._debug['entries']['arr'] = []
             self._debug['entries']['arr'].append({'start': self._io.pos()})
             _t_entries = AndroidDto.DtTableEntry(self._io, self, self._root)
-            _t_entries._read()
-            self.entries[i] = _t_entries
+            try:
+                _t_entries._read()
+            finally:
+                self.entries.append(_t_entries)
             self._debug['entries']['arr'][i]['end'] = self._io.pos()
 
         self._debug['entries']['end'] = self._io.pos()
 
+
+    def _fetch_instances(self):
+        pass
+        self.header._fetch_instances()
+        for i in range(len(self.entries)):
+            pass
+            self.entries[i]._fetch_instances()
+
+
+    class DtTableEntry(KaitaiStruct):
+        SEQ_FIELDS = ["dt_size", "dt_offset", "id", "rev", "custom"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(AndroidDto.DtTableEntry, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['dt_size']['start'] = self._io.pos()
+            self.dt_size = self._io.read_u4be()
+            self._debug['dt_size']['end'] = self._io.pos()
+            self._debug['dt_offset']['start'] = self._io.pos()
+            self.dt_offset = self._io.read_u4be()
+            self._debug['dt_offset']['end'] = self._io.pos()
+            self._debug['id']['start'] = self._io.pos()
+            self.id = self._io.read_u4be()
+            self._debug['id']['end'] = self._io.pos()
+            self._debug['rev']['start'] = self._io.pos()
+            self.rev = self._io.read_u4be()
+            self._debug['rev']['end'] = self._io.pos()
+            self._debug['custom']['start'] = self._io.pos()
+            self._debug['custom']['arr'] = []
+            self.custom = []
+            for i in range(4):
+                self._debug['custom']['arr'].append({'start': self._io.pos()})
+                self.custom.append(self._io.read_u4be())
+                self._debug['custom']['arr'][i]['end'] = self._io.pos()
+
+            self._debug['custom']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            for i in range(len(self.custom)):
+                pass
+
+            _ = self.body
+            if hasattr(self, '_m_body'):
+                pass
+
+
+        @property
+        def body(self):
+            """DTB/DTBO file."""
+            if hasattr(self, '_m_body'):
+                return self._m_body
+
+            io = self._root._io
+            _pos = io.pos()
+            io.seek(self.dt_offset)
+            self._debug['_m_body']['start'] = io.pos()
+            self._m_body = io.read_bytes(self.dt_size)
+            self._debug['_m_body']['end'] = io.pos()
+            io.seek(_pos)
+            return getattr(self, '_m_body', None)
+
+
     class DtTableHeader(KaitaiStruct):
         SEQ_FIELDS = ["magic", "total_size", "header_size", "dt_entry_size", "dt_entry_count", "dt_entries_offset", "page_size", "version"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(AndroidDto.DtTableHeader, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -87,52 +155,8 @@ class AndroidDto(KaitaiStruct):
             self._debug['version']['end'] = self._io.pos()
 
 
-    class DtTableEntry(KaitaiStruct):
-        SEQ_FIELDS = ["dt_size", "dt_offset", "id", "rev", "custom"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['dt_size']['start'] = self._io.pos()
-            self.dt_size = self._io.read_u4be()
-            self._debug['dt_size']['end'] = self._io.pos()
-            self._debug['dt_offset']['start'] = self._io.pos()
-            self.dt_offset = self._io.read_u4be()
-            self._debug['dt_offset']['end'] = self._io.pos()
-            self._debug['id']['start'] = self._io.pos()
-            self.id = self._io.read_u4be()
-            self._debug['id']['end'] = self._io.pos()
-            self._debug['rev']['start'] = self._io.pos()
-            self.rev = self._io.read_u4be()
-            self._debug['rev']['end'] = self._io.pos()
-            self._debug['custom']['start'] = self._io.pos()
-            self.custom = [None] * (4)
-            for i in range(4):
-                if not 'arr' in self._debug['custom']:
-                    self._debug['custom']['arr'] = []
-                self._debug['custom']['arr'].append({'start': self._io.pos()})
-                self.custom[i] = self._io.read_u4be()
-                self._debug['custom']['arr'][i]['end'] = self._io.pos()
-
-            self._debug['custom']['end'] = self._io.pos()
-
-        @property
-        def body(self):
-            """DTB/DTBO file."""
-            if hasattr(self, '_m_body'):
-                return self._m_body if hasattr(self, '_m_body') else None
-
-            io = self._root._io
-            _pos = io.pos()
-            io.seek(self.dt_offset)
-            self._debug['_m_body']['start'] = io.pos()
-            self._m_body = io.read_bytes(self.dt_size)
-            self._debug['_m_body']['end'] = io.pos()
-            io.seek(_pos)
-            return self._m_body if hasattr(self, '_m_body') else None
+        def _fetch_instances(self):
+            pass
 
 
 

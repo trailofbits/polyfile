@@ -1,13 +1,13 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
+# type: ignore
 
-from packaging.version import parse as parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
-    raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
+    raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class AndroidBootldrQcom(KaitaiStruct):
     """A bootloader for Android used on various devices powered by Qualcomm
@@ -119,9 +119,9 @@ class AndroidBootldrQcom(KaitaiStruct):
     """
     SEQ_FIELDS = ["magic", "num_images", "ofs_img_bodies", "bootloader_size", "img_headers"]
     def __init__(self, _io, _parent=None, _root=None):
-        self._io = _io
+        super(AndroidBootldrQcom, self).__init__(_io)
         self._parent = _parent
-        self._root = _root if _root else self
+        self._root = _root or self
         self._debug = collections.defaultdict(dict)
 
     def _read(self):
@@ -140,24 +140,68 @@ class AndroidBootldrQcom(KaitaiStruct):
         self.bootloader_size = self._io.read_u4le()
         self._debug['bootloader_size']['end'] = self._io.pos()
         self._debug['img_headers']['start'] = self._io.pos()
-        self.img_headers = [None] * (self.num_images)
+        self._debug['img_headers']['arr'] = []
+        self.img_headers = []
         for i in range(self.num_images):
-            if not 'arr' in self._debug['img_headers']:
-                self._debug['img_headers']['arr'] = []
             self._debug['img_headers']['arr'].append({'start': self._io.pos()})
             _t_img_headers = AndroidBootldrQcom.ImgHeader(self._io, self, self._root)
-            _t_img_headers._read()
-            self.img_headers[i] = _t_img_headers
+            try:
+                _t_img_headers._read()
+            finally:
+                self.img_headers.append(_t_img_headers)
             self._debug['img_headers']['arr'][i]['end'] = self._io.pos()
 
         self._debug['img_headers']['end'] = self._io.pos()
 
+
+    def _fetch_instances(self):
+        pass
+        for i in range(len(self.img_headers)):
+            pass
+            self.img_headers[i]._fetch_instances()
+
+        _ = self.img_bodies
+        if hasattr(self, '_m_img_bodies'):
+            pass
+            for i in range(len(self._m_img_bodies)):
+                pass
+                self._m_img_bodies[i]._fetch_instances()
+
+
+
+    class ImgBody(KaitaiStruct):
+        SEQ_FIELDS = ["body"]
+        def __init__(self, idx, _io, _parent=None, _root=None):
+            super(AndroidBootldrQcom.ImgBody, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self.idx = idx
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['body']['start'] = self._io.pos()
+            self.body = self._io.read_bytes(self.img_header.len_body)
+            self._debug['body']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+
+        @property
+        def img_header(self):
+            if hasattr(self, '_m_img_header'):
+                return self._m_img_header
+
+            self._m_img_header = self._root.img_headers[self.idx]
+            return getattr(self, '_m_img_header', None)
+
+
     class ImgHeader(KaitaiStruct):
         SEQ_FIELDS = ["name", "len_body"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(AndroidBootldrQcom.ImgHeader, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -169,49 +213,31 @@ class AndroidBootldrQcom(KaitaiStruct):
             self._debug['len_body']['end'] = self._io.pos()
 
 
-    class ImgBody(KaitaiStruct):
-        SEQ_FIELDS = ["body"]
-        def __init__(self, idx, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self.idx = idx
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['body']['start'] = self._io.pos()
-            self.body = self._io.read_bytes(self.img_header.len_body)
-            self._debug['body']['end'] = self._io.pos()
-
-        @property
-        def img_header(self):
-            if hasattr(self, '_m_img_header'):
-                return self._m_img_header if hasattr(self, '_m_img_header') else None
-
-            self._m_img_header = self._root.img_headers[self.idx]
-            return self._m_img_header if hasattr(self, '_m_img_header') else None
+        def _fetch_instances(self):
+            pass
 
 
     @property
     def img_bodies(self):
         if hasattr(self, '_m_img_bodies'):
-            return self._m_img_bodies if hasattr(self, '_m_img_bodies') else None
+            return self._m_img_bodies
 
         _pos = self._io.pos()
         self._io.seek(self.ofs_img_bodies)
         self._debug['_m_img_bodies']['start'] = self._io.pos()
-        self._m_img_bodies = [None] * (self.num_images)
+        self._debug['_m_img_bodies']['arr'] = []
+        self._m_img_bodies = []
         for i in range(self.num_images):
-            if not 'arr' in self._debug['_m_img_bodies']:
-                self._debug['_m_img_bodies']['arr'] = []
             self._debug['_m_img_bodies']['arr'].append({'start': self._io.pos()})
             _t__m_img_bodies = AndroidBootldrQcom.ImgBody(i, self._io, self, self._root)
-            _t__m_img_bodies._read()
-            self._m_img_bodies[i] = _t__m_img_bodies
+            try:
+                _t__m_img_bodies._read()
+            finally:
+                self._m_img_bodies.append(_t__m_img_bodies)
             self._debug['_m_img_bodies']['arr'][i]['end'] = self._io.pos()
 
         self._debug['_m_img_bodies']['end'] = self._io.pos()
         self._io.seek(_pos)
-        return self._m_img_bodies if hasattr(self, '_m_img_bodies') else None
+        return getattr(self, '_m_img_bodies', None)
 
 

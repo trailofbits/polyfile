@@ -1,13 +1,13 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
+# type: ignore
 
-from packaging.version import parse as parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
-    raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
+    raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class Hccapx(KaitaiStruct):
     """Native format of Hashcat password "recovery" utility
@@ -17,33 +17,42 @@ class Hccapx(KaitaiStruct):
     """
     SEQ_FIELDS = ["records"]
     def __init__(self, _io, _parent=None, _root=None):
-        self._io = _io
+        super(Hccapx, self).__init__(_io)
         self._parent = _parent
-        self._root = _root if _root else self
+        self._root = _root or self
         self._debug = collections.defaultdict(dict)
 
     def _read(self):
         self._debug['records']['start'] = self._io.pos()
+        self._debug['records']['arr'] = []
         self.records = []
         i = 0
         while not self._io.is_eof():
-            if not 'arr' in self._debug['records']:
-                self._debug['records']['arr'] = []
             self._debug['records']['arr'].append({'start': self._io.pos()})
             _t_records = Hccapx.HccapxRecord(self._io, self, self._root)
-            _t_records._read()
-            self.records.append(_t_records)
+            try:
+                _t_records._read()
+            finally:
+                self.records.append(_t_records)
             self._debug['records']['arr'][len(self.records) - 1]['end'] = self._io.pos()
             i += 1
 
         self._debug['records']['end'] = self._io.pos()
 
+
+    def _fetch_instances(self):
+        pass
+        for i in range(len(self.records)):
+            pass
+            self.records[i]._fetch_instances()
+
+
     class HccapxRecord(KaitaiStruct):
         SEQ_FIELDS = ["magic", "version", "ignore_replay_counter", "message_pair", "len_essid", "essid", "padding1", "keyver", "keymic", "mac_ap", "nonce_ap", "mac_station", "nonce_station", "len_eapol", "eapol", "padding2"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Hccapx.HccapxRecord, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -61,7 +70,6 @@ class Hccapx(KaitaiStruct):
             self._debug['message_pair']['start'] = self._io.pos()
             self.message_pair = self._io.read_bits_int_be(7)
             self._debug['message_pair']['end'] = self._io.pos()
-            self._io.align_to_byte()
             self._debug['len_essid']['start'] = self._io.pos()
             self.len_essid = self._io.read_u1()
             self._debug['len_essid']['end'] = self._io.pos()
@@ -69,7 +77,7 @@ class Hccapx(KaitaiStruct):
             self.essid = self._io.read_bytes(self.len_essid)
             self._debug['essid']['end'] = self._io.pos()
             self._debug['padding1']['start'] = self._io.pos()
-            self.padding1 = self._io.read_bytes((32 - self.len_essid))
+            self.padding1 = self._io.read_bytes(32 - self.len_essid)
             self._debug['padding1']['end'] = self._io.pos()
             self._debug['keyver']['start'] = self._io.pos()
             self.keyver = self._io.read_u1()
@@ -96,8 +104,12 @@ class Hccapx(KaitaiStruct):
             self.eapol = self._io.read_bytes(self.len_eapol)
             self._debug['eapol']['end'] = self._io.pos()
             self._debug['padding2']['start'] = self._io.pos()
-            self.padding2 = self._io.read_bytes((256 - self.len_eapol))
+            self.padding2 = self._io.read_bytes(256 - self.len_eapol)
             self._debug['padding2']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
 
 
 

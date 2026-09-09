@@ -1,15 +1,15 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
+# type: ignore
 
-from packaging.version import parse as parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
+from polyfile.kaitai.parsers import dos_datetime
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
-    raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
+    raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
-from polyfile.kaitai.parsers import dos_datetime
 class Lzh(KaitaiStruct):
     """LHA (LHarc, LZH) is a file format used by a popular freeware
     eponymous archiver, created in 1988 by Haruyasu Yoshizaki. Over the
@@ -21,63 +21,53 @@ class Lzh(KaitaiStruct):
     """
     SEQ_FIELDS = ["entries"]
     def __init__(self, _io, _parent=None, _root=None):
-        self._io = _io
+        super(Lzh, self).__init__(_io)
         self._parent = _parent
-        self._root = _root if _root else self
+        self._root = _root or self
         self._debug = collections.defaultdict(dict)
 
     def _read(self):
         self._debug['entries']['start'] = self._io.pos()
+        self._debug['entries']['arr'] = []
         self.entries = []
         i = 0
         while not self._io.is_eof():
-            if not 'arr' in self._debug['entries']:
-                self._debug['entries']['arr'] = []
             self._debug['entries']['arr'].append({'start': self._io.pos()})
             _t_entries = Lzh.Record(self._io, self, self._root)
-            _t_entries._read()
-            self.entries.append(_t_entries)
+            try:
+                _t_entries._read()
+            finally:
+                self.entries.append(_t_entries)
             self._debug['entries']['arr'][len(self.entries) - 1]['end'] = self._io.pos()
             i += 1
 
         self._debug['entries']['end'] = self._io.pos()
 
-    class Record(KaitaiStruct):
-        SEQ_FIELDS = ["header_len", "file_record"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
 
-        def _read(self):
-            self._debug['header_len']['start'] = self._io.pos()
-            self.header_len = self._io.read_u1()
-            self._debug['header_len']['end'] = self._io.pos()
-            if self.header_len > 0:
-                self._debug['file_record']['start'] = self._io.pos()
-                self.file_record = Lzh.FileRecord(self._io, self, self._root)
-                self.file_record._read()
-                self._debug['file_record']['end'] = self._io.pos()
-
+    def _fetch_instances(self):
+        pass
+        for i in range(len(self.entries)):
+            pass
+            self.entries[i]._fetch_instances()
 
 
     class FileRecord(KaitaiStruct):
         SEQ_FIELDS = ["header", "file_uncompr_crc16", "body"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Lzh.FileRecord, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
             self._debug['header']['start'] = self._io.pos()
-            self._raw_header = self._io.read_bytes((self._parent.header_len - 1))
+            self._raw_header = self._io.read_bytes(self._parent.header_len - 1)
             _io__raw_header = KaitaiStream(BytesIO(self._raw_header))
             self.header = Lzh.Header(_io__raw_header, self, self._root)
             self.header._read()
             self._debug['header']['end'] = self._io.pos()
             if self.header.header1.lha_level == 0:
+                pass
                 self._debug['file_uncompr_crc16']['start'] = self._io.pos()
                 self.file_uncompr_crc16 = self._io.read_u2le()
                 self._debug['file_uncompr_crc16']['end'] = self._io.pos()
@@ -87,12 +77,20 @@ class Lzh(KaitaiStruct):
             self._debug['body']['end'] = self._io.pos()
 
 
+        def _fetch_instances(self):
+            pass
+            self.header._fetch_instances()
+            if self.header.header1.lha_level == 0:
+                pass
+
+
+
     class Header(KaitaiStruct):
         SEQ_FIELDS = ["header1", "filename_len", "filename", "file_uncompr_crc16", "os", "ext_header_size"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Lzh.Header, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -101,38 +99,63 @@ class Lzh(KaitaiStruct):
             self.header1._read()
             self._debug['header1']['end'] = self._io.pos()
             if self.header1.lha_level == 0:
+                pass
                 self._debug['filename_len']['start'] = self._io.pos()
                 self.filename_len = self._io.read_u1()
                 self._debug['filename_len']['end'] = self._io.pos()
 
             if self.header1.lha_level == 0:
+                pass
                 self._debug['filename']['start'] = self._io.pos()
                 self.filename = (self._io.read_bytes(self.filename_len)).decode(u"ASCII")
                 self._debug['filename']['end'] = self._io.pos()
 
             if self.header1.lha_level == 2:
+                pass
                 self._debug['file_uncompr_crc16']['start'] = self._io.pos()
                 self.file_uncompr_crc16 = self._io.read_u2le()
                 self._debug['file_uncompr_crc16']['end'] = self._io.pos()
 
             if self.header1.lha_level == 2:
+                pass
                 self._debug['os']['start'] = self._io.pos()
                 self.os = self._io.read_u1()
                 self._debug['os']['end'] = self._io.pos()
 
             if self.header1.lha_level == 2:
+                pass
                 self._debug['ext_header_size']['start'] = self._io.pos()
                 self.ext_header_size = self._io.read_u2le()
                 self._debug['ext_header_size']['end'] = self._io.pos()
 
 
 
+        def _fetch_instances(self):
+            pass
+            self.header1._fetch_instances()
+            if self.header1.lha_level == 0:
+                pass
+
+            if self.header1.lha_level == 0:
+                pass
+
+            if self.header1.lha_level == 2:
+                pass
+
+            if self.header1.lha_level == 2:
+                pass
+
+            if self.header1.lha_level == 2:
+                pass
+
+
+
     class Header1(KaitaiStruct):
         SEQ_FIELDS = ["header_checksum", "method_id", "file_size_compr", "file_size_uncompr", "file_timestamp", "attr", "lha_level"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Lzh.Header1, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -160,6 +183,40 @@ class Lzh(KaitaiStruct):
             self._debug['lha_level']['start'] = self._io.pos()
             self.lha_level = self._io.read_u1()
             self._debug['lha_level']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            self.file_timestamp._fetch_instances()
+
+
+    class Record(KaitaiStruct):
+        SEQ_FIELDS = ["header_len", "file_record"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Lzh.Record, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['header_len']['start'] = self._io.pos()
+            self.header_len = self._io.read_u1()
+            self._debug['header_len']['end'] = self._io.pos()
+            if self.header_len > 0:
+                pass
+                self._debug['file_record']['start'] = self._io.pos()
+                self.file_record = Lzh.FileRecord(self._io, self, self._root)
+                self.file_record._read()
+                self._debug['file_record']['end'] = self._io.pos()
+
+
+
+        def _fetch_instances(self):
+            pass
+            if self.header_len > 0:
+                pass
+                self.file_record._fetch_instances()
+
 
 
 

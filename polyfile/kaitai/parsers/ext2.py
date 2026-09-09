@@ -1,41 +1,435 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
+# type: ignore
 
-from packaging.version import parse as parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
-from enum import Enum
+from enum import IntEnum
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
-    raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
+    raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class Ext2(KaitaiStruct):
     SEQ_FIELDS = []
     def __init__(self, _io, _parent=None, _root=None):
-        self._io = _io
+        super(Ext2, self).__init__(_io)
         self._parent = _parent
-        self._root = _root if _root else self
+        self._root = _root or self
         self._debug = collections.defaultdict(dict)
 
     def _read(self):
         pass
 
+
+    def _fetch_instances(self):
+        pass
+        _ = self.bg1
+        if hasattr(self, '_m_bg1'):
+            pass
+            self._m_bg1._fetch_instances()
+
+
+    class Bgd(KaitaiStruct):
+        SEQ_FIELDS = ["block_bitmap_block", "inode_bitmap_block", "inode_table_block", "free_blocks_count", "free_inodes_count", "used_dirs_count", "pad_reserved"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Ext2.Bgd, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['block_bitmap_block']['start'] = self._io.pos()
+            self.block_bitmap_block = self._io.read_u4le()
+            self._debug['block_bitmap_block']['end'] = self._io.pos()
+            self._debug['inode_bitmap_block']['start'] = self._io.pos()
+            self.inode_bitmap_block = self._io.read_u4le()
+            self._debug['inode_bitmap_block']['end'] = self._io.pos()
+            self._debug['inode_table_block']['start'] = self._io.pos()
+            self.inode_table_block = self._io.read_u4le()
+            self._debug['inode_table_block']['end'] = self._io.pos()
+            self._debug['free_blocks_count']['start'] = self._io.pos()
+            self.free_blocks_count = self._io.read_u2le()
+            self._debug['free_blocks_count']['end'] = self._io.pos()
+            self._debug['free_inodes_count']['start'] = self._io.pos()
+            self.free_inodes_count = self._io.read_u2le()
+            self._debug['free_inodes_count']['end'] = self._io.pos()
+            self._debug['used_dirs_count']['start'] = self._io.pos()
+            self.used_dirs_count = self._io.read_u2le()
+            self._debug['used_dirs_count']['end'] = self._io.pos()
+            self._debug['pad_reserved']['start'] = self._io.pos()
+            self.pad_reserved = self._io.read_bytes(2 + 12)
+            self._debug['pad_reserved']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            _ = self.block_bitmap
+            if hasattr(self, '_m_block_bitmap'):
+                pass
+
+            _ = self.inode_bitmap
+            if hasattr(self, '_m_inode_bitmap'):
+                pass
+
+            _ = self.inodes
+            if hasattr(self, '_m_inodes'):
+                pass
+                for i in range(len(self._m_inodes)):
+                    pass
+                    self._m_inodes[i]._fetch_instances()
+
+
+
+        @property
+        def block_bitmap(self):
+            if hasattr(self, '_m_block_bitmap'):
+                return self._m_block_bitmap
+
+            _pos = self._io.pos()
+            self._io.seek(self.block_bitmap_block * self._root.bg1.super_block.block_size)
+            self._debug['_m_block_bitmap']['start'] = self._io.pos()
+            self._m_block_bitmap = self._io.read_bytes(1024)
+            self._debug['_m_block_bitmap']['end'] = self._io.pos()
+            self._io.seek(_pos)
+            return getattr(self, '_m_block_bitmap', None)
+
+        @property
+        def inode_bitmap(self):
+            if hasattr(self, '_m_inode_bitmap'):
+                return self._m_inode_bitmap
+
+            _pos = self._io.pos()
+            self._io.seek(self.inode_bitmap_block * self._root.bg1.super_block.block_size)
+            self._debug['_m_inode_bitmap']['start'] = self._io.pos()
+            self._m_inode_bitmap = self._io.read_bytes(1024)
+            self._debug['_m_inode_bitmap']['end'] = self._io.pos()
+            self._io.seek(_pos)
+            return getattr(self, '_m_inode_bitmap', None)
+
+        @property
+        def inodes(self):
+            if hasattr(self, '_m_inodes'):
+                return self._m_inodes
+
+            _pos = self._io.pos()
+            self._io.seek(self.inode_table_block * self._root.bg1.super_block.block_size)
+            self._debug['_m_inodes']['start'] = self._io.pos()
+            self._debug['_m_inodes']['arr'] = []
+            self._m_inodes = []
+            for i in range(self._root.bg1.super_block.inodes_per_group):
+                self._debug['_m_inodes']['arr'].append({'start': self._io.pos()})
+                _t__m_inodes = Ext2.Inode(self._io, self, self._root)
+                try:
+                    _t__m_inodes._read()
+                finally:
+                    self._m_inodes.append(_t__m_inodes)
+                self._debug['_m_inodes']['arr'][i]['end'] = self._io.pos()
+
+            self._debug['_m_inodes']['end'] = self._io.pos()
+            self._io.seek(_pos)
+            return getattr(self, '_m_inodes', None)
+
+
+    class BlockGroup(KaitaiStruct):
+        SEQ_FIELDS = ["super_block", "block_groups"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Ext2.BlockGroup, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['super_block']['start'] = self._io.pos()
+            self._raw_super_block = self._io.read_bytes(1024)
+            _io__raw_super_block = KaitaiStream(BytesIO(self._raw_super_block))
+            self.super_block = Ext2.SuperBlockStruct(_io__raw_super_block, self, self._root)
+            self.super_block._read()
+            self._debug['super_block']['end'] = self._io.pos()
+            self._debug['block_groups']['start'] = self._io.pos()
+            self._debug['block_groups']['arr'] = []
+            self.block_groups = []
+            for i in range(self.super_block.block_group_count):
+                self._debug['block_groups']['arr'].append({'start': self._io.pos()})
+                _t_block_groups = Ext2.Bgd(self._io, self, self._root)
+                try:
+                    _t_block_groups._read()
+                finally:
+                    self.block_groups.append(_t_block_groups)
+                self._debug['block_groups']['arr'][i]['end'] = self._io.pos()
+
+            self._debug['block_groups']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            self.super_block._fetch_instances()
+            for i in range(len(self.block_groups)):
+                pass
+                self.block_groups[i]._fetch_instances()
+
+
+
+    class BlockPtr(KaitaiStruct):
+        SEQ_FIELDS = ["ptr"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Ext2.BlockPtr, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['ptr']['start'] = self._io.pos()
+            self.ptr = self._io.read_u4le()
+            self._debug['ptr']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            _ = self.body
+            if hasattr(self, '_m_body'):
+                pass
+                self._m_body._fetch_instances()
+
+
+        @property
+        def body(self):
+            if hasattr(self, '_m_body'):
+                return self._m_body
+
+            _pos = self._io.pos()
+            self._io.seek(self.ptr * self._root.bg1.super_block.block_size)
+            self._debug['_m_body']['start'] = self._io.pos()
+            self._raw__m_body = self._io.read_bytes(self._root.bg1.super_block.block_size)
+            _io__raw__m_body = KaitaiStream(BytesIO(self._raw__m_body))
+            self._m_body = Ext2.RawBlock(_io__raw__m_body, self, self._root)
+            self._m_body._read()
+            self._debug['_m_body']['end'] = self._io.pos()
+            self._io.seek(_pos)
+            return getattr(self, '_m_body', None)
+
+
+    class Dir(KaitaiStruct):
+        SEQ_FIELDS = ["entries"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Ext2.Dir, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['entries']['start'] = self._io.pos()
+            self._debug['entries']['arr'] = []
+            self.entries = []
+            i = 0
+            while not self._io.is_eof():
+                self._debug['entries']['arr'].append({'start': self._io.pos()})
+                _t_entries = Ext2.DirEntry(self._io, self, self._root)
+                try:
+                    _t_entries._read()
+                finally:
+                    self.entries.append(_t_entries)
+                self._debug['entries']['arr'][len(self.entries) - 1]['end'] = self._io.pos()
+                i += 1
+
+            self._debug['entries']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            for i in range(len(self.entries)):
+                pass
+                self.entries[i]._fetch_instances()
+
+
+
+    class DirEntry(KaitaiStruct):
+
+        class FileTypeEnum(IntEnum):
+            unknown = 0
+            reg_file = 1
+            dir = 2
+            chrdev = 3
+            blkdev = 4
+            fifo = 5
+            sock = 6
+            symlink = 7
+        SEQ_FIELDS = ["inode_ptr", "rec_len", "name_len", "file_type", "name", "padding"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Ext2.DirEntry, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['inode_ptr']['start'] = self._io.pos()
+            self.inode_ptr = self._io.read_u4le()
+            self._debug['inode_ptr']['end'] = self._io.pos()
+            self._debug['rec_len']['start'] = self._io.pos()
+            self.rec_len = self._io.read_u2le()
+            self._debug['rec_len']['end'] = self._io.pos()
+            self._debug['name_len']['start'] = self._io.pos()
+            self.name_len = self._io.read_u1()
+            self._debug['name_len']['end'] = self._io.pos()
+            self._debug['file_type']['start'] = self._io.pos()
+            self.file_type = KaitaiStream.resolve_enum(Ext2.DirEntry.FileTypeEnum, self._io.read_u1())
+            self._debug['file_type']['end'] = self._io.pos()
+            self._debug['name']['start'] = self._io.pos()
+            self.name = (self._io.read_bytes(self.name_len)).decode(u"UTF-8")
+            self._debug['name']['end'] = self._io.pos()
+            self._debug['padding']['start'] = self._io.pos()
+            self.padding = self._io.read_bytes((self.rec_len - self.name_len) - 8)
+            self._debug['padding']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+
+        @property
+        def inode(self):
+            if hasattr(self, '_m_inode'):
+                return self._m_inode
+
+            self._m_inode = self._root.bg1.block_groups[(self.inode_ptr - 1) // self._root.bg1.super_block.inodes_per_group].inodes[(self.inode_ptr - 1) % self._root.bg1.super_block.inodes_per_group]
+            return getattr(self, '_m_inode', None)
+
+
+    class Inode(KaitaiStruct):
+        SEQ_FIELDS = ["mode", "uid", "size", "atime", "ctime", "mtime", "dtime", "gid", "links_count", "blocks", "flags", "osd1", "block", "generation", "file_acl", "dir_acl", "faddr", "osd2"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Ext2.Inode, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['mode']['start'] = self._io.pos()
+            self.mode = self._io.read_u2le()
+            self._debug['mode']['end'] = self._io.pos()
+            self._debug['uid']['start'] = self._io.pos()
+            self.uid = self._io.read_u2le()
+            self._debug['uid']['end'] = self._io.pos()
+            self._debug['size']['start'] = self._io.pos()
+            self.size = self._io.read_u4le()
+            self._debug['size']['end'] = self._io.pos()
+            self._debug['atime']['start'] = self._io.pos()
+            self.atime = self._io.read_u4le()
+            self._debug['atime']['end'] = self._io.pos()
+            self._debug['ctime']['start'] = self._io.pos()
+            self.ctime = self._io.read_u4le()
+            self._debug['ctime']['end'] = self._io.pos()
+            self._debug['mtime']['start'] = self._io.pos()
+            self.mtime = self._io.read_u4le()
+            self._debug['mtime']['end'] = self._io.pos()
+            self._debug['dtime']['start'] = self._io.pos()
+            self.dtime = self._io.read_u4le()
+            self._debug['dtime']['end'] = self._io.pos()
+            self._debug['gid']['start'] = self._io.pos()
+            self.gid = self._io.read_u2le()
+            self._debug['gid']['end'] = self._io.pos()
+            self._debug['links_count']['start'] = self._io.pos()
+            self.links_count = self._io.read_u2le()
+            self._debug['links_count']['end'] = self._io.pos()
+            self._debug['blocks']['start'] = self._io.pos()
+            self.blocks = self._io.read_u4le()
+            self._debug['blocks']['end'] = self._io.pos()
+            self._debug['flags']['start'] = self._io.pos()
+            self.flags = self._io.read_u4le()
+            self._debug['flags']['end'] = self._io.pos()
+            self._debug['osd1']['start'] = self._io.pos()
+            self.osd1 = self._io.read_u4le()
+            self._debug['osd1']['end'] = self._io.pos()
+            self._debug['block']['start'] = self._io.pos()
+            self._debug['block']['arr'] = []
+            self.block = []
+            for i in range(15):
+                self._debug['block']['arr'].append({'start': self._io.pos()})
+                _t_block = Ext2.BlockPtr(self._io, self, self._root)
+                try:
+                    _t_block._read()
+                finally:
+                    self.block.append(_t_block)
+                self._debug['block']['arr'][i]['end'] = self._io.pos()
+
+            self._debug['block']['end'] = self._io.pos()
+            self._debug['generation']['start'] = self._io.pos()
+            self.generation = self._io.read_u4le()
+            self._debug['generation']['end'] = self._io.pos()
+            self._debug['file_acl']['start'] = self._io.pos()
+            self.file_acl = self._io.read_u4le()
+            self._debug['file_acl']['end'] = self._io.pos()
+            self._debug['dir_acl']['start'] = self._io.pos()
+            self.dir_acl = self._io.read_u4le()
+            self._debug['dir_acl']['end'] = self._io.pos()
+            self._debug['faddr']['start'] = self._io.pos()
+            self.faddr = self._io.read_u4le()
+            self._debug['faddr']['end'] = self._io.pos()
+            self._debug['osd2']['start'] = self._io.pos()
+            self.osd2 = self._io.read_bytes(12)
+            self._debug['osd2']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            for i in range(len(self.block)):
+                pass
+                self.block[i]._fetch_instances()
+
+            _ = self.as_dir
+            if hasattr(self, '_m_as_dir'):
+                pass
+                self._m_as_dir._fetch_instances()
+
+
+        @property
+        def as_dir(self):
+            if hasattr(self, '_m_as_dir'):
+                return self._m_as_dir
+
+            io = self.block[0].body._io
+            _pos = io.pos()
+            io.seek(0)
+            self._debug['_m_as_dir']['start'] = io.pos()
+            self._m_as_dir = Ext2.Dir(io, self, self._root)
+            self._m_as_dir._read()
+            self._debug['_m_as_dir']['end'] = io.pos()
+            io.seek(_pos)
+            return getattr(self, '_m_as_dir', None)
+
+
+    class RawBlock(KaitaiStruct):
+        SEQ_FIELDS = ["body"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Ext2.RawBlock, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['body']['start'] = self._io.pos()
+            self.body = self._io.read_bytes(self._root.bg1.super_block.block_size)
+            self._debug['body']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+
+
     class SuperBlockStruct(KaitaiStruct):
 
-        class StateEnum(Enum):
-            valid_fs = 1
-            error_fs = 2
-
-        class ErrorsEnum(Enum):
+        class ErrorsEnum(IntEnum):
             act_continue = 1
             act_ro = 2
             act_panic = 3
+
+        class StateEnum(IntEnum):
+            valid_fs = 1
+            error_fs = 2
         SEQ_FIELDS = ["inodes_count", "blocks_count", "r_blocks_count", "free_blocks_count", "free_inodes_count", "first_data_block", "log_block_size", "log_frag_size", "blocks_per_group", "frags_per_group", "inodes_per_group", "mtime", "wtime", "mnt_count", "max_mnt_count", "magic", "state", "errors", "minor_rev_level", "lastcheck", "checkinterval", "creator_os", "rev_level", "def_resuid", "def_resgid", "first_ino", "inode_size", "block_group_nr", "feature_compat", "feature_incompat", "feature_ro_compat", "uuid", "volume_name", "last_mounted", "algo_bitmap", "prealloc_blocks", "prealloc_dir_blocks", "padding1", "journal_uuid", "journal_inum", "journal_dev", "last_orphan", "hash_seed", "def_hash_version"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Ext2.SuperBlockStruct, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -168,12 +562,11 @@ class Ext2(KaitaiStruct):
             self.last_orphan = self._io.read_u4le()
             self._debug['last_orphan']['end'] = self._io.pos()
             self._debug['hash_seed']['start'] = self._io.pos()
-            self.hash_seed = [None] * (4)
+            self._debug['hash_seed']['arr'] = []
+            self.hash_seed = []
             for i in range(4):
-                if not 'arr' in self._debug['hash_seed']:
-                    self._debug['hash_seed']['arr'] = []
                 self._debug['hash_seed']['arr'].append({'start': self._io.pos()})
-                self.hash_seed[i] = self._io.read_u4le()
+                self.hash_seed.append(self._io.read_u4le())
                 self._debug['hash_seed']['arr'][i]['end'] = self._io.pos()
 
             self._debug['hash_seed']['end'] = self._io.pos()
@@ -181,341 +574,34 @@ class Ext2(KaitaiStruct):
             self.def_hash_version = self._io.read_u1()
             self._debug['def_hash_version']['end'] = self._io.pos()
 
-        @property
-        def block_size(self):
-            if hasattr(self, '_m_block_size'):
-                return self._m_block_size if hasattr(self, '_m_block_size') else None
 
-            self._m_block_size = (1024 << self.log_block_size)
-            return self._m_block_size if hasattr(self, '_m_block_size') else None
+        def _fetch_instances(self):
+            pass
+            for i in range(len(self.hash_seed)):
+                pass
+
 
         @property
         def block_group_count(self):
             if hasattr(self, '_m_block_group_count'):
-                return self._m_block_group_count if hasattr(self, '_m_block_group_count') else None
+                return self._m_block_group_count
 
             self._m_block_group_count = self.blocks_count // self.blocks_per_group
-            return self._m_block_group_count if hasattr(self, '_m_block_group_count') else None
-
-
-    class DirEntry(KaitaiStruct):
-
-        class FileTypeEnum(Enum):
-            unknown = 0
-            reg_file = 1
-            dir = 2
-            chrdev = 3
-            blkdev = 4
-            fifo = 5
-            sock = 6
-            symlink = 7
-        SEQ_FIELDS = ["inode_ptr", "rec_len", "name_len", "file_type", "name", "padding"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['inode_ptr']['start'] = self._io.pos()
-            self.inode_ptr = self._io.read_u4le()
-            self._debug['inode_ptr']['end'] = self._io.pos()
-            self._debug['rec_len']['start'] = self._io.pos()
-            self.rec_len = self._io.read_u2le()
-            self._debug['rec_len']['end'] = self._io.pos()
-            self._debug['name_len']['start'] = self._io.pos()
-            self.name_len = self._io.read_u1()
-            self._debug['name_len']['end'] = self._io.pos()
-            self._debug['file_type']['start'] = self._io.pos()
-            self.file_type = KaitaiStream.resolve_enum(Ext2.DirEntry.FileTypeEnum, self._io.read_u1())
-            self._debug['file_type']['end'] = self._io.pos()
-            self._debug['name']['start'] = self._io.pos()
-            self.name = (self._io.read_bytes(self.name_len)).decode(u"UTF-8")
-            self._debug['name']['end'] = self._io.pos()
-            self._debug['padding']['start'] = self._io.pos()
-            self.padding = self._io.read_bytes(((self.rec_len - self.name_len) - 8))
-            self._debug['padding']['end'] = self._io.pos()
+            return getattr(self, '_m_block_group_count', None)
 
         @property
-        def inode(self):
-            if hasattr(self, '_m_inode'):
-                return self._m_inode if hasattr(self, '_m_inode') else None
+        def block_size(self):
+            if hasattr(self, '_m_block_size'):
+                return self._m_block_size
 
-            self._m_inode = self._root.bg1.block_groups[(self.inode_ptr - 1) // self._root.bg1.super_block.inodes_per_group].inodes[((self.inode_ptr - 1) % self._root.bg1.super_block.inodes_per_group)]
-            return self._m_inode if hasattr(self, '_m_inode') else None
-
-
-    class Inode(KaitaiStruct):
-        SEQ_FIELDS = ["mode", "uid", "size", "atime", "ctime", "mtime", "dtime", "gid", "links_count", "blocks", "flags", "osd1", "block", "generation", "file_acl", "dir_acl", "faddr", "osd2"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['mode']['start'] = self._io.pos()
-            self.mode = self._io.read_u2le()
-            self._debug['mode']['end'] = self._io.pos()
-            self._debug['uid']['start'] = self._io.pos()
-            self.uid = self._io.read_u2le()
-            self._debug['uid']['end'] = self._io.pos()
-            self._debug['size']['start'] = self._io.pos()
-            self.size = self._io.read_u4le()
-            self._debug['size']['end'] = self._io.pos()
-            self._debug['atime']['start'] = self._io.pos()
-            self.atime = self._io.read_u4le()
-            self._debug['atime']['end'] = self._io.pos()
-            self._debug['ctime']['start'] = self._io.pos()
-            self.ctime = self._io.read_u4le()
-            self._debug['ctime']['end'] = self._io.pos()
-            self._debug['mtime']['start'] = self._io.pos()
-            self.mtime = self._io.read_u4le()
-            self._debug['mtime']['end'] = self._io.pos()
-            self._debug['dtime']['start'] = self._io.pos()
-            self.dtime = self._io.read_u4le()
-            self._debug['dtime']['end'] = self._io.pos()
-            self._debug['gid']['start'] = self._io.pos()
-            self.gid = self._io.read_u2le()
-            self._debug['gid']['end'] = self._io.pos()
-            self._debug['links_count']['start'] = self._io.pos()
-            self.links_count = self._io.read_u2le()
-            self._debug['links_count']['end'] = self._io.pos()
-            self._debug['blocks']['start'] = self._io.pos()
-            self.blocks = self._io.read_u4le()
-            self._debug['blocks']['end'] = self._io.pos()
-            self._debug['flags']['start'] = self._io.pos()
-            self.flags = self._io.read_u4le()
-            self._debug['flags']['end'] = self._io.pos()
-            self._debug['osd1']['start'] = self._io.pos()
-            self.osd1 = self._io.read_u4le()
-            self._debug['osd1']['end'] = self._io.pos()
-            self._debug['block']['start'] = self._io.pos()
-            self.block = [None] * (15)
-            for i in range(15):
-                if not 'arr' in self._debug['block']:
-                    self._debug['block']['arr'] = []
-                self._debug['block']['arr'].append({'start': self._io.pos()})
-                _t_block = Ext2.BlockPtr(self._io, self, self._root)
-                _t_block._read()
-                self.block[i] = _t_block
-                self._debug['block']['arr'][i]['end'] = self._io.pos()
-
-            self._debug['block']['end'] = self._io.pos()
-            self._debug['generation']['start'] = self._io.pos()
-            self.generation = self._io.read_u4le()
-            self._debug['generation']['end'] = self._io.pos()
-            self._debug['file_acl']['start'] = self._io.pos()
-            self.file_acl = self._io.read_u4le()
-            self._debug['file_acl']['end'] = self._io.pos()
-            self._debug['dir_acl']['start'] = self._io.pos()
-            self.dir_acl = self._io.read_u4le()
-            self._debug['dir_acl']['end'] = self._io.pos()
-            self._debug['faddr']['start'] = self._io.pos()
-            self.faddr = self._io.read_u4le()
-            self._debug['faddr']['end'] = self._io.pos()
-            self._debug['osd2']['start'] = self._io.pos()
-            self.osd2 = self._io.read_bytes(12)
-            self._debug['osd2']['end'] = self._io.pos()
-
-        @property
-        def as_dir(self):
-            if hasattr(self, '_m_as_dir'):
-                return self._m_as_dir if hasattr(self, '_m_as_dir') else None
-
-            io = self.block[0].body._io
-            _pos = io.pos()
-            io.seek(0)
-            self._debug['_m_as_dir']['start'] = io.pos()
-            self._m_as_dir = Ext2.Dir(io, self, self._root)
-            self._m_as_dir._read()
-            self._debug['_m_as_dir']['end'] = io.pos()
-            io.seek(_pos)
-            return self._m_as_dir if hasattr(self, '_m_as_dir') else None
-
-
-    class BlockPtr(KaitaiStruct):
-        SEQ_FIELDS = ["ptr"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['ptr']['start'] = self._io.pos()
-            self.ptr = self._io.read_u4le()
-            self._debug['ptr']['end'] = self._io.pos()
-
-        @property
-        def body(self):
-            if hasattr(self, '_m_body'):
-                return self._m_body if hasattr(self, '_m_body') else None
-
-            _pos = self._io.pos()
-            self._io.seek((self.ptr * self._root.bg1.super_block.block_size))
-            self._debug['_m_body']['start'] = self._io.pos()
-            self._raw__m_body = self._io.read_bytes(self._root.bg1.super_block.block_size)
-            _io__raw__m_body = KaitaiStream(BytesIO(self._raw__m_body))
-            self._m_body = Ext2.RawBlock(_io__raw__m_body, self, self._root)
-            self._m_body._read()
-            self._debug['_m_body']['end'] = self._io.pos()
-            self._io.seek(_pos)
-            return self._m_body if hasattr(self, '_m_body') else None
-
-
-    class Dir(KaitaiStruct):
-        SEQ_FIELDS = ["entries"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['entries']['start'] = self._io.pos()
-            self.entries = []
-            i = 0
-            while not self._io.is_eof():
-                if not 'arr' in self._debug['entries']:
-                    self._debug['entries']['arr'] = []
-                self._debug['entries']['arr'].append({'start': self._io.pos()})
-                _t_entries = Ext2.DirEntry(self._io, self, self._root)
-                _t_entries._read()
-                self.entries.append(_t_entries)
-                self._debug['entries']['arr'][len(self.entries) - 1]['end'] = self._io.pos()
-                i += 1
-
-            self._debug['entries']['end'] = self._io.pos()
-
-
-    class BlockGroup(KaitaiStruct):
-        SEQ_FIELDS = ["super_block", "block_groups"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['super_block']['start'] = self._io.pos()
-            self._raw_super_block = self._io.read_bytes(1024)
-            _io__raw_super_block = KaitaiStream(BytesIO(self._raw_super_block))
-            self.super_block = Ext2.SuperBlockStruct(_io__raw_super_block, self, self._root)
-            self.super_block._read()
-            self._debug['super_block']['end'] = self._io.pos()
-            self._debug['block_groups']['start'] = self._io.pos()
-            self.block_groups = [None] * (self.super_block.block_group_count)
-            for i in range(self.super_block.block_group_count):
-                if not 'arr' in self._debug['block_groups']:
-                    self._debug['block_groups']['arr'] = []
-                self._debug['block_groups']['arr'].append({'start': self._io.pos()})
-                _t_block_groups = Ext2.Bgd(self._io, self, self._root)
-                _t_block_groups._read()
-                self.block_groups[i] = _t_block_groups
-                self._debug['block_groups']['arr'][i]['end'] = self._io.pos()
-
-            self._debug['block_groups']['end'] = self._io.pos()
-
-
-    class Bgd(KaitaiStruct):
-        SEQ_FIELDS = ["block_bitmap_block", "inode_bitmap_block", "inode_table_block", "free_blocks_count", "free_inodes_count", "used_dirs_count", "pad_reserved"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['block_bitmap_block']['start'] = self._io.pos()
-            self.block_bitmap_block = self._io.read_u4le()
-            self._debug['block_bitmap_block']['end'] = self._io.pos()
-            self._debug['inode_bitmap_block']['start'] = self._io.pos()
-            self.inode_bitmap_block = self._io.read_u4le()
-            self._debug['inode_bitmap_block']['end'] = self._io.pos()
-            self._debug['inode_table_block']['start'] = self._io.pos()
-            self.inode_table_block = self._io.read_u4le()
-            self._debug['inode_table_block']['end'] = self._io.pos()
-            self._debug['free_blocks_count']['start'] = self._io.pos()
-            self.free_blocks_count = self._io.read_u2le()
-            self._debug['free_blocks_count']['end'] = self._io.pos()
-            self._debug['free_inodes_count']['start'] = self._io.pos()
-            self.free_inodes_count = self._io.read_u2le()
-            self._debug['free_inodes_count']['end'] = self._io.pos()
-            self._debug['used_dirs_count']['start'] = self._io.pos()
-            self.used_dirs_count = self._io.read_u2le()
-            self._debug['used_dirs_count']['end'] = self._io.pos()
-            self._debug['pad_reserved']['start'] = self._io.pos()
-            self.pad_reserved = self._io.read_bytes((2 + 12))
-            self._debug['pad_reserved']['end'] = self._io.pos()
-
-        @property
-        def block_bitmap(self):
-            if hasattr(self, '_m_block_bitmap'):
-                return self._m_block_bitmap if hasattr(self, '_m_block_bitmap') else None
-
-            _pos = self._io.pos()
-            self._io.seek((self.block_bitmap_block * self._root.bg1.super_block.block_size))
-            self._debug['_m_block_bitmap']['start'] = self._io.pos()
-            self._m_block_bitmap = self._io.read_bytes(1024)
-            self._debug['_m_block_bitmap']['end'] = self._io.pos()
-            self._io.seek(_pos)
-            return self._m_block_bitmap if hasattr(self, '_m_block_bitmap') else None
-
-        @property
-        def inode_bitmap(self):
-            if hasattr(self, '_m_inode_bitmap'):
-                return self._m_inode_bitmap if hasattr(self, '_m_inode_bitmap') else None
-
-            _pos = self._io.pos()
-            self._io.seek((self.inode_bitmap_block * self._root.bg1.super_block.block_size))
-            self._debug['_m_inode_bitmap']['start'] = self._io.pos()
-            self._m_inode_bitmap = self._io.read_bytes(1024)
-            self._debug['_m_inode_bitmap']['end'] = self._io.pos()
-            self._io.seek(_pos)
-            return self._m_inode_bitmap if hasattr(self, '_m_inode_bitmap') else None
-
-        @property
-        def inodes(self):
-            if hasattr(self, '_m_inodes'):
-                return self._m_inodes if hasattr(self, '_m_inodes') else None
-
-            _pos = self._io.pos()
-            self._io.seek((self.inode_table_block * self._root.bg1.super_block.block_size))
-            self._debug['_m_inodes']['start'] = self._io.pos()
-            self._m_inodes = [None] * (self._root.bg1.super_block.inodes_per_group)
-            for i in range(self._root.bg1.super_block.inodes_per_group):
-                if not 'arr' in self._debug['_m_inodes']:
-                    self._debug['_m_inodes']['arr'] = []
-                self._debug['_m_inodes']['arr'].append({'start': self._io.pos()})
-                _t__m_inodes = Ext2.Inode(self._io, self, self._root)
-                _t__m_inodes._read()
-                self._m_inodes[i] = _t__m_inodes
-                self._debug['_m_inodes']['arr'][i]['end'] = self._io.pos()
-
-            self._debug['_m_inodes']['end'] = self._io.pos()
-            self._io.seek(_pos)
-            return self._m_inodes if hasattr(self, '_m_inodes') else None
-
-
-    class RawBlock(KaitaiStruct):
-        SEQ_FIELDS = ["body"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['body']['start'] = self._io.pos()
-            self.body = self._io.read_bytes(self._root.bg1.super_block.block_size)
-            self._debug['body']['end'] = self._io.pos()
+            self._m_block_size = 1024 << self.log_block_size
+            return getattr(self, '_m_block_size', None)
 
 
     @property
     def bg1(self):
         if hasattr(self, '_m_bg1'):
-            return self._m_bg1 if hasattr(self, '_m_bg1') else None
+            return self._m_bg1
 
         _pos = self._io.pos()
         self._io.seek(1024)
@@ -524,14 +610,14 @@ class Ext2(KaitaiStruct):
         self._m_bg1._read()
         self._debug['_m_bg1']['end'] = self._io.pos()
         self._io.seek(_pos)
-        return self._m_bg1 if hasattr(self, '_m_bg1') else None
+        return getattr(self, '_m_bg1', None)
 
     @property
     def root_dir(self):
         if hasattr(self, '_m_root_dir'):
-            return self._m_root_dir if hasattr(self, '_m_root_dir') else None
+            return self._m_root_dir
 
         self._m_root_dir = self.bg1.block_groups[0].inodes[1].as_dir
-        return self._m_root_dir if hasattr(self, '_m_root_dir') else None
+        return getattr(self, '_m_root_dir', None)
 
 

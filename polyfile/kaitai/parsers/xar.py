@@ -1,15 +1,15 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
+# type: ignore
 
-from packaging.version import parse as parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
-from enum import Enum
+from enum import IntEnum
 import collections
 import zlib
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
-    raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
+    raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class Xar(KaitaiStruct):
     """From [Wikipedia](https://en.wikipedia.org/wiki/Xar_(archiver)):
@@ -23,7 +23,7 @@ class Xar(KaitaiStruct):
        Source - https://github.com/mackyle/xar/wiki/xarformat
     """
 
-    class ChecksumAlgorithmsApple(Enum):
+    class ChecksumAlgorithmsApple(IntEnum):
         none = 0
         sha1 = 1
         md5 = 2
@@ -31,9 +31,9 @@ class Xar(KaitaiStruct):
         sha512 = 4
     SEQ_FIELDS = ["header_prefix", "header", "toc"]
     def __init__(self, _io, _parent=None, _root=None):
-        self._io = _io
+        super(Xar, self).__init__(_io)
         self._parent = _parent
-        self._root = _root if _root else self
+        self._root = _root or self
         self._debug = collections.defaultdict(dict)
 
     def _read(self):
@@ -42,7 +42,7 @@ class Xar(KaitaiStruct):
         self.header_prefix._read()
         self._debug['header_prefix']['end'] = self._io.pos()
         self._debug['header']['start'] = self._io.pos()
-        self._raw_header = self._io.read_bytes((self.header_prefix.len_header - 6))
+        self._raw_header = self._io.read_bytes(self.header_prefix.len_header - 6)
         _io__raw_header = KaitaiStream(BytesIO(self._raw_header))
         self.header = Xar.FileHeader(_io__raw_header, self, self._root)
         self.header._read()
@@ -55,31 +55,19 @@ class Xar(KaitaiStruct):
         self.toc._read()
         self._debug['toc']['end'] = self._io.pos()
 
-    class FileHeaderPrefix(KaitaiStruct):
-        SEQ_FIELDS = ["magic", "len_header"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
 
-        def _read(self):
-            self._debug['magic']['start'] = self._io.pos()
-            self.magic = self._io.read_bytes(4)
-            self._debug['magic']['end'] = self._io.pos()
-            if not self.magic == b"\x78\x61\x72\x21":
-                raise kaitaistruct.ValidationNotEqualError(b"\x78\x61\x72\x21", self.magic, self._io, u"/types/file_header_prefix/seq/0")
-            self._debug['len_header']['start'] = self._io.pos()
-            self.len_header = self._io.read_u2be()
-            self._debug['len_header']['end'] = self._io.pos()
-
+    def _fetch_instances(self):
+        pass
+        self.header_prefix._fetch_instances()
+        self.header._fetch_instances()
+        self.toc._fetch_instances()
 
     class FileHeader(KaitaiStruct):
         SEQ_FIELDS = ["version", "len_toc_compressed", "toc_length_uncompressed", "checksum_algorithm_int", "checksum_alg_name"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Xar.FileHeader, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -98,12 +86,20 @@ class Xar(KaitaiStruct):
             self.checksum_algorithm_int = self._io.read_u4be()
             self._debug['checksum_algorithm_int']['end'] = self._io.pos()
             if self.has_checksum_alg_name:
+                pass
                 self._debug['checksum_alg_name']['start'] = self._io.pos()
                 self.checksum_alg_name = (KaitaiStream.bytes_terminate(self._io.read_bytes_full(), 0, False)).decode(u"UTF-8")
                 self._debug['checksum_alg_name']['end'] = self._io.pos()
                 _ = self.checksum_alg_name
                 if not  ((_ != u"") and (_ != u"none")) :
                     raise kaitaistruct.ValidationExprError(self.checksum_alg_name, self._io, u"/types/file_header/seq/4")
+
+
+
+        def _fetch_instances(self):
+            pass
+            if self.has_checksum_alg_name:
+                pass
 
 
         @property
@@ -130,40 +126,67 @@ class Xar(KaitaiStruct):
             that OpenSSL recognizes.
             """
             if hasattr(self, '_m_checksum_algorithm_name'):
-                return self._m_checksum_algorithm_name if hasattr(self, '_m_checksum_algorithm_name') else None
+                return self._m_checksum_algorithm_name
 
-            self._m_checksum_algorithm_name = (self.checksum_alg_name if self.has_checksum_alg_name else (u"none" if self.checksum_algorithm_int == Xar.ChecksumAlgorithmsApple.none.value else (u"sha1" if self.checksum_algorithm_int == Xar.ChecksumAlgorithmsApple.sha1.value else (u"md5" if self.checksum_algorithm_int == Xar.ChecksumAlgorithmsApple.md5.value else (u"sha256" if self.checksum_algorithm_int == Xar.ChecksumAlgorithmsApple.sha256.value else (u"sha512" if self.checksum_algorithm_int == Xar.ChecksumAlgorithmsApple.sha512.value else u""))))))
-            return self._m_checksum_algorithm_name if hasattr(self, '_m_checksum_algorithm_name') else None
+            self._m_checksum_algorithm_name = (self.checksum_alg_name if self.has_checksum_alg_name else (u"none" if self.checksum_algorithm_int == int(Xar.ChecksumAlgorithmsApple.none) else (u"sha1" if self.checksum_algorithm_int == int(Xar.ChecksumAlgorithmsApple.sha1) else (u"md5" if self.checksum_algorithm_int == int(Xar.ChecksumAlgorithmsApple.md5) else (u"sha256" if self.checksum_algorithm_int == int(Xar.ChecksumAlgorithmsApple.sha256) else (u"sha512" if self.checksum_algorithm_int == int(Xar.ChecksumAlgorithmsApple.sha512) else u""))))))
+            return getattr(self, '_m_checksum_algorithm_name', None)
 
         @property
         def has_checksum_alg_name(self):
             if hasattr(self, '_m_has_checksum_alg_name'):
-                return self._m_has_checksum_alg_name if hasattr(self, '_m_has_checksum_alg_name') else None
+                return self._m_has_checksum_alg_name
 
-            self._m_has_checksum_alg_name =  ((self.checksum_algorithm_int == self._root.checksum_algorithm_other) and (self.len_header >= 32) and ((self.len_header % 4) == 0)) 
-            return self._m_has_checksum_alg_name if hasattr(self, '_m_has_checksum_alg_name') else None
+            self._m_has_checksum_alg_name =  ((self.checksum_algorithm_int == self._root.checksum_algorithm_other) and (self.len_header >= 32) and (self.len_header % 4 == 0)) 
+            return getattr(self, '_m_has_checksum_alg_name', None)
 
         @property
         def len_header(self):
             if hasattr(self, '_m_len_header'):
-                return self._m_len_header if hasattr(self, '_m_len_header') else None
+                return self._m_len_header
 
             self._m_len_header = self._root.header_prefix.len_header
-            return self._m_len_header if hasattr(self, '_m_len_header') else None
+            return getattr(self, '_m_len_header', None)
+
+
+    class FileHeaderPrefix(KaitaiStruct):
+        SEQ_FIELDS = ["magic", "len_header"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Xar.FileHeaderPrefix, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['magic']['start'] = self._io.pos()
+            self.magic = self._io.read_bytes(4)
+            self._debug['magic']['end'] = self._io.pos()
+            if not self.magic == b"\x78\x61\x72\x21":
+                raise kaitaistruct.ValidationNotEqualError(b"\x78\x61\x72\x21", self.magic, self._io, u"/types/file_header_prefix/seq/0")
+            self._debug['len_header']['start'] = self._io.pos()
+            self.len_header = self._io.read_u2be()
+            self._debug['len_header']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
 
 
     class TocType(KaitaiStruct):
         SEQ_FIELDS = ["xml_string"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Xar.TocType, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
             self._debug['xml_string']['start'] = self._io.pos()
             self.xml_string = (self._io.read_bytes_full()).decode(u"UTF-8")
             self._debug['xml_string']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
 
 
     @property
@@ -173,9 +196,9 @@ class Xar(KaitaiStruct):
            Source - https://github.com/mackyle/xar/blob/66d451d/xar/include/xar.h.in#L85
         """
         if hasattr(self, '_m_checksum_algorithm_other'):
-            return self._m_checksum_algorithm_other if hasattr(self, '_m_checksum_algorithm_other') else None
+            return self._m_checksum_algorithm_other
 
         self._m_checksum_algorithm_other = 3
-        return self._m_checksum_algorithm_other if hasattr(self, '_m_checksum_algorithm_other') else None
+        return getattr(self, '_m_checksum_algorithm_other', None)
 
 

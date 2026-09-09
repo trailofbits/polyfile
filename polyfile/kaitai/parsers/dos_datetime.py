@@ -1,13 +1,13 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
+# type: ignore
 
-from packaging.version import parse as parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
-    raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
+    raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class DosDatetime(KaitaiStruct):
     """MS-DOS date and time are packed 16-bit values that specify local date/time.
@@ -56,9 +56,9 @@ class DosDatetime(KaitaiStruct):
     """
     SEQ_FIELDS = ["time", "date"]
     def __init__(self, _io, _parent=None, _root=None):
-        self._io = _io
+        super(DosDatetime, self).__init__(_io)
         self._parent = _parent
-        self._root = _root if _root else self
+        self._root = _root or self
         self._debug = collections.defaultdict(dict)
 
     def _read(self):
@@ -71,70 +71,18 @@ class DosDatetime(KaitaiStruct):
         self.date._read()
         self._debug['date']['end'] = self._io.pos()
 
-    class Time(KaitaiStruct):
-        SEQ_FIELDS = ["second_div_2", "minute", "hour"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
 
-        def _read(self):
-            self._debug['second_div_2']['start'] = self._io.pos()
-            self.second_div_2 = self._io.read_bits_int_le(5)
-            self._debug['second_div_2']['end'] = self._io.pos()
-            if not self.second_div_2 <= 29:
-                raise kaitaistruct.ValidationGreaterThanError(29, self.second_div_2, self._io, u"/types/time/seq/0")
-            self._debug['minute']['start'] = self._io.pos()
-            self.minute = self._io.read_bits_int_le(6)
-            self._debug['minute']['end'] = self._io.pos()
-            if not self.minute <= 59:
-                raise kaitaistruct.ValidationGreaterThanError(59, self.minute, self._io, u"/types/time/seq/1")
-            self._debug['hour']['start'] = self._io.pos()
-            self.hour = self._io.read_bits_int_le(5)
-            self._debug['hour']['end'] = self._io.pos()
-            if not self.hour <= 23:
-                raise kaitaistruct.ValidationGreaterThanError(23, self.hour, self._io, u"/types/time/seq/2")
-
-        @property
-        def second(self):
-            if hasattr(self, '_m_second'):
-                return self._m_second if hasattr(self, '_m_second') else None
-
-            self._m_second = (2 * self.second_div_2)
-            return self._m_second if hasattr(self, '_m_second') else None
-
-        @property
-        def padded_second(self):
-            if hasattr(self, '_m_padded_second'):
-                return self._m_padded_second if hasattr(self, '_m_padded_second') else None
-
-            self._m_padded_second = (u"0" if self.second <= 9 else u"") + str(self.second)
-            return self._m_padded_second if hasattr(self, '_m_padded_second') else None
-
-        @property
-        def padded_minute(self):
-            if hasattr(self, '_m_padded_minute'):
-                return self._m_padded_minute if hasattr(self, '_m_padded_minute') else None
-
-            self._m_padded_minute = (u"0" if self.minute <= 9 else u"") + str(self.minute)
-            return self._m_padded_minute if hasattr(self, '_m_padded_minute') else None
-
-        @property
-        def padded_hour(self):
-            if hasattr(self, '_m_padded_hour'):
-                return self._m_padded_hour if hasattr(self, '_m_padded_hour') else None
-
-            self._m_padded_hour = (u"0" if self.hour <= 9 else u"") + str(self.hour)
-            return self._m_padded_hour if hasattr(self, '_m_padded_hour') else None
-
+    def _fetch_instances(self):
+        pass
+        self.time._fetch_instances()
+        self.date._fetch_instances()
 
     class Date(KaitaiStruct):
         SEQ_FIELDS = ["day", "month", "year_minus_1980"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(DosDatetime.Date, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -154,38 +102,104 @@ class DosDatetime(KaitaiStruct):
             self.year_minus_1980 = self._io.read_bits_int_le(7)
             self._debug['year_minus_1980']['end'] = self._io.pos()
 
-        @property
-        def year(self):
-            """only years from 1980 to 2107 (1980 + 127) can be represented."""
-            if hasattr(self, '_m_year'):
-                return self._m_year if hasattr(self, '_m_year') else None
 
-            self._m_year = (1980 + self.year_minus_1980)
-            return self._m_year if hasattr(self, '_m_year') else None
+        def _fetch_instances(self):
+            pass
 
         @property
         def padded_day(self):
             if hasattr(self, '_m_padded_day'):
-                return self._m_padded_day if hasattr(self, '_m_padded_day') else None
+                return self._m_padded_day
 
             self._m_padded_day = (u"0" if self.day <= 9 else u"") + str(self.day)
-            return self._m_padded_day if hasattr(self, '_m_padded_day') else None
+            return getattr(self, '_m_padded_day', None)
 
         @property
         def padded_month(self):
             if hasattr(self, '_m_padded_month'):
-                return self._m_padded_month if hasattr(self, '_m_padded_month') else None
+                return self._m_padded_month
 
             self._m_padded_month = (u"0" if self.month <= 9 else u"") + str(self.month)
-            return self._m_padded_month if hasattr(self, '_m_padded_month') else None
+            return getattr(self, '_m_padded_month', None)
 
         @property
         def padded_year(self):
             if hasattr(self, '_m_padded_year'):
-                return self._m_padded_year if hasattr(self, '_m_padded_year') else None
+                return self._m_padded_year
 
             self._m_padded_year = (u"0" + (u"0" + (u"0" if self.year <= 9 else u"") if self.year <= 99 else u"") if self.year <= 999 else u"") + str(self.year)
-            return self._m_padded_year if hasattr(self, '_m_padded_year') else None
+            return getattr(self, '_m_padded_year', None)
+
+        @property
+        def year(self):
+            """only years from 1980 to 2107 (1980 + 127) can be represented."""
+            if hasattr(self, '_m_year'):
+                return self._m_year
+
+            self._m_year = 1980 + self.year_minus_1980
+            return getattr(self, '_m_year', None)
+
+
+    class Time(KaitaiStruct):
+        SEQ_FIELDS = ["second_div_2", "minute", "hour"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(DosDatetime.Time, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['second_div_2']['start'] = self._io.pos()
+            self.second_div_2 = self._io.read_bits_int_le(5)
+            self._debug['second_div_2']['end'] = self._io.pos()
+            if not self.second_div_2 <= 29:
+                raise kaitaistruct.ValidationGreaterThanError(29, self.second_div_2, self._io, u"/types/time/seq/0")
+            self._debug['minute']['start'] = self._io.pos()
+            self.minute = self._io.read_bits_int_le(6)
+            self._debug['minute']['end'] = self._io.pos()
+            if not self.minute <= 59:
+                raise kaitaistruct.ValidationGreaterThanError(59, self.minute, self._io, u"/types/time/seq/1")
+            self._debug['hour']['start'] = self._io.pos()
+            self.hour = self._io.read_bits_int_le(5)
+            self._debug['hour']['end'] = self._io.pos()
+            if not self.hour <= 23:
+                raise kaitaistruct.ValidationGreaterThanError(23, self.hour, self._io, u"/types/time/seq/2")
+
+
+        def _fetch_instances(self):
+            pass
+
+        @property
+        def padded_hour(self):
+            if hasattr(self, '_m_padded_hour'):
+                return self._m_padded_hour
+
+            self._m_padded_hour = (u"0" if self.hour <= 9 else u"") + str(self.hour)
+            return getattr(self, '_m_padded_hour', None)
+
+        @property
+        def padded_minute(self):
+            if hasattr(self, '_m_padded_minute'):
+                return self._m_padded_minute
+
+            self._m_padded_minute = (u"0" if self.minute <= 9 else u"") + str(self.minute)
+            return getattr(self, '_m_padded_minute', None)
+
+        @property
+        def padded_second(self):
+            if hasattr(self, '_m_padded_second'):
+                return self._m_padded_second
+
+            self._m_padded_second = (u"0" if self.second <= 9 else u"") + str(self.second)
+            return getattr(self, '_m_padded_second', None)
+
+        @property
+        def second(self):
+            if hasattr(self, '_m_second'):
+                return self._m_second
+
+            self._m_second = 2 * self.second_div_2
+            return getattr(self, '_m_second', None)
 
 
 

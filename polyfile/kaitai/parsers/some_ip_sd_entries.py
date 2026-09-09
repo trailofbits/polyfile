@@ -1,14 +1,14 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
+# type: ignore
 
-from packaging.version import parse as parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
-from enum import Enum
+from enum import IntEnum
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
-    raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
+    raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class SomeIpSdEntries(KaitaiStruct):
     """The entries are used to synchronize the state of services instances and the
@@ -20,39 +20,48 @@ class SomeIpSdEntries(KaitaiStruct):
     """
     SEQ_FIELDS = ["entries"]
     def __init__(self, _io, _parent=None, _root=None):
-        self._io = _io
+        super(SomeIpSdEntries, self).__init__(_io)
         self._parent = _parent
-        self._root = _root if _root else self
+        self._root = _root or self
         self._debug = collections.defaultdict(dict)
 
     def _read(self):
         self._debug['entries']['start'] = self._io.pos()
+        self._debug['entries']['arr'] = []
         self.entries = []
         i = 0
         while not self._io.is_eof():
-            if not 'arr' in self._debug['entries']:
-                self._debug['entries']['arr'] = []
             self._debug['entries']['arr'].append({'start': self._io.pos()})
             _t_entries = SomeIpSdEntries.SdEntry(self._io, self, self._root)
-            _t_entries._read()
-            self.entries.append(_t_entries)
+            try:
+                _t_entries._read()
+            finally:
+                self.entries.append(_t_entries)
             self._debug['entries']['arr'][len(self.entries) - 1]['end'] = self._io.pos()
             i += 1
 
         self._debug['entries']['end'] = self._io.pos()
 
+
+    def _fetch_instances(self):
+        pass
+        for i in range(len(self.entries)):
+            pass
+            self.entries[i]._fetch_instances()
+
+
     class SdEntry(KaitaiStruct):
 
-        class EntryTypes(Enum):
+        class EntryTypes(IntEnum):
             find = 0
             offer = 1
             subscribe = 6
             subscribe_ack = 7
         SEQ_FIELDS = ["header", "content"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(SomeIpSdEntries.SdEntry, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -63,25 +72,47 @@ class SomeIpSdEntries(KaitaiStruct):
             self._debug['content']['start'] = self._io.pos()
             _on = self.header.type
             if _on == SomeIpSdEntries.SdEntry.EntryTypes.find:
+                pass
                 self.content = SomeIpSdEntries.SdEntry.SdServiceEntry(self._io, self, self._root)
                 self.content._read()
             elif _on == SomeIpSdEntries.SdEntry.EntryTypes.offer:
+                pass
                 self.content = SomeIpSdEntries.SdEntry.SdServiceEntry(self._io, self, self._root)
                 self.content._read()
             elif _on == SomeIpSdEntries.SdEntry.EntryTypes.subscribe:
+                pass
                 self.content = SomeIpSdEntries.SdEntry.SdEventgroupEntry(self._io, self, self._root)
                 self.content._read()
             elif _on == SomeIpSdEntries.SdEntry.EntryTypes.subscribe_ack:
+                pass
                 self.content = SomeIpSdEntries.SdEntry.SdEventgroupEntry(self._io, self, self._root)
                 self.content._read()
             self._debug['content']['end'] = self._io.pos()
 
+
+        def _fetch_instances(self):
+            pass
+            self.header._fetch_instances()
+            _on = self.header.type
+            if _on == SomeIpSdEntries.SdEntry.EntryTypes.find:
+                pass
+                self.content._fetch_instances()
+            elif _on == SomeIpSdEntries.SdEntry.EntryTypes.offer:
+                pass
+                self.content._fetch_instances()
+            elif _on == SomeIpSdEntries.SdEntry.EntryTypes.subscribe:
+                pass
+                self.content._fetch_instances()
+            elif _on == SomeIpSdEntries.SdEntry.EntryTypes.subscribe_ack:
+                pass
+                self.content._fetch_instances()
+
         class SdEntryHeader(KaitaiStruct):
             SEQ_FIELDS = ["type", "index_first_options", "index_second_options", "number_first_options", "number_second_options", "service_id", "instance_id", "major_version", "ttl"]
             def __init__(self, _io, _parent=None, _root=None):
-                self._io = _io
+                super(SomeIpSdEntries.SdEntry.SdEntryHeader, self).__init__(_io)
                 self._parent = _parent
-                self._root = _root if _root else self
+                self._root = _root
                 self._debug = collections.defaultdict(dict)
 
             def _read(self):
@@ -100,7 +131,6 @@ class SomeIpSdEntries(KaitaiStruct):
                 self._debug['number_second_options']['start'] = self._io.pos()
                 self.number_second_options = self._io.read_bits_int_be(4)
                 self._debug['number_second_options']['end'] = self._io.pos()
-                self._io.align_to_byte()
                 self._debug['service_id']['start'] = self._io.pos()
                 self.service_id = self._io.read_u2be()
                 self._debug['service_id']['end'] = self._io.pos()
@@ -115,26 +145,16 @@ class SomeIpSdEntries(KaitaiStruct):
                 self._debug['ttl']['end'] = self._io.pos()
 
 
-        class SdServiceEntry(KaitaiStruct):
-            SEQ_FIELDS = ["minor_version"]
-            def __init__(self, _io, _parent=None, _root=None):
-                self._io = _io
-                self._parent = _parent
-                self._root = _root if _root else self
-                self._debug = collections.defaultdict(dict)
-
-            def _read(self):
-                self._debug['minor_version']['start'] = self._io.pos()
-                self.minor_version = self._io.read_u4be()
-                self._debug['minor_version']['end'] = self._io.pos()
+            def _fetch_instances(self):
+                pass
 
 
         class SdEventgroupEntry(KaitaiStruct):
             SEQ_FIELDS = ["reserved", "initial_data_requested", "reserved2", "counter", "event_group_id"]
             def __init__(self, _io, _parent=None, _root=None):
-                self._io = _io
+                super(SomeIpSdEntries.SdEntry.SdEventgroupEntry, self).__init__(_io)
                 self._parent = _parent
-                self._root = _root if _root else self
+                self._root = _root
                 self._debug = collections.defaultdict(dict)
 
             def _read(self):
@@ -150,10 +170,31 @@ class SomeIpSdEntries(KaitaiStruct):
                 self._debug['counter']['start'] = self._io.pos()
                 self.counter = self._io.read_bits_int_be(4)
                 self._debug['counter']['end'] = self._io.pos()
-                self._io.align_to_byte()
                 self._debug['event_group_id']['start'] = self._io.pos()
                 self.event_group_id = self._io.read_u2be()
                 self._debug['event_group_id']['end'] = self._io.pos()
+
+
+            def _fetch_instances(self):
+                pass
+
+
+        class SdServiceEntry(KaitaiStruct):
+            SEQ_FIELDS = ["minor_version"]
+            def __init__(self, _io, _parent=None, _root=None):
+                super(SomeIpSdEntries.SdEntry.SdServiceEntry, self).__init__(_io)
+                self._parent = _parent
+                self._root = _root
+                self._debug = collections.defaultdict(dict)
+
+            def _read(self):
+                self._debug['minor_version']['start'] = self._io.pos()
+                self.minor_version = self._io.read_u4be()
+                self._debug['minor_version']['end'] = self._io.pos()
+
+
+            def _fetch_instances(self):
+                pass
 
 
 

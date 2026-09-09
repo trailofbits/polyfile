@@ -1,44 +1,53 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
+# type: ignore
 
-from packaging.version import parse as parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
-    raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
+    raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class CpioOldLe(KaitaiStruct):
     SEQ_FIELDS = ["files"]
     def __init__(self, _io, _parent=None, _root=None):
-        self._io = _io
+        super(CpioOldLe, self).__init__(_io)
         self._parent = _parent
-        self._root = _root if _root else self
+        self._root = _root or self
         self._debug = collections.defaultdict(dict)
 
     def _read(self):
         self._debug['files']['start'] = self._io.pos()
+        self._debug['files']['arr'] = []
         self.files = []
         i = 0
         while not self._io.is_eof():
-            if not 'arr' in self._debug['files']:
-                self._debug['files']['arr'] = []
             self._debug['files']['arr'].append({'start': self._io.pos()})
             _t_files = CpioOldLe.File(self._io, self, self._root)
-            _t_files._read()
-            self.files.append(_t_files)
+            try:
+                _t_files._read()
+            finally:
+                self.files.append(_t_files)
             self._debug['files']['arr'][len(self.files) - 1]['end'] = self._io.pos()
             i += 1
 
         self._debug['files']['end'] = self._io.pos()
 
+
+    def _fetch_instances(self):
+        pass
+        for i in range(len(self.files)):
+            pass
+            self.files[i]._fetch_instances()
+
+
     class File(KaitaiStruct):
         SEQ_FIELDS = ["header", "path_name", "string_terminator", "path_name_padding", "file_data", "file_data_padding", "end_of_file_padding"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(CpioOldLe.File, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -47,14 +56,15 @@ class CpioOldLe(KaitaiStruct):
             self.header._read()
             self._debug['header']['end'] = self._io.pos()
             self._debug['path_name']['start'] = self._io.pos()
-            self.path_name = self._io.read_bytes((self.header.path_name_size - 1))
+            self.path_name = self._io.read_bytes(self.header.path_name_size - 1)
             self._debug['path_name']['end'] = self._io.pos()
             self._debug['string_terminator']['start'] = self._io.pos()
             self.string_terminator = self._io.read_bytes(1)
             self._debug['string_terminator']['end'] = self._io.pos()
             if not self.string_terminator == b"\x00":
                 raise kaitaistruct.ValidationNotEqualError(b"\x00", self.string_terminator, self._io, u"/types/file/seq/2")
-            if (self.header.path_name_size % 2) == 1:
+            if self.header.path_name_size % 2 == 1:
+                pass
                 self._debug['path_name_padding']['start'] = self._io.pos()
                 self.path_name_padding = self._io.read_bytes(1)
                 self._debug['path_name_padding']['end'] = self._io.pos()
@@ -64,7 +74,8 @@ class CpioOldLe(KaitaiStruct):
             self._debug['file_data']['start'] = self._io.pos()
             self.file_data = self._io.read_bytes(self.header.file_size.value)
             self._debug['file_data']['end'] = self._io.pos()
-            if (self.header.file_size.value % 2) == 1:
+            if self.header.file_size.value % 2 == 1:
+                pass
                 self._debug['file_data_padding']['start'] = self._io.pos()
                 self.file_data_padding = self._io.read_bytes(1)
                 self._debug['file_data_padding']['end'] = self._io.pos()
@@ -72,18 +83,33 @@ class CpioOldLe(KaitaiStruct):
                     raise kaitaistruct.ValidationNotEqualError(b"\x00", self.file_data_padding, self._io, u"/types/file/seq/5")
 
             if  ((self.path_name == b"\x54\x52\x41\x49\x4C\x45\x52\x21\x21\x21") and (self.header.file_size.value == 0)) :
+                pass
                 self._debug['end_of_file_padding']['start'] = self._io.pos()
                 self.end_of_file_padding = self._io.read_bytes_full()
                 self._debug['end_of_file_padding']['end'] = self._io.pos()
 
 
 
+        def _fetch_instances(self):
+            pass
+            self.header._fetch_instances()
+            if self.header.path_name_size % 2 == 1:
+                pass
+
+            if self.header.file_size.value % 2 == 1:
+                pass
+
+            if  ((self.path_name == b"\x54\x52\x41\x49\x4C\x45\x52\x21\x21\x21") and (self.header.file_size.value == 0)) :
+                pass
+
+
+
     class FileHeader(KaitaiStruct):
         SEQ_FIELDS = ["magic", "device_number", "inode_number", "mode", "user_id", "group_id", "number_of_links", "r_device_number", "modification_time", "path_name_size", "file_size"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(CpioOldLe.FileHeader, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -126,12 +152,18 @@ class CpioOldLe(KaitaiStruct):
             self._debug['file_size']['end'] = self._io.pos()
 
 
+        def _fetch_instances(self):
+            pass
+            self.modification_time._fetch_instances()
+            self.file_size._fetch_instances()
+
+
     class FourByteUnsignedInteger(KaitaiStruct):
         SEQ_FIELDS = ["most_significant_bits", "least_significant_bits"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(CpioOldLe.FourByteUnsignedInteger, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -142,13 +174,17 @@ class CpioOldLe(KaitaiStruct):
             self.least_significant_bits = self._io.read_u2le()
             self._debug['least_significant_bits']['end'] = self._io.pos()
 
+
+        def _fetch_instances(self):
+            pass
+
         @property
         def value(self):
             if hasattr(self, '_m_value'):
-                return self._m_value if hasattr(self, '_m_value') else None
+                return self._m_value
 
-            self._m_value = (self.least_significant_bits + (self.most_significant_bits << 16))
-            return self._m_value if hasattr(self, '_m_value') else None
+            self._m_value = self.least_significant_bits + (self.most_significant_bits << 16)
+            return getattr(self, '_m_value', None)
 
 
 

@@ -1,14 +1,14 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
+# type: ignore
 
-from packaging.version import parse as parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
-from enum import Enum
+from enum import IntEnum
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
-    raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
+    raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class Dicom(KaitaiStruct):
     """DICOM (Digital Imaging and Communications in Medicine), AKA NEMA
@@ -26,7 +26,7 @@ class Dicom(KaitaiStruct):
        Source - https://dicom.nema.org/medical/dicom/current/output/html/part10.html#chapter_7
     """
 
-    class Tags(Enum):
+    class Tags(IntEnum):
         file_meta_information_group_length = 131072
         file_meta_information_version = 131073
         media_storage_sop_class_uid = 131074
@@ -4052,9 +4052,9 @@ class Dicom(KaitaiStruct):
         sequence_delimitation_item = 4294893789
     SEQ_FIELDS = ["file_header", "elements"]
     def __init__(self, _io, _parent=None, _root=None):
-        self._io = _io
+        super(Dicom, self).__init__(_io)
         self._parent = _parent
-        self._root = _root if _root else self
+        self._root = _root or self
         self._debug = collections.defaultdict(dict)
 
     def _read(self):
@@ -4063,271 +4063,36 @@ class Dicom(KaitaiStruct):
         self.file_header._read()
         self._debug['file_header']['end'] = self._io.pos()
         self._debug['elements']['start'] = self._io.pos()
+        self._debug['elements']['arr'] = []
         self.elements = []
         i = 0
         while not self._io.is_eof():
-            if not 'arr' in self._debug['elements']:
-                self._debug['elements']['arr'] = []
             self._debug['elements']['arr'].append({'start': self._io.pos()})
             _t_elements = Dicom.TDataElementImplicit(self._io, self, self._root)
-            _t_elements._read()
-            self.elements.append(_t_elements)
+            try:
+                _t_elements._read()
+            finally:
+                self.elements.append(_t_elements)
             self._debug['elements']['arr'][len(self.elements) - 1]['end'] = self._io.pos()
             i += 1
 
         self._debug['elements']['end'] = self._io.pos()
 
-    class TFileHeader(KaitaiStruct):
-        SEQ_FIELDS = ["preamble", "magic"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
 
-        def _read(self):
-            self._debug['preamble']['start'] = self._io.pos()
-            self.preamble = self._io.read_bytes(128)
-            self._debug['preamble']['end'] = self._io.pos()
-            self._debug['magic']['start'] = self._io.pos()
-            self.magic = self._io.read_bytes(4)
-            self._debug['magic']['end'] = self._io.pos()
-            if not self.magic == b"\x44\x49\x43\x4D":
-                raise kaitaistruct.ValidationNotEqualError(b"\x44\x49\x43\x4D", self.magic, self._io, u"/types/t_file_header/seq/1")
-
-
-    class TDataElementExplicit(KaitaiStruct):
-        """
-        .. seealso::
-           Source - https://dicom.nema.org/medical/dicom/current/output/html/part05.html#sect_7.1.2
-        """
-        SEQ_FIELDS = ["tag_group", "tag_elem", "vr", "reserved", "value_len", "value", "items", "elements_implicit"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['tag_group']['start'] = self._io.pos()
-            self.tag_group = self._io.read_u2le()
-            self._debug['tag_group']['end'] = self._io.pos()
-            self._debug['tag_elem']['start'] = self._io.pos()
-            self.tag_elem = self._io.read_u2le()
-            self._debug['tag_elem']['end'] = self._io.pos()
-            if not (self.is_forced_implicit):
-                self._debug['vr']['start'] = self._io.pos()
-                self.vr = (self._io.read_bytes(2)).decode(u"ASCII")
-                self._debug['vr']['end'] = self._io.pos()
-
-            if  ((self.is_long_len) and (not (self.is_forced_implicit))) :
-                self._debug['reserved']['start'] = self._io.pos()
-                self.reserved = self._io.read_u2le()
-                self._debug['reserved']['end'] = self._io.pos()
-
-            self._debug['value_len']['start'] = self._io.pos()
-            _on = self.is_long_len
-            if _on == False:
-                self.value_len = self._io.read_u2le()
-            elif _on == True:
-                self.value_len = self._io.read_u4le()
-            self._debug['value_len']['end'] = self._io.pos()
-            if self.value_len != 4294967295:
-                self._debug['value']['start'] = self._io.pos()
-                self.value = self._io.read_bytes(self.value_len)
-                self._debug['value']['end'] = self._io.pos()
-
-            if  ((self.vr == u"SQ") and (self.value_len == 4294967295)) :
-                self._debug['items']['start'] = self._io.pos()
-                self.items = []
-                i = 0
-                while True:
-                    if not 'arr' in self._debug['items']:
-                        self._debug['items']['arr'] = []
-                    self._debug['items']['arr'].append({'start': self._io.pos()})
-                    _t_items = Dicom.SeqItem(self._io, self, self._root)
-                    _t_items._read()
-                    _ = _t_items
-                    self.items.append(_)
-                    self._debug['items']['arr'][len(self.items) - 1]['end'] = self._io.pos()
-                    if _.tag_elem == 57565:
-                        break
-                    i += 1
-                self._debug['items']['end'] = self._io.pos()
-
-            if self.is_transfer_syntax_change_implicit:
-                self._debug['elements_implicit']['start'] = self._io.pos()
-                self.elements_implicit = []
-                i = 0
-                while not self._io.is_eof():
-                    if not 'arr' in self._debug['elements_implicit']:
-                        self._debug['elements_implicit']['arr'] = []
-                    self._debug['elements_implicit']['arr'].append({'start': self._io.pos()})
-                    _t_elements_implicit = Dicom.TDataElementImplicit(self._io, self, self._root)
-                    _t_elements_implicit._read()
-                    self.elements_implicit.append(_t_elements_implicit)
-                    self._debug['elements_implicit']['arr'][len(self.elements_implicit) - 1]['end'] = self._io.pos()
-                    i += 1
-
-                self._debug['elements_implicit']['end'] = self._io.pos()
-
-
-        @property
-        def is_forced_implicit(self):
-            if hasattr(self, '_m_is_forced_implicit'):
-                return self._m_is_forced_implicit if hasattr(self, '_m_is_forced_implicit') else None
-
-            self._m_is_forced_implicit = self.tag_group == 65534
-            return self._m_is_forced_implicit if hasattr(self, '_m_is_forced_implicit') else None
-
-        @property
-        def is_long_len(self):
-            if hasattr(self, '_m_is_long_len'):
-                return self._m_is_long_len if hasattr(self, '_m_is_long_len') else None
-
-            self._m_is_long_len =  ((self.is_forced_implicit) or (self.vr == u"OB") or (self.vr == u"OD") or (self.vr == u"OF") or (self.vr == u"OL") or (self.vr == u"OW") or (self.vr == u"SQ") or (self.vr == u"UC") or (self.vr == u"UR") or (self.vr == u"UT") or (self.vr == u"UN")) 
-            return self._m_is_long_len if hasattr(self, '_m_is_long_len') else None
-
-        @property
-        def is_transfer_syntax_change_implicit(self):
-            if hasattr(self, '_m_is_transfer_syntax_change_implicit'):
-                return self._m_is_transfer_syntax_change_implicit if hasattr(self, '_m_is_transfer_syntax_change_implicit') else None
-
-            self._m_is_transfer_syntax_change_implicit = False
-            return self._m_is_transfer_syntax_change_implicit if hasattr(self, '_m_is_transfer_syntax_change_implicit') else None
-
-        @property
-        def tag(self):
-            if hasattr(self, '_m_tag'):
-                return self._m_tag if hasattr(self, '_m_tag') else None
-
-            self._m_tag = KaitaiStream.resolve_enum(Dicom.Tags, ((self.tag_group << 16) | self.tag_elem))
-            return self._m_tag if hasattr(self, '_m_tag') else None
-
-
-    class TDataElementImplicit(KaitaiStruct):
-        """
-        .. seealso::
-           Source - https://dicom.nema.org/medical/dicom/current/output/html/part05.html#sect_7.1.2
-        """
-        SEQ_FIELDS = ["tag_group", "tag_elem", "vr", "reserved", "value_len", "value", "items", "elements"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['tag_group']['start'] = self._io.pos()
-            self.tag_group = self._io.read_u2le()
-            self._debug['tag_group']['end'] = self._io.pos()
-            self._debug['tag_elem']['start'] = self._io.pos()
-            self.tag_elem = self._io.read_u2le()
-            self._debug['tag_elem']['end'] = self._io.pos()
-            if self.is_forced_explicit:
-                self._debug['vr']['start'] = self._io.pos()
-                self.vr = (self._io.read_bytes(2)).decode(u"ASCII")
-                self._debug['vr']['end'] = self._io.pos()
-
-            if  ((self.is_long_len) and (self.is_forced_explicit)) :
-                self._debug['reserved']['start'] = self._io.pos()
-                self.reserved = self._io.read_u2le()
-                self._debug['reserved']['end'] = self._io.pos()
-
-            self._debug['value_len']['start'] = self._io.pos()
-            _on = (self.is_long_len if self.is_forced_explicit else True)
-            if _on == False:
-                self.value_len = self._io.read_u2le()
-            elif _on == True:
-                self.value_len = self._io.read_u4le()
-            self._debug['value_len']['end'] = self._io.pos()
-            if self.value_len != 4294967295:
-                self._debug['value']['start'] = self._io.pos()
-                self.value = self._io.read_bytes(self.value_len)
-                self._debug['value']['end'] = self._io.pos()
-
-            if  ((self.vr == u"SQ") and (self.value_len == 4294967295)) :
-                self._debug['items']['start'] = self._io.pos()
-                self.items = []
-                i = 0
-                while True:
-                    if not 'arr' in self._debug['items']:
-                        self._debug['items']['arr'] = []
-                    self._debug['items']['arr'].append({'start': self._io.pos()})
-                    _t_items = Dicom.SeqItem(self._io, self, self._root)
-                    _t_items._read()
-                    _ = _t_items
-                    self.items.append(_)
-                    self._debug['items']['arr'][len(self.items) - 1]['end'] = self._io.pos()
-                    if _.tag_elem == 57565:
-                        break
-                    i += 1
-                self._debug['items']['end'] = self._io.pos()
-
-            if self.is_transfer_syntax_change_explicit:
-                self._debug['elements']['start'] = self._io.pos()
-                self.elements = []
-                i = 0
-                while not self._io.is_eof():
-                    if not 'arr' in self._debug['elements']:
-                        self._debug['elements']['arr'] = []
-                    self._debug['elements']['arr'].append({'start': self._io.pos()})
-                    _t_elements = Dicom.TDataElementExplicit(self._io, self, self._root)
-                    _t_elements._read()
-                    self.elements.append(_t_elements)
-                    self._debug['elements']['arr'][len(self.elements) - 1]['end'] = self._io.pos()
-                    i += 1
-
-                self._debug['elements']['end'] = self._io.pos()
-
-
-        @property
-        def tag(self):
-            if hasattr(self, '_m_tag'):
-                return self._m_tag if hasattr(self, '_m_tag') else None
-
-            self._m_tag = KaitaiStream.resolve_enum(Dicom.Tags, ((self.tag_group << 16) | self.tag_elem))
-            return self._m_tag if hasattr(self, '_m_tag') else None
-
-        @property
-        def is_transfer_syntax_change_explicit(self):
-            if hasattr(self, '_m_is_transfer_syntax_change_explicit'):
-                return self._m_is_transfer_syntax_change_explicit if hasattr(self, '_m_is_transfer_syntax_change_explicit') else None
-
-            self._m_is_transfer_syntax_change_explicit = self.p_is_transfer_syntax_change_explicit
-            return self._m_is_transfer_syntax_change_explicit if hasattr(self, '_m_is_transfer_syntax_change_explicit') else None
-
-        @property
-        def is_long_len(self):
-            if hasattr(self, '_m_is_long_len'):
-                return self._m_is_long_len if hasattr(self, '_m_is_long_len') else None
-
-            self._m_is_long_len =  ((self.is_forced_explicit) and ( ((self.vr == u"OB") or (self.vr == u"OD") or (self.vr == u"OF") or (self.vr == u"OL") or (self.vr == u"OW") or (self.vr == u"SQ") or (self.vr == u"UC") or (self.vr == u"UR") or (self.vr == u"UT") or (self.vr == u"UN")) )) 
-            return self._m_is_long_len if hasattr(self, '_m_is_long_len') else None
-
-        @property
-        def p_is_transfer_syntax_change_explicit(self):
-            if hasattr(self, '_m_p_is_transfer_syntax_change_explicit'):
-                return self._m_p_is_transfer_syntax_change_explicit if hasattr(self, '_m_p_is_transfer_syntax_change_explicit') else None
-
-            self._m_p_is_transfer_syntax_change_explicit = self.value == b"\x31\x2E\x32\x2E\x38\x34\x30\x2E\x31\x30\x30\x30\x38\x2E\x31\x2E\x32\x2E\x31\x00"
-            return self._m_p_is_transfer_syntax_change_explicit if hasattr(self, '_m_p_is_transfer_syntax_change_explicit') else None
-
-        @property
-        def is_forced_explicit(self):
-            if hasattr(self, '_m_is_forced_explicit'):
-                return self._m_is_forced_explicit if hasattr(self, '_m_is_forced_explicit') else None
-
-            self._m_is_forced_explicit = self.tag_group == 2
-            return self._m_is_forced_explicit if hasattr(self, '_m_is_forced_explicit') else None
+    def _fetch_instances(self):
+        pass
+        self.file_header._fetch_instances()
+        for i in range(len(self.elements)):
+            pass
+            self.elements[i]._fetch_instances()
 
 
     class SeqItem(KaitaiStruct):
         SEQ_FIELDS = ["tag_group", "tag_elem", "value_len", "value", "items"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Dicom.SeqItem, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -4343,28 +4108,376 @@ class Dicom(KaitaiStruct):
             self.value_len = self._io.read_u4le()
             self._debug['value_len']['end'] = self._io.pos()
             if self.value_len != 4294967295:
+                pass
                 self._debug['value']['start'] = self._io.pos()
                 self.value = self._io.read_bytes(self.value_len)
                 self._debug['value']['end'] = self._io.pos()
 
             if self.value_len == 4294967295:
+                pass
                 self._debug['items']['start'] = self._io.pos()
+                self._debug['items']['arr'] = []
                 self.items = []
                 i = 0
                 while True:
-                    if not 'arr' in self._debug['items']:
-                        self._debug['items']['arr'] = []
                     self._debug['items']['arr'].append({'start': self._io.pos()})
                     _t_items = Dicom.TDataElementExplicit(self._io, self, self._root)
-                    _t_items._read()
-                    _ = _t_items
-                    self.items.append(_)
+                    try:
+                        _t_items._read()
+                    finally:
+                        _ = _t_items
+                        self.items.append(_)
                     self._debug['items']['arr'][len(self.items) - 1]['end'] = self._io.pos()
                     if  ((_.tag_group == 65534) and (_.tag_elem == 57357)) :
                         break
                     i += 1
                 self._debug['items']['end'] = self._io.pos()
 
+
+
+        def _fetch_instances(self):
+            pass
+            if self.value_len != 4294967295:
+                pass
+
+            if self.value_len == 4294967295:
+                pass
+                for i in range(len(self.items)):
+                    pass
+                    self.items[i]._fetch_instances()
+
+
+
+
+    class TDataElementExplicit(KaitaiStruct):
+        """
+        .. seealso::
+           Source - https://dicom.nema.org/medical/dicom/current/output/html/part05.html#sect_7.1.2
+        """
+        SEQ_FIELDS = ["tag_group", "tag_elem", "vr", "reserved", "value_len", "value", "items", "elements_implicit"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Dicom.TDataElementExplicit, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['tag_group']['start'] = self._io.pos()
+            self.tag_group = self._io.read_u2le()
+            self._debug['tag_group']['end'] = self._io.pos()
+            self._debug['tag_elem']['start'] = self._io.pos()
+            self.tag_elem = self._io.read_u2le()
+            self._debug['tag_elem']['end'] = self._io.pos()
+            if (not (self.is_forced_implicit)):
+                pass
+                self._debug['vr']['start'] = self._io.pos()
+                self.vr = (self._io.read_bytes(2)).decode(u"ASCII")
+                self._debug['vr']['end'] = self._io.pos()
+
+            if  ((self.is_long_len) and ((not (self.is_forced_implicit)))) :
+                pass
+                self._debug['reserved']['start'] = self._io.pos()
+                self.reserved = self._io.read_u2le()
+                self._debug['reserved']['end'] = self._io.pos()
+
+            self._debug['value_len']['start'] = self._io.pos()
+            _on = self.is_long_len
+            if _on == False:
+                pass
+                self.value_len = self._io.read_u2le()
+            elif _on == True:
+                pass
+                self.value_len = self._io.read_u4le()
+            self._debug['value_len']['end'] = self._io.pos()
+            if self.value_len != 4294967295:
+                pass
+                self._debug['value']['start'] = self._io.pos()
+                self.value = self._io.read_bytes(self.value_len)
+                self._debug['value']['end'] = self._io.pos()
+
+            if  ((self.vr == u"SQ") and (self.value_len == 4294967295)) :
+                pass
+                self._debug['items']['start'] = self._io.pos()
+                self._debug['items']['arr'] = []
+                self.items = []
+                i = 0
+                while True:
+                    self._debug['items']['arr'].append({'start': self._io.pos()})
+                    _t_items = Dicom.SeqItem(self._io, self, self._root)
+                    try:
+                        _t_items._read()
+                    finally:
+                        _ = _t_items
+                        self.items.append(_)
+                    self._debug['items']['arr'][len(self.items) - 1]['end'] = self._io.pos()
+                    if _.tag_elem == 57565:
+                        break
+                    i += 1
+                self._debug['items']['end'] = self._io.pos()
+
+            if self.is_transfer_syntax_change_implicit:
+                pass
+                self._debug['elements_implicit']['start'] = self._io.pos()
+                self._debug['elements_implicit']['arr'] = []
+                self.elements_implicit = []
+                i = 0
+                while not self._io.is_eof():
+                    self._debug['elements_implicit']['arr'].append({'start': self._io.pos()})
+                    _t_elements_implicit = Dicom.TDataElementImplicit(self._io, self, self._root)
+                    try:
+                        _t_elements_implicit._read()
+                    finally:
+                        self.elements_implicit.append(_t_elements_implicit)
+                    self._debug['elements_implicit']['arr'][len(self.elements_implicit) - 1]['end'] = self._io.pos()
+                    i += 1
+
+                self._debug['elements_implicit']['end'] = self._io.pos()
+
+
+
+        def _fetch_instances(self):
+            pass
+            if (not (self.is_forced_implicit)):
+                pass
+
+            if  ((self.is_long_len) and ((not (self.is_forced_implicit)))) :
+                pass
+
+            _on = self.is_long_len
+            if _on == False:
+                pass
+            elif _on == True:
+                pass
+            if self.value_len != 4294967295:
+                pass
+
+            if  ((self.vr == u"SQ") and (self.value_len == 4294967295)) :
+                pass
+                for i in range(len(self.items)):
+                    pass
+                    self.items[i]._fetch_instances()
+
+
+            if self.is_transfer_syntax_change_implicit:
+                pass
+                for i in range(len(self.elements_implicit)):
+                    pass
+                    self.elements_implicit[i]._fetch_instances()
+
+
+
+        @property
+        def is_forced_implicit(self):
+            if hasattr(self, '_m_is_forced_implicit'):
+                return self._m_is_forced_implicit
+
+            self._m_is_forced_implicit = self.tag_group == 65534
+            return getattr(self, '_m_is_forced_implicit', None)
+
+        @property
+        def is_long_len(self):
+            if hasattr(self, '_m_is_long_len'):
+                return self._m_is_long_len
+
+            self._m_is_long_len =  ((self.is_forced_implicit) or (self.vr == u"OB") or (self.vr == u"OD") or (self.vr == u"OF") or (self.vr == u"OL") or (self.vr == u"OW") or (self.vr == u"SQ") or (self.vr == u"UC") or (self.vr == u"UR") or (self.vr == u"UT") or (self.vr == u"UN")) 
+            return getattr(self, '_m_is_long_len', None)
+
+        @property
+        def is_transfer_syntax_change_implicit(self):
+            if hasattr(self, '_m_is_transfer_syntax_change_implicit'):
+                return self._m_is_transfer_syntax_change_implicit
+
+            self._m_is_transfer_syntax_change_implicit = False
+            return getattr(self, '_m_is_transfer_syntax_change_implicit', None)
+
+        @property
+        def tag(self):
+            if hasattr(self, '_m_tag'):
+                return self._m_tag
+
+            self._m_tag = KaitaiStream.resolve_enum(Dicom.Tags, self.tag_group << 16 | self.tag_elem)
+            return getattr(self, '_m_tag', None)
+
+
+    class TDataElementImplicit(KaitaiStruct):
+        """
+        .. seealso::
+           Source - https://dicom.nema.org/medical/dicom/current/output/html/part05.html#sect_7.1.2
+        """
+        SEQ_FIELDS = ["tag_group", "tag_elem", "vr", "reserved", "value_len", "value", "items", "elements"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Dicom.TDataElementImplicit, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['tag_group']['start'] = self._io.pos()
+            self.tag_group = self._io.read_u2le()
+            self._debug['tag_group']['end'] = self._io.pos()
+            self._debug['tag_elem']['start'] = self._io.pos()
+            self.tag_elem = self._io.read_u2le()
+            self._debug['tag_elem']['end'] = self._io.pos()
+            if self.is_forced_explicit:
+                pass
+                self._debug['vr']['start'] = self._io.pos()
+                self.vr = (self._io.read_bytes(2)).decode(u"ASCII")
+                self._debug['vr']['end'] = self._io.pos()
+
+            if  ((self.is_long_len) and (self.is_forced_explicit)) :
+                pass
+                self._debug['reserved']['start'] = self._io.pos()
+                self.reserved = self._io.read_u2le()
+                self._debug['reserved']['end'] = self._io.pos()
+
+            self._debug['value_len']['start'] = self._io.pos()
+            _on = (self.is_long_len if self.is_forced_explicit else True)
+            if _on == False:
+                pass
+                self.value_len = self._io.read_u2le()
+            elif _on == True:
+                pass
+                self.value_len = self._io.read_u4le()
+            self._debug['value_len']['end'] = self._io.pos()
+            if self.value_len != 4294967295:
+                pass
+                self._debug['value']['start'] = self._io.pos()
+                self.value = self._io.read_bytes(self.value_len)
+                self._debug['value']['end'] = self._io.pos()
+
+            if  ((self.vr == u"SQ") and (self.value_len == 4294967295)) :
+                pass
+                self._debug['items']['start'] = self._io.pos()
+                self._debug['items']['arr'] = []
+                self.items = []
+                i = 0
+                while True:
+                    self._debug['items']['arr'].append({'start': self._io.pos()})
+                    _t_items = Dicom.SeqItem(self._io, self, self._root)
+                    try:
+                        _t_items._read()
+                    finally:
+                        _ = _t_items
+                        self.items.append(_)
+                    self._debug['items']['arr'][len(self.items) - 1]['end'] = self._io.pos()
+                    if _.tag_elem == 57565:
+                        break
+                    i += 1
+                self._debug['items']['end'] = self._io.pos()
+
+            if self.is_transfer_syntax_change_explicit:
+                pass
+                self._debug['elements']['start'] = self._io.pos()
+                self._debug['elements']['arr'] = []
+                self.elements = []
+                i = 0
+                while not self._io.is_eof():
+                    self._debug['elements']['arr'].append({'start': self._io.pos()})
+                    _t_elements = Dicom.TDataElementExplicit(self._io, self, self._root)
+                    try:
+                        _t_elements._read()
+                    finally:
+                        self.elements.append(_t_elements)
+                    self._debug['elements']['arr'][len(self.elements) - 1]['end'] = self._io.pos()
+                    i += 1
+
+                self._debug['elements']['end'] = self._io.pos()
+
+
+
+        def _fetch_instances(self):
+            pass
+            if self.is_forced_explicit:
+                pass
+
+            if  ((self.is_long_len) and (self.is_forced_explicit)) :
+                pass
+
+            _on = (self.is_long_len if self.is_forced_explicit else True)
+            if _on == False:
+                pass
+            elif _on == True:
+                pass
+            if self.value_len != 4294967295:
+                pass
+
+            if  ((self.vr == u"SQ") and (self.value_len == 4294967295)) :
+                pass
+                for i in range(len(self.items)):
+                    pass
+                    self.items[i]._fetch_instances()
+
+
+            if self.is_transfer_syntax_change_explicit:
+                pass
+                for i in range(len(self.elements)):
+                    pass
+                    self.elements[i]._fetch_instances()
+
+
+
+        @property
+        def is_forced_explicit(self):
+            if hasattr(self, '_m_is_forced_explicit'):
+                return self._m_is_forced_explicit
+
+            self._m_is_forced_explicit = self.tag_group == 2
+            return getattr(self, '_m_is_forced_explicit', None)
+
+        @property
+        def is_long_len(self):
+            if hasattr(self, '_m_is_long_len'):
+                return self._m_is_long_len
+
+            self._m_is_long_len =  ((self.is_forced_explicit) and ( ((self.vr == u"OB") or (self.vr == u"OD") or (self.vr == u"OF") or (self.vr == u"OL") or (self.vr == u"OW") or (self.vr == u"SQ") or (self.vr == u"UC") or (self.vr == u"UR") or (self.vr == u"UT") or (self.vr == u"UN")) )) 
+            return getattr(self, '_m_is_long_len', None)
+
+        @property
+        def is_transfer_syntax_change_explicit(self):
+            if hasattr(self, '_m_is_transfer_syntax_change_explicit'):
+                return self._m_is_transfer_syntax_change_explicit
+
+            self._m_is_transfer_syntax_change_explicit = self.p_is_transfer_syntax_change_explicit
+            return getattr(self, '_m_is_transfer_syntax_change_explicit', None)
+
+        @property
+        def p_is_transfer_syntax_change_explicit(self):
+            if hasattr(self, '_m_p_is_transfer_syntax_change_explicit'):
+                return self._m_p_is_transfer_syntax_change_explicit
+
+            self._m_p_is_transfer_syntax_change_explicit = self.value == b"\x31\x2E\x32\x2E\x38\x34\x30\x2E\x31\x30\x30\x30\x38\x2E\x31\x2E\x32\x2E\x31\x00"
+            return getattr(self, '_m_p_is_transfer_syntax_change_explicit', None)
+
+        @property
+        def tag(self):
+            if hasattr(self, '_m_tag'):
+                return self._m_tag
+
+            self._m_tag = KaitaiStream.resolve_enum(Dicom.Tags, self.tag_group << 16 | self.tag_elem)
+            return getattr(self, '_m_tag', None)
+
+
+    class TFileHeader(KaitaiStruct):
+        SEQ_FIELDS = ["preamble", "magic"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Dicom.TFileHeader, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['preamble']['start'] = self._io.pos()
+            self.preamble = self._io.read_bytes(128)
+            self._debug['preamble']['end'] = self._io.pos()
+            self._debug['magic']['start'] = self._io.pos()
+            self.magic = self._io.read_bytes(4)
+            self._debug['magic']['end'] = self._io.pos()
+            if not self.magic == b"\x44\x49\x43\x4D":
+                raise kaitaistruct.ValidationNotEqualError(b"\x44\x49\x43\x4D", self.magic, self._io, u"/types/t_file_header/seq/1")
+
+
+        def _fetch_instances(self):
+            pass
 
 
 

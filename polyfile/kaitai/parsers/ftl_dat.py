@@ -1,20 +1,20 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
+# type: ignore
 
-from packaging.version import parse as parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
-    raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
+    raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class FtlDat(KaitaiStruct):
     SEQ_FIELDS = ["num_files", "files"]
     def __init__(self, _io, _parent=None, _root=None):
-        self._io = _io
+        super(FtlDat, self).__init__(_io)
         self._parent = _parent
-        self._root = _root if _root else self
+        self._root = _root or self
         self._debug = collections.defaultdict(dict)
 
     def _read(self):
@@ -22,24 +22,33 @@ class FtlDat(KaitaiStruct):
         self.num_files = self._io.read_u4le()
         self._debug['num_files']['end'] = self._io.pos()
         self._debug['files']['start'] = self._io.pos()
-        self.files = [None] * (self.num_files)
+        self._debug['files']['arr'] = []
+        self.files = []
         for i in range(self.num_files):
-            if not 'arr' in self._debug['files']:
-                self._debug['files']['arr'] = []
             self._debug['files']['arr'].append({'start': self._io.pos()})
             _t_files = FtlDat.File(self._io, self, self._root)
-            _t_files._read()
-            self.files[i] = _t_files
+            try:
+                _t_files._read()
+            finally:
+                self.files.append(_t_files)
             self._debug['files']['arr'][i]['end'] = self._io.pos()
 
         self._debug['files']['end'] = self._io.pos()
 
+
+    def _fetch_instances(self):
+        pass
+        for i in range(len(self.files)):
+            pass
+            self.files[i]._fetch_instances()
+
+
     class File(KaitaiStruct):
         SEQ_FIELDS = ["ofs_meta"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(FtlDat.File, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -47,12 +56,22 @@ class FtlDat(KaitaiStruct):
             self.ofs_meta = self._io.read_u4le()
             self._debug['ofs_meta']['end'] = self._io.pos()
 
+
+        def _fetch_instances(self):
+            pass
+            _ = self.meta
+            if hasattr(self, '_m_meta'):
+                pass
+                self._m_meta._fetch_instances()
+
+
         @property
         def meta(self):
             if hasattr(self, '_m_meta'):
-                return self._m_meta if hasattr(self, '_m_meta') else None
+                return self._m_meta
 
             if self.ofs_meta != 0:
+                pass
                 _pos = self._io.pos()
                 self._io.seek(self.ofs_meta)
                 self._debug['_m_meta']['start'] = self._io.pos()
@@ -61,15 +80,15 @@ class FtlDat(KaitaiStruct):
                 self._debug['_m_meta']['end'] = self._io.pos()
                 self._io.seek(_pos)
 
-            return self._m_meta if hasattr(self, '_m_meta') else None
+            return getattr(self, '_m_meta', None)
 
 
     class Meta(KaitaiStruct):
         SEQ_FIELDS = ["len_file", "len_filename", "filename", "body"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(FtlDat.Meta, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -85,6 +104,10 @@ class FtlDat(KaitaiStruct):
             self._debug['body']['start'] = self._io.pos()
             self.body = self._io.read_bytes(self.len_file)
             self._debug['body']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
 
 
 

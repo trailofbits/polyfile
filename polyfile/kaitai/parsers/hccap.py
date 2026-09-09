@@ -1,13 +1,13 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
+# type: ignore
 
-from packaging.version import parse as parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
-    raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
+    raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class Hccap(KaitaiStruct):
     """Native format of Hashcat password "recovery" utility.
@@ -20,33 +20,58 @@ class Hccap(KaitaiStruct):
     """
     SEQ_FIELDS = ["records"]
     def __init__(self, _io, _parent=None, _root=None):
-        self._io = _io
+        super(Hccap, self).__init__(_io)
         self._parent = _parent
-        self._root = _root if _root else self
+        self._root = _root or self
         self._debug = collections.defaultdict(dict)
 
     def _read(self):
         self._debug['records']['start'] = self._io.pos()
+        self._debug['records']['arr'] = []
         self.records = []
         i = 0
         while not self._io.is_eof():
-            if not 'arr' in self._debug['records']:
-                self._debug['records']['arr'] = []
             self._debug['records']['arr'].append({'start': self._io.pos()})
             _t_records = Hccap.HccapRecord(self._io, self, self._root)
-            _t_records._read()
-            self.records.append(_t_records)
+            try:
+                _t_records._read()
+            finally:
+                self.records.append(_t_records)
             self._debug['records']['arr'][len(self.records) - 1]['end'] = self._io.pos()
             i += 1
 
         self._debug['records']['end'] = self._io.pos()
 
+
+    def _fetch_instances(self):
+        pass
+        for i in range(len(self.records)):
+            pass
+            self.records[i]._fetch_instances()
+
+
+    class EapolDummy(KaitaiStruct):
+        SEQ_FIELDS = []
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Hccap.EapolDummy, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            pass
+
+
+        def _fetch_instances(self):
+            pass
+
+
     class HccapRecord(KaitaiStruct):
         SEQ_FIELDS = ["essid", "mac_ap", "mac_station", "nonce_station", "nonce_ap", "eapol_buffer", "len_eapol", "keyver", "keymic"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Hccap.HccapRecord, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -81,10 +106,19 @@ class Hccap(KaitaiStruct):
             self.keymic = self._io.read_bytes(16)
             self._debug['keymic']['end'] = self._io.pos()
 
+
+        def _fetch_instances(self):
+            pass
+            self.eapol_buffer._fetch_instances()
+            _ = self.eapol
+            if hasattr(self, '_m_eapol'):
+                pass
+
+
         @property
         def eapol(self):
             if hasattr(self, '_m_eapol'):
-                return self._m_eapol if hasattr(self, '_m_eapol') else None
+                return self._m_eapol
 
             io = self.eapol_buffer._io
             _pos = io.pos()
@@ -93,19 +127,7 @@ class Hccap(KaitaiStruct):
             self._m_eapol = io.read_bytes(self.len_eapol)
             self._debug['_m_eapol']['end'] = io.pos()
             io.seek(_pos)
-            return self._m_eapol if hasattr(self, '_m_eapol') else None
-
-
-    class EapolDummy(KaitaiStruct):
-        SEQ_FIELDS = []
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            pass
+            return getattr(self, '_m_eapol', None)
 
 
 

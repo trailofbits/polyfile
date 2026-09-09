@@ -1,16 +1,16 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
+# type: ignore
 
-from packaging.version import parse as parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
-from enum import Enum
+from polyfile.kaitai.parsers import vlq_base128_le
+from enum import IntEnum
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
-    raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
+    raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
-from polyfile.kaitai.parsers import vlq_base128_le
 class Dex(KaitaiStruct):
     """Android OS applications executables are typically stored in its own
     format, optimized for more efficient execution in Dalvik virtual
@@ -24,7 +24,7 @@ class Dex(KaitaiStruct):
        Source - https://source.android.com/docs/core/runtime/dex-format
     """
 
-    class ClassAccessFlags(Enum):
+    class ClassAccessFlags(IntEnum):
         public = 1
         private = 2
         protected = 4
@@ -37,9 +37,9 @@ class Dex(KaitaiStruct):
         enum = 16384
     SEQ_FIELDS = ["header"]
     def __init__(self, _io, _parent=None, _root=None):
-        self._io = _io
+        super(Dex, self).__init__(_io)
         self._parent = _parent
-        self._root = _root if _root else self
+        self._root = _root or self
         self._debug = collections.defaultdict(dict)
 
     def _read(self):
@@ -48,16 +48,653 @@ class Dex(KaitaiStruct):
         self.header._read()
         self._debug['header']['end'] = self._io.pos()
 
+
+    def _fetch_instances(self):
+        pass
+        self.header._fetch_instances()
+        _ = self.class_defs
+        if hasattr(self, '_m_class_defs'):
+            pass
+            for i in range(len(self._m_class_defs)):
+                pass
+                self._m_class_defs[i]._fetch_instances()
+
+
+        _ = self.data
+        if hasattr(self, '_m_data'):
+            pass
+
+        _ = self.field_ids
+        if hasattr(self, '_m_field_ids'):
+            pass
+            for i in range(len(self._m_field_ids)):
+                pass
+                self._m_field_ids[i]._fetch_instances()
+
+
+        _ = self.link_data
+        if hasattr(self, '_m_link_data'):
+            pass
+
+        _ = self.map
+        if hasattr(self, '_m_map'):
+            pass
+            self._m_map._fetch_instances()
+
+        _ = self.method_ids
+        if hasattr(self, '_m_method_ids'):
+            pass
+            for i in range(len(self._m_method_ids)):
+                pass
+                self._m_method_ids[i]._fetch_instances()
+
+
+        _ = self.proto_ids
+        if hasattr(self, '_m_proto_ids'):
+            pass
+            for i in range(len(self._m_proto_ids)):
+                pass
+                self._m_proto_ids[i]._fetch_instances()
+
+
+        _ = self.string_ids
+        if hasattr(self, '_m_string_ids'):
+            pass
+            for i in range(len(self._m_string_ids)):
+                pass
+                self._m_string_ids[i]._fetch_instances()
+
+
+        _ = self.type_ids
+        if hasattr(self, '_m_type_ids'):
+            pass
+            for i in range(len(self._m_type_ids)):
+                pass
+                self._m_type_ids[i]._fetch_instances()
+
+
+
+    class AnnotationElement(KaitaiStruct):
+        SEQ_FIELDS = ["name_idx", "value"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Dex.AnnotationElement, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['name_idx']['start'] = self._io.pos()
+            self.name_idx = vlq_base128_le.VlqBase128Le(self._io)
+            self.name_idx._read()
+            self._debug['name_idx']['end'] = self._io.pos()
+            self._debug['value']['start'] = self._io.pos()
+            self.value = Dex.EncodedValue(self._io, self, self._root)
+            self.value._read()
+            self._debug['value']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            self.name_idx._fetch_instances()
+            self.value._fetch_instances()
+
+
+    class CallSiteIdItem(KaitaiStruct):
+        SEQ_FIELDS = ["call_site_off"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Dex.CallSiteIdItem, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['call_site_off']['start'] = self._io.pos()
+            self.call_site_off = self._io.read_u4le()
+            self._debug['call_site_off']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+
+
+    class ClassDataItem(KaitaiStruct):
+        SEQ_FIELDS = ["static_fields_size", "instance_fields_size", "direct_methods_size", "virtual_methods_size", "static_fields", "instance_fields", "direct_methods", "virtual_methods"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Dex.ClassDataItem, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['static_fields_size']['start'] = self._io.pos()
+            self.static_fields_size = vlq_base128_le.VlqBase128Le(self._io)
+            self.static_fields_size._read()
+            self._debug['static_fields_size']['end'] = self._io.pos()
+            self._debug['instance_fields_size']['start'] = self._io.pos()
+            self.instance_fields_size = vlq_base128_le.VlqBase128Le(self._io)
+            self.instance_fields_size._read()
+            self._debug['instance_fields_size']['end'] = self._io.pos()
+            self._debug['direct_methods_size']['start'] = self._io.pos()
+            self.direct_methods_size = vlq_base128_le.VlqBase128Le(self._io)
+            self.direct_methods_size._read()
+            self._debug['direct_methods_size']['end'] = self._io.pos()
+            self._debug['virtual_methods_size']['start'] = self._io.pos()
+            self.virtual_methods_size = vlq_base128_le.VlqBase128Le(self._io)
+            self.virtual_methods_size._read()
+            self._debug['virtual_methods_size']['end'] = self._io.pos()
+            self._debug['static_fields']['start'] = self._io.pos()
+            self._debug['static_fields']['arr'] = []
+            self.static_fields = []
+            for i in range(self.static_fields_size.value):
+                self._debug['static_fields']['arr'].append({'start': self._io.pos()})
+                _t_static_fields = Dex.EncodedField(self._io, self, self._root)
+                try:
+                    _t_static_fields._read()
+                finally:
+                    self.static_fields.append(_t_static_fields)
+                self._debug['static_fields']['arr'][i]['end'] = self._io.pos()
+
+            self._debug['static_fields']['end'] = self._io.pos()
+            self._debug['instance_fields']['start'] = self._io.pos()
+            self._debug['instance_fields']['arr'] = []
+            self.instance_fields = []
+            for i in range(self.instance_fields_size.value):
+                self._debug['instance_fields']['arr'].append({'start': self._io.pos()})
+                _t_instance_fields = Dex.EncodedField(self._io, self, self._root)
+                try:
+                    _t_instance_fields._read()
+                finally:
+                    self.instance_fields.append(_t_instance_fields)
+                self._debug['instance_fields']['arr'][i]['end'] = self._io.pos()
+
+            self._debug['instance_fields']['end'] = self._io.pos()
+            self._debug['direct_methods']['start'] = self._io.pos()
+            self._debug['direct_methods']['arr'] = []
+            self.direct_methods = []
+            for i in range(self.direct_methods_size.value):
+                self._debug['direct_methods']['arr'].append({'start': self._io.pos()})
+                _t_direct_methods = Dex.EncodedMethod(self._io, self, self._root)
+                try:
+                    _t_direct_methods._read()
+                finally:
+                    self.direct_methods.append(_t_direct_methods)
+                self._debug['direct_methods']['arr'][i]['end'] = self._io.pos()
+
+            self._debug['direct_methods']['end'] = self._io.pos()
+            self._debug['virtual_methods']['start'] = self._io.pos()
+            self._debug['virtual_methods']['arr'] = []
+            self.virtual_methods = []
+            for i in range(self.virtual_methods_size.value):
+                self._debug['virtual_methods']['arr'].append({'start': self._io.pos()})
+                _t_virtual_methods = Dex.EncodedMethod(self._io, self, self._root)
+                try:
+                    _t_virtual_methods._read()
+                finally:
+                    self.virtual_methods.append(_t_virtual_methods)
+                self._debug['virtual_methods']['arr'][i]['end'] = self._io.pos()
+
+            self._debug['virtual_methods']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            self.static_fields_size._fetch_instances()
+            self.instance_fields_size._fetch_instances()
+            self.direct_methods_size._fetch_instances()
+            self.virtual_methods_size._fetch_instances()
+            for i in range(len(self.static_fields)):
+                pass
+                self.static_fields[i]._fetch_instances()
+
+            for i in range(len(self.instance_fields)):
+                pass
+                self.instance_fields[i]._fetch_instances()
+
+            for i in range(len(self.direct_methods)):
+                pass
+                self.direct_methods[i]._fetch_instances()
+
+            for i in range(len(self.virtual_methods)):
+                pass
+                self.virtual_methods[i]._fetch_instances()
+
+
+
+    class ClassDefItem(KaitaiStruct):
+        SEQ_FIELDS = ["class_idx", "access_flags", "superclass_idx", "interfaces_off", "source_file_idx", "annotations_off", "class_data_off", "static_values_off"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Dex.ClassDefItem, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['class_idx']['start'] = self._io.pos()
+            self.class_idx = self._io.read_u4le()
+            self._debug['class_idx']['end'] = self._io.pos()
+            self._debug['access_flags']['start'] = self._io.pos()
+            self.access_flags = KaitaiStream.resolve_enum(Dex.ClassAccessFlags, self._io.read_u4le())
+            self._debug['access_flags']['end'] = self._io.pos()
+            self._debug['superclass_idx']['start'] = self._io.pos()
+            self.superclass_idx = self._io.read_u4le()
+            self._debug['superclass_idx']['end'] = self._io.pos()
+            self._debug['interfaces_off']['start'] = self._io.pos()
+            self.interfaces_off = self._io.read_u4le()
+            self._debug['interfaces_off']['end'] = self._io.pos()
+            self._debug['source_file_idx']['start'] = self._io.pos()
+            self.source_file_idx = self._io.read_u4le()
+            self._debug['source_file_idx']['end'] = self._io.pos()
+            self._debug['annotations_off']['start'] = self._io.pos()
+            self.annotations_off = self._io.read_u4le()
+            self._debug['annotations_off']['end'] = self._io.pos()
+            self._debug['class_data_off']['start'] = self._io.pos()
+            self.class_data_off = self._io.read_u4le()
+            self._debug['class_data_off']['end'] = self._io.pos()
+            self._debug['static_values_off']['start'] = self._io.pos()
+            self.static_values_off = self._io.read_u4le()
+            self._debug['static_values_off']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            _ = self.class_data
+            if hasattr(self, '_m_class_data'):
+                pass
+                self._m_class_data._fetch_instances()
+
+            _ = self.static_values
+            if hasattr(self, '_m_static_values'):
+                pass
+                self._m_static_values._fetch_instances()
+
+
+        @property
+        def class_data(self):
+            if hasattr(self, '_m_class_data'):
+                return self._m_class_data
+
+            if self.class_data_off != 0:
+                pass
+                _pos = self._io.pos()
+                self._io.seek(self.class_data_off)
+                self._debug['_m_class_data']['start'] = self._io.pos()
+                self._m_class_data = Dex.ClassDataItem(self._io, self, self._root)
+                self._m_class_data._read()
+                self._debug['_m_class_data']['end'] = self._io.pos()
+                self._io.seek(_pos)
+
+            return getattr(self, '_m_class_data', None)
+
+        @property
+        def static_values(self):
+            if hasattr(self, '_m_static_values'):
+                return self._m_static_values
+
+            if self.static_values_off != 0:
+                pass
+                _pos = self._io.pos()
+                self._io.seek(self.static_values_off)
+                self._debug['_m_static_values']['start'] = self._io.pos()
+                self._m_static_values = Dex.EncodedArrayItem(self._io, self, self._root)
+                self._m_static_values._read()
+                self._debug['_m_static_values']['end'] = self._io.pos()
+                self._io.seek(_pos)
+
+            return getattr(self, '_m_static_values', None)
+
+        @property
+        def type_name(self):
+            if hasattr(self, '_m_type_name'):
+                return self._m_type_name
+
+            self._m_type_name = self._root.type_ids[self.class_idx].type_name
+            return getattr(self, '_m_type_name', None)
+
+
+    class EncodedAnnotation(KaitaiStruct):
+        SEQ_FIELDS = ["type_idx", "size", "elements"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Dex.EncodedAnnotation, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['type_idx']['start'] = self._io.pos()
+            self.type_idx = vlq_base128_le.VlqBase128Le(self._io)
+            self.type_idx._read()
+            self._debug['type_idx']['end'] = self._io.pos()
+            self._debug['size']['start'] = self._io.pos()
+            self.size = vlq_base128_le.VlqBase128Le(self._io)
+            self.size._read()
+            self._debug['size']['end'] = self._io.pos()
+            self._debug['elements']['start'] = self._io.pos()
+            self._debug['elements']['arr'] = []
+            self.elements = []
+            for i in range(self.size.value):
+                self._debug['elements']['arr'].append({'start': self._io.pos()})
+                _t_elements = Dex.AnnotationElement(self._io, self, self._root)
+                try:
+                    _t_elements._read()
+                finally:
+                    self.elements.append(_t_elements)
+                self._debug['elements']['arr'][i]['end'] = self._io.pos()
+
+            self._debug['elements']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            self.type_idx._fetch_instances()
+            self.size._fetch_instances()
+            for i in range(len(self.elements)):
+                pass
+                self.elements[i]._fetch_instances()
+
+
+
+    class EncodedArray(KaitaiStruct):
+        SEQ_FIELDS = ["size", "values"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Dex.EncodedArray, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['size']['start'] = self._io.pos()
+            self.size = vlq_base128_le.VlqBase128Le(self._io)
+            self.size._read()
+            self._debug['size']['end'] = self._io.pos()
+            self._debug['values']['start'] = self._io.pos()
+            self._debug['values']['arr'] = []
+            self.values = []
+            for i in range(self.size.value):
+                self._debug['values']['arr'].append({'start': self._io.pos()})
+                _t_values = Dex.EncodedValue(self._io, self, self._root)
+                try:
+                    _t_values._read()
+                finally:
+                    self.values.append(_t_values)
+                self._debug['values']['arr'][i]['end'] = self._io.pos()
+
+            self._debug['values']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            self.size._fetch_instances()
+            for i in range(len(self.values)):
+                pass
+                self.values[i]._fetch_instances()
+
+
+
+    class EncodedArrayItem(KaitaiStruct):
+        SEQ_FIELDS = ["value"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Dex.EncodedArrayItem, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['value']['start'] = self._io.pos()
+            self.value = Dex.EncodedArray(self._io, self, self._root)
+            self.value._read()
+            self._debug['value']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            self.value._fetch_instances()
+
+
+    class EncodedField(KaitaiStruct):
+        SEQ_FIELDS = ["field_idx_diff", "access_flags"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Dex.EncodedField, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['field_idx_diff']['start'] = self._io.pos()
+            self.field_idx_diff = vlq_base128_le.VlqBase128Le(self._io)
+            self.field_idx_diff._read()
+            self._debug['field_idx_diff']['end'] = self._io.pos()
+            self._debug['access_flags']['start'] = self._io.pos()
+            self.access_flags = vlq_base128_le.VlqBase128Le(self._io)
+            self.access_flags._read()
+            self._debug['access_flags']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            self.field_idx_diff._fetch_instances()
+            self.access_flags._fetch_instances()
+
+
+    class EncodedMethod(KaitaiStruct):
+        SEQ_FIELDS = ["method_idx_diff", "access_flags", "code_off"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Dex.EncodedMethod, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['method_idx_diff']['start'] = self._io.pos()
+            self.method_idx_diff = vlq_base128_le.VlqBase128Le(self._io)
+            self.method_idx_diff._read()
+            self._debug['method_idx_diff']['end'] = self._io.pos()
+            self._debug['access_flags']['start'] = self._io.pos()
+            self.access_flags = vlq_base128_le.VlqBase128Le(self._io)
+            self.access_flags._read()
+            self._debug['access_flags']['end'] = self._io.pos()
+            self._debug['code_off']['start'] = self._io.pos()
+            self.code_off = vlq_base128_le.VlqBase128Le(self._io)
+            self.code_off._read()
+            self._debug['code_off']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            self.method_idx_diff._fetch_instances()
+            self.access_flags._fetch_instances()
+            self.code_off._fetch_instances()
+
+
+    class EncodedValue(KaitaiStruct):
+
+        class ValueTypeEnum(IntEnum):
+            byte = 0
+            short = 2
+            char = 3
+            int = 4
+            long = 6
+            float = 16
+            double = 17
+            method_type = 21
+            method_handle = 22
+            string = 23
+            type = 24
+            field = 25
+            method = 26
+            enum = 27
+            array = 28
+            annotation = 29
+            null = 30
+            boolean = 31
+        SEQ_FIELDS = ["value_arg", "value_type", "value"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Dex.EncodedValue, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['value_arg']['start'] = self._io.pos()
+            self.value_arg = self._io.read_bits_int_be(3)
+            self._debug['value_arg']['end'] = self._io.pos()
+            self._debug['value_type']['start'] = self._io.pos()
+            self.value_type = KaitaiStream.resolve_enum(Dex.EncodedValue.ValueTypeEnum, self._io.read_bits_int_be(5))
+            self._debug['value_type']['end'] = self._io.pos()
+            self._debug['value']['start'] = self._io.pos()
+            _on = self.value_type
+            if _on == Dex.EncodedValue.ValueTypeEnum.annotation:
+                pass
+                self.value = Dex.EncodedAnnotation(self._io, self, self._root)
+                self.value._read()
+            elif _on == Dex.EncodedValue.ValueTypeEnum.array:
+                pass
+                self.value = Dex.EncodedArray(self._io, self, self._root)
+                self.value._read()
+            elif _on == Dex.EncodedValue.ValueTypeEnum.byte:
+                pass
+                self.value = self._io.read_s1()
+            elif _on == Dex.EncodedValue.ValueTypeEnum.char:
+                pass
+                self.value = self._io.read_u2le()
+            elif _on == Dex.EncodedValue.ValueTypeEnum.double:
+                pass
+                self.value = self._io.read_f8le()
+            elif _on == Dex.EncodedValue.ValueTypeEnum.enum:
+                pass
+                self.value = self._io.read_u4le()
+            elif _on == Dex.EncodedValue.ValueTypeEnum.field:
+                pass
+                self.value = self._io.read_u4le()
+            elif _on == Dex.EncodedValue.ValueTypeEnum.float:
+                pass
+                self.value = self._io.read_f4le()
+            elif _on == Dex.EncodedValue.ValueTypeEnum.int:
+                pass
+                self.value = self._io.read_s4le()
+            elif _on == Dex.EncodedValue.ValueTypeEnum.long:
+                pass
+                self.value = self._io.read_s8le()
+            elif _on == Dex.EncodedValue.ValueTypeEnum.method:
+                pass
+                self.value = self._io.read_u4le()
+            elif _on == Dex.EncodedValue.ValueTypeEnum.method_handle:
+                pass
+                self.value = self._io.read_u4le()
+            elif _on == Dex.EncodedValue.ValueTypeEnum.method_type:
+                pass
+                self.value = self._io.read_u4le()
+            elif _on == Dex.EncodedValue.ValueTypeEnum.short:
+                pass
+                self.value = self._io.read_s2le()
+            elif _on == Dex.EncodedValue.ValueTypeEnum.string:
+                pass
+                self.value = self._io.read_u4le()
+            elif _on == Dex.EncodedValue.ValueTypeEnum.type:
+                pass
+                self.value = self._io.read_u4le()
+            self._debug['value']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            _on = self.value_type
+            if _on == Dex.EncodedValue.ValueTypeEnum.annotation:
+                pass
+                self.value._fetch_instances()
+            elif _on == Dex.EncodedValue.ValueTypeEnum.array:
+                pass
+                self.value._fetch_instances()
+            elif _on == Dex.EncodedValue.ValueTypeEnum.byte:
+                pass
+            elif _on == Dex.EncodedValue.ValueTypeEnum.char:
+                pass
+            elif _on == Dex.EncodedValue.ValueTypeEnum.double:
+                pass
+            elif _on == Dex.EncodedValue.ValueTypeEnum.enum:
+                pass
+            elif _on == Dex.EncodedValue.ValueTypeEnum.field:
+                pass
+            elif _on == Dex.EncodedValue.ValueTypeEnum.float:
+                pass
+            elif _on == Dex.EncodedValue.ValueTypeEnum.int:
+                pass
+            elif _on == Dex.EncodedValue.ValueTypeEnum.long:
+                pass
+            elif _on == Dex.EncodedValue.ValueTypeEnum.method:
+                pass
+            elif _on == Dex.EncodedValue.ValueTypeEnum.method_handle:
+                pass
+            elif _on == Dex.EncodedValue.ValueTypeEnum.method_type:
+                pass
+            elif _on == Dex.EncodedValue.ValueTypeEnum.short:
+                pass
+            elif _on == Dex.EncodedValue.ValueTypeEnum.string:
+                pass
+            elif _on == Dex.EncodedValue.ValueTypeEnum.type:
+                pass
+
+
+    class FieldIdItem(KaitaiStruct):
+        SEQ_FIELDS = ["class_idx", "type_idx", "name_idx"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Dex.FieldIdItem, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['class_idx']['start'] = self._io.pos()
+            self.class_idx = self._io.read_u2le()
+            self._debug['class_idx']['end'] = self._io.pos()
+            self._debug['type_idx']['start'] = self._io.pos()
+            self.type_idx = self._io.read_u2le()
+            self._debug['type_idx']['end'] = self._io.pos()
+            self._debug['name_idx']['start'] = self._io.pos()
+            self.name_idx = self._io.read_u4le()
+            self._debug['name_idx']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+
+        @property
+        def class_name(self):
+            """the definer of this field."""
+            if hasattr(self, '_m_class_name'):
+                return self._m_class_name
+
+            self._m_class_name = self._root.type_ids[self.class_idx].type_name
+            return getattr(self, '_m_class_name', None)
+
+        @property
+        def field_name(self):
+            """the name of this field."""
+            if hasattr(self, '_m_field_name'):
+                return self._m_field_name
+
+            self._m_field_name = self._root.string_ids[self.name_idx].value.data
+            return getattr(self, '_m_field_name', None)
+
+        @property
+        def type_name(self):
+            """the type of this field."""
+            if hasattr(self, '_m_type_name'):
+                return self._m_type_name
+
+            self._m_type_name = self._root.type_ids[self.type_idx].type_name
+            return getattr(self, '_m_type_name', None)
+
+
     class HeaderItem(KaitaiStruct):
 
-        class EndianConstant(Enum):
+        class EndianConstant(IntEnum):
             endian_constant = 305419896
             reverse_endian_constant = 2018915346
         SEQ_FIELDS = ["magic", "version_str", "checksum", "signature", "file_size", "header_size", "endian_tag", "link_size", "link_off", "map_off", "string_ids_size", "string_ids_off", "type_ids_size", "type_ids_off", "proto_ids_size", "proto_ids_off", "field_ids_size", "field_ids_off", "method_ids_size", "method_ids_off", "class_defs_size", "class_defs_off", "data_size", "data_off"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Dex.HeaderItem, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -67,7 +704,7 @@ class Dex(KaitaiStruct):
             if not self.magic == b"\x64\x65\x78\x0A":
                 raise kaitaistruct.ValidationNotEqualError(b"\x64\x65\x78\x0A", self.magic, self._io, u"/types/header_item/seq/0")
             self._debug['version_str']['start'] = self._io.pos()
-            self.version_str = (KaitaiStream.bytes_terminate(self._io.read_bytes(4), 0, False)).decode(u"ascii")
+            self.version_str = (KaitaiStream.bytes_terminate(self._io.read_bytes(4), 0, False)).decode(u"ASCII")
             self._debug['version_str']['end'] = self._io.pos()
             self._debug['checksum']['start'] = self._io.pos()
             self.checksum = self._io.read_u4le()
@@ -137,647 +774,13 @@ class Dex(KaitaiStruct):
             self._debug['data_off']['end'] = self._io.pos()
 
 
-    class MapList(KaitaiStruct):
-        SEQ_FIELDS = ["size", "list"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['size']['start'] = self._io.pos()
-            self.size = self._io.read_u4le()
-            self._debug['size']['end'] = self._io.pos()
-            self._debug['list']['start'] = self._io.pos()
-            self.list = [None] * (self.size)
-            for i in range(self.size):
-                if not 'arr' in self._debug['list']:
-                    self._debug['list']['arr'] = []
-                self._debug['list']['arr'].append({'start': self._io.pos()})
-                _t_list = Dex.MapItem(self._io, self, self._root)
-                _t_list._read()
-                self.list[i] = _t_list
-                self._debug['list']['arr'][i]['end'] = self._io.pos()
-
-            self._debug['list']['end'] = self._io.pos()
-
-
-    class EncodedValue(KaitaiStruct):
-
-        class ValueTypeEnum(Enum):
-            byte = 0
-            short = 2
-            char = 3
-            int = 4
-            long = 6
-            float = 16
-            double = 17
-            method_type = 21
-            method_handle = 22
-            string = 23
-            type = 24
-            field = 25
-            method = 26
-            enum = 27
-            array = 28
-            annotation = 29
-            null = 30
-            boolean = 31
-        SEQ_FIELDS = ["value_arg", "value_type", "value"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['value_arg']['start'] = self._io.pos()
-            self.value_arg = self._io.read_bits_int_be(3)
-            self._debug['value_arg']['end'] = self._io.pos()
-            self._debug['value_type']['start'] = self._io.pos()
-            self.value_type = KaitaiStream.resolve_enum(Dex.EncodedValue.ValueTypeEnum, self._io.read_bits_int_be(5))
-            self._debug['value_type']['end'] = self._io.pos()
-            self._io.align_to_byte()
-            self._debug['value']['start'] = self._io.pos()
-            _on = self.value_type
-            if _on == Dex.EncodedValue.ValueTypeEnum.int:
-                self.value = self._io.read_s4le()
-            elif _on == Dex.EncodedValue.ValueTypeEnum.annotation:
-                self.value = Dex.EncodedAnnotation(self._io, self, self._root)
-                self.value._read()
-            elif _on == Dex.EncodedValue.ValueTypeEnum.long:
-                self.value = self._io.read_s8le()
-            elif _on == Dex.EncodedValue.ValueTypeEnum.method_handle:
-                self.value = self._io.read_u4le()
-            elif _on == Dex.EncodedValue.ValueTypeEnum.byte:
-                self.value = self._io.read_s1()
-            elif _on == Dex.EncodedValue.ValueTypeEnum.array:
-                self.value = Dex.EncodedArray(self._io, self, self._root)
-                self.value._read()
-            elif _on == Dex.EncodedValue.ValueTypeEnum.method_type:
-                self.value = self._io.read_u4le()
-            elif _on == Dex.EncodedValue.ValueTypeEnum.short:
-                self.value = self._io.read_s2le()
-            elif _on == Dex.EncodedValue.ValueTypeEnum.method:
-                self.value = self._io.read_u4le()
-            elif _on == Dex.EncodedValue.ValueTypeEnum.double:
-                self.value = self._io.read_f8le()
-            elif _on == Dex.EncodedValue.ValueTypeEnum.float:
-                self.value = self._io.read_f4le()
-            elif _on == Dex.EncodedValue.ValueTypeEnum.type:
-                self.value = self._io.read_u4le()
-            elif _on == Dex.EncodedValue.ValueTypeEnum.enum:
-                self.value = self._io.read_u4le()
-            elif _on == Dex.EncodedValue.ValueTypeEnum.field:
-                self.value = self._io.read_u4le()
-            elif _on == Dex.EncodedValue.ValueTypeEnum.string:
-                self.value = self._io.read_u4le()
-            elif _on == Dex.EncodedValue.ValueTypeEnum.char:
-                self.value = self._io.read_u2le()
-            self._debug['value']['end'] = self._io.pos()
-
-
-    class CallSiteIdItem(KaitaiStruct):
-        SEQ_FIELDS = ["call_site_off"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['call_site_off']['start'] = self._io.pos()
-            self.call_site_off = self._io.read_u4le()
-            self._debug['call_site_off']['end'] = self._io.pos()
-
-
-    class MethodIdItem(KaitaiStruct):
-        SEQ_FIELDS = ["class_idx", "proto_idx", "name_idx"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['class_idx']['start'] = self._io.pos()
-            self.class_idx = self._io.read_u2le()
-            self._debug['class_idx']['end'] = self._io.pos()
-            self._debug['proto_idx']['start'] = self._io.pos()
-            self.proto_idx = self._io.read_u2le()
-            self._debug['proto_idx']['end'] = self._io.pos()
-            self._debug['name_idx']['start'] = self._io.pos()
-            self.name_idx = self._io.read_u4le()
-            self._debug['name_idx']['end'] = self._io.pos()
-
-        @property
-        def class_name(self):
-            """the definer of this method."""
-            if hasattr(self, '_m_class_name'):
-                return self._m_class_name if hasattr(self, '_m_class_name') else None
-
-            self._m_class_name = self._root.type_ids[self.class_idx].type_name
-            return self._m_class_name if hasattr(self, '_m_class_name') else None
-
-        @property
-        def proto_desc(self):
-            """the short-form descriptor of the prototype of this method."""
-            if hasattr(self, '_m_proto_desc'):
-                return self._m_proto_desc if hasattr(self, '_m_proto_desc') else None
-
-            self._m_proto_desc = self._root.proto_ids[self.proto_idx].shorty_desc
-            return self._m_proto_desc if hasattr(self, '_m_proto_desc') else None
-
-        @property
-        def method_name(self):
-            """the name of this method."""
-            if hasattr(self, '_m_method_name'):
-                return self._m_method_name if hasattr(self, '_m_method_name') else None
-
-            self._m_method_name = self._root.string_ids[self.name_idx].value.data
-            return self._m_method_name if hasattr(self, '_m_method_name') else None
-
-
-    class TypeItem(KaitaiStruct):
-        SEQ_FIELDS = ["type_idx"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['type_idx']['start'] = self._io.pos()
-            self.type_idx = self._io.read_u2le()
-            self._debug['type_idx']['end'] = self._io.pos()
-
-        @property
-        def value(self):
-            if hasattr(self, '_m_value'):
-                return self._m_value if hasattr(self, '_m_value') else None
-
-            self._m_value = self._root.type_ids[self.type_idx].type_name
-            return self._m_value if hasattr(self, '_m_value') else None
-
-
-    class TypeIdItem(KaitaiStruct):
-        SEQ_FIELDS = ["descriptor_idx"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['descriptor_idx']['start'] = self._io.pos()
-            self.descriptor_idx = self._io.read_u4le()
-            self._debug['descriptor_idx']['end'] = self._io.pos()
-
-        @property
-        def type_name(self):
-            if hasattr(self, '_m_type_name'):
-                return self._m_type_name if hasattr(self, '_m_type_name') else None
-
-            self._m_type_name = self._root.string_ids[self.descriptor_idx].value.data
-            return self._m_type_name if hasattr(self, '_m_type_name') else None
-
-
-    class AnnotationElement(KaitaiStruct):
-        SEQ_FIELDS = ["name_idx", "value"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['name_idx']['start'] = self._io.pos()
-            self.name_idx = vlq_base128_le.VlqBase128Le(self._io)
-            self.name_idx._read()
-            self._debug['name_idx']['end'] = self._io.pos()
-            self._debug['value']['start'] = self._io.pos()
-            self.value = Dex.EncodedValue(self._io, self, self._root)
-            self.value._read()
-            self._debug['value']['end'] = self._io.pos()
-
-
-    class EncodedField(KaitaiStruct):
-        SEQ_FIELDS = ["field_idx_diff", "access_flags"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['field_idx_diff']['start'] = self._io.pos()
-            self.field_idx_diff = vlq_base128_le.VlqBase128Le(self._io)
-            self.field_idx_diff._read()
-            self._debug['field_idx_diff']['end'] = self._io.pos()
-            self._debug['access_flags']['start'] = self._io.pos()
-            self.access_flags = vlq_base128_le.VlqBase128Le(self._io)
-            self.access_flags._read()
-            self._debug['access_flags']['end'] = self._io.pos()
-
-
-    class EncodedArrayItem(KaitaiStruct):
-        SEQ_FIELDS = ["value"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['value']['start'] = self._io.pos()
-            self.value = Dex.EncodedArray(self._io, self, self._root)
-            self.value._read()
-            self._debug['value']['end'] = self._io.pos()
-
-
-    class ClassDataItem(KaitaiStruct):
-        SEQ_FIELDS = ["static_fields_size", "instance_fields_size", "direct_methods_size", "virtual_methods_size", "static_fields", "instance_fields", "direct_methods", "virtual_methods"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['static_fields_size']['start'] = self._io.pos()
-            self.static_fields_size = vlq_base128_le.VlqBase128Le(self._io)
-            self.static_fields_size._read()
-            self._debug['static_fields_size']['end'] = self._io.pos()
-            self._debug['instance_fields_size']['start'] = self._io.pos()
-            self.instance_fields_size = vlq_base128_le.VlqBase128Le(self._io)
-            self.instance_fields_size._read()
-            self._debug['instance_fields_size']['end'] = self._io.pos()
-            self._debug['direct_methods_size']['start'] = self._io.pos()
-            self.direct_methods_size = vlq_base128_le.VlqBase128Le(self._io)
-            self.direct_methods_size._read()
-            self._debug['direct_methods_size']['end'] = self._io.pos()
-            self._debug['virtual_methods_size']['start'] = self._io.pos()
-            self.virtual_methods_size = vlq_base128_le.VlqBase128Le(self._io)
-            self.virtual_methods_size._read()
-            self._debug['virtual_methods_size']['end'] = self._io.pos()
-            self._debug['static_fields']['start'] = self._io.pos()
-            self.static_fields = [None] * (self.static_fields_size.value)
-            for i in range(self.static_fields_size.value):
-                if not 'arr' in self._debug['static_fields']:
-                    self._debug['static_fields']['arr'] = []
-                self._debug['static_fields']['arr'].append({'start': self._io.pos()})
-                _t_static_fields = Dex.EncodedField(self._io, self, self._root)
-                _t_static_fields._read()
-                self.static_fields[i] = _t_static_fields
-                self._debug['static_fields']['arr'][i]['end'] = self._io.pos()
-
-            self._debug['static_fields']['end'] = self._io.pos()
-            self._debug['instance_fields']['start'] = self._io.pos()
-            self.instance_fields = [None] * (self.instance_fields_size.value)
-            for i in range(self.instance_fields_size.value):
-                if not 'arr' in self._debug['instance_fields']:
-                    self._debug['instance_fields']['arr'] = []
-                self._debug['instance_fields']['arr'].append({'start': self._io.pos()})
-                _t_instance_fields = Dex.EncodedField(self._io, self, self._root)
-                _t_instance_fields._read()
-                self.instance_fields[i] = _t_instance_fields
-                self._debug['instance_fields']['arr'][i]['end'] = self._io.pos()
-
-            self._debug['instance_fields']['end'] = self._io.pos()
-            self._debug['direct_methods']['start'] = self._io.pos()
-            self.direct_methods = [None] * (self.direct_methods_size.value)
-            for i in range(self.direct_methods_size.value):
-                if not 'arr' in self._debug['direct_methods']:
-                    self._debug['direct_methods']['arr'] = []
-                self._debug['direct_methods']['arr'].append({'start': self._io.pos()})
-                _t_direct_methods = Dex.EncodedMethod(self._io, self, self._root)
-                _t_direct_methods._read()
-                self.direct_methods[i] = _t_direct_methods
-                self._debug['direct_methods']['arr'][i]['end'] = self._io.pos()
-
-            self._debug['direct_methods']['end'] = self._io.pos()
-            self._debug['virtual_methods']['start'] = self._io.pos()
-            self.virtual_methods = [None] * (self.virtual_methods_size.value)
-            for i in range(self.virtual_methods_size.value):
-                if not 'arr' in self._debug['virtual_methods']:
-                    self._debug['virtual_methods']['arr'] = []
-                self._debug['virtual_methods']['arr'].append({'start': self._io.pos()})
-                _t_virtual_methods = Dex.EncodedMethod(self._io, self, self._root)
-                _t_virtual_methods._read()
-                self.virtual_methods[i] = _t_virtual_methods
-                self._debug['virtual_methods']['arr'][i]['end'] = self._io.pos()
-
-            self._debug['virtual_methods']['end'] = self._io.pos()
-
-
-    class FieldIdItem(KaitaiStruct):
-        SEQ_FIELDS = ["class_idx", "type_idx", "name_idx"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['class_idx']['start'] = self._io.pos()
-            self.class_idx = self._io.read_u2le()
-            self._debug['class_idx']['end'] = self._io.pos()
-            self._debug['type_idx']['start'] = self._io.pos()
-            self.type_idx = self._io.read_u2le()
-            self._debug['type_idx']['end'] = self._io.pos()
-            self._debug['name_idx']['start'] = self._io.pos()
-            self.name_idx = self._io.read_u4le()
-            self._debug['name_idx']['end'] = self._io.pos()
-
-        @property
-        def class_name(self):
-            """the definer of this field."""
-            if hasattr(self, '_m_class_name'):
-                return self._m_class_name if hasattr(self, '_m_class_name') else None
-
-            self._m_class_name = self._root.type_ids[self.class_idx].type_name
-            return self._m_class_name if hasattr(self, '_m_class_name') else None
-
-        @property
-        def type_name(self):
-            """the type of this field."""
-            if hasattr(self, '_m_type_name'):
-                return self._m_type_name if hasattr(self, '_m_type_name') else None
-
-            self._m_type_name = self._root.type_ids[self.type_idx].type_name
-            return self._m_type_name if hasattr(self, '_m_type_name') else None
-
-        @property
-        def field_name(self):
-            """the name of this field."""
-            if hasattr(self, '_m_field_name'):
-                return self._m_field_name if hasattr(self, '_m_field_name') else None
-
-            self._m_field_name = self._root.string_ids[self.name_idx].value.data
-            return self._m_field_name if hasattr(self, '_m_field_name') else None
-
-
-    class EncodedAnnotation(KaitaiStruct):
-        SEQ_FIELDS = ["type_idx", "size", "elements"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['type_idx']['start'] = self._io.pos()
-            self.type_idx = vlq_base128_le.VlqBase128Le(self._io)
-            self.type_idx._read()
-            self._debug['type_idx']['end'] = self._io.pos()
-            self._debug['size']['start'] = self._io.pos()
-            self.size = vlq_base128_le.VlqBase128Le(self._io)
-            self.size._read()
-            self._debug['size']['end'] = self._io.pos()
-            self._debug['elements']['start'] = self._io.pos()
-            self.elements = [None] * (self.size.value)
-            for i in range(self.size.value):
-                if not 'arr' in self._debug['elements']:
-                    self._debug['elements']['arr'] = []
-                self._debug['elements']['arr'].append({'start': self._io.pos()})
-                _t_elements = Dex.AnnotationElement(self._io, self, self._root)
-                _t_elements._read()
-                self.elements[i] = _t_elements
-                self._debug['elements']['arr'][i]['end'] = self._io.pos()
-
-            self._debug['elements']['end'] = self._io.pos()
-
-
-    class ClassDefItem(KaitaiStruct):
-        SEQ_FIELDS = ["class_idx", "access_flags", "superclass_idx", "interfaces_off", "source_file_idx", "annotations_off", "class_data_off", "static_values_off"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['class_idx']['start'] = self._io.pos()
-            self.class_idx = self._io.read_u4le()
-            self._debug['class_idx']['end'] = self._io.pos()
-            self._debug['access_flags']['start'] = self._io.pos()
-            self.access_flags = KaitaiStream.resolve_enum(Dex.ClassAccessFlags, self._io.read_u4le())
-            self._debug['access_flags']['end'] = self._io.pos()
-            self._debug['superclass_idx']['start'] = self._io.pos()
-            self.superclass_idx = self._io.read_u4le()
-            self._debug['superclass_idx']['end'] = self._io.pos()
-            self._debug['interfaces_off']['start'] = self._io.pos()
-            self.interfaces_off = self._io.read_u4le()
-            self._debug['interfaces_off']['end'] = self._io.pos()
-            self._debug['source_file_idx']['start'] = self._io.pos()
-            self.source_file_idx = self._io.read_u4le()
-            self._debug['source_file_idx']['end'] = self._io.pos()
-            self._debug['annotations_off']['start'] = self._io.pos()
-            self.annotations_off = self._io.read_u4le()
-            self._debug['annotations_off']['end'] = self._io.pos()
-            self._debug['class_data_off']['start'] = self._io.pos()
-            self.class_data_off = self._io.read_u4le()
-            self._debug['class_data_off']['end'] = self._io.pos()
-            self._debug['static_values_off']['start'] = self._io.pos()
-            self.static_values_off = self._io.read_u4le()
-            self._debug['static_values_off']['end'] = self._io.pos()
-
-        @property
-        def type_name(self):
-            if hasattr(self, '_m_type_name'):
-                return self._m_type_name if hasattr(self, '_m_type_name') else None
-
-            self._m_type_name = self._root.type_ids[self.class_idx].type_name
-            return self._m_type_name if hasattr(self, '_m_type_name') else None
-
-        @property
-        def class_data(self):
-            if hasattr(self, '_m_class_data'):
-                return self._m_class_data if hasattr(self, '_m_class_data') else None
-
-            if self.class_data_off != 0:
-                _pos = self._io.pos()
-                self._io.seek(self.class_data_off)
-                self._debug['_m_class_data']['start'] = self._io.pos()
-                self._m_class_data = Dex.ClassDataItem(self._io, self, self._root)
-                self._m_class_data._read()
-                self._debug['_m_class_data']['end'] = self._io.pos()
-                self._io.seek(_pos)
-
-            return self._m_class_data if hasattr(self, '_m_class_data') else None
-
-        @property
-        def static_values(self):
-            if hasattr(self, '_m_static_values'):
-                return self._m_static_values if hasattr(self, '_m_static_values') else None
-
-            if self.static_values_off != 0:
-                _pos = self._io.pos()
-                self._io.seek(self.static_values_off)
-                self._debug['_m_static_values']['start'] = self._io.pos()
-                self._m_static_values = Dex.EncodedArrayItem(self._io, self, self._root)
-                self._m_static_values._read()
-                self._debug['_m_static_values']['end'] = self._io.pos()
-                self._io.seek(_pos)
-
-            return self._m_static_values if hasattr(self, '_m_static_values') else None
-
-
-    class TypeList(KaitaiStruct):
-        SEQ_FIELDS = ["size", "list"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['size']['start'] = self._io.pos()
-            self.size = self._io.read_u4le()
-            self._debug['size']['end'] = self._io.pos()
-            self._debug['list']['start'] = self._io.pos()
-            self.list = [None] * (self.size)
-            for i in range(self.size):
-                if not 'arr' in self._debug['list']:
-                    self._debug['list']['arr'] = []
-                self._debug['list']['arr'].append({'start': self._io.pos()})
-                _t_list = Dex.TypeItem(self._io, self, self._root)
-                _t_list._read()
-                self.list[i] = _t_list
-                self._debug['list']['arr'][i]['end'] = self._io.pos()
-
-            self._debug['list']['end'] = self._io.pos()
-
-
-    class StringIdItem(KaitaiStruct):
-        SEQ_FIELDS = ["string_data_off"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['string_data_off']['start'] = self._io.pos()
-            self.string_data_off = self._io.read_u4le()
-            self._debug['string_data_off']['end'] = self._io.pos()
-
-        class StringDataItem(KaitaiStruct):
-            SEQ_FIELDS = ["utf16_size", "data"]
-            def __init__(self, _io, _parent=None, _root=None):
-                self._io = _io
-                self._parent = _parent
-                self._root = _root if _root else self
-                self._debug = collections.defaultdict(dict)
-
-            def _read(self):
-                self._debug['utf16_size']['start'] = self._io.pos()
-                self.utf16_size = vlq_base128_le.VlqBase128Le(self._io)
-                self.utf16_size._read()
-                self._debug['utf16_size']['end'] = self._io.pos()
-                self._debug['data']['start'] = self._io.pos()
-                self.data = (self._io.read_bytes(self.utf16_size.value)).decode(u"ascii")
-                self._debug['data']['end'] = self._io.pos()
-
-
-        @property
-        def value(self):
-            if hasattr(self, '_m_value'):
-                return self._m_value if hasattr(self, '_m_value') else None
-
-            _pos = self._io.pos()
-            self._io.seek(self.string_data_off)
-            self._debug['_m_value']['start'] = self._io.pos()
-            self._m_value = Dex.StringIdItem.StringDataItem(self._io, self, self._root)
-            self._m_value._read()
-            self._debug['_m_value']['end'] = self._io.pos()
-            self._io.seek(_pos)
-            return self._m_value if hasattr(self, '_m_value') else None
-
-
-    class ProtoIdItem(KaitaiStruct):
-        SEQ_FIELDS = ["shorty_idx", "return_type_idx", "parameters_off"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['shorty_idx']['start'] = self._io.pos()
-            self.shorty_idx = self._io.read_u4le()
-            self._debug['shorty_idx']['end'] = self._io.pos()
-            self._debug['return_type_idx']['start'] = self._io.pos()
-            self.return_type_idx = self._io.read_u4le()
-            self._debug['return_type_idx']['end'] = self._io.pos()
-            self._debug['parameters_off']['start'] = self._io.pos()
-            self.parameters_off = self._io.read_u4le()
-            self._debug['parameters_off']['end'] = self._io.pos()
-
-        @property
-        def shorty_desc(self):
-            """short-form descriptor string of this prototype, as pointed to by shorty_idx."""
-            if hasattr(self, '_m_shorty_desc'):
-                return self._m_shorty_desc if hasattr(self, '_m_shorty_desc') else None
-
-            self._m_shorty_desc = self._root.string_ids[self.shorty_idx].value.data
-            return self._m_shorty_desc if hasattr(self, '_m_shorty_desc') else None
-
-        @property
-        def params_types(self):
-            """list of parameter types for this prototype."""
-            if hasattr(self, '_m_params_types'):
-                return self._m_params_types if hasattr(self, '_m_params_types') else None
-
-            if self.parameters_off != 0:
-                io = self._root._io
-                _pos = io.pos()
-                io.seek(self.parameters_off)
-                self._debug['_m_params_types']['start'] = io.pos()
-                self._m_params_types = Dex.TypeList(io, self, self._root)
-                self._m_params_types._read()
-                self._debug['_m_params_types']['end'] = io.pos()
-                io.seek(_pos)
-
-            return self._m_params_types if hasattr(self, '_m_params_types') else None
-
-        @property
-        def return_type(self):
-            """return type of this prototype."""
-            if hasattr(self, '_m_return_type'):
-                return self._m_return_type if hasattr(self, '_m_return_type') else None
-
-            self._m_return_type = self._root.type_ids[self.return_type_idx].type_name
-            return self._m_return_type if hasattr(self, '_m_return_type') else None
-
-
-    class EncodedMethod(KaitaiStruct):
-        SEQ_FIELDS = ["method_idx_diff", "access_flags", "code_off"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['method_idx_diff']['start'] = self._io.pos()
-            self.method_idx_diff = vlq_base128_le.VlqBase128Le(self._io)
-            self.method_idx_diff._read()
-            self._debug['method_idx_diff']['end'] = self._io.pos()
-            self._debug['access_flags']['start'] = self._io.pos()
-            self.access_flags = vlq_base128_le.VlqBase128Le(self._io)
-            self.access_flags._read()
-            self._debug['access_flags']['end'] = self._io.pos()
-            self._debug['code_off']['start'] = self._io.pos()
-            self.code_off = vlq_base128_le.VlqBase128Le(self._io)
-            self.code_off._read()
-            self._debug['code_off']['end'] = self._io.pos()
+        def _fetch_instances(self):
+            pass
 
 
     class MapItem(KaitaiStruct):
 
-        class MapItemType(Enum):
+        class MapItemType(IntEnum):
             header_item = 0
             string_id_item = 1
             type_id_item = 2
@@ -800,9 +803,9 @@ class Dex(KaitaiStruct):
             annotations_directory_item = 8198
         SEQ_FIELDS = ["type", "unused", "size", "offset"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Dex.MapItem, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -820,62 +823,424 @@ class Dex(KaitaiStruct):
             self._debug['offset']['end'] = self._io.pos()
 
 
-    class EncodedArray(KaitaiStruct):
-        SEQ_FIELDS = ["size", "values"]
+        def _fetch_instances(self):
+            pass
+
+
+    class MapList(KaitaiStruct):
+        SEQ_FIELDS = ["size", "list"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Dex.MapList, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
             self._debug['size']['start'] = self._io.pos()
-            self.size = vlq_base128_le.VlqBase128Le(self._io)
-            self.size._read()
+            self.size = self._io.read_u4le()
             self._debug['size']['end'] = self._io.pos()
-            self._debug['values']['start'] = self._io.pos()
-            self.values = [None] * (self.size.value)
-            for i in range(self.size.value):
-                if not 'arr' in self._debug['values']:
-                    self._debug['values']['arr'] = []
-                self._debug['values']['arr'].append({'start': self._io.pos()})
-                _t_values = Dex.EncodedValue(self._io, self, self._root)
-                _t_values._read()
-                self.values[i] = _t_values
-                self._debug['values']['arr'][i]['end'] = self._io.pos()
+            self._debug['list']['start'] = self._io.pos()
+            self._debug['list']['arr'] = []
+            self.list = []
+            for i in range(self.size):
+                self._debug['list']['arr'].append({'start': self._io.pos()})
+                _t_list = Dex.MapItem(self._io, self, self._root)
+                try:
+                    _t_list._read()
+                finally:
+                    self.list.append(_t_list)
+                self._debug['list']['arr'][i]['end'] = self._io.pos()
 
-            self._debug['values']['end'] = self._io.pos()
+            self._debug['list']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            for i in range(len(self.list)):
+                pass
+                self.list[i]._fetch_instances()
+
+
+
+    class MethodIdItem(KaitaiStruct):
+        SEQ_FIELDS = ["class_idx", "proto_idx", "name_idx"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Dex.MethodIdItem, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['class_idx']['start'] = self._io.pos()
+            self.class_idx = self._io.read_u2le()
+            self._debug['class_idx']['end'] = self._io.pos()
+            self._debug['proto_idx']['start'] = self._io.pos()
+            self.proto_idx = self._io.read_u2le()
+            self._debug['proto_idx']['end'] = self._io.pos()
+            self._debug['name_idx']['start'] = self._io.pos()
+            self.name_idx = self._io.read_u4le()
+            self._debug['name_idx']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+
+        @property
+        def class_name(self):
+            """the definer of this method."""
+            if hasattr(self, '_m_class_name'):
+                return self._m_class_name
+
+            self._m_class_name = self._root.type_ids[self.class_idx].type_name
+            return getattr(self, '_m_class_name', None)
+
+        @property
+        def method_name(self):
+            """the name of this method."""
+            if hasattr(self, '_m_method_name'):
+                return self._m_method_name
+
+            self._m_method_name = self._root.string_ids[self.name_idx].value.data
+            return getattr(self, '_m_method_name', None)
+
+        @property
+        def proto_desc(self):
+            """the short-form descriptor of the prototype of this method."""
+            if hasattr(self, '_m_proto_desc'):
+                return self._m_proto_desc
+
+            self._m_proto_desc = self._root.proto_ids[self.proto_idx].shorty_desc
+            return getattr(self, '_m_proto_desc', None)
+
+
+    class ProtoIdItem(KaitaiStruct):
+        SEQ_FIELDS = ["shorty_idx", "return_type_idx", "parameters_off"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Dex.ProtoIdItem, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['shorty_idx']['start'] = self._io.pos()
+            self.shorty_idx = self._io.read_u4le()
+            self._debug['shorty_idx']['end'] = self._io.pos()
+            self._debug['return_type_idx']['start'] = self._io.pos()
+            self.return_type_idx = self._io.read_u4le()
+            self._debug['return_type_idx']['end'] = self._io.pos()
+            self._debug['parameters_off']['start'] = self._io.pos()
+            self.parameters_off = self._io.read_u4le()
+            self._debug['parameters_off']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            _ = self.params_types
+            if hasattr(self, '_m_params_types'):
+                pass
+                self._m_params_types._fetch_instances()
+
+
+        @property
+        def params_types(self):
+            """list of parameter types for this prototype."""
+            if hasattr(self, '_m_params_types'):
+                return self._m_params_types
+
+            if self.parameters_off != 0:
+                pass
+                io = self._root._io
+                _pos = io.pos()
+                io.seek(self.parameters_off)
+                self._debug['_m_params_types']['start'] = io.pos()
+                self._m_params_types = Dex.TypeList(io, self, self._root)
+                self._m_params_types._read()
+                self._debug['_m_params_types']['end'] = io.pos()
+                io.seek(_pos)
+
+            return getattr(self, '_m_params_types', None)
+
+        @property
+        def return_type(self):
+            """return type of this prototype."""
+            if hasattr(self, '_m_return_type'):
+                return self._m_return_type
+
+            self._m_return_type = self._root.type_ids[self.return_type_idx].type_name
+            return getattr(self, '_m_return_type', None)
+
+        @property
+        def shorty_desc(self):
+            """short-form descriptor string of this prototype, as pointed to by shorty_idx."""
+            if hasattr(self, '_m_shorty_desc'):
+                return self._m_shorty_desc
+
+            self._m_shorty_desc = self._root.string_ids[self.shorty_idx].value.data
+            return getattr(self, '_m_shorty_desc', None)
+
+
+    class StringIdItem(KaitaiStruct):
+        SEQ_FIELDS = ["string_data_off"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Dex.StringIdItem, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['string_data_off']['start'] = self._io.pos()
+            self.string_data_off = self._io.read_u4le()
+            self._debug['string_data_off']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            _ = self.value
+            if hasattr(self, '_m_value'):
+                pass
+                self._m_value._fetch_instances()
+
+
+        class StringDataItem(KaitaiStruct):
+            SEQ_FIELDS = ["utf16_size", "data"]
+            def __init__(self, _io, _parent=None, _root=None):
+                super(Dex.StringIdItem.StringDataItem, self).__init__(_io)
+                self._parent = _parent
+                self._root = _root
+                self._debug = collections.defaultdict(dict)
+
+            def _read(self):
+                self._debug['utf16_size']['start'] = self._io.pos()
+                self.utf16_size = vlq_base128_le.VlqBase128Le(self._io)
+                self.utf16_size._read()
+                self._debug['utf16_size']['end'] = self._io.pos()
+                self._debug['data']['start'] = self._io.pos()
+                self.data = (self._io.read_bytes(self.utf16_size.value)).decode(u"ASCII")
+                self._debug['data']['end'] = self._io.pos()
+
+
+            def _fetch_instances(self):
+                pass
+                self.utf16_size._fetch_instances()
+
+
+        @property
+        def value(self):
+            if hasattr(self, '_m_value'):
+                return self._m_value
+
+            _pos = self._io.pos()
+            self._io.seek(self.string_data_off)
+            self._debug['_m_value']['start'] = self._io.pos()
+            self._m_value = Dex.StringIdItem.StringDataItem(self._io, self, self._root)
+            self._m_value._read()
+            self._debug['_m_value']['end'] = self._io.pos()
+            self._io.seek(_pos)
+            return getattr(self, '_m_value', None)
+
+
+    class TypeIdItem(KaitaiStruct):
+        SEQ_FIELDS = ["descriptor_idx"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Dex.TypeIdItem, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['descriptor_idx']['start'] = self._io.pos()
+            self.descriptor_idx = self._io.read_u4le()
+            self._debug['descriptor_idx']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+
+        @property
+        def type_name(self):
+            if hasattr(self, '_m_type_name'):
+                return self._m_type_name
+
+            self._m_type_name = self._root.string_ids[self.descriptor_idx].value.data
+            return getattr(self, '_m_type_name', None)
+
+
+    class TypeItem(KaitaiStruct):
+        SEQ_FIELDS = ["type_idx"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Dex.TypeItem, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['type_idx']['start'] = self._io.pos()
+            self.type_idx = self._io.read_u2le()
+            self._debug['type_idx']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+
+        @property
+        def value(self):
+            if hasattr(self, '_m_value'):
+                return self._m_value
+
+            self._m_value = self._root.type_ids[self.type_idx].type_name
+            return getattr(self, '_m_value', None)
+
+
+    class TypeList(KaitaiStruct):
+        SEQ_FIELDS = ["size", "list"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Dex.TypeList, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['size']['start'] = self._io.pos()
+            self.size = self._io.read_u4le()
+            self._debug['size']['end'] = self._io.pos()
+            self._debug['list']['start'] = self._io.pos()
+            self._debug['list']['arr'] = []
+            self.list = []
+            for i in range(self.size):
+                self._debug['list']['arr'].append({'start': self._io.pos()})
+                _t_list = Dex.TypeItem(self._io, self, self._root)
+                try:
+                    _t_list._read()
+                finally:
+                    self.list.append(_t_list)
+                self._debug['list']['arr'][i]['end'] = self._io.pos()
+
+            self._debug['list']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            for i in range(len(self.list)):
+                pass
+                self.list[i]._fetch_instances()
+
 
 
     @property
-    def string_ids(self):
-        """string identifiers list.
+    def class_defs(self):
+        """class definitions list.
         
-        These are identifiers for all the strings used by this file, either for
-        internal naming (e.g., type descriptors) or as constant objects referred to by code.
+        The classes must be ordered such that a given class's superclass and
+        implemented interfaces appear in the list earlier than the referring class.
         
-        This list must be sorted by string contents, using UTF-16 code point values
-        (not in a locale-sensitive manner), and it must not contain any duplicate entries.
+        Furthermore, it is invalid for a definition for the same-named class to
+        appear more than once in the list.
         """
-        if hasattr(self, '_m_string_ids'):
-            return self._m_string_ids if hasattr(self, '_m_string_ids') else None
+        if hasattr(self, '_m_class_defs'):
+            return self._m_class_defs
 
         _pos = self._io.pos()
-        self._io.seek(self.header.string_ids_off)
-        self._debug['_m_string_ids']['start'] = self._io.pos()
-        self._m_string_ids = [None] * (self.header.string_ids_size)
-        for i in range(self.header.string_ids_size):
-            if not 'arr' in self._debug['_m_string_ids']:
-                self._debug['_m_string_ids']['arr'] = []
-            self._debug['_m_string_ids']['arr'].append({'start': self._io.pos()})
-            _t__m_string_ids = Dex.StringIdItem(self._io, self, self._root)
-            _t__m_string_ids._read()
-            self._m_string_ids[i] = _t__m_string_ids
-            self._debug['_m_string_ids']['arr'][i]['end'] = self._io.pos()
+        self._io.seek(self.header.class_defs_off)
+        self._debug['_m_class_defs']['start'] = self._io.pos()
+        self._debug['_m_class_defs']['arr'] = []
+        self._m_class_defs = []
+        for i in range(self.header.class_defs_size):
+            self._debug['_m_class_defs']['arr'].append({'start': self._io.pos()})
+            _t__m_class_defs = Dex.ClassDefItem(self._io, self, self._root)
+            try:
+                _t__m_class_defs._read()
+            finally:
+                self._m_class_defs.append(_t__m_class_defs)
+            self._debug['_m_class_defs']['arr'][i]['end'] = self._io.pos()
 
-        self._debug['_m_string_ids']['end'] = self._io.pos()
+        self._debug['_m_class_defs']['end'] = self._io.pos()
         self._io.seek(_pos)
-        return self._m_string_ids if hasattr(self, '_m_string_ids') else None
+        return getattr(self, '_m_class_defs', None)
+
+    @property
+    def data(self):
+        """data area, containing all the support data for the tables listed above.
+        
+        Different items have different alignment requirements, and padding bytes
+        are inserted before each item if necessary to achieve proper alignment.
+        """
+        if hasattr(self, '_m_data'):
+            return self._m_data
+
+        _pos = self._io.pos()
+        self._io.seek(self.header.data_off)
+        self._debug['_m_data']['start'] = self._io.pos()
+        self._m_data = self._io.read_bytes(self.header.data_size)
+        self._debug['_m_data']['end'] = self._io.pos()
+        self._io.seek(_pos)
+        return getattr(self, '_m_data', None)
+
+    @property
+    def field_ids(self):
+        """field identifiers list.
+        
+        These are identifiers for all fields referred to by this file, whether defined in the file or not.
+        
+        This list must be sorted, where the defining type (by type_id index)
+        is the major order, field name (by string_id index) is the intermediate
+        order, and type (by type_id index) is the minor order.
+        
+        The list must not contain any duplicate entries.
+        """
+        if hasattr(self, '_m_field_ids'):
+            return self._m_field_ids
+
+        _pos = self._io.pos()
+        self._io.seek(self.header.field_ids_off)
+        self._debug['_m_field_ids']['start'] = self._io.pos()
+        self._debug['_m_field_ids']['arr'] = []
+        self._m_field_ids = []
+        for i in range(self.header.field_ids_size):
+            self._debug['_m_field_ids']['arr'].append({'start': self._io.pos()})
+            _t__m_field_ids = Dex.FieldIdItem(self._io, self, self._root)
+            try:
+                _t__m_field_ids._read()
+            finally:
+                self._m_field_ids.append(_t__m_field_ids)
+            self._debug['_m_field_ids']['arr'][i]['end'] = self._io.pos()
+
+        self._debug['_m_field_ids']['end'] = self._io.pos()
+        self._io.seek(_pos)
+        return getattr(self, '_m_field_ids', None)
+
+    @property
+    def link_data(self):
+        """data used in statically linked files.
+        
+        The format of the data in this section is left unspecified by this document.
+        
+        This section is empty in unlinked files, and runtime implementations may
+        use it as they see fit.
+        """
+        if hasattr(self, '_m_link_data'):
+            return self._m_link_data
+
+        _pos = self._io.pos()
+        self._io.seek(self.header.link_off)
+        self._debug['_m_link_data']['start'] = self._io.pos()
+        self._m_link_data = self._io.read_bytes(self.header.link_size)
+        self._debug['_m_link_data']['end'] = self._io.pos()
+        self._io.seek(_pos)
+        return getattr(self, '_m_link_data', None)
+
+    @property
+    def map(self):
+        if hasattr(self, '_m_map'):
+            return self._m_map
+
+        _pos = self._io.pos()
+        self._io.seek(self.header.map_off)
+        self._debug['_m_map']['start'] = self._io.pos()
+        self._m_map = Dex.MapList(self._io, self, self._root)
+        self._m_map._read()
+        self._debug['_m_map']['end'] = self._io.pos()
+        self._io.seek(_pos)
+        return getattr(self, '_m_map', None)
 
     @property
     def method_ids(self):
@@ -891,135 +1256,25 @@ class Dex(KaitaiStruct):
         The list must not contain any duplicate entries.
         """
         if hasattr(self, '_m_method_ids'):
-            return self._m_method_ids if hasattr(self, '_m_method_ids') else None
+            return self._m_method_ids
 
         _pos = self._io.pos()
         self._io.seek(self.header.method_ids_off)
         self._debug['_m_method_ids']['start'] = self._io.pos()
-        self._m_method_ids = [None] * (self.header.method_ids_size)
+        self._debug['_m_method_ids']['arr'] = []
+        self._m_method_ids = []
         for i in range(self.header.method_ids_size):
-            if not 'arr' in self._debug['_m_method_ids']:
-                self._debug['_m_method_ids']['arr'] = []
             self._debug['_m_method_ids']['arr'].append({'start': self._io.pos()})
             _t__m_method_ids = Dex.MethodIdItem(self._io, self, self._root)
-            _t__m_method_ids._read()
-            self._m_method_ids[i] = _t__m_method_ids
+            try:
+                _t__m_method_ids._read()
+            finally:
+                self._m_method_ids.append(_t__m_method_ids)
             self._debug['_m_method_ids']['arr'][i]['end'] = self._io.pos()
 
         self._debug['_m_method_ids']['end'] = self._io.pos()
         self._io.seek(_pos)
-        return self._m_method_ids if hasattr(self, '_m_method_ids') else None
-
-    @property
-    def link_data(self):
-        """data used in statically linked files.
-        
-        The format of the data in this section is left unspecified by this document.
-        
-        This section is empty in unlinked files, and runtime implementations may
-        use it as they see fit.
-        """
-        if hasattr(self, '_m_link_data'):
-            return self._m_link_data if hasattr(self, '_m_link_data') else None
-
-        _pos = self._io.pos()
-        self._io.seek(self.header.link_off)
-        self._debug['_m_link_data']['start'] = self._io.pos()
-        self._m_link_data = self._io.read_bytes(self.header.link_size)
-        self._debug['_m_link_data']['end'] = self._io.pos()
-        self._io.seek(_pos)
-        return self._m_link_data if hasattr(self, '_m_link_data') else None
-
-    @property
-    def map(self):
-        if hasattr(self, '_m_map'):
-            return self._m_map if hasattr(self, '_m_map') else None
-
-        _pos = self._io.pos()
-        self._io.seek(self.header.map_off)
-        self._debug['_m_map']['start'] = self._io.pos()
-        self._m_map = Dex.MapList(self._io, self, self._root)
-        self._m_map._read()
-        self._debug['_m_map']['end'] = self._io.pos()
-        self._io.seek(_pos)
-        return self._m_map if hasattr(self, '_m_map') else None
-
-    @property
-    def class_defs(self):
-        """class definitions list.
-        
-        The classes must be ordered such that a given class's superclass and
-        implemented interfaces appear in the list earlier than the referring class.
-        
-        Furthermore, it is invalid for a definition for the same-named class to
-        appear more than once in the list.
-        """
-        if hasattr(self, '_m_class_defs'):
-            return self._m_class_defs if hasattr(self, '_m_class_defs') else None
-
-        _pos = self._io.pos()
-        self._io.seek(self.header.class_defs_off)
-        self._debug['_m_class_defs']['start'] = self._io.pos()
-        self._m_class_defs = [None] * (self.header.class_defs_size)
-        for i in range(self.header.class_defs_size):
-            if not 'arr' in self._debug['_m_class_defs']:
-                self._debug['_m_class_defs']['arr'] = []
-            self._debug['_m_class_defs']['arr'].append({'start': self._io.pos()})
-            _t__m_class_defs = Dex.ClassDefItem(self._io, self, self._root)
-            _t__m_class_defs._read()
-            self._m_class_defs[i] = _t__m_class_defs
-            self._debug['_m_class_defs']['arr'][i]['end'] = self._io.pos()
-
-        self._debug['_m_class_defs']['end'] = self._io.pos()
-        self._io.seek(_pos)
-        return self._m_class_defs if hasattr(self, '_m_class_defs') else None
-
-    @property
-    def data(self):
-        """data area, containing all the support data for the tables listed above.
-        
-        Different items have different alignment requirements, and padding bytes
-        are inserted before each item if necessary to achieve proper alignment.
-        """
-        if hasattr(self, '_m_data'):
-            return self._m_data if hasattr(self, '_m_data') else None
-
-        _pos = self._io.pos()
-        self._io.seek(self.header.data_off)
-        self._debug['_m_data']['start'] = self._io.pos()
-        self._m_data = self._io.read_bytes(self.header.data_size)
-        self._debug['_m_data']['end'] = self._io.pos()
-        self._io.seek(_pos)
-        return self._m_data if hasattr(self, '_m_data') else None
-
-    @property
-    def type_ids(self):
-        """type identifiers list.
-        
-        These are identifiers for all types (classes, arrays, or primitive types)
-        referred to by this file, whether defined in the file or not.
-        
-        This list must be sorted by string_id index, and it must not contain any duplicate entries.
-        """
-        if hasattr(self, '_m_type_ids'):
-            return self._m_type_ids if hasattr(self, '_m_type_ids') else None
-
-        _pos = self._io.pos()
-        self._io.seek(self.header.type_ids_off)
-        self._debug['_m_type_ids']['start'] = self._io.pos()
-        self._m_type_ids = [None] * (self.header.type_ids_size)
-        for i in range(self.header.type_ids_size):
-            if not 'arr' in self._debug['_m_type_ids']:
-                self._debug['_m_type_ids']['arr'] = []
-            self._debug['_m_type_ids']['arr'].append({'start': self._io.pos()})
-            _t__m_type_ids = Dex.TypeIdItem(self._io, self, self._root)
-            _t__m_type_ids._read()
-            self._m_type_ids[i] = _t__m_type_ids
-            self._debug['_m_type_ids']['arr'][i]['end'] = self._io.pos()
-
-        self._debug['_m_type_ids']['end'] = self._io.pos()
-        self._io.seek(_pos)
-        return self._m_type_ids if hasattr(self, '_m_type_ids') else None
+        return getattr(self, '_m_method_ids', None)
 
     @property
     def proto_ids(self):
@@ -1032,55 +1287,85 @@ class Dex(KaitaiStruct):
         ordered by type_id index). The list must not contain any duplicate entries.
         """
         if hasattr(self, '_m_proto_ids'):
-            return self._m_proto_ids if hasattr(self, '_m_proto_ids') else None
+            return self._m_proto_ids
 
         _pos = self._io.pos()
         self._io.seek(self.header.proto_ids_off)
         self._debug['_m_proto_ids']['start'] = self._io.pos()
-        self._m_proto_ids = [None] * (self.header.proto_ids_size)
+        self._debug['_m_proto_ids']['arr'] = []
+        self._m_proto_ids = []
         for i in range(self.header.proto_ids_size):
-            if not 'arr' in self._debug['_m_proto_ids']:
-                self._debug['_m_proto_ids']['arr'] = []
             self._debug['_m_proto_ids']['arr'].append({'start': self._io.pos()})
             _t__m_proto_ids = Dex.ProtoIdItem(self._io, self, self._root)
-            _t__m_proto_ids._read()
-            self._m_proto_ids[i] = _t__m_proto_ids
+            try:
+                _t__m_proto_ids._read()
+            finally:
+                self._m_proto_ids.append(_t__m_proto_ids)
             self._debug['_m_proto_ids']['arr'][i]['end'] = self._io.pos()
 
         self._debug['_m_proto_ids']['end'] = self._io.pos()
         self._io.seek(_pos)
-        return self._m_proto_ids if hasattr(self, '_m_proto_ids') else None
+        return getattr(self, '_m_proto_ids', None)
 
     @property
-    def field_ids(self):
-        """field identifiers list.
+    def string_ids(self):
+        """string identifiers list.
         
-        These are identifiers for all fields referred to by this file, whether defined in the file or not.
+        These are identifiers for all the strings used by this file, either for
+        internal naming (e.g., type descriptors) or as constant objects referred to by code.
         
-        This list must be sorted, where the defining type (by type_id index)
-        is the major order, field name (by string_id index) is the intermediate
-        order, and type (by type_id index) is the minor order.
-        
-        The list must not contain any duplicate entries.
+        This list must be sorted by string contents, using UTF-16 code point values
+        (not in a locale-sensitive manner), and it must not contain any duplicate entries.
         """
-        if hasattr(self, '_m_field_ids'):
-            return self._m_field_ids if hasattr(self, '_m_field_ids') else None
+        if hasattr(self, '_m_string_ids'):
+            return self._m_string_ids
 
         _pos = self._io.pos()
-        self._io.seek(self.header.field_ids_off)
-        self._debug['_m_field_ids']['start'] = self._io.pos()
-        self._m_field_ids = [None] * (self.header.field_ids_size)
-        for i in range(self.header.field_ids_size):
-            if not 'arr' in self._debug['_m_field_ids']:
-                self._debug['_m_field_ids']['arr'] = []
-            self._debug['_m_field_ids']['arr'].append({'start': self._io.pos()})
-            _t__m_field_ids = Dex.FieldIdItem(self._io, self, self._root)
-            _t__m_field_ids._read()
-            self._m_field_ids[i] = _t__m_field_ids
-            self._debug['_m_field_ids']['arr'][i]['end'] = self._io.pos()
+        self._io.seek(self.header.string_ids_off)
+        self._debug['_m_string_ids']['start'] = self._io.pos()
+        self._debug['_m_string_ids']['arr'] = []
+        self._m_string_ids = []
+        for i in range(self.header.string_ids_size):
+            self._debug['_m_string_ids']['arr'].append({'start': self._io.pos()})
+            _t__m_string_ids = Dex.StringIdItem(self._io, self, self._root)
+            try:
+                _t__m_string_ids._read()
+            finally:
+                self._m_string_ids.append(_t__m_string_ids)
+            self._debug['_m_string_ids']['arr'][i]['end'] = self._io.pos()
 
-        self._debug['_m_field_ids']['end'] = self._io.pos()
+        self._debug['_m_string_ids']['end'] = self._io.pos()
         self._io.seek(_pos)
-        return self._m_field_ids if hasattr(self, '_m_field_ids') else None
+        return getattr(self, '_m_string_ids', None)
+
+    @property
+    def type_ids(self):
+        """type identifiers list.
+        
+        These are identifiers for all types (classes, arrays, or primitive types)
+        referred to by this file, whether defined in the file or not.
+        
+        This list must be sorted by string_id index, and it must not contain any duplicate entries.
+        """
+        if hasattr(self, '_m_type_ids'):
+            return self._m_type_ids
+
+        _pos = self._io.pos()
+        self._io.seek(self.header.type_ids_off)
+        self._debug['_m_type_ids']['start'] = self._io.pos()
+        self._debug['_m_type_ids']['arr'] = []
+        self._m_type_ids = []
+        for i in range(self.header.type_ids_size):
+            self._debug['_m_type_ids']['arr'].append({'start': self._io.pos()})
+            _t__m_type_ids = Dex.TypeIdItem(self._io, self, self._root)
+            try:
+                _t__m_type_ids._read()
+            finally:
+                self._m_type_ids.append(_t__m_type_ids)
+            self._debug['_m_type_ids']['arr'][i]['end'] = self._io.pos()
+
+        self._debug['_m_type_ids']['end'] = self._io.pos()
+        self._io.seek(_pos)
+        return getattr(self, '_m_type_ids', None)
 
 

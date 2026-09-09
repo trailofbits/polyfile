@@ -1,14 +1,14 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
+# type: ignore
 
-from packaging.version import parse as parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
-from enum import Enum
+from enum import IntEnum
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
-    raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
+    raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class Bson(KaitaiStruct):
     """BSON, short for Binary JSON, is a binary-encoded serialization of JSON-like documents. Like JSON, BSON supports the embedding of documents and arrays within other documents and arrays. BSON also contains extensions that allow representation of data types that are not part of the JSON spec. For example, BSON has a Date type and a BinData type. BSON can be compared to binary interchange formats, like Protocol Buffers. BSON is more "schemaless" than Protocol Buffers, which can give it an advantage in flexibility but also a slight disadvantage in space efficiency (BSON has overhead for field names within the serialized data). BSON was designed to have the following three characteristics:
@@ -18,9 +18,9 @@ class Bson(KaitaiStruct):
     """
     SEQ_FIELDS = ["len", "fields", "terminator"]
     def __init__(self, _io, _parent=None, _root=None):
-        self._io = _io
+        super(Bson, self).__init__(_io)
         self._parent = _parent
-        self._root = _root if _root else self
+        self._root = _root or self
         self._debug = collections.defaultdict(dict)
 
     def _read(self):
@@ -28,7 +28,7 @@ class Bson(KaitaiStruct):
         self.len = self._io.read_s4le()
         self._debug['len']['end'] = self._io.pos()
         self._debug['fields']['start'] = self._io.pos()
-        self._raw_fields = self._io.read_bytes((self.len - 5))
+        self._raw_fields = self._io.read_bytes(self.len - 5)
         _io__raw_fields = KaitaiStream(BytesIO(self._raw_fields))
         self.fields = Bson.ElementsList(_io__raw_fields, self, self._root)
         self.fields._read()
@@ -39,28 +39,15 @@ class Bson(KaitaiStruct):
         if not self.terminator == b"\x00":
             raise kaitaistruct.ValidationNotEqualError(b"\x00", self.terminator, self._io, u"/seq/2")
 
-    class Timestamp(KaitaiStruct):
-        """Special internal type used by MongoDB replication and sharding. First 4 bytes are an increment, second 4 are a timestamp."""
-        SEQ_FIELDS = ["increment", "timestamp"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
 
-        def _read(self):
-            self._debug['increment']['start'] = self._io.pos()
-            self.increment = self._io.read_u4le()
-            self._debug['increment']['end'] = self._io.pos()
-            self._debug['timestamp']['start'] = self._io.pos()
-            self.timestamp = self._io.read_u4le()
-            self._debug['timestamp']['end'] = self._io.pos()
-
+    def _fetch_instances(self):
+        pass
+        self.fields._fetch_instances()
 
     class BinData(KaitaiStruct):
         """The BSON "binary" or "BinData" datatype is used to represent arrays of bytes. It is somewhat analogous to the Java notion of a ByteArray. BSON binary values have a subtype. This is used to indicate what kind of data is in the byte array. Subtypes from zero to 127 are predefined or reserved. Subtypes from 128-255 are user-defined."""
 
-        class Subtype(Enum):
+        class Subtype(IntEnum):
             generic = 0
             function = 1
             byte_array_deprecated = 2
@@ -70,9 +57,9 @@ class Bson(KaitaiStruct):
             custom = 128
         SEQ_FIELDS = ["len", "subtype", "content"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Bson.BinData, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -85,21 +72,33 @@ class Bson(KaitaiStruct):
             self._debug['content']['start'] = self._io.pos()
             _on = self.subtype
             if _on == Bson.BinData.Subtype.byte_array_deprecated:
+                pass
                 self._raw_content = self._io.read_bytes(self.len)
                 _io__raw_content = KaitaiStream(BytesIO(self._raw_content))
                 self.content = Bson.BinData.ByteArrayDeprecated(_io__raw_content, self, self._root)
                 self.content._read()
             else:
+                pass
                 self.content = self._io.read_bytes(self.len)
             self._debug['content']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            _on = self.subtype
+            if _on == Bson.BinData.Subtype.byte_array_deprecated:
+                pass
+                self.content._fetch_instances()
+            else:
+                pass
 
         class ByteArrayDeprecated(KaitaiStruct):
             """The BSON "binary" or "BinData" datatype is used to represent arrays of bytes. It is somewhat analogous to the Java notion of a ByteArray. BSON binary values have a subtype. This is used to indicate what kind of data is in the byte array. Subtypes from zero to 127 are predefined or reserved. Subtypes from 128-255 are user-defined."""
             SEQ_FIELDS = ["len", "content"]
             def __init__(self, _io, _parent=None, _root=None):
-                self._io = _io
+                super(Bson.BinData.ByteArrayDeprecated, self).__init__(_io)
                 self._parent = _parent
-                self._root = _root if _root else self
+                self._root = _root
                 self._debug = collections.defaultdict(dict)
 
             def _read(self):
@@ -111,38 +110,45 @@ class Bson(KaitaiStruct):
                 self._debug['content']['end'] = self._io.pos()
 
 
+            def _fetch_instances(self):
+                pass
 
-    class ElementsList(KaitaiStruct):
-        SEQ_FIELDS = ["elements"]
+
+
+    class CodeWithScope(KaitaiStruct):
+        SEQ_FIELDS = ["id", "source", "scope"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Bson.CodeWithScope, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
-            self._debug['elements']['start'] = self._io.pos()
-            self.elements = []
-            i = 0
-            while not self._io.is_eof():
-                if not 'arr' in self._debug['elements']:
-                    self._debug['elements']['arr'] = []
-                self._debug['elements']['arr'].append({'start': self._io.pos()})
-                _t_elements = Bson.Element(self._io, self, self._root)
-                _t_elements._read()
-                self.elements.append(_t_elements)
-                self._debug['elements']['arr'][len(self.elements) - 1]['end'] = self._io.pos()
-                i += 1
+            self._debug['id']['start'] = self._io.pos()
+            self.id = self._io.read_s4le()
+            self._debug['id']['end'] = self._io.pos()
+            self._debug['source']['start'] = self._io.pos()
+            self.source = Bson.String(self._io, self, self._root)
+            self.source._read()
+            self._debug['source']['end'] = self._io.pos()
+            self._debug['scope']['start'] = self._io.pos()
+            self.scope = Bson(self._io, self, self._root)
+            self.scope._read()
+            self._debug['scope']['end'] = self._io.pos()
 
-            self._debug['elements']['end'] = self._io.pos()
+
+        def _fetch_instances(self):
+            pass
+            self.source._fetch_instances()
+            self.scope._fetch_instances()
 
 
     class Cstring(KaitaiStruct):
         SEQ_FIELDS = ["str"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Bson.Cstring, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -151,31 +157,38 @@ class Bson(KaitaiStruct):
             self._debug['str']['end'] = self._io.pos()
 
 
-    class String(KaitaiStruct):
-        SEQ_FIELDS = ["len", "str", "terminator"]
+        def _fetch_instances(self):
+            pass
+
+
+    class DbPointer(KaitaiStruct):
+        SEQ_FIELDS = ["namespace", "id"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Bson.DbPointer, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
-            self._debug['len']['start'] = self._io.pos()
-            self.len = self._io.read_s4le()
-            self._debug['len']['end'] = self._io.pos()
-            self._debug['str']['start'] = self._io.pos()
-            self.str = (self._io.read_bytes((self.len - 1))).decode(u"UTF-8")
-            self._debug['str']['end'] = self._io.pos()
-            self._debug['terminator']['start'] = self._io.pos()
-            self.terminator = self._io.read_bytes(1)
-            self._debug['terminator']['end'] = self._io.pos()
-            if not self.terminator == b"\x00":
-                raise kaitaistruct.ValidationNotEqualError(b"\x00", self.terminator, self._io, u"/types/string/seq/2")
+            self._debug['namespace']['start'] = self._io.pos()
+            self.namespace = Bson.String(self._io, self, self._root)
+            self.namespace._read()
+            self._debug['namespace']['end'] = self._io.pos()
+            self._debug['id']['start'] = self._io.pos()
+            self.id = Bson.ObjectId(self._io, self, self._root)
+            self.id._read()
+            self._debug['id']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            self.namespace._fetch_instances()
+            self.id._fetch_instances()
 
 
     class Element(KaitaiStruct):
 
-        class BsonType(Enum):
+        class BsonType(IntEnum):
             min_key = -1
             end_of_object = 0
             number_double = 1
@@ -200,9 +213,9 @@ class Bson(KaitaiStruct):
             max_key = 127
         SEQ_FIELDS = ["type_byte", "name", "content"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Bson.Element, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -215,133 +228,165 @@ class Bson(KaitaiStruct):
             self._debug['name']['end'] = self._io.pos()
             self._debug['content']['start'] = self._io.pos()
             _on = self.type_byte
-            if _on == Bson.Element.BsonType.code_with_scope:
+            if _on == Bson.Element.BsonType.array:
+                pass
+                self.content = Bson(self._io, self, self._root)
+                self.content._read()
+            elif _on == Bson.Element.BsonType.bin_data:
+                pass
+                self.content = Bson.BinData(self._io, self, self._root)
+                self.content._read()
+            elif _on == Bson.Element.BsonType.boolean:
+                pass
+                self.content = self._io.read_u1()
+            elif _on == Bson.Element.BsonType.code_with_scope:
+                pass
                 self.content = Bson.CodeWithScope(self._io, self, self._root)
                 self.content._read()
-            elif _on == Bson.Element.BsonType.reg_ex:
-                self.content = Bson.RegEx(self._io, self, self._root)
+            elif _on == Bson.Element.BsonType.db_pointer:
+                pass
+                self.content = Bson.DbPointer(self._io, self, self._root)
+                self.content._read()
+            elif _on == Bson.Element.BsonType.document:
+                pass
+                self.content = Bson(self._io, self, self._root)
+                self.content._read()
+            elif _on == Bson.Element.BsonType.javascript:
+                pass
+                self.content = Bson.String(self._io, self, self._root)
+                self.content._read()
+            elif _on == Bson.Element.BsonType.number_decimal:
+                pass
+                self.content = Bson.F16(self._io, self, self._root)
                 self.content._read()
             elif _on == Bson.Element.BsonType.number_double:
+                pass
                 self.content = self._io.read_f8le()
+            elif _on == Bson.Element.BsonType.number_int:
+                pass
+                self.content = self._io.read_s4le()
+            elif _on == Bson.Element.BsonType.number_long:
+                pass
+                self.content = self._io.read_s8le()
+            elif _on == Bson.Element.BsonType.object_id:
+                pass
+                self.content = Bson.ObjectId(self._io, self, self._root)
+                self.content._read()
+            elif _on == Bson.Element.BsonType.reg_ex:
+                pass
+                self.content = Bson.RegEx(self._io, self, self._root)
+                self.content._read()
+            elif _on == Bson.Element.BsonType.string:
+                pass
+                self.content = Bson.String(self._io, self, self._root)
+                self.content._read()
             elif _on == Bson.Element.BsonType.symbol:
+                pass
                 self.content = Bson.String(self._io, self, self._root)
                 self.content._read()
             elif _on == Bson.Element.BsonType.timestamp:
+                pass
                 self.content = Bson.Timestamp(self._io, self, self._root)
                 self.content._read()
-            elif _on == Bson.Element.BsonType.number_int:
-                self.content = self._io.read_s4le()
-            elif _on == Bson.Element.BsonType.document:
-                self.content = Bson(self._io)
-                self.content._read()
-            elif _on == Bson.Element.BsonType.object_id:
-                self.content = Bson.ObjectId(self._io, self, self._root)
-                self.content._read()
-            elif _on == Bson.Element.BsonType.javascript:
-                self.content = Bson.String(self._io, self, self._root)
-                self.content._read()
             elif _on == Bson.Element.BsonType.utc_datetime:
+                pass
                 self.content = self._io.read_s8le()
-            elif _on == Bson.Element.BsonType.boolean:
-                self.content = self._io.read_u1()
-            elif _on == Bson.Element.BsonType.number_long:
-                self.content = self._io.read_s8le()
-            elif _on == Bson.Element.BsonType.bin_data:
-                self.content = Bson.BinData(self._io, self, self._root)
-                self.content._read()
-            elif _on == Bson.Element.BsonType.string:
-                self.content = Bson.String(self._io, self, self._root)
-                self.content._read()
-            elif _on == Bson.Element.BsonType.db_pointer:
-                self.content = Bson.DbPointer(self._io, self, self._root)
-                self.content._read()
-            elif _on == Bson.Element.BsonType.array:
-                self.content = Bson(self._io)
-                self.content._read()
-            elif _on == Bson.Element.BsonType.number_decimal:
-                self.content = Bson.F16(self._io, self, self._root)
-                self.content._read()
             self._debug['content']['end'] = self._io.pos()
 
 
-    class DbPointer(KaitaiStruct):
-        SEQ_FIELDS = ["namespace", "id"]
+        def _fetch_instances(self):
+            pass
+            self.name._fetch_instances()
+            _on = self.type_byte
+            if _on == Bson.Element.BsonType.array:
+                pass
+                self.content._fetch_instances()
+            elif _on == Bson.Element.BsonType.bin_data:
+                pass
+                self.content._fetch_instances()
+            elif _on == Bson.Element.BsonType.boolean:
+                pass
+            elif _on == Bson.Element.BsonType.code_with_scope:
+                pass
+                self.content._fetch_instances()
+            elif _on == Bson.Element.BsonType.db_pointer:
+                pass
+                self.content._fetch_instances()
+            elif _on == Bson.Element.BsonType.document:
+                pass
+                self.content._fetch_instances()
+            elif _on == Bson.Element.BsonType.javascript:
+                pass
+                self.content._fetch_instances()
+            elif _on == Bson.Element.BsonType.number_decimal:
+                pass
+                self.content._fetch_instances()
+            elif _on == Bson.Element.BsonType.number_double:
+                pass
+            elif _on == Bson.Element.BsonType.number_int:
+                pass
+            elif _on == Bson.Element.BsonType.number_long:
+                pass
+            elif _on == Bson.Element.BsonType.object_id:
+                pass
+                self.content._fetch_instances()
+            elif _on == Bson.Element.BsonType.reg_ex:
+                pass
+                self.content._fetch_instances()
+            elif _on == Bson.Element.BsonType.string:
+                pass
+                self.content._fetch_instances()
+            elif _on == Bson.Element.BsonType.symbol:
+                pass
+                self.content._fetch_instances()
+            elif _on == Bson.Element.BsonType.timestamp:
+                pass
+                self.content._fetch_instances()
+            elif _on == Bson.Element.BsonType.utc_datetime:
+                pass
+
+
+    class ElementsList(KaitaiStruct):
+        SEQ_FIELDS = ["elements"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Bson.ElementsList, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
-            self._debug['namespace']['start'] = self._io.pos()
-            self.namespace = Bson.String(self._io, self, self._root)
-            self.namespace._read()
-            self._debug['namespace']['end'] = self._io.pos()
-            self._debug['id']['start'] = self._io.pos()
-            self.id = Bson.ObjectId(self._io, self, self._root)
-            self.id._read()
-            self._debug['id']['end'] = self._io.pos()
+            self._debug['elements']['start'] = self._io.pos()
+            self._debug['elements']['arr'] = []
+            self.elements = []
+            i = 0
+            while not self._io.is_eof():
+                self._debug['elements']['arr'].append({'start': self._io.pos()})
+                _t_elements = Bson.Element(self._io, self, self._root)
+                try:
+                    _t_elements._read()
+                finally:
+                    self.elements.append(_t_elements)
+                self._debug['elements']['arr'][len(self.elements) - 1]['end'] = self._io.pos()
+                i += 1
+
+            self._debug['elements']['end'] = self._io.pos()
 
 
-    class U3(KaitaiStruct):
-        """Implements unsigned 24-bit (3 byte) integer.
-        """
-        SEQ_FIELDS = ["b1", "b2", "b3"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
+        def _fetch_instances(self):
+            pass
+            for i in range(len(self.elements)):
+                pass
+                self.elements[i]._fetch_instances()
 
-        def _read(self):
-            self._debug['b1']['start'] = self._io.pos()
-            self.b1 = self._io.read_u1()
-            self._debug['b1']['end'] = self._io.pos()
-            self._debug['b2']['start'] = self._io.pos()
-            self.b2 = self._io.read_u1()
-            self._debug['b2']['end'] = self._io.pos()
-            self._debug['b3']['start'] = self._io.pos()
-            self.b3 = self._io.read_u1()
-            self._debug['b3']['end'] = self._io.pos()
-
-        @property
-        def value(self):
-            if hasattr(self, '_m_value'):
-                return self._m_value if hasattr(self, '_m_value') else None
-
-            self._m_value = ((self.b1 | (self.b2 << 8)) | (self.b3 << 16))
-            return self._m_value if hasattr(self, '_m_value') else None
-
-
-    class CodeWithScope(KaitaiStruct):
-        SEQ_FIELDS = ["id", "source", "scope"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['id']['start'] = self._io.pos()
-            self.id = self._io.read_s4le()
-            self._debug['id']['end'] = self._io.pos()
-            self._debug['source']['start'] = self._io.pos()
-            self.source = Bson.String(self._io, self, self._root)
-            self.source._read()
-            self._debug['source']['end'] = self._io.pos()
-            self._debug['scope']['start'] = self._io.pos()
-            self.scope = Bson(self._io)
-            self.scope._read()
-            self._debug['scope']['end'] = self._io.pos()
 
 
     class F16(KaitaiStruct):
         """128-bit IEEE 754-2008 decimal floating point."""
         SEQ_FIELDS = ["str", "exponent", "significand_hi", "significand_lo"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Bson.F16, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -354,10 +399,13 @@ class Bson(KaitaiStruct):
             self._debug['significand_hi']['start'] = self._io.pos()
             self.significand_hi = self._io.read_bits_int_be(49)
             self._debug['significand_hi']['end'] = self._io.pos()
-            self._io.align_to_byte()
             self._debug['significand_lo']['start'] = self._io.pos()
             self.significand_lo = self._io.read_u8le()
             self._debug['significand_lo']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
 
 
     class ObjectId(KaitaiStruct):
@@ -367,9 +415,9 @@ class Bson(KaitaiStruct):
         """
         SEQ_FIELDS = ["epoch_time", "machine_id", "process_id", "counter"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Bson.ObjectId, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -389,12 +437,18 @@ class Bson(KaitaiStruct):
             self._debug['counter']['end'] = self._io.pos()
 
 
+        def _fetch_instances(self):
+            pass
+            self.machine_id._fetch_instances()
+            self.counter._fetch_instances()
+
+
     class RegEx(KaitaiStruct):
         SEQ_FIELDS = ["pattern", "options"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Bson.RegEx, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -406,6 +460,94 @@ class Bson(KaitaiStruct):
             self.options = Bson.Cstring(self._io, self, self._root)
             self.options._read()
             self._debug['options']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            self.pattern._fetch_instances()
+            self.options._fetch_instances()
+
+
+    class String(KaitaiStruct):
+        SEQ_FIELDS = ["len", "str", "terminator"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Bson.String, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['len']['start'] = self._io.pos()
+            self.len = self._io.read_s4le()
+            self._debug['len']['end'] = self._io.pos()
+            self._debug['str']['start'] = self._io.pos()
+            self.str = (self._io.read_bytes(self.len - 1)).decode(u"UTF-8")
+            self._debug['str']['end'] = self._io.pos()
+            self._debug['terminator']['start'] = self._io.pos()
+            self.terminator = self._io.read_bytes(1)
+            self._debug['terminator']['end'] = self._io.pos()
+            if not self.terminator == b"\x00":
+                raise kaitaistruct.ValidationNotEqualError(b"\x00", self.terminator, self._io, u"/types/string/seq/2")
+
+
+        def _fetch_instances(self):
+            pass
+
+
+    class Timestamp(KaitaiStruct):
+        """Special internal type used by MongoDB replication and sharding. First 4 bytes are an increment, second 4 are a timestamp."""
+        SEQ_FIELDS = ["increment", "timestamp"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Bson.Timestamp, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['increment']['start'] = self._io.pos()
+            self.increment = self._io.read_u4le()
+            self._debug['increment']['end'] = self._io.pos()
+            self._debug['timestamp']['start'] = self._io.pos()
+            self.timestamp = self._io.read_u4le()
+            self._debug['timestamp']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+
+
+    class U3(KaitaiStruct):
+        """Implements unsigned 24-bit (3 byte) integer.
+        """
+        SEQ_FIELDS = ["b1", "b2", "b3"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Bson.U3, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['b1']['start'] = self._io.pos()
+            self.b1 = self._io.read_u1()
+            self._debug['b1']['end'] = self._io.pos()
+            self._debug['b2']['start'] = self._io.pos()
+            self.b2 = self._io.read_u1()
+            self._debug['b2']['end'] = self._io.pos()
+            self._debug['b3']['start'] = self._io.pos()
+            self.b3 = self._io.read_u1()
+            self._debug['b3']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+
+        @property
+        def value(self):
+            if hasattr(self, '_m_value'):
+                return self._m_value
+
+            self._m_value = (self.b1 | self.b2 << 8) | self.b3 << 16
+            return getattr(self, '_m_value', None)
 
 
 

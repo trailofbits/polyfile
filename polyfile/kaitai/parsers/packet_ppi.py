@@ -1,16 +1,16 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
+# type: ignore
 
-from packaging.version import parse as parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
-from enum import Enum
+from polyfile.kaitai.parsers import ethernet_frame
+from enum import IntEnum
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
-    raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
+    raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
-from polyfile.kaitai.parsers import ethernet_frame
 class PacketPpi(KaitaiStruct):
     """PPI is a standard for link layer packet encapsulation, proposed as
     generic extensible container to store both captured in-band data and
@@ -24,15 +24,7 @@ class PacketPpi(KaitaiStruct):
        PPI header format spec, section 3 - https://web.archive.org/web/20090206112419/https://www.cacetech.com/documents/PPI_Header_format_1.0.1.pdf
     """
 
-    class PfhType(Enum):
-        radio_802_11_common = 2
-        radio_802_11n_mac_ext = 3
-        radio_802_11n_mac_phy_ext = 4
-        spectrum_map = 5
-        process_info = 6
-        capture_info = 7
-
-    class Linktype(Enum):
+    class Linktype(IntEnum):
         null_linktype = 0
         ethernet = 1
         ax25 = 3
@@ -137,11 +129,19 @@ class PacketPpi(KaitaiStruct):
         zwave_r3 = 262
         wattstopper_dlm = 263
         iso_14443 = 264
+
+    class PfhType(IntEnum):
+        radio_802_11_common = 2
+        radio_802_11n_mac_ext = 3
+        radio_802_11n_mac_phy_ext = 4
+        spectrum_map = 5
+        process_info = 6
+        capture_info = 7
     SEQ_FIELDS = ["header", "fields", "body"]
     def __init__(self, _io, _parent=None, _root=None):
-        self._io = _io
+        super(PacketPpi, self).__init__(_io)
         self._parent = _parent
-        self._root = _root if _root else self
+        self._root = _root or self
         self._debug = collections.defaultdict(dict)
 
     def _read(self):
@@ -150,86 +150,51 @@ class PacketPpi(KaitaiStruct):
         self.header._read()
         self._debug['header']['end'] = self._io.pos()
         self._debug['fields']['start'] = self._io.pos()
-        self._raw_fields = self._io.read_bytes((self.header.pph_len - 8))
+        self._raw_fields = self._io.read_bytes(self.header.pph_len - 8)
         _io__raw_fields = KaitaiStream(BytesIO(self._raw_fields))
         self.fields = PacketPpi.PacketPpiFields(_io__raw_fields, self, self._root)
         self.fields._read()
         self._debug['fields']['end'] = self._io.pos()
         self._debug['body']['start'] = self._io.pos()
         _on = self.header.pph_dlt
-        if _on == PacketPpi.Linktype.ppi:
-            self._raw_body = self._io.read_bytes_full()
-            _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
-            self.body = PacketPpi(_io__raw_body)
-            self.body._read()
-        elif _on == PacketPpi.Linktype.ethernet:
+        if _on == PacketPpi.Linktype.ethernet:
+            pass
             self._raw_body = self._io.read_bytes_full()
             _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
             self.body = ethernet_frame.EthernetFrame(_io__raw_body)
             self.body._read()
+        elif _on == PacketPpi.Linktype.ppi:
+            pass
+            self._raw_body = self._io.read_bytes_full()
+            _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
+            self.body = PacketPpi(_io__raw_body, self, self._root)
+            self.body._read()
         else:
+            pass
             self.body = self._io.read_bytes_full()
         self._debug['body']['end'] = self._io.pos()
 
-    class PacketPpiFields(KaitaiStruct):
-        SEQ_FIELDS = ["entries"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
 
-        def _read(self):
-            self._debug['entries']['start'] = self._io.pos()
-            self.entries = []
-            i = 0
-            while not self._io.is_eof():
-                if not 'arr' in self._debug['entries']:
-                    self._debug['entries']['arr'] = []
-                self._debug['entries']['arr'].append({'start': self._io.pos()})
-                _t_entries = PacketPpi.PacketPpiField(self._io, self, self._root)
-                _t_entries._read()
-                self.entries.append(_t_entries)
-                self._debug['entries']['arr'][len(self.entries) - 1]['end'] = self._io.pos()
-                i += 1
-
-            self._debug['entries']['end'] = self._io.pos()
-
-
-    class Radio80211nMacExtBody(KaitaiStruct):
-        """
-        .. seealso::
-           PPI header format spec, section 4.1.3 - https://web.archive.org/web/20090206112419/https://www.cacetech.com/documents/PPI_Header_format_1.0.1.pdf
-        """
-        SEQ_FIELDS = ["flags", "a_mpdu_id", "num_delimiters", "reserved"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['flags']['start'] = self._io.pos()
-            self.flags = PacketPpi.MacFlags(self._io, self, self._root)
-            self.flags._read()
-            self._debug['flags']['end'] = self._io.pos()
-            self._debug['a_mpdu_id']['start'] = self._io.pos()
-            self.a_mpdu_id = self._io.read_u4le()
-            self._debug['a_mpdu_id']['end'] = self._io.pos()
-            self._debug['num_delimiters']['start'] = self._io.pos()
-            self.num_delimiters = self._io.read_u1()
-            self._debug['num_delimiters']['end'] = self._io.pos()
-            self._debug['reserved']['start'] = self._io.pos()
-            self.reserved = self._io.read_bytes(3)
-            self._debug['reserved']['end'] = self._io.pos()
-
+    def _fetch_instances(self):
+        pass
+        self.header._fetch_instances()
+        self.fields._fetch_instances()
+        _on = self.header.pph_dlt
+        if _on == PacketPpi.Linktype.ethernet:
+            pass
+            self.body._fetch_instances()
+        elif _on == PacketPpi.Linktype.ppi:
+            pass
+            self.body._fetch_instances()
+        else:
+            pass
 
     class MacFlags(KaitaiStruct):
         SEQ_FIELDS = ["unused1", "aggregate_delimiter", "more_aggregates", "aggregate", "dup_rx", "rx_short_guard", "is_ht_40", "greenfield", "unused2"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(PacketPpi.MacFlags, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -257,10 +222,108 @@ class PacketPpi(KaitaiStruct):
             self._debug['greenfield']['start'] = self._io.pos()
             self.greenfield = self._io.read_bits_int_be(1) != 0
             self._debug['greenfield']['end'] = self._io.pos()
-            self._io.align_to_byte()
             self._debug['unused2']['start'] = self._io.pos()
             self.unused2 = self._io.read_bytes(3)
             self._debug['unused2']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+
+
+    class PacketPpiField(KaitaiStruct):
+        """
+        .. seealso::
+           PPI header format spec, section 3.1 - https://web.archive.org/web/20090206112419/https://www.cacetech.com/documents/PPI_Header_format_1.0.1.pdf
+        """
+        SEQ_FIELDS = ["pfh_type", "pfh_datalen", "body"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(PacketPpi.PacketPpiField, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['pfh_type']['start'] = self._io.pos()
+            self.pfh_type = KaitaiStream.resolve_enum(PacketPpi.PfhType, self._io.read_u2le())
+            self._debug['pfh_type']['end'] = self._io.pos()
+            self._debug['pfh_datalen']['start'] = self._io.pos()
+            self.pfh_datalen = self._io.read_u2le()
+            self._debug['pfh_datalen']['end'] = self._io.pos()
+            self._debug['body']['start'] = self._io.pos()
+            _on = self.pfh_type
+            if _on == PacketPpi.PfhType.radio_802_11_common:
+                pass
+                self._raw_body = self._io.read_bytes(self.pfh_datalen)
+                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
+                self.body = PacketPpi.Radio80211CommonBody(_io__raw_body, self, self._root)
+                self.body._read()
+            elif _on == PacketPpi.PfhType.radio_802_11n_mac_ext:
+                pass
+                self._raw_body = self._io.read_bytes(self.pfh_datalen)
+                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
+                self.body = PacketPpi.Radio80211nMacExtBody(_io__raw_body, self, self._root)
+                self.body._read()
+            elif _on == PacketPpi.PfhType.radio_802_11n_mac_phy_ext:
+                pass
+                self._raw_body = self._io.read_bytes(self.pfh_datalen)
+                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
+                self.body = PacketPpi.Radio80211nMacPhyExtBody(_io__raw_body, self, self._root)
+                self.body._read()
+            else:
+                pass
+                self.body = self._io.read_bytes(self.pfh_datalen)
+            self._debug['body']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            _on = self.pfh_type
+            if _on == PacketPpi.PfhType.radio_802_11_common:
+                pass
+                self.body._fetch_instances()
+            elif _on == PacketPpi.PfhType.radio_802_11n_mac_ext:
+                pass
+                self.body._fetch_instances()
+            elif _on == PacketPpi.PfhType.radio_802_11n_mac_phy_ext:
+                pass
+                self.body._fetch_instances()
+            else:
+                pass
+
+
+    class PacketPpiFields(KaitaiStruct):
+        SEQ_FIELDS = ["entries"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(PacketPpi.PacketPpiFields, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['entries']['start'] = self._io.pos()
+            self._debug['entries']['arr'] = []
+            self.entries = []
+            i = 0
+            while not self._io.is_eof():
+                self._debug['entries']['arr'].append({'start': self._io.pos()})
+                _t_entries = PacketPpi.PacketPpiField(self._io, self, self._root)
+                try:
+                    _t_entries._read()
+                finally:
+                    self.entries.append(_t_entries)
+                self._debug['entries']['arr'][len(self.entries) - 1]['end'] = self._io.pos()
+                i += 1
+
+            self._debug['entries']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            for i in range(len(self.entries)):
+                pass
+                self.entries[i]._fetch_instances()
+
 
 
     class PacketPpiHeader(KaitaiStruct):
@@ -270,9 +333,9 @@ class PacketPpi(KaitaiStruct):
         """
         SEQ_FIELDS = ["pph_version", "pph_flags", "pph_len", "pph_dlt"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(PacketPpi.PacketPpiHeader, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -290,6 +353,10 @@ class PacketPpi(KaitaiStruct):
             self._debug['pph_dlt']['end'] = self._io.pos()
 
 
+        def _fetch_instances(self):
+            pass
+
+
     class Radio80211CommonBody(KaitaiStruct):
         """
         .. seealso::
@@ -297,9 +364,9 @@ class PacketPpi(KaitaiStruct):
         """
         SEQ_FIELDS = ["tsf_timer", "flags", "rate", "channel_freq", "channel_flags", "fhss_hopset", "fhss_pattern", "dbm_antsignal", "dbm_antnoise"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(PacketPpi.Radio80211CommonBody, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -332,45 +399,41 @@ class PacketPpi(KaitaiStruct):
             self._debug['dbm_antnoise']['end'] = self._io.pos()
 
 
-    class PacketPpiField(KaitaiStruct):
+        def _fetch_instances(self):
+            pass
+
+
+    class Radio80211nMacExtBody(KaitaiStruct):
         """
         .. seealso::
-           PPI header format spec, section 3.1 - https://web.archive.org/web/20090206112419/https://www.cacetech.com/documents/PPI_Header_format_1.0.1.pdf
+           PPI header format spec, section 4.1.3 - https://web.archive.org/web/20090206112419/https://www.cacetech.com/documents/PPI_Header_format_1.0.1.pdf
         """
-        SEQ_FIELDS = ["pfh_type", "pfh_datalen", "body"]
+        SEQ_FIELDS = ["flags", "a_mpdu_id", "num_delimiters", "reserved"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(PacketPpi.Radio80211nMacExtBody, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
-            self._debug['pfh_type']['start'] = self._io.pos()
-            self.pfh_type = KaitaiStream.resolve_enum(PacketPpi.PfhType, self._io.read_u2le())
-            self._debug['pfh_type']['end'] = self._io.pos()
-            self._debug['pfh_datalen']['start'] = self._io.pos()
-            self.pfh_datalen = self._io.read_u2le()
-            self._debug['pfh_datalen']['end'] = self._io.pos()
-            self._debug['body']['start'] = self._io.pos()
-            _on = self.pfh_type
-            if _on == PacketPpi.PfhType.radio_802_11_common:
-                self._raw_body = self._io.read_bytes(self.pfh_datalen)
-                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
-                self.body = PacketPpi.Radio80211CommonBody(_io__raw_body, self, self._root)
-                self.body._read()
-            elif _on == PacketPpi.PfhType.radio_802_11n_mac_ext:
-                self._raw_body = self._io.read_bytes(self.pfh_datalen)
-                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
-                self.body = PacketPpi.Radio80211nMacExtBody(_io__raw_body, self, self._root)
-                self.body._read()
-            elif _on == PacketPpi.PfhType.radio_802_11n_mac_phy_ext:
-                self._raw_body = self._io.read_bytes(self.pfh_datalen)
-                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
-                self.body = PacketPpi.Radio80211nMacPhyExtBody(_io__raw_body, self, self._root)
-                self.body._read()
-            else:
-                self.body = self._io.read_bytes(self.pfh_datalen)
-            self._debug['body']['end'] = self._io.pos()
+            self._debug['flags']['start'] = self._io.pos()
+            self.flags = PacketPpi.MacFlags(self._io, self, self._root)
+            self.flags._read()
+            self._debug['flags']['end'] = self._io.pos()
+            self._debug['a_mpdu_id']['start'] = self._io.pos()
+            self.a_mpdu_id = self._io.read_u4le()
+            self._debug['a_mpdu_id']['end'] = self._io.pos()
+            self._debug['num_delimiters']['start'] = self._io.pos()
+            self.num_delimiters = self._io.read_u1()
+            self._debug['num_delimiters']['end'] = self._io.pos()
+            self._debug['reserved']['start'] = self._io.pos()
+            self.reserved = self._io.read_bytes(3)
+            self._debug['reserved']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            self.flags._fetch_instances()
 
 
     class Radio80211nMacPhyExtBody(KaitaiStruct):
@@ -380,9 +443,9 @@ class PacketPpi(KaitaiStruct):
         """
         SEQ_FIELDS = ["flags", "a_mpdu_id", "num_delimiters", "mcs", "num_streams", "rssi_combined", "rssi_ant_ctl", "rssi_ant_ext", "ext_channel_freq", "ext_channel_flags", "rf_signal_noise", "evm"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(PacketPpi.Radio80211nMacPhyExtBody, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -406,22 +469,20 @@ class PacketPpi(KaitaiStruct):
             self.rssi_combined = self._io.read_u1()
             self._debug['rssi_combined']['end'] = self._io.pos()
             self._debug['rssi_ant_ctl']['start'] = self._io.pos()
-            self.rssi_ant_ctl = [None] * (4)
+            self._debug['rssi_ant_ctl']['arr'] = []
+            self.rssi_ant_ctl = []
             for i in range(4):
-                if not 'arr' in self._debug['rssi_ant_ctl']:
-                    self._debug['rssi_ant_ctl']['arr'] = []
                 self._debug['rssi_ant_ctl']['arr'].append({'start': self._io.pos()})
-                self.rssi_ant_ctl[i] = self._io.read_u1()
+                self.rssi_ant_ctl.append(self._io.read_u1())
                 self._debug['rssi_ant_ctl']['arr'][i]['end'] = self._io.pos()
 
             self._debug['rssi_ant_ctl']['end'] = self._io.pos()
             self._debug['rssi_ant_ext']['start'] = self._io.pos()
-            self.rssi_ant_ext = [None] * (4)
+            self._debug['rssi_ant_ext']['arr'] = []
+            self.rssi_ant_ext = []
             for i in range(4):
-                if not 'arr' in self._debug['rssi_ant_ext']:
-                    self._debug['rssi_ant_ext']['arr'] = []
                 self._debug['rssi_ant_ext']['arr'].append({'start': self._io.pos()})
-                self.rssi_ant_ext[i] = self._io.read_u1()
+                self.rssi_ant_ext.append(self._io.read_u1())
                 self._debug['rssi_ant_ext']['arr'][i]['end'] = self._io.pos()
 
             self._debug['rssi_ant_ext']['end'] = self._io.pos()
@@ -433,34 +494,53 @@ class PacketPpi(KaitaiStruct):
             self.ext_channel_flags._read()
             self._debug['ext_channel_flags']['end'] = self._io.pos()
             self._debug['rf_signal_noise']['start'] = self._io.pos()
-            self.rf_signal_noise = [None] * (4)
+            self._debug['rf_signal_noise']['arr'] = []
+            self.rf_signal_noise = []
             for i in range(4):
-                if not 'arr' in self._debug['rf_signal_noise']:
-                    self._debug['rf_signal_noise']['arr'] = []
                 self._debug['rf_signal_noise']['arr'].append({'start': self._io.pos()})
                 _t_rf_signal_noise = PacketPpi.Radio80211nMacPhyExtBody.SignalNoise(self._io, self, self._root)
-                _t_rf_signal_noise._read()
-                self.rf_signal_noise[i] = _t_rf_signal_noise
+                try:
+                    _t_rf_signal_noise._read()
+                finally:
+                    self.rf_signal_noise.append(_t_rf_signal_noise)
                 self._debug['rf_signal_noise']['arr'][i]['end'] = self._io.pos()
 
             self._debug['rf_signal_noise']['end'] = self._io.pos()
             self._debug['evm']['start'] = self._io.pos()
-            self.evm = [None] * (4)
+            self._debug['evm']['arr'] = []
+            self.evm = []
             for i in range(4):
-                if not 'arr' in self._debug['evm']:
-                    self._debug['evm']['arr'] = []
                 self._debug['evm']['arr'].append({'start': self._io.pos()})
-                self.evm[i] = self._io.read_u4le()
+                self.evm.append(self._io.read_u4le())
                 self._debug['evm']['arr'][i]['end'] = self._io.pos()
 
             self._debug['evm']['end'] = self._io.pos()
 
+
+        def _fetch_instances(self):
+            pass
+            self.flags._fetch_instances()
+            for i in range(len(self.rssi_ant_ctl)):
+                pass
+
+            for i in range(len(self.rssi_ant_ext)):
+                pass
+
+            self.ext_channel_flags._fetch_instances()
+            for i in range(len(self.rf_signal_noise)):
+                pass
+                self.rf_signal_noise[i]._fetch_instances()
+
+            for i in range(len(self.evm)):
+                pass
+
+
         class ChannelFlags(KaitaiStruct):
             SEQ_FIELDS = ["spectrum_2ghz", "ofdm", "cck", "turbo", "unused", "gfsk", "dyn_cck_ofdm", "only_passive_scan", "spectrum_5ghz"]
             def __init__(self, _io, _parent=None, _root=None):
-                self._io = _io
+                super(PacketPpi.Radio80211nMacPhyExtBody.ChannelFlags, self).__init__(_io)
                 self._parent = _parent
-                self._root = _root if _root else self
+                self._root = _root
                 self._debug = collections.defaultdict(dict)
 
             def _read(self):
@@ -493,13 +573,17 @@ class PacketPpi(KaitaiStruct):
                 self._debug['spectrum_5ghz']['end'] = self._io.pos()
 
 
+            def _fetch_instances(self):
+                pass
+
+
         class SignalNoise(KaitaiStruct):
             """RF signal + noise pair at a single antenna."""
             SEQ_FIELDS = ["signal", "noise"]
             def __init__(self, _io, _parent=None, _root=None):
-                self._io = _io
+                super(PacketPpi.Radio80211nMacPhyExtBody.SignalNoise, self).__init__(_io)
                 self._parent = _parent
-                self._root = _root if _root else self
+                self._root = _root
                 self._debug = collections.defaultdict(dict)
 
             def _read(self):
@@ -509,6 +593,10 @@ class PacketPpi(KaitaiStruct):
                 self._debug['noise']['start'] = self._io.pos()
                 self.noise = self._io.read_s1()
                 self._debug['noise']['end'] = self._io.pos()
+
+
+            def _fetch_instances(self):
+                pass
 
 
 

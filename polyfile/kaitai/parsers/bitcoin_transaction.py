@@ -1,14 +1,14 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
+# type: ignore
 
-from packaging.version import parse as parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
-from enum import Enum
+from enum import IntEnum
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
-    raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
+    raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class BitcoinTransaction(KaitaiStruct):
     """
@@ -18,9 +18,9 @@ class BitcoinTransaction(KaitaiStruct):
     """
     SEQ_FIELDS = ["version", "num_vins", "vins", "num_vouts", "vouts", "locktime"]
     def __init__(self, _io, _parent=None, _root=None):
-        self._io = _io
+        super(BitcoinTransaction, self).__init__(_io)
         self._parent = _parent
-        self._root = _root if _root else self
+        self._root = _root or self
         self._debug = collections.defaultdict(dict)
 
     def _read(self):
@@ -31,14 +31,15 @@ class BitcoinTransaction(KaitaiStruct):
         self.num_vins = self._io.read_u1()
         self._debug['num_vins']['end'] = self._io.pos()
         self._debug['vins']['start'] = self._io.pos()
-        self.vins = [None] * (self.num_vins)
+        self._debug['vins']['arr'] = []
+        self.vins = []
         for i in range(self.num_vins):
-            if not 'arr' in self._debug['vins']:
-                self._debug['vins']['arr'] = []
             self._debug['vins']['arr'].append({'start': self._io.pos()})
             _t_vins = BitcoinTransaction.Vin(self._io, self, self._root)
-            _t_vins._read()
-            self.vins[i] = _t_vins
+            try:
+                _t_vins._read()
+            finally:
+                self.vins.append(_t_vins)
             self._debug['vins']['arr'][i]['end'] = self._io.pos()
 
         self._debug['vins']['end'] = self._io.pos()
@@ -46,14 +47,15 @@ class BitcoinTransaction(KaitaiStruct):
         self.num_vouts = self._io.read_u1()
         self._debug['num_vouts']['end'] = self._io.pos()
         self._debug['vouts']['start'] = self._io.pos()
-        self.vouts = [None] * (self.num_vouts)
+        self._debug['vouts']['arr'] = []
+        self.vouts = []
         for i in range(self.num_vouts):
-            if not 'arr' in self._debug['vouts']:
-                self._debug['vouts']['arr'] = []
             self._debug['vouts']['arr'].append({'start': self._io.pos()})
             _t_vouts = BitcoinTransaction.Vout(self._io, self, self._root)
-            _t_vouts._read()
-            self.vouts[i] = _t_vouts
+            try:
+                _t_vouts._read()
+            finally:
+                self.vouts.append(_t_vouts)
             self._debug['vouts']['arr'][i]['end'] = self._io.pos()
 
         self._debug['vouts']['end'] = self._io.pos()
@@ -61,12 +63,24 @@ class BitcoinTransaction(KaitaiStruct):
         self.locktime = self._io.read_u4le()
         self._debug['locktime']['end'] = self._io.pos()
 
+
+    def _fetch_instances(self):
+        pass
+        for i in range(len(self.vins)):
+            pass
+            self.vins[i]._fetch_instances()
+
+        for i in range(len(self.vouts)):
+            pass
+            self.vouts[i]._fetch_instances()
+
+
     class Vin(KaitaiStruct):
         SEQ_FIELDS = ["txid", "output_id", "len_script", "script_sig", "end_of_vin"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(BitcoinTransaction.Vin, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -91,18 +105,23 @@ class BitcoinTransaction(KaitaiStruct):
             if not self.end_of_vin == b"\xFF\xFF\xFF\xFF":
                 raise kaitaistruct.ValidationNotEqualError(b"\xFF\xFF\xFF\xFF", self.end_of_vin, self._io, u"/types/vin/seq/4")
 
+
+        def _fetch_instances(self):
+            pass
+            self.script_sig._fetch_instances()
+
         class ScriptSignature(KaitaiStruct):
 
-            class SighashType(Enum):
+            class SighashType(IntEnum):
                 sighash_all = 1
                 sighash_none = 2
                 sighash_single = 3
                 sighash_anyonecanpay = 80
             SEQ_FIELDS = ["len_sig_stack", "der_sig", "sig_type", "len_pubkey_stack", "pubkey"]
             def __init__(self, _io, _parent=None, _root=None):
-                self._io = _io
+                super(BitcoinTransaction.Vin.ScriptSignature, self).__init__(_io)
                 self._parent = _parent
-                self._root = _root if _root else self
+                self._root = _root
                 self._debug = collections.defaultdict(dict)
 
             def _read(self):
@@ -124,12 +143,18 @@ class BitcoinTransaction(KaitaiStruct):
                 self.pubkey._read()
                 self._debug['pubkey']['end'] = self._io.pos()
 
+
+            def _fetch_instances(self):
+                pass
+                self.der_sig._fetch_instances()
+                self.pubkey._fetch_instances()
+
             class DerSignature(KaitaiStruct):
                 SEQ_FIELDS = ["sequence", "len_sig", "sep_1", "len_sig_r", "sig_r", "sep_2", "len_sig_s", "sig_s"]
                 def __init__(self, _io, _parent=None, _root=None):
-                    self._io = _io
+                    super(BitcoinTransaction.Vin.ScriptSignature.DerSignature, self).__init__(_io)
                     self._parent = _parent
-                    self._root = _root if _root else self
+                    self._root = _root
                     self._debug = collections.defaultdict(dict)
 
                 def _read(self):
@@ -165,12 +190,16 @@ class BitcoinTransaction(KaitaiStruct):
                     self._debug['sig_s']['end'] = self._io.pos()
 
 
+                def _fetch_instances(self):
+                    pass
+
+
             class PublicKey(KaitaiStruct):
                 SEQ_FIELDS = ["type", "x", "y"]
                 def __init__(self, _io, _parent=None, _root=None):
-                    self._io = _io
+                    super(BitcoinTransaction.Vin.ScriptSignature.PublicKey, self).__init__(_io)
                     self._parent = _parent
-                    self._root = _root if _root else self
+                    self._root = _root
                     self._debug = collections.defaultdict(dict)
 
                 def _read(self):
@@ -185,14 +214,18 @@ class BitcoinTransaction(KaitaiStruct):
                     self._debug['y']['end'] = self._io.pos()
 
 
+                def _fetch_instances(self):
+                    pass
+
+
 
 
     class Vout(KaitaiStruct):
         SEQ_FIELDS = ["amount", "len_script", "script_pub_key"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(BitcoinTransaction.Vout, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -205,6 +238,10 @@ class BitcoinTransaction(KaitaiStruct):
             self._debug['script_pub_key']['start'] = self._io.pos()
             self.script_pub_key = self._io.read_bytes(self.len_script)
             self._debug['script_pub_key']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
 
 
 

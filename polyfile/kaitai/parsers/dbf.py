@@ -1,14 +1,14 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
+# type: ignore
 
-from packaging.version import parse as parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
-from enum import Enum
+from enum import IntEnum
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
-    raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
+    raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class Dbf(KaitaiStruct):
     """.dbf is a relational database format introduced in DOS database
@@ -21,14 +21,14 @@ class Dbf(KaitaiStruct):
        Source - http://www.dbase.com/Knowledgebase/INT/db7_file_fmt.htm
     """
 
-    class DeleteState(Enum):
+    class DeleteState(IntEnum):
         false = 32
         true = 42
     SEQ_FIELDS = ["header1", "header2", "header_terminator", "records"]
     def __init__(self, _io, _parent=None, _root=None):
-        self._io = _io
+        super(Dbf, self).__init__(_io)
         self._parent = _parent
-        self._root = _root if _root else self
+        self._root = _root or self
         self._debug = collections.defaultdict(dict)
 
     def _read(self):
@@ -37,7 +37,7 @@ class Dbf(KaitaiStruct):
         self.header1._read()
         self._debug['header1']['end'] = self._io.pos()
         self._debug['header2']['start'] = self._io.pos()
-        self._raw_header2 = self._io.read_bytes(((self.header1.len_header - 12) - 1))
+        self._raw_header2 = self._io.read_bytes((self.header1.len_header - 12) - 1)
         _io__raw_header2 = KaitaiStream(BytesIO(self._raw_header2))
         self.header2 = Dbf.Header2(_io__raw_header2, self, self._root)
         self.header2._read()
@@ -48,64 +48,38 @@ class Dbf(KaitaiStruct):
         if not self.header_terminator == b"\x0D":
             raise kaitaistruct.ValidationNotEqualError(b"\x0D", self.header_terminator, self._io, u"/seq/2")
         self._debug['records']['start'] = self._io.pos()
-        self._raw_records = [None] * (self.header1.num_records)
-        self.records = [None] * (self.header1.num_records)
+        self._debug['records']['arr'] = []
+        self._raw_records = []
+        self.records = []
         for i in range(self.header1.num_records):
-            if not 'arr' in self._debug['records']:
-                self._debug['records']['arr'] = []
             self._debug['records']['arr'].append({'start': self._io.pos()})
-            self._raw_records[i] = self._io.read_bytes(self.header1.len_record)
+            self._raw_records.append(self._io.read_bytes(self.header1.len_record))
             _io__raw_records = KaitaiStream(BytesIO(self._raw_records[i]))
             _t_records = Dbf.Record(_io__raw_records, self, self._root)
-            _t_records._read()
-            self.records[i] = _t_records
+            try:
+                _t_records._read()
+            finally:
+                self.records.append(_t_records)
             self._debug['records']['arr'][i]['end'] = self._io.pos()
 
         self._debug['records']['end'] = self._io.pos()
 
-    class Header2(KaitaiStruct):
-        SEQ_FIELDS = ["header_dbase_3", "header_dbase_7", "fields"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
 
-        def _read(self):
-            if self._root.header1.dbase_level == 3:
-                self._debug['header_dbase_3']['start'] = self._io.pos()
-                self.header_dbase_3 = Dbf.HeaderDbase3(self._io, self, self._root)
-                self.header_dbase_3._read()
-                self._debug['header_dbase_3']['end'] = self._io.pos()
-
-            if self._root.header1.dbase_level == 7:
-                self._debug['header_dbase_7']['start'] = self._io.pos()
-                self.header_dbase_7 = Dbf.HeaderDbase7(self._io, self, self._root)
-                self.header_dbase_7._read()
-                self._debug['header_dbase_7']['end'] = self._io.pos()
-
-            self._debug['fields']['start'] = self._io.pos()
-            self.fields = []
-            i = 0
-            while not self._io.is_eof():
-                if not 'arr' in self._debug['fields']:
-                    self._debug['fields']['arr'] = []
-                self._debug['fields']['arr'].append({'start': self._io.pos()})
-                _t_fields = Dbf.Field(self._io, self, self._root)
-                _t_fields._read()
-                self.fields.append(_t_fields)
-                self._debug['fields']['arr'][len(self.fields) - 1]['end'] = self._io.pos()
-                i += 1
-
-            self._debug['fields']['end'] = self._io.pos()
+    def _fetch_instances(self):
+        pass
+        self.header1._fetch_instances()
+        self.header2._fetch_instances()
+        for i in range(len(self.records)):
+            pass
+            self.records[i]._fetch_instances()
 
 
     class Field(KaitaiStruct):
         SEQ_FIELDS = ["name", "datatype", "data_address", "length", "decimal_count", "reserved1", "work_area_id", "reserved2", "set_fields_flag", "reserved3"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Dbf.Field, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -141,6 +115,10 @@ class Dbf(KaitaiStruct):
             self._debug['reserved3']['end'] = self._io.pos()
 
 
+        def _fetch_instances(self):
+            pass
+
+
     class Header1(KaitaiStruct):
         """
         .. seealso::
@@ -148,9 +126,9 @@ class Dbf(KaitaiStruct):
         """
         SEQ_FIELDS = ["version", "last_update_y", "last_update_m", "last_update_d", "num_records", "len_header", "len_record"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Dbf.Header1, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -176,21 +154,81 @@ class Dbf(KaitaiStruct):
             self.len_record = self._io.read_u2le()
             self._debug['len_record']['end'] = self._io.pos()
 
+
+        def _fetch_instances(self):
+            pass
+
         @property
         def dbase_level(self):
             if hasattr(self, '_m_dbase_level'):
-                return self._m_dbase_level if hasattr(self, '_m_dbase_level') else None
+                return self._m_dbase_level
 
-            self._m_dbase_level = (self.version & 7)
-            return self._m_dbase_level if hasattr(self, '_m_dbase_level') else None
+            self._m_dbase_level = self.version & 7
+            return getattr(self, '_m_dbase_level', None)
+
+
+    class Header2(KaitaiStruct):
+        SEQ_FIELDS = ["header_dbase_3", "header_dbase_7", "fields"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Dbf.Header2, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            if self._root.header1.dbase_level == 3:
+                pass
+                self._debug['header_dbase_3']['start'] = self._io.pos()
+                self.header_dbase_3 = Dbf.HeaderDbase3(self._io, self, self._root)
+                self.header_dbase_3._read()
+                self._debug['header_dbase_3']['end'] = self._io.pos()
+
+            if self._root.header1.dbase_level == 7:
+                pass
+                self._debug['header_dbase_7']['start'] = self._io.pos()
+                self.header_dbase_7 = Dbf.HeaderDbase7(self._io, self, self._root)
+                self.header_dbase_7._read()
+                self._debug['header_dbase_7']['end'] = self._io.pos()
+
+            self._debug['fields']['start'] = self._io.pos()
+            self._debug['fields']['arr'] = []
+            self.fields = []
+            i = 0
+            while not self._io.is_eof():
+                self._debug['fields']['arr'].append({'start': self._io.pos()})
+                _t_fields = Dbf.Field(self._io, self, self._root)
+                try:
+                    _t_fields._read()
+                finally:
+                    self.fields.append(_t_fields)
+                self._debug['fields']['arr'][len(self.fields) - 1]['end'] = self._io.pos()
+                i += 1
+
+            self._debug['fields']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            if self._root.header1.dbase_level == 3:
+                pass
+                self.header_dbase_3._fetch_instances()
+
+            if self._root.header1.dbase_level == 7:
+                pass
+                self.header_dbase_7._fetch_instances()
+
+            for i in range(len(self.fields)):
+                pass
+                self.fields[i]._fetch_instances()
+
 
 
     class HeaderDbase3(KaitaiStruct):
         SEQ_FIELDS = ["reserved1", "reserved2", "reserved3"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Dbf.HeaderDbase3, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -205,12 +243,16 @@ class Dbf(KaitaiStruct):
             self._debug['reserved3']['end'] = self._io.pos()
 
 
+        def _fetch_instances(self):
+            pass
+
+
     class HeaderDbase7(KaitaiStruct):
         SEQ_FIELDS = ["reserved1", "has_incomplete_transaction", "dbase_iv_encryption", "reserved2", "production_mdx", "language_driver_id", "reserved3", "language_driver_name", "reserved4"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Dbf.HeaderDbase7, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -247,12 +289,16 @@ class Dbf(KaitaiStruct):
             self._debug['reserved4']['end'] = self._io.pos()
 
 
+        def _fetch_instances(self):
+            pass
+
+
     class Record(KaitaiStruct):
         SEQ_FIELDS = ["deleted", "record_fields"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Dbf.Record, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -260,15 +306,21 @@ class Dbf(KaitaiStruct):
             self.deleted = KaitaiStream.resolve_enum(Dbf.DeleteState, self._io.read_u1())
             self._debug['deleted']['end'] = self._io.pos()
             self._debug['record_fields']['start'] = self._io.pos()
-            self.record_fields = [None] * (len(self._root.header2.fields))
+            self._debug['record_fields']['arr'] = []
+            self.record_fields = []
             for i in range(len(self._root.header2.fields)):
-                if not 'arr' in self._debug['record_fields']:
-                    self._debug['record_fields']['arr'] = []
                 self._debug['record_fields']['arr'].append({'start': self._io.pos()})
-                self.record_fields[i] = self._io.read_bytes(self._root.header2.fields[i].length)
+                self.record_fields.append(self._io.read_bytes(self._root.header2.fields[i].length))
                 self._debug['record_fields']['arr'][i]['end'] = self._io.pos()
 
             self._debug['record_fields']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            for i in range(len(self.record_fields)):
+                pass
+
 
 
 

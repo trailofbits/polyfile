@@ -1,13 +1,13 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
+# type: ignore
 
-from packaging.version import parse as parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
-    raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
+    raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class Iso9660(KaitaiStruct):
     """ISO9660 is standard filesystem used on read-only optical discs
@@ -22,13 +22,467 @@ class Iso9660(KaitaiStruct):
     """
     SEQ_FIELDS = []
     def __init__(self, _io, _parent=None, _root=None):
-        self._io = _io
+        super(Iso9660, self).__init__(_io)
         self._parent = _parent
-        self._root = _root if _root else self
+        self._root = _root or self
         self._debug = collections.defaultdict(dict)
 
     def _read(self):
         pass
+
+
+    def _fetch_instances(self):
+        pass
+        _ = self.primary_vol_desc
+        if hasattr(self, '_m_primary_vol_desc'):
+            pass
+            self._m_primary_vol_desc._fetch_instances()
+
+
+    class Datetime(KaitaiStruct):
+        SEQ_FIELDS = ["year", "month", "day", "hour", "minute", "sec", "timezone"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Iso9660.Datetime, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['year']['start'] = self._io.pos()
+            self.year = self._io.read_u1()
+            self._debug['year']['end'] = self._io.pos()
+            self._debug['month']['start'] = self._io.pos()
+            self.month = self._io.read_u1()
+            self._debug['month']['end'] = self._io.pos()
+            self._debug['day']['start'] = self._io.pos()
+            self.day = self._io.read_u1()
+            self._debug['day']['end'] = self._io.pos()
+            self._debug['hour']['start'] = self._io.pos()
+            self.hour = self._io.read_u1()
+            self._debug['hour']['end'] = self._io.pos()
+            self._debug['minute']['start'] = self._io.pos()
+            self.minute = self._io.read_u1()
+            self._debug['minute']['end'] = self._io.pos()
+            self._debug['sec']['start'] = self._io.pos()
+            self.sec = self._io.read_u1()
+            self._debug['sec']['end'] = self._io.pos()
+            self._debug['timezone']['start'] = self._io.pos()
+            self.timezone = self._io.read_u1()
+            self._debug['timezone']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+
+
+    class DecDatetime(KaitaiStruct):
+        """
+        .. seealso::
+           Source - https://wiki.osdev.org/ISO_9660#Date.2Ftime_format
+        """
+        SEQ_FIELDS = ["year", "month", "day", "hour", "minute", "sec", "sec_hundreds", "timezone"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Iso9660.DecDatetime, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['year']['start'] = self._io.pos()
+            self.year = (self._io.read_bytes(4)).decode(u"ASCII")
+            self._debug['year']['end'] = self._io.pos()
+            self._debug['month']['start'] = self._io.pos()
+            self.month = (self._io.read_bytes(2)).decode(u"ASCII")
+            self._debug['month']['end'] = self._io.pos()
+            self._debug['day']['start'] = self._io.pos()
+            self.day = (self._io.read_bytes(2)).decode(u"ASCII")
+            self._debug['day']['end'] = self._io.pos()
+            self._debug['hour']['start'] = self._io.pos()
+            self.hour = (self._io.read_bytes(2)).decode(u"ASCII")
+            self._debug['hour']['end'] = self._io.pos()
+            self._debug['minute']['start'] = self._io.pos()
+            self.minute = (self._io.read_bytes(2)).decode(u"ASCII")
+            self._debug['minute']['end'] = self._io.pos()
+            self._debug['sec']['start'] = self._io.pos()
+            self.sec = (self._io.read_bytes(2)).decode(u"ASCII")
+            self._debug['sec']['end'] = self._io.pos()
+            self._debug['sec_hundreds']['start'] = self._io.pos()
+            self.sec_hundreds = (self._io.read_bytes(2)).decode(u"ASCII")
+            self._debug['sec_hundreds']['end'] = self._io.pos()
+            self._debug['timezone']['start'] = self._io.pos()
+            self.timezone = self._io.read_u1()
+            self._debug['timezone']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+
+
+    class DirEntries(KaitaiStruct):
+        SEQ_FIELDS = ["entries"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Iso9660.DirEntries, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['entries']['start'] = self._io.pos()
+            self._debug['entries']['arr'] = []
+            self.entries = []
+            i = 0
+            while True:
+                self._debug['entries']['arr'].append({'start': self._io.pos()})
+                _t_entries = Iso9660.DirEntry(self._io, self, self._root)
+                try:
+                    _t_entries._read()
+                finally:
+                    _ = _t_entries
+                    self.entries.append(_)
+                self._debug['entries']['arr'][len(self.entries) - 1]['end'] = self._io.pos()
+                if _.len == 0:
+                    break
+                i += 1
+            self._debug['entries']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            for i in range(len(self.entries)):
+                pass
+                self.entries[i]._fetch_instances()
+
+
+
+    class DirEntry(KaitaiStruct):
+        SEQ_FIELDS = ["len", "body"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Iso9660.DirEntry, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['len']['start'] = self._io.pos()
+            self.len = self._io.read_u1()
+            self._debug['len']['end'] = self._io.pos()
+            if self.len > 0:
+                pass
+                self._debug['body']['start'] = self._io.pos()
+                self._raw_body = self._io.read_bytes(self.len - 1)
+                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
+                self.body = Iso9660.DirEntryBody(_io__raw_body, self, self._root)
+                self.body._read()
+                self._debug['body']['end'] = self._io.pos()
+
+
+
+        def _fetch_instances(self):
+            pass
+            if self.len > 0:
+                pass
+                self.body._fetch_instances()
+
+
+
+    class DirEntryBody(KaitaiStruct):
+        SEQ_FIELDS = ["len_ext_attr_rec", "lba_extent", "size_extent", "datetime", "file_flags", "file_unit_size", "interleave_gap_size", "vol_seq_num", "len_file_name", "file_name", "padding", "rest"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Iso9660.DirEntryBody, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['len_ext_attr_rec']['start'] = self._io.pos()
+            self.len_ext_attr_rec = self._io.read_u1()
+            self._debug['len_ext_attr_rec']['end'] = self._io.pos()
+            self._debug['lba_extent']['start'] = self._io.pos()
+            self.lba_extent = Iso9660.U4bi(self._io, self, self._root)
+            self.lba_extent._read()
+            self._debug['lba_extent']['end'] = self._io.pos()
+            self._debug['size_extent']['start'] = self._io.pos()
+            self.size_extent = Iso9660.U4bi(self._io, self, self._root)
+            self.size_extent._read()
+            self._debug['size_extent']['end'] = self._io.pos()
+            self._debug['datetime']['start'] = self._io.pos()
+            self.datetime = Iso9660.Datetime(self._io, self, self._root)
+            self.datetime._read()
+            self._debug['datetime']['end'] = self._io.pos()
+            self._debug['file_flags']['start'] = self._io.pos()
+            self.file_flags = self._io.read_u1()
+            self._debug['file_flags']['end'] = self._io.pos()
+            self._debug['file_unit_size']['start'] = self._io.pos()
+            self.file_unit_size = self._io.read_u1()
+            self._debug['file_unit_size']['end'] = self._io.pos()
+            self._debug['interleave_gap_size']['start'] = self._io.pos()
+            self.interleave_gap_size = self._io.read_u1()
+            self._debug['interleave_gap_size']['end'] = self._io.pos()
+            self._debug['vol_seq_num']['start'] = self._io.pos()
+            self.vol_seq_num = Iso9660.U2bi(self._io, self, self._root)
+            self.vol_seq_num._read()
+            self._debug['vol_seq_num']['end'] = self._io.pos()
+            self._debug['len_file_name']['start'] = self._io.pos()
+            self.len_file_name = self._io.read_u1()
+            self._debug['len_file_name']['end'] = self._io.pos()
+            self._debug['file_name']['start'] = self._io.pos()
+            self.file_name = (self._io.read_bytes(self.len_file_name)).decode(u"UTF-8")
+            self._debug['file_name']['end'] = self._io.pos()
+            if self.len_file_name % 2 == 0:
+                pass
+                self._debug['padding']['start'] = self._io.pos()
+                self.padding = self._io.read_u1()
+                self._debug['padding']['end'] = self._io.pos()
+
+            self._debug['rest']['start'] = self._io.pos()
+            self.rest = self._io.read_bytes_full()
+            self._debug['rest']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            self.lba_extent._fetch_instances()
+            self.size_extent._fetch_instances()
+            self.datetime._fetch_instances()
+            self.vol_seq_num._fetch_instances()
+            if self.len_file_name % 2 == 0:
+                pass
+
+            _ = self.extent_as_dir
+            if hasattr(self, '_m_extent_as_dir'):
+                pass
+                self._m_extent_as_dir._fetch_instances()
+
+            _ = self.extent_as_file
+            if hasattr(self, '_m_extent_as_file'):
+                pass
+
+
+        @property
+        def extent_as_dir(self):
+            if hasattr(self, '_m_extent_as_dir'):
+                return self._m_extent_as_dir
+
+            if self.file_flags & 2 != 0:
+                pass
+                io = self._root._io
+                _pos = io.pos()
+                io.seek(self.lba_extent.le * self._root.sector_size)
+                self._debug['_m_extent_as_dir']['start'] = io.pos()
+                self._raw__m_extent_as_dir = io.read_bytes(self.size_extent.le)
+                _io__raw__m_extent_as_dir = KaitaiStream(BytesIO(self._raw__m_extent_as_dir))
+                self._m_extent_as_dir = Iso9660.DirEntries(_io__raw__m_extent_as_dir, self, self._root)
+                self._m_extent_as_dir._read()
+                self._debug['_m_extent_as_dir']['end'] = io.pos()
+                io.seek(_pos)
+
+            return getattr(self, '_m_extent_as_dir', None)
+
+        @property
+        def extent_as_file(self):
+            if hasattr(self, '_m_extent_as_file'):
+                return self._m_extent_as_file
+
+            if self.file_flags & 2 == 0:
+                pass
+                io = self._root._io
+                _pos = io.pos()
+                io.seek(self.lba_extent.le * self._root.sector_size)
+                self._debug['_m_extent_as_file']['start'] = io.pos()
+                self._m_extent_as_file = io.read_bytes(self.size_extent.le)
+                self._debug['_m_extent_as_file']['end'] = io.pos()
+                io.seek(_pos)
+
+            return getattr(self, '_m_extent_as_file', None)
+
+
+    class PathTableEntryLe(KaitaiStruct):
+        SEQ_FIELDS = ["len_dir_name", "len_ext_attr_rec", "lba_extent", "parent_dir_idx", "dir_name", "padding"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Iso9660.PathTableEntryLe, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['len_dir_name']['start'] = self._io.pos()
+            self.len_dir_name = self._io.read_u1()
+            self._debug['len_dir_name']['end'] = self._io.pos()
+            self._debug['len_ext_attr_rec']['start'] = self._io.pos()
+            self.len_ext_attr_rec = self._io.read_u1()
+            self._debug['len_ext_attr_rec']['end'] = self._io.pos()
+            self._debug['lba_extent']['start'] = self._io.pos()
+            self.lba_extent = self._io.read_u4le()
+            self._debug['lba_extent']['end'] = self._io.pos()
+            self._debug['parent_dir_idx']['start'] = self._io.pos()
+            self.parent_dir_idx = self._io.read_u2le()
+            self._debug['parent_dir_idx']['end'] = self._io.pos()
+            self._debug['dir_name']['start'] = self._io.pos()
+            self.dir_name = (self._io.read_bytes(self.len_dir_name)).decode(u"UTF-8")
+            self._debug['dir_name']['end'] = self._io.pos()
+            if self.len_dir_name % 2 == 1:
+                pass
+                self._debug['padding']['start'] = self._io.pos()
+                self.padding = self._io.read_u1()
+                self._debug['padding']['end'] = self._io.pos()
+
+
+
+        def _fetch_instances(self):
+            pass
+            if self.len_dir_name % 2 == 1:
+                pass
+
+
+
+    class PathTableLe(KaitaiStruct):
+        """
+        .. seealso::
+           Source - https://wiki.osdev.org/ISO_9660#The_Path_Table
+        """
+        SEQ_FIELDS = ["entries"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Iso9660.PathTableLe, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['entries']['start'] = self._io.pos()
+            self._debug['entries']['arr'] = []
+            self.entries = []
+            i = 0
+            while not self._io.is_eof():
+                self._debug['entries']['arr'].append({'start': self._io.pos()})
+                _t_entries = Iso9660.PathTableEntryLe(self._io, self, self._root)
+                try:
+                    _t_entries._read()
+                finally:
+                    self.entries.append(_t_entries)
+                self._debug['entries']['arr'][len(self.entries) - 1]['end'] = self._io.pos()
+                i += 1
+
+            self._debug['entries']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            for i in range(len(self.entries)):
+                pass
+                self.entries[i]._fetch_instances()
+
+
+
+    class U2bi(KaitaiStruct):
+        SEQ_FIELDS = ["le", "be"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Iso9660.U2bi, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['le']['start'] = self._io.pos()
+            self.le = self._io.read_u2le()
+            self._debug['le']['end'] = self._io.pos()
+            self._debug['be']['start'] = self._io.pos()
+            self.be = self._io.read_u2be()
+            self._debug['be']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+
+
+    class U4bi(KaitaiStruct):
+        SEQ_FIELDS = ["le", "be"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Iso9660.U4bi, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['le']['start'] = self._io.pos()
+            self.le = self._io.read_u4le()
+            self._debug['le']['end'] = self._io.pos()
+            self._debug['be']['start'] = self._io.pos()
+            self.be = self._io.read_u4be()
+            self._debug['be']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+
+
+    class VolDesc(KaitaiStruct):
+        SEQ_FIELDS = ["type", "magic", "version", "vol_desc_boot_record", "vol_desc_primary"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Iso9660.VolDesc, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['type']['start'] = self._io.pos()
+            self.type = self._io.read_u1()
+            self._debug['type']['end'] = self._io.pos()
+            self._debug['magic']['start'] = self._io.pos()
+            self.magic = self._io.read_bytes(5)
+            self._debug['magic']['end'] = self._io.pos()
+            if not self.magic == b"\x43\x44\x30\x30\x31":
+                raise kaitaistruct.ValidationNotEqualError(b"\x43\x44\x30\x30\x31", self.magic, self._io, u"/types/vol_desc/seq/1")
+            self._debug['version']['start'] = self._io.pos()
+            self.version = self._io.read_u1()
+            self._debug['version']['end'] = self._io.pos()
+            if self.type == 0:
+                pass
+                self._debug['vol_desc_boot_record']['start'] = self._io.pos()
+                self.vol_desc_boot_record = Iso9660.VolDescBootRecord(self._io, self, self._root)
+                self.vol_desc_boot_record._read()
+                self._debug['vol_desc_boot_record']['end'] = self._io.pos()
+
+            if self.type == 1:
+                pass
+                self._debug['vol_desc_primary']['start'] = self._io.pos()
+                self.vol_desc_primary = Iso9660.VolDescPrimary(self._io, self, self._root)
+                self.vol_desc_primary._read()
+                self._debug['vol_desc_primary']['end'] = self._io.pos()
+
+
+
+        def _fetch_instances(self):
+            pass
+            if self.type == 0:
+                pass
+                self.vol_desc_boot_record._fetch_instances()
+
+            if self.type == 1:
+                pass
+                self.vol_desc_primary._fetch_instances()
+
+
+
+    class VolDescBootRecord(KaitaiStruct):
+        SEQ_FIELDS = ["boot_system_id", "boot_id"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Iso9660.VolDescBootRecord, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['boot_system_id']['start'] = self._io.pos()
+            self.boot_system_id = (self._io.read_bytes(32)).decode(u"UTF-8")
+            self._debug['boot_system_id']['end'] = self._io.pos()
+            self._debug['boot_id']['start'] = self._io.pos()
+            self.boot_id = (self._io.read_bytes(32)).decode(u"UTF-8")
+            self._debug['boot_id']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+
 
     class VolDescPrimary(KaitaiStruct):
         """
@@ -37,9 +491,9 @@ class Iso9660(KaitaiStruct):
         """
         SEQ_FIELDS = ["unused1", "system_id", "volume_id", "unused2", "vol_space_size", "unused3", "vol_set_size", "vol_seq_num", "logical_block_size", "path_table_size", "lba_path_table_le", "lba_opt_path_table_le", "lba_path_table_be", "lba_opt_path_table_be", "root_dir", "vol_set_id", "publisher_id", "data_preparer_id", "application_id", "copyright_file_id", "abstract_file_id", "bibliographic_file_id", "vol_create_datetime", "vol_mod_datetime", "vol_expire_datetime", "vol_effective_datetime", "file_structure_version", "unused4", "application_area"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Iso9660.VolDescPrimary, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -149,13 +603,32 @@ class Iso9660(KaitaiStruct):
             self.application_area = self._io.read_bytes(512)
             self._debug['application_area']['end'] = self._io.pos()
 
+
+        def _fetch_instances(self):
+            pass
+            self.vol_space_size._fetch_instances()
+            self.vol_set_size._fetch_instances()
+            self.vol_seq_num._fetch_instances()
+            self.logical_block_size._fetch_instances()
+            self.path_table_size._fetch_instances()
+            self.root_dir._fetch_instances()
+            self.vol_create_datetime._fetch_instances()
+            self.vol_mod_datetime._fetch_instances()
+            self.vol_expire_datetime._fetch_instances()
+            self.vol_effective_datetime._fetch_instances()
+            _ = self.path_table
+            if hasattr(self, '_m_path_table'):
+                pass
+                self._m_path_table._fetch_instances()
+
+
         @property
         def path_table(self):
             if hasattr(self, '_m_path_table'):
-                return self._m_path_table if hasattr(self, '_m_path_table') else None
+                return self._m_path_table
 
             _pos = self._io.pos()
-            self._io.seek((self.lba_path_table_le * self._root.sector_size))
+            self._io.seek(self.lba_path_table_le * self._root.sector_size)
             self._debug['_m_path_table']['start'] = self._io.pos()
             self._raw__m_path_table = self._io.read_bytes(self.path_table_size.le)
             _io__raw__m_path_table = KaitaiStream(BytesIO(self._raw__m_path_table))
@@ -163,382 +636,29 @@ class Iso9660(KaitaiStruct):
             self._m_path_table._read()
             self._debug['_m_path_table']['end'] = self._io.pos()
             self._io.seek(_pos)
-            return self._m_path_table if hasattr(self, '_m_path_table') else None
+            return getattr(self, '_m_path_table', None)
 
-
-    class VolDescBootRecord(KaitaiStruct):
-        SEQ_FIELDS = ["boot_system_id", "boot_id"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['boot_system_id']['start'] = self._io.pos()
-            self.boot_system_id = (self._io.read_bytes(32)).decode(u"UTF-8")
-            self._debug['boot_system_id']['end'] = self._io.pos()
-            self._debug['boot_id']['start'] = self._io.pos()
-            self.boot_id = (self._io.read_bytes(32)).decode(u"UTF-8")
-            self._debug['boot_id']['end'] = self._io.pos()
-
-
-    class Datetime(KaitaiStruct):
-        SEQ_FIELDS = ["year", "month", "day", "hour", "minute", "sec", "timezone"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['year']['start'] = self._io.pos()
-            self.year = self._io.read_u1()
-            self._debug['year']['end'] = self._io.pos()
-            self._debug['month']['start'] = self._io.pos()
-            self.month = self._io.read_u1()
-            self._debug['month']['end'] = self._io.pos()
-            self._debug['day']['start'] = self._io.pos()
-            self.day = self._io.read_u1()
-            self._debug['day']['end'] = self._io.pos()
-            self._debug['hour']['start'] = self._io.pos()
-            self.hour = self._io.read_u1()
-            self._debug['hour']['end'] = self._io.pos()
-            self._debug['minute']['start'] = self._io.pos()
-            self.minute = self._io.read_u1()
-            self._debug['minute']['end'] = self._io.pos()
-            self._debug['sec']['start'] = self._io.pos()
-            self.sec = self._io.read_u1()
-            self._debug['sec']['end'] = self._io.pos()
-            self._debug['timezone']['start'] = self._io.pos()
-            self.timezone = self._io.read_u1()
-            self._debug['timezone']['end'] = self._io.pos()
-
-
-    class DirEntry(KaitaiStruct):
-        SEQ_FIELDS = ["len", "body"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['len']['start'] = self._io.pos()
-            self.len = self._io.read_u1()
-            self._debug['len']['end'] = self._io.pos()
-            if self.len > 0:
-                self._debug['body']['start'] = self._io.pos()
-                self._raw_body = self._io.read_bytes((self.len - 1))
-                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
-                self.body = Iso9660.DirEntryBody(_io__raw_body, self, self._root)
-                self.body._read()
-                self._debug['body']['end'] = self._io.pos()
-
-
-
-    class VolDesc(KaitaiStruct):
-        SEQ_FIELDS = ["type", "magic", "version", "vol_desc_boot_record", "vol_desc_primary"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['type']['start'] = self._io.pos()
-            self.type = self._io.read_u1()
-            self._debug['type']['end'] = self._io.pos()
-            self._debug['magic']['start'] = self._io.pos()
-            self.magic = self._io.read_bytes(5)
-            self._debug['magic']['end'] = self._io.pos()
-            if not self.magic == b"\x43\x44\x30\x30\x31":
-                raise kaitaistruct.ValidationNotEqualError(b"\x43\x44\x30\x30\x31", self.magic, self._io, u"/types/vol_desc/seq/1")
-            self._debug['version']['start'] = self._io.pos()
-            self.version = self._io.read_u1()
-            self._debug['version']['end'] = self._io.pos()
-            if self.type == 0:
-                self._debug['vol_desc_boot_record']['start'] = self._io.pos()
-                self.vol_desc_boot_record = Iso9660.VolDescBootRecord(self._io, self, self._root)
-                self.vol_desc_boot_record._read()
-                self._debug['vol_desc_boot_record']['end'] = self._io.pos()
-
-            if self.type == 1:
-                self._debug['vol_desc_primary']['start'] = self._io.pos()
-                self.vol_desc_primary = Iso9660.VolDescPrimary(self._io, self, self._root)
-                self.vol_desc_primary._read()
-                self._debug['vol_desc_primary']['end'] = self._io.pos()
-
-
-
-    class PathTableEntryLe(KaitaiStruct):
-        SEQ_FIELDS = ["len_dir_name", "len_ext_attr_rec", "lba_extent", "parent_dir_idx", "dir_name", "padding"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['len_dir_name']['start'] = self._io.pos()
-            self.len_dir_name = self._io.read_u1()
-            self._debug['len_dir_name']['end'] = self._io.pos()
-            self._debug['len_ext_attr_rec']['start'] = self._io.pos()
-            self.len_ext_attr_rec = self._io.read_u1()
-            self._debug['len_ext_attr_rec']['end'] = self._io.pos()
-            self._debug['lba_extent']['start'] = self._io.pos()
-            self.lba_extent = self._io.read_u4le()
-            self._debug['lba_extent']['end'] = self._io.pos()
-            self._debug['parent_dir_idx']['start'] = self._io.pos()
-            self.parent_dir_idx = self._io.read_u2le()
-            self._debug['parent_dir_idx']['end'] = self._io.pos()
-            self._debug['dir_name']['start'] = self._io.pos()
-            self.dir_name = (self._io.read_bytes(self.len_dir_name)).decode(u"UTF-8")
-            self._debug['dir_name']['end'] = self._io.pos()
-            if (self.len_dir_name % 2) == 1:
-                self._debug['padding']['start'] = self._io.pos()
-                self.padding = self._io.read_u1()
-                self._debug['padding']['end'] = self._io.pos()
-
-
-
-    class DirEntries(KaitaiStruct):
-        SEQ_FIELDS = ["entries"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['entries']['start'] = self._io.pos()
-            self.entries = []
-            i = 0
-            while True:
-                if not 'arr' in self._debug['entries']:
-                    self._debug['entries']['arr'] = []
-                self._debug['entries']['arr'].append({'start': self._io.pos()})
-                _t_entries = Iso9660.DirEntry(self._io, self, self._root)
-                _t_entries._read()
-                _ = _t_entries
-                self.entries.append(_)
-                self._debug['entries']['arr'][len(self.entries) - 1]['end'] = self._io.pos()
-                if _.len == 0:
-                    break
-                i += 1
-            self._debug['entries']['end'] = self._io.pos()
-
-
-    class U4bi(KaitaiStruct):
-        SEQ_FIELDS = ["le", "be"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['le']['start'] = self._io.pos()
-            self.le = self._io.read_u4le()
-            self._debug['le']['end'] = self._io.pos()
-            self._debug['be']['start'] = self._io.pos()
-            self.be = self._io.read_u4be()
-            self._debug['be']['end'] = self._io.pos()
-
-
-    class U2bi(KaitaiStruct):
-        SEQ_FIELDS = ["le", "be"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['le']['start'] = self._io.pos()
-            self.le = self._io.read_u2le()
-            self._debug['le']['end'] = self._io.pos()
-            self._debug['be']['start'] = self._io.pos()
-            self.be = self._io.read_u2be()
-            self._debug['be']['end'] = self._io.pos()
-
-
-    class PathTableLe(KaitaiStruct):
-        """
-        .. seealso::
-           Source - https://wiki.osdev.org/ISO_9660#The_Path_Table
-        """
-        SEQ_FIELDS = ["entries"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['entries']['start'] = self._io.pos()
-            self.entries = []
-            i = 0
-            while not self._io.is_eof():
-                if not 'arr' in self._debug['entries']:
-                    self._debug['entries']['arr'] = []
-                self._debug['entries']['arr'].append({'start': self._io.pos()})
-                _t_entries = Iso9660.PathTableEntryLe(self._io, self, self._root)
-                _t_entries._read()
-                self.entries.append(_t_entries)
-                self._debug['entries']['arr'][len(self.entries) - 1]['end'] = self._io.pos()
-                i += 1
-
-            self._debug['entries']['end'] = self._io.pos()
-
-
-    class DecDatetime(KaitaiStruct):
-        """
-        .. seealso::
-           Source - https://wiki.osdev.org/ISO_9660#Date.2Ftime_format
-        """
-        SEQ_FIELDS = ["year", "month", "day", "hour", "minute", "sec", "sec_hundreds", "timezone"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['year']['start'] = self._io.pos()
-            self.year = (self._io.read_bytes(4)).decode(u"ASCII")
-            self._debug['year']['end'] = self._io.pos()
-            self._debug['month']['start'] = self._io.pos()
-            self.month = (self._io.read_bytes(2)).decode(u"ASCII")
-            self._debug['month']['end'] = self._io.pos()
-            self._debug['day']['start'] = self._io.pos()
-            self.day = (self._io.read_bytes(2)).decode(u"ASCII")
-            self._debug['day']['end'] = self._io.pos()
-            self._debug['hour']['start'] = self._io.pos()
-            self.hour = (self._io.read_bytes(2)).decode(u"ASCII")
-            self._debug['hour']['end'] = self._io.pos()
-            self._debug['minute']['start'] = self._io.pos()
-            self.minute = (self._io.read_bytes(2)).decode(u"ASCII")
-            self._debug['minute']['end'] = self._io.pos()
-            self._debug['sec']['start'] = self._io.pos()
-            self.sec = (self._io.read_bytes(2)).decode(u"ASCII")
-            self._debug['sec']['end'] = self._io.pos()
-            self._debug['sec_hundreds']['start'] = self._io.pos()
-            self.sec_hundreds = (self._io.read_bytes(2)).decode(u"ASCII")
-            self._debug['sec_hundreds']['end'] = self._io.pos()
-            self._debug['timezone']['start'] = self._io.pos()
-            self.timezone = self._io.read_u1()
-            self._debug['timezone']['end'] = self._io.pos()
-
-
-    class DirEntryBody(KaitaiStruct):
-        SEQ_FIELDS = ["len_ext_attr_rec", "lba_extent", "size_extent", "datetime", "file_flags", "file_unit_size", "interleave_gap_size", "vol_seq_num", "len_file_name", "file_name", "padding", "rest"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['len_ext_attr_rec']['start'] = self._io.pos()
-            self.len_ext_attr_rec = self._io.read_u1()
-            self._debug['len_ext_attr_rec']['end'] = self._io.pos()
-            self._debug['lba_extent']['start'] = self._io.pos()
-            self.lba_extent = Iso9660.U4bi(self._io, self, self._root)
-            self.lba_extent._read()
-            self._debug['lba_extent']['end'] = self._io.pos()
-            self._debug['size_extent']['start'] = self._io.pos()
-            self.size_extent = Iso9660.U4bi(self._io, self, self._root)
-            self.size_extent._read()
-            self._debug['size_extent']['end'] = self._io.pos()
-            self._debug['datetime']['start'] = self._io.pos()
-            self.datetime = Iso9660.Datetime(self._io, self, self._root)
-            self.datetime._read()
-            self._debug['datetime']['end'] = self._io.pos()
-            self._debug['file_flags']['start'] = self._io.pos()
-            self.file_flags = self._io.read_u1()
-            self._debug['file_flags']['end'] = self._io.pos()
-            self._debug['file_unit_size']['start'] = self._io.pos()
-            self.file_unit_size = self._io.read_u1()
-            self._debug['file_unit_size']['end'] = self._io.pos()
-            self._debug['interleave_gap_size']['start'] = self._io.pos()
-            self.interleave_gap_size = self._io.read_u1()
-            self._debug['interleave_gap_size']['end'] = self._io.pos()
-            self._debug['vol_seq_num']['start'] = self._io.pos()
-            self.vol_seq_num = Iso9660.U2bi(self._io, self, self._root)
-            self.vol_seq_num._read()
-            self._debug['vol_seq_num']['end'] = self._io.pos()
-            self._debug['len_file_name']['start'] = self._io.pos()
-            self.len_file_name = self._io.read_u1()
-            self._debug['len_file_name']['end'] = self._io.pos()
-            self._debug['file_name']['start'] = self._io.pos()
-            self.file_name = (self._io.read_bytes(self.len_file_name)).decode(u"UTF-8")
-            self._debug['file_name']['end'] = self._io.pos()
-            if (self.len_file_name % 2) == 0:
-                self._debug['padding']['start'] = self._io.pos()
-                self.padding = self._io.read_u1()
-                self._debug['padding']['end'] = self._io.pos()
-
-            self._debug['rest']['start'] = self._io.pos()
-            self.rest = self._io.read_bytes_full()
-            self._debug['rest']['end'] = self._io.pos()
-
-        @property
-        def extent_as_dir(self):
-            if hasattr(self, '_m_extent_as_dir'):
-                return self._m_extent_as_dir if hasattr(self, '_m_extent_as_dir') else None
-
-            if (self.file_flags & 2) != 0:
-                io = self._root._io
-                _pos = io.pos()
-                io.seek((self.lba_extent.le * self._root.sector_size))
-                self._debug['_m_extent_as_dir']['start'] = io.pos()
-                self._raw__m_extent_as_dir = io.read_bytes(self.size_extent.le)
-                _io__raw__m_extent_as_dir = KaitaiStream(BytesIO(self._raw__m_extent_as_dir))
-                self._m_extent_as_dir = Iso9660.DirEntries(_io__raw__m_extent_as_dir, self, self._root)
-                self._m_extent_as_dir._read()
-                self._debug['_m_extent_as_dir']['end'] = io.pos()
-                io.seek(_pos)
-
-            return self._m_extent_as_dir if hasattr(self, '_m_extent_as_dir') else None
-
-        @property
-        def extent_as_file(self):
-            if hasattr(self, '_m_extent_as_file'):
-                return self._m_extent_as_file if hasattr(self, '_m_extent_as_file') else None
-
-            if (self.file_flags & 2) == 0:
-                io = self._root._io
-                _pos = io.pos()
-                io.seek((self.lba_extent.le * self._root.sector_size))
-                self._debug['_m_extent_as_file']['start'] = io.pos()
-                self._m_extent_as_file = io.read_bytes(self.size_extent.le)
-                self._debug['_m_extent_as_file']['end'] = io.pos()
-                io.seek(_pos)
-
-            return self._m_extent_as_file if hasattr(self, '_m_extent_as_file') else None
-
-
-    @property
-    def sector_size(self):
-        if hasattr(self, '_m_sector_size'):
-            return self._m_sector_size if hasattr(self, '_m_sector_size') else None
-
-        self._m_sector_size = 2048
-        return self._m_sector_size if hasattr(self, '_m_sector_size') else None
 
     @property
     def primary_vol_desc(self):
         if hasattr(self, '_m_primary_vol_desc'):
-            return self._m_primary_vol_desc if hasattr(self, '_m_primary_vol_desc') else None
+            return self._m_primary_vol_desc
 
         _pos = self._io.pos()
-        self._io.seek((16 * self.sector_size))
+        self._io.seek(16 * self.sector_size)
         self._debug['_m_primary_vol_desc']['start'] = self._io.pos()
         self._m_primary_vol_desc = Iso9660.VolDesc(self._io, self, self._root)
         self._m_primary_vol_desc._read()
         self._debug['_m_primary_vol_desc']['end'] = self._io.pos()
         self._io.seek(_pos)
-        return self._m_primary_vol_desc if hasattr(self, '_m_primary_vol_desc') else None
+        return getattr(self, '_m_primary_vol_desc', None)
+
+    @property
+    def sector_size(self):
+        if hasattr(self, '_m_sector_size'):
+            return self._m_sector_size
+
+        self._m_sector_size = 2048
+        return getattr(self, '_m_sector_size', None)
 
 
