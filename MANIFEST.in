@@ -1,6 +1,15 @@
 include compile_kaitai_parsers.py
 include CODEOWNERS
 graft kaitai_struct_formats
+# PolyFile redistributes only the format specifications it is licensed to redistribute. Keep
+# this list in sync with compile_kaitai_parsers.excluded_specs(); tests/test_licensing.py
+# enforces that they agree.
+exclude kaitai_struct_formats/filesystem/lvm2.ksy
+exclude kaitai_struct_formats/filesystem/vdi.ksy
+exclude kaitai_struct_formats/firmware/broadcom_trx.ksy
+exclude kaitai_struct_formats/game/renderware_binary_stream.ksy
+exclude kaitai_struct_formats/image/pif.ksy
+exclude kaitai_struct_formats/scientific/nt_mdt/nt_mdt.ksy
 graft file
 graft docs
 graft logo
