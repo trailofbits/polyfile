@@ -31,7 +31,7 @@ from uuid import UUID
 from chardet.universaldetector import UniversalDetector
 
 from .arithmetic import CStyleInt, make_c_style_int
-from .der import DERHeader, DERSpecification, InvalidDER
+from .der import DERHeader, DERSpecification, InvalidDER, mime_type_for_message
 from .fileutils import Streamable
 from .iterators import LazyIterableSet
 from .logger import getStatusLogger, TRACE
@@ -3261,7 +3261,8 @@ class MagicMatcher:
                 )
             elif data_type == "der":
                 test = DERTest(offset=offset, specification=DERSpecification(test_str),
-                               message=message, parent=parent)
+                               mime=mime_type_for_message(message), message=message,
+                               parent=parent)
             else:
                 try:
                     data_type = DataType.parse(data_type)
@@ -3342,6 +3343,9 @@ class MagicMatcher:
                     continue
                 test = MagicMatcher.parse_test(line, def_file, line_number, current_test, matcher)
                 if test is not None:
+                    if test.mime is not None:
+                        # a test can arrive with a MIME type that no `!:mime` line supplied
+                        tests_with_mime.add(test)
                     if isinstance(test, NamedTest):
                         matcher.named_tests[test.name] = test
                     else:

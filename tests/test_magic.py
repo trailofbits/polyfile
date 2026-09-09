@@ -10,6 +10,7 @@ from typing import Callable, Iterator, List, Optional, Set, Tuple
 from unittest import TestCase
 
 # from polyfile import logger
+import polyfile.der
 import polyfile.magic
 from polyfile.magic import MagicMatcher, MAGIC_DEFS, Match, MatchContext, SearchType, TestResult
 
@@ -214,21 +215,42 @@ class MagicTest(TestCase):
     def messages(matcher: MagicMatcher, data: bytes) -> Set[str]:
         return {str(match) for match in matcher.match(data)}
 
-    def test_der_certificate(self):
-        with gzip.open(DER_CERTIFICATE, "rb") as f:
-            certificate = f.read()
+    def only_match(self, data: bytes, message: str):
         matches = [
-            match for match in MagicMatcher.DEFAULT_INSTANCE.match(certificate)
-            if str(match) == "Certificate, Version=3"
+            match for match in MagicMatcher.DEFAULT_INSTANCE.match(data) if str(match) == message
         ]
         self.assertEqual(
             1, len(matches),
-            f"expected an X.509 certificate, but got "
-            f"{self.messages(MagicMatcher.DEFAULT_INSTANCE, certificate)!r}"
+            f"expected {message!r}, but got {self.messages(MagicMatcher.DEFAULT_INSTANCE, data)!r}"
         )
-        # polyfile/magic_defs/der has no `!:mime` line, so `file` reports
-        # application/octet-stream for a certificate and PolyFile reports no MIME type at all.
-        self.assertEqual([], list(matches[0].mimetypes))
+        return matches[0]
+
+    def test_der_certificate(self):
+        with gzip.open(DER_CERTIFICATE, "rb") as f:
+            certificate = f.read()
+        match = self.only_match(certificate, "Certificate, Version=3")
+        self.assertEqual(["application/pkix-cert"], list(match.mimetypes))
+
+    def test_der_certificate_request(self):
+        request = tag_length_value(
+            0x30, tag_length_value(0x30, tag_length_value(0x02, b"\x00"))
+        ) + b"\x00"
+        match = self.only_match(request, "DER Encoded Certificate request")
+        self.assertEqual(["application/pkcs10"], list(match.mimetypes))
+
+    def test_der_pkcs7_signed_data(self):
+        signed_data = tag_length_value(
+            0x30, tag_length_value(0x06, bytes.fromhex("2a864886f70d010702"))
+        ) + b"\x00"
+        match = self.only_match(signed_data, "DER Encoded PKCS#7 Signed Data")
+        self.assertEqual(["application/pkcs7-mime"], list(match.mimetypes))
+
+    def test_der_mime_types_are_reachable(self):
+        # If an upstream update to polyfile/magic_defs/der rewords a message, the prefixes in
+        # polyfile.der.MIME_TYPES stop matching and PolyFile silently drops the type. Fail here
+        # instead, so that whoever syncs the definitions sees it.
+        for mime in dict.fromkeys(mime for _, mime in polyfile.der.MIME_TYPES):
+            self.assertIn(mime, MagicMatcher.DEFAULT_INSTANCE.mimetypes)
 
     def test_der_walks_sibling_objects(self):
         # The "DER Encoded Key Pair" tests are three sibling `der` tests that each read the
@@ -239,8 +261,9 @@ class MagicTest(TestCase):
             tag_length_value(0x02, b"\x00" + b"\xab" * 64),
             tag_length_value(0x02, bytes.fromhex("010001")),
         ))) + b"\x00"
-        messages = self.messages(MagicMatcher.DEFAULT_INSTANCE, key_pair)
-        self.assertIn("DER Encoded Key Pair, 512 bits", messages)
+        match = self.only_match(key_pair, "DER Encoded Key Pair, 512 bits")
+        # A raw PKCS#1 key pair has no registered media type, so PolyFile assigns none.
+        self.assertEqual([], list(match.mimetypes))
 
     def test_der_does_not_break_other_matches(self):
         # Regression test for issue #3374: the der tests used to raise NotImplementedError

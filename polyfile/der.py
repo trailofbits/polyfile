@@ -106,6 +106,38 @@ def read_length(data: bytes, offset: int) -> Tuple[int, int]:
     return length, offset
 
 
+MIME_TYPES: Tuple[Tuple[str, str], ...] = (
+    ("Certificate, Version=", "application/pkix-cert"),
+    ("DER Encoded Certificate, ", "application/pkix-cert"),
+    ("DER Encoded Certificate request", "application/pkcs10"),
+    ("DER Encoded PKCS#7 Signed Data", "application/pkcs7-mime"),
+)
+"""Maps the message of a ``der`` test to the MIME type of what that test identifies.
+
+Upstream ``der`` carries no ``!:mime`` line, so PolyFile supplies these. The key is the start of the
+message rather than the whole message, because the certificate rules end in a key size that upstream
+extends as larger keys come into use. The ``DER Encoded Key Pair`` rules are deliberately absent:
+there is no registered media type for a raw PKCS#1 key pair.
+"""
+
+
+def mime_type_for_message(message: str) -> Optional[str]:
+    """Returns the MIME type that a ``der`` test's message identifies, if PolyFile assigns one.
+
+    Args:
+        message: The message of a single ``der`` test, as written in the definition file.
+
+    Returns:
+        A MIME type from :data:`MIME_TYPES`, or ``None`` if the message identifies nothing that has
+        a registered media type.
+    """
+    message = message.strip()
+    for prefix, mime in MIME_TYPES:
+        if message.startswith(prefix):
+            return mime
+    return None
+
+
 def tag_name(tag: int) -> str:
     """Returns the libmagic name of a tag number, or its hexadecimal form if it has none."""
     if tag < len(TAG_NAMES):
