@@ -136,6 +136,53 @@ class MagicTest(TestCase):
         self.assertIn("application/x-pie-executable", matcher.mimetypes)
         self.assertIn("application/x-sharedlib", matcher.mimetypes)
 
+    def test_text_char_class_boundaries(self):
+        """Tests the corners of the character class table against libmagic's `text_chars`."""
+        classes = polyfile.magic.TEXT_CHAR_CLASSES
+        self.assertEqual(256, len(classes))
+        for byte in (0x00, 0x06, 0x0E, 0x19, 0x1C, 0x7F):
+            self.assertEqual(polyfile.magic.TEXT_CHAR_NONE, classes[byte], f"byte {byte:#04x}")
+        for byte in (0x07, 0x0B, 0x0D, 0x1A, 0x1B, 0x20, 0x7E, 0x85):
+            self.assertEqual(polyfile.magic.TEXT_CHAR_ASCII, classes[byte], f"byte {byte:#04x}")
+        for byte in (0x80, 0x84, 0x86, 0x9F):
+            self.assertEqual(polyfile.magic.TEXT_CHAR_EXTENDED, classes[byte], f"byte {byte:#04x}")
+        for byte in (0xA0, 0xE9, 0xEA, 0xFF):
+            self.assertEqual(polyfile.magic.TEXT_CHAR_ISO_8859, classes[byte], f"byte {byte:#04x}")
+
+    def test_text_character_classes(self):
+        """Tests that text membership follows libmagic's character classes, not chardet's guess."""
+        self.assertEqual("ascii", polyfile.magic.detect_text_encoding(b"plain ASCII\n"))
+        self.assertEqual("utf-8", polyfile.magic.detect_text_encoding("héllo wörld".encode()))
+        utf16 = b"\xff\xfe" + "hi".encode("utf-16-le")
+        self.assertEqual("utf-16le", polyfile.magic.detect_text_encoding(utf16))
+        self.assertEqual("unknown-8bit", polyfile.magic.detect_text_encoding(b"text\x80\x9f"))
+        self.assertIsNone(polyfile.magic.detect_text_encoding(b"text\x00\x01\x02"))
+        self.assertIsNone(polyfile.magic.detect_text_encoding(b"a"))
+
+    def test_iso_8859_text_is_not_binary(self):
+        """Tests that mostly-ASCII data with a handful of ISO-8859-1 high bytes matches text/plain.
+
+        This is a regression test for trailofbits/polyfile#3468. chardet scores this data at a
+        confidence of 0.07 because five high bytes cannot distinguish ISO-8859-1 from its
+        siblings, so PolyFile used to report application/octet-stream where `file` reports
+        text/plain.
+        """
+        data = (
+            b"; imports with IAT inside descriptors\r\n"
+            b"; Ange Albertini, BSD LICENCE 2011-2013\r\n"
+            b"%include 'consts.inc'\r\n"
+            b"        ; Mais elle n'a pas r\xe9ussi a laminer tes rancoeurs dialectiques\r\n"
+            b"        ; et \xe9radiquer les tentacules de la d\xe9r\xe9liction...\r\n"
+            b"        ; ok, j'arr\xeate de boire...\r\n"
+        )
+        self.assertEqual("iso-8859-1", polyfile.magic.detect_text_encoding(data))
+        mimetypes = {
+            mimetype
+            for match in MagicMatcher.DEFAULT_INSTANCE.match(data)
+            for mimetype in match.mimetypes
+        }
+        self.assertIn("text/plain", mimetypes)
+
     def test_file_corpus(self):
         self.assertTrue(FILE_TEST_DIR.exists(), "Make sure to run `git submodule init && git submodule update` in the "
                                                 "root of this repository.")

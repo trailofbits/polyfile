@@ -2571,6 +2571,114 @@ class DERTest(MagicTest):
         return self.test(data, absolute_offset, parent_match)
 
 
+TEXT_CHAR_NONE: int = 0
+TEXT_CHAR_ASCII: int = 1
+TEXT_CHAR_ISO_8859: int = 2
+TEXT_CHAR_EXTENDED: int = 3
+
+
+def _text_char_classes() -> bytes:
+    """Reproduces the ``text_chars`` table of libmagic's ``src/encoding.c``.
+
+    Returns:
+        A 256 byte table mapping each byte value to one of the ``TEXT_CHAR_*`` classes.
+    """
+    classes = bytearray(256)
+    for byte in range(0x20, 0x7F):
+        classes[byte] = TEXT_CHAR_ASCII
+    for byte in range(0x80, 0xA0):
+        classes[byte] = TEXT_CHAR_EXTENDED
+    for byte in range(0xA0, 0x100):
+        classes[byte] = TEXT_CHAR_ISO_8859
+    for byte in (0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x1A, 0x1B, 0x85):
+        classes[byte] = TEXT_CHAR_ASCII
+    return bytes(classes)
+
+
+TEXT_CHAR_CLASSES: bytes = _text_char_classes()
+
+_ASCII_BYTES: bytes = bytes(b for b in range(256) if TEXT_CHAR_CLASSES[b] == TEXT_CHAR_ASCII)
+_ISO_8859_BYTES: bytes = bytes(
+    b for b in range(256) if TEXT_CHAR_CLASSES[b] in (TEXT_CHAR_ASCII, TEXT_CHAR_ISO_8859)
+)
+_TEXT_BYTES: bytes = bytes(b for b in range(256) if TEXT_CHAR_CLASSES[b] != TEXT_CHAR_NONE)
+_UTF8_SAFE_BYTES: bytes = bytes(
+    b for b in range(256) if b >= 0x80 or TEXT_CHAR_CLASSES[b] == TEXT_CHAR_ASCII
+)
+
+_UCS_BYTE_ORDER_MARKS: Tuple[Tuple[bytes, str, int], ...] = (
+    (b"\xff\xfe\x00\x00", "utf-32le", 4),
+    (b"\x00\x00\xfe\xff", "utf-32be", 4),
+    (b"\xff\xfe", "utf-16le", 2),
+    (b"\xfe\xff", "utf-16be", 2),
+)
+
+
+def _only_contains(data: bytes, allowed: bytes) -> bool:
+    return not data.translate(None, delete=allowed)
+
+
+def _looks_like_utf8(data: bytes) -> bool:
+    if not _only_contains(data, _UTF8_SAFE_BYTES):
+        return False
+    try:
+        data.decode("utf-8")
+    except UnicodeDecodeError:
+        return False
+    return True
+
+
+def _looks_like_ucs(data: bytes) -> Optional[str]:
+    for bom, encoding, unit in _UCS_BYTE_ORDER_MARKS:
+        if not data.startswith(bom):
+            continue
+        body = data[len(bom):]
+        body = body[:len(body) - len(body) % unit]
+        try:
+            decoded = body.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+        if all(char >= "\x80" or TEXT_CHAR_CLASSES[ord(char)] == TEXT_CHAR_ASCII
+               for char in decoded):
+            return encoding
+    return None
+
+
+def _eight_bit_encoding(data: bytes) -> Optional[str]:
+    if not _only_contains(data, _TEXT_BYTES):
+        return None
+    elif _only_contains(data, _ISO_8859_BYTES):
+        return "iso-8859-1"
+    else:
+        return "unknown-8bit"
+
+
+def detect_text_encoding(data: bytes) -> Optional[str]:
+    """Decides whether `data` is text, and names the character encoding family it belongs to.
+
+    This mirrors ``file_encoding`` in libmagic's ``src/encoding.c``: membership in a text
+    encoding is decided by character class alone, with no statistical inference. Every byte in
+    ``0xA0``-``0xFF`` is a printable ISO-8859 character, so a buffer of ASCII with a handful of
+    accented characters is text.
+
+    Args:
+        data: the bytes to classify.
+
+    Returns:
+        The name of the encoding family, or None if `data` belongs to no text character class.
+    """
+    if len(data) < 2:
+        return None
+    elif _only_contains(data, _ASCII_BYTES):
+        return "ascii"
+    elif _looks_like_utf8(data):
+        return "utf-8"
+    ucs_encoding = _looks_like_ucs(data)
+    if ucs_encoding is not None:
+        return ucs_encoding
+    return _eight_bit_encoding(data)
+
+
 class PlainTextTest(MagicTest):
     AUTO_REGISTER_TEST = False
 
@@ -2589,29 +2697,46 @@ class PlainTextTest(MagicTest):
     def subtest_type(self) -> TestType:
         return TestType.TEXT
 
-    def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
-        if not isinstance(self.message, ConstantMessage) or self.message.message:
-            raise ValueError(f"A new PlainTextTest must be constructed for each call to .test")
+    def encoding_name(self, data: bytes, fallback: str) -> str:
+        """Names the encoding of `data` for the human-readable match message.
+
+        Args:
+            data: the text whose encoding to name.
+            fallback: the name to use when chardet is not confident enough to name one itself.
+
+        Returns:
+            The chardet encoding name if its confidence reaches `minimum_encoding_confidence`,
+            and `fallback` otherwise.
+        """
         detector = UniversalDetector()
-        offset = absolute_offset
+        offset = 0
         while not detector.done and offset < min(len(data), 5000000):
             # feed 1kB at a time until we have high confidence in the classification
             # up to a maximum of 5MiB
             detector.feed(data[offset:offset+1024])
             offset += 1024
         detector.close()
-        if detector.result["confidence"] >= self.minimum_encoding_confidence and detector.result["encoding"] is not None:
-            encoding = detector.result["encoding"]
-            try:
-                value = data[absolute_offset:].decode(encoding)
-            except UnicodeDecodeError:
-                value = data[absolute_offset:]
-            self.message = ConstantMessage(f"{encoding} text")
-            return MatchedTest(self, offset=absolute_offset, length=len(data) - absolute_offset, parent=parent_match,
-                               value=value)
-        else:
+        if detector.result["encoding"] is None \
+                or detector.result["confidence"] < self.minimum_encoding_confidence:
+            return fallback
+        return detector.result["encoding"]
+
+    def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
+        if not isinstance(self.message, ConstantMessage) or self.message.message:
+            raise ValueError(f"A new PlainTextTest must be constructed for each call to .test")
+        content = data[absolute_offset:]
+        character_class = detect_text_encoding(content)
+        if character_class is None:
             return FailedTest(self, offset=absolute_offset, parent=parent_match, message="the data do not appear to "
                                                                                          "be encoded in a text format")
+        encoding = self.encoding_name(content, character_class)
+        try:
+            value: Union[str, bytes] = content.decode(encoding)
+        except (UnicodeDecodeError, LookupError):
+            value = content
+        self.message = ConstantMessage(f"{encoding} text")
+        return MatchedTest(self, offset=absolute_offset, length=len(content), parent=parent_match,
+                           value=value)
 
     def test_flip_endianness(
             self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]
