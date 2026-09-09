@@ -1,4 +1,5 @@
 import base64
+import json
 import math
 import mimetypes
 import os
@@ -24,6 +25,54 @@ def assign_ids(sbud):
     return matches
 
 
+def _leaf_extents(matches, length):
+    """Yields the ``(start, end)`` byte extent of every match that has no children.
+
+    A match with children spans all of them, so it says nothing about the bytes its children
+    skip. Only childless matches describe bytes.
+
+    Args:
+        matches: The top-level SBUD matches to walk.
+        length: The length of the analyzed file, in bytes. Extents are clamped to it.
+
+    Yields:
+        A ``(start, end)`` pair for each childless match that covers at least one byte.
+    """
+    stack = list(matches)
+    while stack:
+        match = stack.pop()
+        children = match.get('subEls')
+        if children:
+            stack.extend(children)
+            continue
+        start = min(max(match['offset'], 0), length)
+        end = min(max(start + match['size'], start), length)
+        if end > start:
+            yield start, end
+
+
+def undescribed_regions(matches, length):
+    """Finds the byte ranges of a file that no match describes.
+
+    Args:
+        matches: The top-level SBUD matches, each with ``offset``, ``size``, and ``subEls`` keys.
+        length: The length of the analyzed file, in bytes.
+
+    Returns:
+        A list of ``(offset, size)`` pairs, in ascending order of offset, one for each maximal
+        run of bytes that no childless match covers.
+    """
+    regions = []
+    position = 0
+    for start, end in sorted(_leaf_extents(matches, length)):
+        if start > position:
+            regions.append((position, start - position))
+        position = max(position, end)
+    if position < length:
+        regions.append((position, length - position))
+    return regions
+
+
 def generate(file_path, sbud):
     global TEMPLATE, jinja2
     if jinja2 is None:
@@ -37,6 +86,8 @@ def generate(file_path, sbud):
     matches = assign_ids(sbud)
 
     input_bytes = sbud['length']
+    regions = undescribed_regions(matches, input_bytes)
+    undescribed_bytes = sum(size for _, size in regions)
     with open(file_path, 'rb') as input_file:
         class ReadUnicode():
             def __init__(self):
@@ -123,12 +174,14 @@ def generate(file_path, sbud):
             math=math,
             read_unicode=ReadUnicode(),
             mime_type=mime_type,
-            decoded_matches=decoded_matches
+            decoded_matches=decoded_matches,
+            undescribed_regions=json.dumps(regions, separators=(',', ':')),
+            undescribed_bytes=undescribed_bytes,
+            undescribed_percent=undescribed_bytes * 100.0 / max(input_bytes, 1)
         )
 
 
 if __name__ == '__main__':
-    import json
     import sys
 
     with open(sys.argv[2], 'r') as f:

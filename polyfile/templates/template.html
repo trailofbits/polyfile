@@ -29,7 +29,14 @@
     <input type="button" value="⬇" id="searchdown" onclick="searchDown()" />
 </span>
 <span style="display:none;" id="clickinfo">Double-click to jump to an address</span>
-<br />
+
+<div class="coverage">
+{% if undescribed_bytes %}<span class="swatch undescribed"></span>Hatched, gray bytes are undescribed:
+    no match covers them. {{ '{:,}'.format(undescribed_bytes) }} of
+    {{ '{:,}'.format(input_bytes) }} bytes ({{ '%.1f' % undescribed_percent }}%) are
+    undescribed.{% else %}Every one of the {{ '{:,}'.format(input_bytes) }} bytes is described by
+    a match.{% endif %}
+</div>
 
 {% macro render_match_name(match, first) -%}
 <a href="#" class="download" title="download" onclick="downloadFile({{ match['offset'] }}, {{ match['size'] }}, '{{ match['type'] }}', '{{ match['extension'] }}')">⇩</a>
