@@ -123,3 +123,20 @@ Bits](https://www.trailofbits.com/) with funding from the Defense
 Advanced Research Projects Agency (DARPA) under the SafeDocs program
 as a subcontractor to [Galois](https://galois.com). It is licensed under the [Apache 2.0 license](LICENSE).
 © 2019, Trail of Bits.
+
+## Known Issues & Fixes
+
+### Python Reserved Keyword in Auto-generated Code
+
+The Kaitai Struct compiler may generate Python code that uses `class` as a variable name (e.g., `self.class = ...`), which is invalid syntax since `class` is a reserved keyword in Python. This issue specifically affects the auto-generated `polyfile/kaitai/parsers/openpgp_message.py` file.
+
+**Automatic Fix:** As of this version, polyfile automatically patches this issue on import. The fix is applied transparently when you first import the package, ensuring it works out-of-the-box.
+
+**Manual Fix:** If you need to manually apply the fix (e.g., for development or debugging), you can run the included `fix_class_keyword.py` script:
+```bash
+python fix_class_keyword.py
+```
+
+This will patch all occurrences of `self.class` to `self.class_` in the affected file.
+
+**Note:** A fix has been submitted upstream to the Kaitai Struct compiler. Once that is merged and a new version of the parsers is generated, this workaround will no longer be necessary.
