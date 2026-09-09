@@ -2990,9 +2990,7 @@ class DefaultMagicMatcher:
 
     def __get__(self, instance, owner) -> "MagicMatcher":
         if DefaultMagicMatcher._DEFAULT_INSTANCE is None:
-            # DefaultMagicMatcher._DEFAULT_INSTANCE = MagicMatcher.parse(*MAGIC_DEFS)
-            # FIXME: skip the DER definition for now because we don't yet support it
-            DefaultMagicMatcher._DEFAULT_INSTANCE = MagicMatcher.parse(*(d for d in MAGIC_DEFS if d.name != "der"))
+            DefaultMagicMatcher._DEFAULT_INSTANCE = MagicMatcher.parse(*MAGIC_DEFS)
         return DefaultMagicMatcher._DEFAULT_INSTANCE
 
     def __set__(self, instance, value: Optional["MagicMatcher"]):
