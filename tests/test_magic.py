@@ -1,12 +1,16 @@
+import base64
+import gzip
 import subprocess
 import sys
 import time
+import zlib
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Callable, Iterator, List, Optional, Set, Tuple
 from unittest import TestCase
 
 # from polyfile import logger
+import polyfile.der
 import polyfile.magic
 from polyfile.magic import MagicMatcher, MAGIC_DEFS, Match, MatchContext, SearchType, TestResult
 
@@ -14,6 +18,26 @@ from polyfile.magic import MagicMatcher, MAGIC_DEFS, Match, MatchContext, Search
 # logger.setLevel(logger.TRACE)
 
 FILE_TEST_DIR: Path = Path(__file__).parent.parent / "file" / "tests"
+
+DER_CERTIFICATE: Path = Path(__file__).absolute().parent / "msjdbc.cer.gz"
+
+ISSUE_3374_PDF: bytes = base64.b64decode(
+    "eNptUsFO4zAQvVvyPwyHSnAgtpukpRJCKtBuJbqkanxZbRAy1C2BkqDYRbv79YydRGm7WLJlv3me9zzj"
+    "3uJ2ei4CQYkADuXTKyWXl0AJMPn3QwO7UVZty40DFmqjDfSRtqTk6ooSXaz8BUr6R3fv8pWB3xA6Ljw4"
+    "5KbcFRbEXuY63XGmsMt0SK2TFFYX1kBUmwA2HoMnAkuaDbApnGY4xKgfiMFF0I8DkWVWG5tl63yrz2rW"
+    "LfrjSM6tN4hICuxHKcuJOzlT9YLiFWq27wa21KbcVc/ovVGeoqtOXLTb1rwLN0C6e7IecxHRgNfKaJ+C"
+    "zfT2U9v8WfmIV++MHJYpOir4XBcb+wKC85pJibGVVu+UXEtKmBSPHIsv19hmdxUPEZIDzjkM4zAYDQcg"
+    "kYwItLPCpp8mSbJIT+AXvhju5fwnzMbpDF6UgdedsTDX6k2vggDOQKKZifQeW+nO7p9KozSHGJduwCCO"
+    "wxjWe6BAbR8q9sDhN6CIov/BKBx1ICW2Utjvqv1Ly7J0P7BpY5r/0xDV1TJWVbb2OBCI9XqTZPoFx5+0"
+    "nw=="
+)
+"""The payload from issue #3374, which reads as a PDF once it is decompressed."""
+
+
+def tag_length_value(tag: int, value: bytes) -> bytes:
+    """Encodes a DER tag-length-value triple using the short form of the length."""
+    assert len(value) < 128
+    return bytes((tag, len(value))) + value
 
 
 class MagicTest(TestCase):
@@ -186,6 +210,81 @@ class MagicTest(TestCase):
             for mimetype in match.mimetypes
         }
         self.assertIn("text/plain", mimetypes)
+
+    @staticmethod
+    def messages(matcher: MagicMatcher, data: bytes) -> Set[str]:
+        return {str(match) for match in matcher.match(data)}
+
+    def only_match(self, data: bytes, message: str):
+        matches = [
+            match for match in MagicMatcher.DEFAULT_INSTANCE.match(data) if str(match) == message
+        ]
+        self.assertEqual(
+            1, len(matches),
+            f"expected {message!r}, but got {self.messages(MagicMatcher.DEFAULT_INSTANCE, data)!r}"
+        )
+        return matches[0]
+
+    def test_der_certificate(self):
+        with gzip.open(DER_CERTIFICATE, "rb") as f:
+            certificate = f.read()
+        match = self.only_match(certificate, "Certificate, Version=3")
+        self.assertEqual(["application/pkix-cert"], list(match.mimetypes))
+
+    def test_der_certificate_request(self):
+        request = tag_length_value(
+            0x30, tag_length_value(0x30, tag_length_value(0x02, b"\x00"))
+        ) + b"\x00"
+        match = self.only_match(request, "DER Encoded Certificate request")
+        self.assertEqual(["application/pkcs10"], list(match.mimetypes))
+
+    def test_der_pkcs7_signed_data(self):
+        signed_data = tag_length_value(
+            0x30, tag_length_value(0x06, bytes.fromhex("2a864886f70d010702"))
+        ) + b"\x00"
+        match = self.only_match(signed_data, "DER Encoded PKCS#7 Signed Data")
+        self.assertEqual(["application/pkcs7-mime"], list(match.mimetypes))
+
+    def test_der_mime_types_are_reachable(self):
+        # If an upstream update to polyfile/magic_defs/der rewords a message, the prefixes in
+        # polyfile.der.MIME_TYPES stop matching and PolyFile silently drops the type. Fail here
+        # instead, so that whoever syncs the definitions sees it.
+        for mime in dict.fromkeys(mime for _, mime in polyfile.der.MIME_TYPES):
+            self.assertIn(mime, MagicMatcher.DEFAULT_INSTANCE.mimetypes)
+
+    def test_der_walks_sibling_objects(self):
+        # The "DER Encoded Key Pair" tests are three sibling `der` tests that each read the
+        # object after the one their predecessor matched. A trailing byte is needed because
+        # libmagic rejects a short form length whose value ends on the final byte of the input.
+        key_pair = tag_length_value(0x30, b"".join((
+            tag_length_value(0x02, b"\x00"),
+            tag_length_value(0x02, b"\x00" + b"\xab" * 64),
+            tag_length_value(0x02, bytes.fromhex("010001")),
+        ))) + b"\x00"
+        match = self.only_match(key_pair, "DER Encoded Key Pair, 512 bits")
+        # A raw PKCS#1 key pair has no registered media type, so PolyFile assigns none.
+        self.assertEqual([], list(match.mimetypes))
+
+    def test_der_does_not_break_other_matches(self):
+        # Regression test for issue #3374: the der tests used to raise NotImplementedError
+        # out of match(), which aborted the search before it could report the PDF.
+        for matcher in (MagicMatcher.DEFAULT_INSTANCE, MagicMatcher.parse(*MAGIC_DEFS)):
+            data = zlib.decompress(ISSUE_3374_PDF)
+            types = [next(iter(match.mimetypes)) for match in matcher.match(data)]
+            self.assertIn("application/pdf", types)
+
+    def test_unimplemented_test_does_not_raise(self):
+        class UnimplementedTest(polyfile.magic.MagicTest):
+            AUTO_REGISTER_TEST = False
+
+            def subtest_type(self) -> polyfile.magic.TestType:
+                return polyfile.magic.TestType.BINARY
+
+            def test(self, data, absolute_offset, parent_match):
+                raise NotImplementedError("this test is deliberately unimplemented")
+
+        test = UnimplementedTest(offset=polyfile.magic.AbsoluteOffset(0), message="unimplemented")
+        self.assertEqual([], list(test.match(b"any data at all")))
 
     def test_file_corpus(self):
         self.assertTrue(FILE_TEST_DIR.exists(), "Make sure to run `git submodule init && git submodule update` in the "

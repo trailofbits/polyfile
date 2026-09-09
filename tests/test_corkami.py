@@ -93,8 +93,7 @@ class CorkamiDifferentialTests(TestCase):
     def setUpClass(cls):
         if FAILED_FILE_DIR.exists():
             shutil.rmtree(FAILED_FILE_DIR)
-        # skip the DER definition because we don't yet support it (and none of the tests actually require it)
-        cls.default_matcher = MagicMatcher.parse(*(d for d in MAGIC_DEFS if d.name != "der"))
+        cls.default_matcher = MagicMatcher.parse(*MAGIC_DEFS)
 
         build_local_file()
 

@@ -31,6 +31,7 @@ from uuid import UUID
 from chardet.universaldetector import UniversalDetector
 
 from .arithmetic import CStyleInt, make_c_style_int
+from .der import DERHeader, DERSpecification, InvalidDER, mime_type_for_message
 from .fileutils import Streamable
 from .iterators import LazyIterableSet
 from .logger import getStatusLogger, TRACE
@@ -208,6 +209,22 @@ class MatchedTest(TestResult):
         super().__init__(test=test, offset=offset, parent=parent)
         self.value: Any = value
         self.length: int = length
+        self._relative_base: Optional[int] = None
+
+    @property
+    def relative_base(self) -> int:
+        """The absolute offset that a relative (``&``) offset in a subsequent test resolves against.
+
+        This is the end of this match unless a test moves it. The ``der`` tests move it past the DER
+        object they matched, so that the following test at the same level reads the next DER object.
+        """
+        if self._relative_base is None:
+            return self.offset + self.length
+        return self._relative_base
+
+    @relative_base.setter
+    def relative_base(self, absolute_offset: int):
+        self._relative_base = absolute_offset
 
     def explain(self, writer: ANSIWriter, file: Streamable):
         if self.parent is not None:
@@ -398,7 +415,7 @@ class RelativeOffset(Offset):
         if not isinstance(last_match, MatchedTest):
             raise InvalidOffsetError(f"The last test was expected to be a match, but instead got {last_match!s}",
                                      offset=self)
-        offset = last_match.offset + last_match.length + difference
+        offset = last_match.relative_base + difference
         if not allow_invalid and len(data) < offset < 0:
             raise InvalidOffsetError(offset=self)
         return offset
@@ -674,6 +691,9 @@ class TernaryExecutableMessage(TernaryMessage):
 
 
 TEST_TYPES: Set[Type["MagicTest"]] = set()
+
+_UNIMPLEMENTED_TESTS: Set["MagicTest"] = set()
+"""The tests that have already been reported as unimplemented, so each one is only logged once."""
 
 
 class Comment:
@@ -965,6 +985,29 @@ class MagicTest(ABC):
     def calculate_absolute_offset(self, data: bytes, parent_match: Optional[TestResult] = None) -> int:
         return self.offset.to_absolute(data, parent_match)
 
+    def _run_test(
+            self,
+            context: MatchContext,
+            absolute_offset: int,
+            parent_match: Optional[TestResult],
+            flip_endianness: bool
+    ) -> TestResult:
+        """Runs this test, treating a test that is not implemented as a non-match.
+
+        A definition file can name a test that PolyFile does not implement yet. Reporting that as a
+        failure keeps the omission out of the caller's exception path, where it would abort an
+        otherwise successful match.
+        """
+        try:
+            if flip_endianness:
+                return self.test_flip_endianness(context.data, absolute_offset, parent_match)
+            return self.test(context.data, absolute_offset, parent_match)
+        except NotImplementedError as e:
+            if self not in _UNIMPLEMENTED_TESTS:
+                _UNIMPLEMENTED_TESTS.add(self)
+                log.warning(f"{self.source_info!s}: {e!s}")
+            return FailedTest(self, offset=absolute_offset, parent=parent_match, message=str(e))
+
     def _match(
             self,
             context: MatchContext,
@@ -977,10 +1020,7 @@ class MagicTest(ABC):
             absolute_offset = self.calculate_absolute_offset(context.data, parent_match)
         except InvalidOffsetError:
             return
-        if flip_endianness:
-            m = self.test_flip_endianness(context.data, absolute_offset, parent_match)
-        else:
-            m = self.test(context.data, absolute_offset, parent_match)
+        m = self._run_test(context, absolute_offset, parent_match, flip_endianness)
         if logging.root.level <= TRACE and (bool(m) or self.level > 0):
             log.trace(
                 f"{self.source_info!s}\t{bool(m)}\t{absolute_offset}\t"
@@ -2576,13 +2616,36 @@ class ClearTest(MagicTest):
 
 
 class DERTest(MagicTest):
+    """Matches one Distinguished Encoding Rules object against a :class:`DERSpecification`."""
+
+    def __init__(
+            self,
+            offset: Offset,
+            specification: DERSpecification,
+            mime: Optional[Union[str, TernaryExecutableMessage]] = None,
+            extensions: Iterable[str] = (),
+            message: Union[str, Message] = "",
+            parent: Optional["MagicTest"] = None,
+            comments: Iterable[Comment] = ()
+    ):
+        super().__init__(offset=offset, mime=mime, extensions=extensions, message=message,
+                         parent=parent, comments=comments)
+        self.specification: DERSpecification = specification
+
     def subtest_type(self) -> TestType:
         return TestType.BINARY
 
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
-        raise NotImplementedError(
-            "TODO: Implement support for the DER test (e.g., using the Kaitai asn1_der.py parser)"
-        )
+        try:
+            header = DERHeader.parse(data, absolute_offset)
+            value = self.specification.match(header, data)
+        except InvalidDER as e:
+            return FailedTest(self, offset=absolute_offset, parent=parent_match, message=str(e))
+        if isinstance(parent_match, MatchedTest):
+            # The next test at this level reads the DER object that follows the one we just matched.
+            parent_match.relative_base = header.end
+        return MatchedTest(self, value=value, offset=absolute_offset, length=header.header_length,
+                           parent=parent_match)
 
     def test_flip_endianness(
             self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]
@@ -2927,9 +2990,7 @@ class DefaultMagicMatcher:
 
     def __get__(self, instance, owner) -> "MagicMatcher":
         if DefaultMagicMatcher._DEFAULT_INSTANCE is None:
-            # DefaultMagicMatcher._DEFAULT_INSTANCE = MagicMatcher.parse(*MAGIC_DEFS)
-            # FIXME: skip the DER definition for now because we don't yet support it
-            DefaultMagicMatcher._DEFAULT_INSTANCE = MagicMatcher.parse(*(d for d in MAGIC_DEFS if d.name != "der"))
+            DefaultMagicMatcher._DEFAULT_INSTANCE = MagicMatcher.parse(*MAGIC_DEFS)
         return DefaultMagicMatcher._DEFAULT_INSTANCE
 
     def __set__(self, instance, value: Optional["MagicMatcher"]):
@@ -3199,8 +3260,9 @@ class MagicMatcher:
                     late_binding=late_binding
                 )
             elif data_type == "der":
-                # TODO: Update this as necessary once we fully implement the DERTest
-                test = DERTest(offset=offset, message=message, parent=parent)
+                test = DERTest(offset=offset, specification=DERSpecification(test_str),
+                               mime=mime_type_for_message(message), message=message,
+                               parent=parent)
             else:
                 try:
                     data_type = DataType.parse(data_type)
@@ -3281,6 +3343,9 @@ class MagicMatcher:
                     continue
                 test = MagicMatcher.parse_test(line, def_file, line_number, current_test, matcher)
                 if test is not None:
+                    if test.mime is not None:
+                        # a test can arrive with a MIME type that no `!:mime` line supplied
+                        tests_with_mime.add(test)
                     if isinstance(test, NamedTest):
                         matcher.named_tests[test.name] = test
                     else:
