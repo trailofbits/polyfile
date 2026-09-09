@@ -675,6 +675,9 @@ class TernaryExecutableMessage(TernaryMessage):
 
 TEST_TYPES: Set[Type["MagicTest"]] = set()
 
+_UNIMPLEMENTED_TESTS: Set["MagicTest"] = set()
+"""The tests that have already been reported as unimplemented, so each one is only logged once."""
+
 
 class Comment:
     def __init__(self, message: str, source_info: Optional[SourceInfo] = None):
@@ -965,6 +968,29 @@ class MagicTest(ABC):
     def calculate_absolute_offset(self, data: bytes, parent_match: Optional[TestResult] = None) -> int:
         return self.offset.to_absolute(data, parent_match)
 
+    def _run_test(
+            self,
+            context: MatchContext,
+            absolute_offset: int,
+            parent_match: Optional[TestResult],
+            flip_endianness: bool
+    ) -> TestResult:
+        """Runs this test, treating a test that is not implemented as a non-match.
+
+        A definition file can name a test that PolyFile does not implement yet. Reporting that as a
+        failure keeps the omission out of the caller's exception path, where it would abort an
+        otherwise successful match.
+        """
+        try:
+            if flip_endianness:
+                return self.test_flip_endianness(context.data, absolute_offset, parent_match)
+            return self.test(context.data, absolute_offset, parent_match)
+        except NotImplementedError as e:
+            if self not in _UNIMPLEMENTED_TESTS:
+                _UNIMPLEMENTED_TESTS.add(self)
+                log.warning(f"{self.source_info!s}: {e!s}")
+            return FailedTest(self, offset=absolute_offset, parent=parent_match, message=str(e))
+
     def _match(
             self,
             context: MatchContext,
@@ -977,10 +1003,7 @@ class MagicTest(ABC):
             absolute_offset = self.calculate_absolute_offset(context.data, parent_match)
         except InvalidOffsetError:
             return
-        if flip_endianness:
-            m = self.test_flip_endianness(context.data, absolute_offset, parent_match)
-        else:
-            m = self.test(context.data, absolute_offset, parent_match)
+        m = self._run_test(context, absolute_offset, parent_match, flip_endianness)
         if logging.root.level <= TRACE and (bool(m) or self.level > 0):
             log.trace(
                 f"{self.source_info!s}\t{bool(m)}\t{absolute_offset}\t"
