@@ -136,6 +136,19 @@ class MagicTest(TestCase):
         self.assertIn("application/x-pie-executable", matcher.mimetypes)
         self.assertIn("application/x-sharedlib", matcher.mimetypes)
 
+    def test_text_char_class_boundaries(self):
+        """Tests the corners of the character class table against libmagic's `text_chars`."""
+        classes = polyfile.magic.TEXT_CHAR_CLASSES
+        self.assertEqual(256, len(classes))
+        for byte in (0x00, 0x06, 0x0E, 0x19, 0x1C, 0x7F):
+            self.assertEqual(polyfile.magic.TEXT_CHAR_NONE, classes[byte], f"byte {byte:#04x}")
+        for byte in (0x07, 0x0B, 0x0D, 0x1A, 0x1B, 0x20, 0x7E, 0x85):
+            self.assertEqual(polyfile.magic.TEXT_CHAR_ASCII, classes[byte], f"byte {byte:#04x}")
+        for byte in (0x80, 0x84, 0x86, 0x9F):
+            self.assertEqual(polyfile.magic.TEXT_CHAR_EXTENDED, classes[byte], f"byte {byte:#04x}")
+        for byte in (0xA0, 0xE9, 0xEA, 0xFF):
+            self.assertEqual(polyfile.magic.TEXT_CHAR_ISO_8859, classes[byte], f"byte {byte:#04x}")
+
     def test_text_character_classes(self):
         """Tests that text membership follows libmagic's character classes, not chardet's guess."""
         self.assertEqual("ascii", polyfile.magic.detect_text_encoding(b"plain ASCII\n"))
