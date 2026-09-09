@@ -136,6 +136,39 @@ class MagicTest(TestCase):
         self.assertIn("application/x-pie-executable", matcher.mimetypes)
         self.assertIn("application/x-sharedlib", matcher.mimetypes)
 
+    def test_text_character_classes(self):
+        """Tests that text membership follows libmagic's character classes, not chardet's guess."""
+        self.assertEqual("ascii", polyfile.magic.detect_text_encoding(b"plain ASCII\n"))
+        self.assertEqual("utf-8", polyfile.magic.detect_text_encoding("héllo wörld".encode("utf-8")))
+        self.assertEqual("utf-16le", polyfile.magic.detect_text_encoding(b"\xff\xfe" + "hi".encode("utf-16-le")))
+        self.assertEqual("unknown-8bit", polyfile.magic.detect_text_encoding(b"text\x80\x9f"))
+        self.assertIsNone(polyfile.magic.detect_text_encoding(b"text\x00\x01\x02"))
+        self.assertIsNone(polyfile.magic.detect_text_encoding(b"a"))
+
+    def test_iso_8859_text_is_not_binary(self):
+        """Tests that mostly-ASCII data with a handful of ISO-8859-1 high bytes matches text/plain.
+
+        This is a regression test for trailofbits/polyfile#3468. chardet scores this data at a
+        confidence of 0.07 because five high bytes cannot distinguish ISO-8859-1 from its
+        siblings, so PolyFile used to report application/octet-stream where `file` reports
+        text/plain.
+        """
+        data = (
+            b"; imports with IAT inside descriptors\r\n"
+            b"; Ange Albertini, BSD LICENCE 2011-2013\r\n"
+            b"%include 'consts.inc'\r\n"
+            b"        ; Mais elle n'a pas r\xe9ussi a laminer tes rancoeurs dialectiques\r\n"
+            b"        ; et \xe9radiquer les tentacules de la d\xe9r\xe9liction...\r\n"
+            b"        ; ok, j'arr\xeate de boire...\r\n"
+        )
+        self.assertEqual("iso-8859-1", polyfile.magic.detect_text_encoding(data))
+        mimetypes = {
+            mimetype
+            for match in MagicMatcher.DEFAULT_INSTANCE.match(data)
+            for mimetype in match.mimetypes
+        }
+        self.assertIn("text/plain", mimetypes)
+
     def test_file_corpus(self):
         self.assertTrue(FILE_TEST_DIR.exists(), "Make sure to run `git submodule init && git submodule update` in the "
                                                 "root of this repository.")
