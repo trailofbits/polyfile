@@ -1,9 +1,17 @@
 import base64
 from io import BytesIO
-
-from PIL import Image, ImageDraw
+from typing import TYPE_CHECKING
 
 from .polyfile import register_parser, InvalidMatch, Submatch
+
+if TYPE_CHECKING:
+    from PIL import Image as PILImage
+
+
+def _get_pil():
+    """Lazy import PIL only when needed (for NES ROM CHR bank rendering)."""
+    from PIL import Image, ImageDraw
+    return Image, ImageDraw
 
 
 def parse_ines_header(header, parent=None):
@@ -130,7 +138,8 @@ def chr_values(chr_bytes: bytes):
                       ((((chr_bytes[offset + y + 8] >> shift) & 0b1)) << 1) | ((chr_bytes[offset + y] >> shift) & 0b1)
 
 
-def render_chr(chr_bytes: bytes) -> Image:
+def render_chr(chr_bytes: bytes) -> "PILImage":
+    Image, ImageDraw = _get_pil()
     img = Image.new(mode='L', size=(8*16, 8*32))
     d = ImageDraw.Draw(img)
     for x, y, pixel in chr_values(chr_bytes):

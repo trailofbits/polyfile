@@ -6,30 +6,30 @@ from polyfile.ast import Node
 from polyfile.fileutils import Tempfile
 
 
-class TestASTNode:
+class MockASTNode:
     def __init__(
             self,
             name: str,
             offset: Optional[int] = None,
             length: Optional[int] = None,
-            children: Iterable["TestASTNode"] = ()
+            children: Iterable["MockASTNode"] = ()
     ):
         self.name: str = name
         if offset is not None:
             setattr(self, "offset", offset)
         if length is not None:
             setattr(self, "length", length)
-        self.children: Tuple[TestASTNode, ...] = tuple(children)
+        self.children: Tuple[MockASTNode, ...] = tuple(children)
 
 
 class ASTTest(TestCase):
-    example_obj = TestASTNode(name="root", children=[
-        TestASTNode(name="child1", offset=0, length=10, children=[
-           TestASTNode(name="grandchild1", offset=5, length=5)
+    example_obj = MockASTNode(name="root", children=[
+        MockASTNode(name="child1", offset=0, length=10, children=[
+           MockASTNode(name="grandchild1", offset=5, length=5)
         ]),
-        TestASTNode(name="child2", offset=10, length=10, children=[
-            TestASTNode(name="grandchild2", offset=10, length=3),
-            TestASTNode(name="grandchild3", offset=13, length=7)
+        MockASTNode(name="child2", offset=10, length=10, children=[
+            MockASTNode(name="grandchild2", offset=10, length=3),
+            MockASTNode(name="grandchild3", offset=13, length=7)
         ])
     ])
 

@@ -147,7 +147,7 @@ class MimeBreakpoint(Breakpoint):
             parent_match: Optional[TestResult],
             result: Optional[TestResult]
     ) -> bool:
-        return self.pattern.is_contained_in(test.mimetypes())
+        return self.pattern.is_contained_in(test.mimetypes)
 
     @classmethod
     def parse(cls: Type[B], command: str) -> Optional[B]:
@@ -183,7 +183,7 @@ class ExtensionBreakpoint(Breakpoint):
             parent_match: Optional[TestResult],
             result: Optional[TestResult]
     ) -> bool:
-        return self.ext in test.all_extensions()
+        return self.ext in test.all_extensions
 
     @classmethod
     def parse(cls: Type[B], command: str) -> Optional[B]:

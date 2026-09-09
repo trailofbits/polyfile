@@ -4,11 +4,16 @@ from io import BytesIO
 from .fileutils import FileStream, Tempfile
 from .polyfile import Match, register_parser, Submatch
 
-from PIL import Image
+
+def _get_pil_image():
+    """Lazy import PIL.Image only when needed (for JPEG2000 parsing)."""
+    from PIL import Image
+    return Image
 
 
 @register_parser("image/jp2")
 def parse_jpeg2000(file_stream: FileStream, parent: Match):
+    Image = _get_pil_image()
     with Tempfile(file_stream.read(parent.length)) as input_bytes:
         img = Image.open(input_bytes)
         with BytesIO() as img_data:

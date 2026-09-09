@@ -11,6 +11,7 @@ details about the file.
 from abc import ABC, abstractmethod
 from collections import defaultdict
 import csv
+import functools
 from datetime import datetime
 from enum import Enum, IntFlag
 from importlib import resources
@@ -63,11 +64,11 @@ else:
         return (resource.name for resource in resources.files(package).iterdir() if resource.is_file())
 
 
-MAGIC_DEFS: List[Path] = [
+MAGIC_DEFS: List[Path] = sorted([
     get_resource_path(resource_name)
     for resource_name in get_resource_contents(magic_defs)
     if resource_name not in ("COPYING", "magic.mgc", "__pycache__") and not resource_name.startswith(".")
-]
+], key=lambda p: p.name)
 
 
 WHITESPACE: bytes = b" \r\t\n\v\f"
@@ -263,6 +264,14 @@ class Endianness(Enum):
     LITTLE = "<"
     BIG = ">"
     PDP = "me"
+
+
+class StrengthOp(Enum):
+    NONE = ""
+    PLUS = "+"
+    MINUS = "-"
+    TIMES = "*"
+    DIV = "/"
 
 
 def parse_numeric(text: Union[str, bytes]) -> int:
@@ -732,6 +741,8 @@ class MagicTest(ABC):
         self.source_info: Optional[SourceInfo] = None
         self.comments: Tuple[Comment, ...] = tuple(comments)
         self._type: TestType = TestType.UNKNOWN
+        self.strength_op: StrengthOp = StrengthOp.NONE
+        self.strength_factor: int = 0
 
     def __init_subclass__(cls, **kwargs):
         if cls.AUTO_REGISTER_TEST:
@@ -782,6 +793,23 @@ class MagicTest(ABC):
     def subtest_type(self) -> TestType:
         raise NotImplementedError()
 
+    def base_strength(self) -> int:
+        """Computes the base strength value before applying !:strength modifier."""
+        return 20
+
+    def compute_strength(self) -> int:
+        """Computes the test strength for sorting, mimicking libmagic's algorithm."""
+        val = self.base_strength()
+        if self.strength_op == StrengthOp.PLUS:
+            val += self.strength_factor
+        elif self.strength_op == StrengthOp.MINUS:
+            val -= self.strength_factor
+        elif self.strength_op == StrengthOp.TIMES:
+            val *= self.strength_factor
+        elif self.strength_op == StrengthOp.DIV and self.strength_factor != 0:
+            val //= self.strength_factor
+        return val
+
     @property
     def parent(self) -> Optional["MagicTest"]:
         return self._parent
@@ -802,24 +830,31 @@ class MagicTest(ABC):
                 stack.append(test.parent)
                 history.add(test.parent)
 
-    def descendants(self) -> Iterator["MagicTest"]:
-        """
-        Yields all descendants of this test.
-        UseTests will also include all referenced NamedTests and their descendants.
-
-        """
+    def _compute_descendants(self) -> Tuple["MagicTest", ...]:
+        """Compute all descendants of this test (internal, called once)."""
+        result: List[MagicTest] = []
         stack: List[MagicTest] = [self]
         history: Set[MagicTest] = set(stack)
         while stack:
             test = stack.pop()
             if test is not self:
-                yield test
+                result.append(test)
             new_tests = [child for child in test.children if child not in history]
             stack.extend(reversed(new_tests))
             history |= set(new_tests)
             if isinstance(test, UseTest):
                 stack.append(test.referenced_test)
                 history.add(test.referenced_test)
+        return tuple(result)
+
+    @functools.cached_property
+    def descendants(self) -> Tuple["MagicTest", ...]:
+        """
+        Returns all descendants of this test (cached).
+        UseTests will also include all referenced NamedTests and their descendants.
+
+        """
+        return self._compute_descendants()
 
     def referenced_tests(self) -> Set["NamedTest"]:
         result: Set[NamedTest] = set()
@@ -853,29 +888,34 @@ class MagicTest(ABC):
         if self.mime is not None:
             yielded |= set(self.mime.possibilities())
             yield from yielded
-        for d in self.descendants():
+        for d in self.descendants:
             if d.mime is not None:
                 possibilities = set(d.mime.possibilities())
                 new_mimes = possibilities - yielded
                 yield from new_mimes
                 yielded |= new_mimes
 
-    def mimetypes(self) -> LazyIterableSet[str]:
-        """Returns the set of all possible MIME types that this test or any of its descendants could match against"""
-        return LazyIterableSet(self._mimetypes())
+    @functools.cached_property
+    def mimetypes(self) -> Tuple[str, ...]:
+        """Returns all possible MIME types that this test or any of its descendants could match against"""
+        return tuple(self._mimetypes())
 
     def _all_extensions(self) -> Iterator[str]:
         """Yields all possible extensions that this test or any of its descendants could match against"""
         yield from self.extensions
         yielded = set(self.extensions)
-        for d in self.descendants():
+        for d in self.descendants:
             new_extensions = d.extensions - yielded
             yield from new_extensions
             yielded |= new_extensions
 
-    def all_extensions(self) -> LazyIterableSet[str]:
-        """Returns the set of all possible extensions that this test or any of its descendants could match against"""
-        return LazyIterableSet(self._all_extensions())
+    @functools.cached_property
+    def all_extensions(self) -> Tuple[str, ...]:
+        """Returns all possible extensions that this test or any of its descendants could match against"""
+        return tuple(self._all_extensions())
+
+    def test_flip_endianness(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
+        raise NotImplementedError(f"TODO: Implement test_flip_endianness for {self.__class__.__name__}")
 
     @abstractmethod
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
@@ -925,14 +965,22 @@ class MagicTest(ABC):
     def calculate_absolute_offset(self, data: bytes, parent_match: Optional[TestResult] = None) -> int:
         return self.offset.to_absolute(data, parent_match)
 
-    def _match(self, context: MatchContext, parent_match: Optional[TestResult] = None) -> Iterator[MatchedTest]:
+    def _match(
+            self,
+            context: MatchContext,
+            parent_match: Optional[TestResult] = None,
+            flip_endianness: bool = False
+    ) -> Iterator[MatchedTest]:
         if context.only_match_mime and not self.can_match_mime:
             return
         try:
             absolute_offset = self.calculate_absolute_offset(context.data, parent_match)
         except InvalidOffsetError:
             return
-        m = self.test(context.data, absolute_offset, parent_match)
+        if flip_endianness:
+            m = self.test_flip_endianness(context.data, absolute_offset, parent_match)
+        else:
+            m = self.test(context.data, absolute_offset, parent_match)
         if logging.root.level <= TRACE and (bool(m) or self.level > 0):
             log.trace(
                 f"{self.source_info!s}\t{bool(m)}\t{absolute_offset}\t"
@@ -943,7 +991,7 @@ class MagicTest(ABC):
                 yield m
             for child in self.children:
                 if not context.only_match_mime or child.can_match_mime:
-                    yield from child._match(context=context, parent_match=m)
+                    yield from child._match(context=context, parent_match=m, flip_endianness=flip_endianness)
 
     def match(self, to_match: Union[bytes, BinaryIO, str, Path, MatchContext]) -> Iterator[TestResult]:
         """Yields all matches for the given data"""
@@ -1066,10 +1114,16 @@ class DataType(ABC, Generic[T]):
             return TYPES_BY_NAME[fmt]
         elif fmt.startswith("string") or fmt.startswith("ustring"):
             dt = StringType.parse(fmt)
-        elif fmt == "lestring16":
-            dt = UTF16Type(endianness=Endianness.LITTLE)
-        elif fmt == "bestring16":
-            dt = UTF16Type(endianness=Endianness.BIG)
+        elif fmt == "lestring16" or fmt.startswith("lestring16/"):
+            num_bytes = None
+            if fmt.startswith("lestring16/"):
+                num_bytes = int(fmt[11:])
+            dt = UTF16Type(endianness=Endianness.LITTLE, num_bytes=num_bytes)
+        elif fmt == "bestring16" or fmt.startswith("bestring16/"):
+            num_bytes = None
+            if fmt.startswith("bestring16/"):
+                num_bytes = int(fmt[11:])
+            dt = UTF16Type(endianness=Endianness.BIG, num_bytes=num_bytes)
         elif fmt.startswith("pstring"):
             dt = PascalStringType.parse(fmt)
         elif fmt.startswith("search"):
@@ -1129,14 +1183,15 @@ class GUIDType(DataType[Union[UUID, UUIDWildcard]]):
 
 
 class UTF16Type(DataType[bytes]):
-    def __init__(self, endianness: Endianness):
-        if endianness == Endianness.LITTLE:
-            super().__init__("lestring16")
-        elif endianness == Endianness.BIG:
-            super().__init__("bestring16")
-        else:
+    def __init__(self, endianness: Endianness, num_bytes: Optional[int] = None):
+        name = "lestring16" if endianness == Endianness.LITTLE else "bestring16"
+        if num_bytes is not None:
+            name = f"{name}/{num_bytes}"
+        if endianness not in (Endianness.LITTLE, Endianness.BIG):
             raise ValueError(f"UTF16 strings only support big and little endianness, not {endianness!r}")
+        super().__init__(name)
         self.endianness: Endianness = endianness
+        self.num_bytes: Optional[int] = num_bytes
 
     def is_text(self, value: bytes) -> bool:
         return True
@@ -1149,6 +1204,8 @@ class UTF16Type(DataType[bytes]):
             return specification.encode("utf-16-be")
 
     def match(self, data: bytes, expected: bytes) -> DataTypeMatch:
+        if self.num_bytes is not None:
+            data = data[:self.num_bytes]
         if data.startswith(expected):
             if self.endianness == Endianness.LITTLE:
                 return DataTypeMatch(expected, expected.decode("utf-16-le"))
@@ -1197,7 +1254,6 @@ class StringTest(ABC):
               optional_blanks: bool = False,
               full_word_match: bool = False,
               num_bytes: Optional[int] = None) -> "StringTest":
-        original_spec = specification
         if specification.strip() == "x":
             return StringWildcard(trim=trim, compact_whitespace=compact_whitespace, num_bytes=num_bytes)
         if specification.startswith("!"):
@@ -1214,9 +1270,6 @@ class StringTest(ABC):
                 num_bytes=num_bytes,
             )
         else:
-            if num_bytes is not None:
-                raise ValueError(f"Invalid string match specification: {original_spec!r}: a string length limiter "
-                                 f"cannot be combined with an explicit string match")
             if specification.startswith("="):
                 specification = specification[1:]
             test = StringMatch(
@@ -1226,7 +1279,8 @@ class StringTest(ABC):
                 case_insensitive_lower=case_insensitive_lower,
                 case_insensitive_upper=case_insensitive_upper,
                 optional_blanks=optional_blanks,
-                full_word_match=full_word_match
+                full_word_match=full_word_match,
+                num_bytes=num_bytes
             )
         if negate:
             return NegatedStringTest(test)
@@ -1334,9 +1388,10 @@ class StringMatch(StringTest):
                  case_insensitive_lower: bool = False,
                  case_insensitive_upper: bool = False,
                  optional_blanks: bool = False,
-                 full_word_match: bool = False
+                 full_word_match: bool = False,
+                 num_bytes: Optional[int] = None
     ):
-        super().__init__(trim=trim, compact_whitespace=compact_whitespace)
+        super().__init__(trim=trim, compact_whitespace=compact_whitespace, num_bytes=num_bytes)
         self.raw_pattern: str = to_match
         self.string: bytes = unescape(to_match)
         self.case_insensitive_lower: bool = case_insensitive_lower
@@ -1421,12 +1476,16 @@ class StringMatch(StringTest):
         return self._is_always_text
 
     def matches(self, data: bytes) -> DataTypeMatch:
+        if self.num_bytes is not None:
+            data = data[:self.num_bytes]
         m = self.pattern.match(data)
         if m:
             return self.post_process(bytes(m.group(0)))
         return DataTypeMatch.INVALID
 
     def search(self, data: bytes) -> DataTypeMatch:
+        if self.num_bytes is not None:
+            data = data[:self.num_bytes]
         m = self.pattern.search(data)
         if m:
             return self.post_process(bytes(m.group(0)), initial_offset=m.start())
@@ -1657,9 +1716,14 @@ class PascalStringType(DataType[StringTest]):
             length -= self.byte_length
         if len(data) < self.byte_length + length:
             return DataTypeMatch.INVALID
-        m = expected.matches(data[self.byte_length:self.byte_length + length])
+        content = data[self.byte_length:self.byte_length + length]
+        m = expected.matches(content)
         if m:
-            m.raw_match = data[:self.byte_length + length]
+            # Use strlen (excluding null terminator) for match length to match libmagic behavior
+            # for relative offset calculations
+            null_pos = content.find(b'\x00')
+            effective_len = null_pos if null_pos != -1 else length
+            m.raw_match = data[:self.byte_length + effective_len]
         return m
 
     PSTRING_TYPE_FORMAT: Pattern[str] = re.compile(r"^pstring(/J?[BHhLl]?J?)?$")
@@ -1795,19 +1859,24 @@ class RegexType(DataType[Pattern[bytes]]):
             else:
                 return DataTypeMatch.INVALID
 
-    REGEX_TYPE_FORMAT: Pattern[str] = re.compile(r"^regex(/(?P<length>\d+)?(?P<flags>[cslT]*)(b\d*)?)?$")
+    REGEX_TYPE_FORMAT: Pattern[str] = re.compile(
+        r"^regex(/(?P<length>\d+)?(?P<flags1>[cslTt]*)(/(?P<flags2>[cslTt]*))?(b\d*)?)?$"
+    )
     # NOTE: some specification files like `cad` use `regex/b`, which is undocumented, and it's unclear from the libmagic
-    #       source code whether it is simply ignored or if it has a purpuse. We ignore it here.
+    #       source code whether it is simply ignored or if it has a purpose. We ignore it here.
+    # NOTE: the `t` flag (force text) is also supported but currently ignored as it's a hint for output formatting.
+    # NOTE: flags can appear either after length directly (regex/31cs) or with a slash (regex/31/cs).
 
     @classmethod
     def parse(cls, format_str: str) -> "RegexType":
         m = cls.REGEX_TYPE_FORMAT.match(format_str)
         if not m:
             raise ValueError(f"Invalid regex type declaration: {format_str!r}")
-        if m.group("flags") is None:
-            options: Iterable[str] = ()
-        else:
-            options = m.group("flags")
+        options: str = ""
+        if m.group("flags1") is not None:
+            options += m.group("flags1")
+        if m.group("flags2") is not None:
+            options += m.group("flags2")
         if m.group("length") is None:
             length: Optional[int] = None
         else:
@@ -1837,13 +1906,32 @@ def utc_date(ms_since_epoch: int) -> str:
     return strftime(DATETIME_FORMAT, gmtime(ms_since_epoch / 1000.0))
 
 
+MSDOS_DATE_FORMAT: str = "%b %d %Y"
+
+
 def msdos_date(value: int) -> str:
-    day = (value & 0b11111) + 1
+    day = value & 0b11111
     value >>= 5
-    month = (value & 0b1111) + 1
+    # MS-DOS stores month as 1-12, convert to 0-11 for datetime
+    month_raw = value & 0b1111
+    month = month_raw - 1
     value >>= 4
     year = 1980 + (value & 0b1111111)
-    return strftime(DATE_FORMAT, datetime(year, month, day).timetuple())
+    # Sanity check: clamp invalid months to 0 (January), matching libmagic behavior
+    if month < 0 or month > 11:
+        month = 0
+    # Clamp invalid day to valid range
+    if day < 1:
+        day = 1
+    if day > 31:
+        day = 31
+    # Convert back to 1-based month for datetime
+    month += 1
+    try:
+        return strftime(MSDOS_DATE_FORMAT, datetime(year, month, day).timetuple())
+    except ValueError:
+        # Handle invalid date combinations (e.g., Feb 31)
+        return f"{year}-{month:02d}-{day:02d}"
 
 
 def msdos_time(value: int) -> str:
@@ -2043,6 +2131,22 @@ class NumericDataType(DataType[NumericValue]):
         else:
             return DataTypeMatch.INVALID
 
+    def flip_endianness(self) -> "NumericDataType":
+        """Return a copy with LITTLE/BIG endianness flipped."""
+        if self.endianness == Endianness.LITTLE:
+            new_endianness = Endianness.BIG
+        elif self.endianness == Endianness.BIG:
+            new_endianness = Endianness.LITTLE
+        else:
+            new_endianness = self.endianness  # NATIVE and PDP unchanged
+        return NumericDataType(
+            name=self.name,
+            base_type=self.base_type,
+            unsigned=self.unsigned,
+            endianness=new_endianness,
+            preprocess=self.preprocess
+        )
+
     @staticmethod
     def parse(fmt: str) -> "NumericDataType":
         name = fmt
@@ -2130,6 +2234,25 @@ class ConstantMatchTest(MagicTest, Generic[T]):
                 message=f"expected {self.constant!s}"
             )
 
+    def test_flip_endianness(
+            self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]
+    ) -> TestResult:
+        if isinstance(self.data_type, NumericDataType):
+            data_type = self.data_type.flip_endianness()
+        else:
+            data_type = self.data_type
+        match = data_type.match(data[absolute_offset:], self.constant)
+        if match:
+            return MatchedTest(self, offset=absolute_offset + match.initial_offset, length=len(match.raw_match),
+                               value=match.value, parent=parent_match)
+        else:
+            return FailedTest(
+                self,
+                offset=absolute_offset,
+                parent=parent_match,
+                message=f"expected {self.constant!s}"
+            )
+
 
 class OffsetMatchTest(MagicTest):
     def __init__(
@@ -2139,17 +2262,24 @@ class OffsetMatchTest(MagicTest):
             mime: Optional[str] = None,
             extensions: Iterable[str] = (),
             message: str = "",
-            parent: Optional["MagicTest"] = None
+            parent: Optional["MagicTest"] = None,
+            subtraction: int = 0,
+            modulo: int = 0
     ):
         super().__init__(offset=offset, mime=mime, extensions=extensions, message=message, parent=parent)
         self.value: IntegerValue = value
+        self.subtraction: int = subtraction
+        self.modulo: int = modulo
 
     def subtest_type(self) -> TestType:
         return TestType.UNKNOWN
 
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
-        if self.value.test(absolute_offset, unsigned=True, num_bytes=8):
-            return MatchedTest(self, offset=0, length=absolute_offset, value=absolute_offset, parent=parent_match)
+        computed_value = absolute_offset - self.subtraction
+        if self.modulo != 0:
+            computed_value = computed_value % self.modulo
+        if self.value.test(computed_value, unsigned=True, num_bytes=8):
+            return MatchedTest(self, offset=0, length=absolute_offset, value=computed_value, parent=parent_match)
         else:
             return FailedTest(
                 test=self,
@@ -2157,6 +2287,11 @@ class OffsetMatchTest(MagicTest):
                 parent=parent_match,
                 message=f"expected {self.value!r}"
             )
+
+    def test_flip_endianness(
+            self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]
+    ) -> TestResult:
+        return self.test(data, absolute_offset, parent_match)
 
 
 class IndirectResult(MatchedTest):
@@ -2207,6 +2342,11 @@ class IndirectTest(MagicTest):
             absolute_offset += parent_match.offset
         return IndirectResult(self, absolute_offset, parent_match)
 
+    def test_flip_endianness(
+            self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]
+    ) -> TestResult:
+        return self.test(data, absolute_offset, parent_match)
+
 
 class NamedTest(MagicTest):
     def __init__(
@@ -2234,6 +2374,13 @@ class NamedTest(MagicTest):
 
     def subtest_type(self) -> TestType:
         return TestType.UNKNOWN
+
+    def test_flip_endianness(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
+        if parent_match is not None:
+            return MatchedTest(self, offset=parent_match.offset + parent_match.length, length=0, value=self.name,
+                               parent=parent_match)
+        else:
+            raise ValueError("A named test must always be called from a `use` test.")
 
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> MatchedTest:
         if parent_match is not None:
@@ -2273,9 +2420,13 @@ class UseTest(MagicTest):
             result |= self.referenced_test.referenced_tests()
         return result
 
-    def _match(self, context: MatchContext, parent_match: Optional[TestResult] = None) -> Iterator[TestResult]:
-        if self.flip_endianness:
-            raise NotImplementedError("TODO: Add support for use tests with flipped endianness")
+    def _match(
+            self,
+            context: MatchContext,
+            parent_match: Optional[TestResult] = None,
+            flip_endianness: bool = False
+    ) -> Iterator[TestResult]:
+        flip_endianness = flip_endianness ^ self.flip_endianness
         try:
             absolute_offset = self.offset.to_absolute(context.data, last_match=parent_match)
         except InvalidOffsetError:
@@ -2285,7 +2436,7 @@ class UseTest(MagicTest):
         )
         use_match = MatchedTest(self, None, absolute_offset, 0, parent=parent_match)
         yielded = False
-        for named_result in self.referenced_test._match(context, use_match):
+        for named_result in self.referenced_test._match(context, use_match, flip_endianness=flip_endianness):
             if not yielded:
                 yielded = True
                 yield use_match
@@ -2298,7 +2449,7 @@ class UseTest(MagicTest):
             return
         for child in self.children:
             if not context.only_match_mime or child.can_match_mime:
-                yield from child._match(context=context, parent_match=use_match)
+                yield from child._match(context=context, parent_match=use_match, flip_endianness=flip_endianness)
 
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
         raise NotImplementedError("This function should never be called")
@@ -2320,6 +2471,11 @@ class JSONTest(MagicTest):
 
     def subtest_type(self) -> TestType:
         return TestType.TEXT
+
+    def test_flip_endianness(
+            self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]
+    ) -> TestResult:
+        return self.test(data, absolute_offset, parent_match)
 
 
 class CSVTest(MagicTest):
@@ -2360,6 +2516,11 @@ class CSVTest(MagicTest):
     def subtest_type(self) -> TestType:
         return TestType.TEXT
 
+    def test_flip_endianness(
+            self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]
+    ) -> TestResult:
+        return self.test(data, absolute_offset, parent_match)
+
 
 class DefaultTest(MagicTest):
     def subtest_type(self) -> TestType:
@@ -2371,6 +2532,11 @@ class DefaultTest(MagicTest):
         else:
             return FailedTest(self, offset=absolute_offset, parent=parent_match, message="the parent test already "
                                                                                          "has a child that matched")
+
+    def test_flip_endianness(
+            self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]
+    ) -> TestResult:
+        return self.test(data, absolute_offset, parent_match)
 
 
 class ClearTest(MagicTest):
@@ -2384,6 +2550,11 @@ class ClearTest(MagicTest):
             parent_match.child_matched = False
             return MatchedTest(self, offset=absolute_offset, length=0, parent=parent_match, value=None)
 
+    def test_flip_endianness(
+            self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]
+    ) -> TestResult:
+        return self.test(data, absolute_offset, parent_match)
+
 
 class DERTest(MagicTest):
     def subtest_type(self) -> TestType:
@@ -2393,6 +2564,11 @@ class DERTest(MagicTest):
         raise NotImplementedError(
             "TODO: Implement support for the DER test (e.g., using the Kaitai asn1_der.py parser)"
         )
+
+    def test_flip_endianness(
+            self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]
+    ) -> TestResult:
+        return self.test(data, absolute_offset, parent_match)
 
 
 class PlainTextTest(MagicTest):
@@ -2424,7 +2600,7 @@ class PlainTextTest(MagicTest):
             detector.feed(data[offset:offset+1024])
             offset += 1024
         detector.close()
-        if detector.result["confidence"] >= self.minimum_encoding_confidence:
+        if detector.result["confidence"] >= self.minimum_encoding_confidence and detector.result["encoding"] is not None:
             encoding = detector.result["encoding"]
             try:
                 value = data[absolute_offset:].decode(encoding)
@@ -2436,6 +2612,11 @@ class PlainTextTest(MagicTest):
         else:
             return FailedTest(self, offset=absolute_offset, parent=parent_match, message="the data do not appear to "
                                                                                          "be encoded in a text format")
+
+    def test_flip_endianness(
+            self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]
+    ) -> TestResult:
+        return self.test(data, absolute_offset, parent_match)
 
 
 class OctetStreamTest(MagicTest):
@@ -2459,6 +2640,11 @@ class OctetStreamTest(MagicTest):
         # Everything is an octet stream!
         return MatchedTest(self, offset=absolute_offset, length=len(data) - absolute_offset, parent=parent_match,
                            value=data)
+
+    def test_flip_endianness(
+            self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]
+    ) -> TestResult:
+        return self.test(data, absolute_offset, parent_match)
 
 
 TEST_PATTERN: Pattern[str] = re.compile(
@@ -2695,9 +2881,9 @@ class MagicMatcher:
                 self._non_text_tests.add(test)
             if test.can_be_indirect:
                 self._tests_that_can_be_indirect.add(test)
-            for mime in test.mimetypes():
+            for mime in test.mimetypes:
                 self._tests_by_mime[mime].add(test)
-            for ext in test.all_extensions():
+            for ext in test.all_extensions:
                 self._tests_by_ext[ext].add(test)
 
     def only_match(
@@ -2716,7 +2902,7 @@ class MagicMatcher:
             return self
         tests: Set[MagicTest] = {
             indirect_test for indirect_test in self.tests_that_can_be_indirect
-            if not any(True for _ in indirect_test.mimetypes())
+            if not any(True for _ in indirect_test.mimetypes)
         }
         if mimetypes is not None:
             for mime in mimetypes:
@@ -2810,10 +2996,25 @@ class MagicMatcher:
                 if parent is None:
                     raise NotImplementedError("TODO: Add support for clear tests at level 0")
                 test = ClearTest(offset=offset, message=message, parent=parent)
-            elif data_type == "offset":
-                expected_value = IntegerValue.parse(test_str, num_bytes=8)
+            elif data_type == "offset" or data_type.startswith("offset-") or data_type.startswith("offset%"):
+                subtraction = 0
+                modulo = 0
+                if data_type.startswith("offset-"):
+                    try:
+                        subtraction = parse_numeric(data_type[7:])
+                    except ValueError:
+                        raise ValueError(f"{def_file!s} line {line_number}: Invalid offset type: {data_type!r}")
+                elif data_type.startswith("offset%"):
+                    try:
+                        modulo = parse_numeric(data_type[7:])
+                    except ValueError:
+                        raise ValueError(f"{def_file!s} line {line_number}: Invalid offset type: {data_type!r}")
+                if test_str.strip() == "x":
+                    expected_value: NumericValue = NumericWildcard()
+                else:
+                    expected_value = IntegerValue.parse(test_str, num_bytes=8)
                 test = OffsetMatchTest(offset=offset, value=expected_value, message=message,
-                                       parent=parent)
+                                       parent=parent, subtraction=subtraction, modulo=modulo)
             elif data_type == "json":
                 test = JSONTest(offset=offset, message=message, parent=parent)
             elif data_type == "csv":
@@ -2906,8 +3107,29 @@ class MagicMatcher:
                     except UnicodeDecodeError:
                         pass
                     continue
-                elif raw_line.startswith(b"!:apple") or raw_line.startswith(b"!:strength"):
-                    # ignore these directives for now
+                elif raw_line.startswith(b"!:apple"):
+                    continue
+                elif raw_line.startswith(b"!:strength"):
+                    if current_test is not None:
+                        strength_spec = raw_line[10:].strip().decode("utf-8")
+                        if strength_spec:
+                            op = strength_spec[0]
+                            factor_str = strength_spec[1:].strip()
+                            if op == '+':
+                                current_test.strength_op = StrengthOp.PLUS
+                            elif op == '-':
+                                current_test.strength_op = StrengthOp.MINUS
+                            elif op == '*':
+                                current_test.strength_op = StrengthOp.TIMES
+                            elif op == '/':
+                                current_test.strength_op = StrengthOp.DIV
+                            else:
+                                factor_str = strength_spec
+                                current_test.strength_op = StrengthOp.PLUS
+                            try:
+                                current_test.strength_factor = int(factor_str)
+                            except ValueError:
+                                pass
                     continue
                 try:
                     line = raw_line.decode("utf-8")
@@ -2978,6 +3200,8 @@ class MagicMatcher:
             assert test.can_match_mime
             for ancestor in test.ancestors():
                 ancestor.can_be_indirect = True
+        # Sort tests by strength (descending) for proper priority matching like libmagic
+        zero_level_tests.sort(key=lambda t: t.compute_strength(), reverse=True)
         for test in zero_level_tests:
             matcher.add(test)
         return matcher
