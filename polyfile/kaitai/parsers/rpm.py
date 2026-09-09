@@ -1,14 +1,14 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
+# type: ignore
 
-from packaging.version import parse as parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
-from enum import Enum
+from enum import IntEnum
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
-    raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
+    raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class Rpm(KaitaiStruct):
     """This parser is for the RPM version 3 file format which is the current version
@@ -33,50 +33,33 @@ class Rpm(KaitaiStruct):
        Source - http://ftp.rpm.org/max-rpm/
     """
 
-    class OperatingSystems(Enum):
-        linux = 1
-        irix = 2
-        no_os = 255
+    class Architectures(IntEnum):
+        x86 = 1
+        alpha = 2
+        sparc = 3
+        mips = 4
+        ppc = 5
+        m68k = 6
+        sgi = 7
+        rs6000 = 8
+        ia64 = 9
+        sparc64 = 10
+        mips64 = 11
+        arm = 12
+        m68k_mint = 13
+        s390 = 14
+        s390x = 15
+        ppc64 = 16
+        sh = 17
+        xtensa = 18
+        aarch64 = 19
+        mips_r6 = 20
+        mips64_r6 = 21
+        riscv = 22
+        loongarch64 = 23
+        no_arch = 255
 
-    class SignatureTags(Enum):
-        signatures = 62
-        header_immutable = 63
-        i18n_table = 100
-        bad_sha1_1_obsolete = 264
-        bad_sha1_2_obsolete = 265
-        dsa = 267
-        rsa = 268
-        sha1 = 269
-        long_size = 270
-        long_archive_size = 271
-        sha256 = 273
-        file_signatures = 274
-        file_signature_length = 275
-        verity_signatures = 276
-        verity_signature_algo = 277
-        size = 1000
-        le_md5_1_obsolete = 1001
-        pgp = 1002
-        le_md5_2_obsolete = 1003
-        md5 = 1004
-        gpg = 1005
-        pgp5_obsolete = 1006
-        payload_size = 1007
-        reserved_space = 1008
-
-    class RecordTypes(Enum):
-        not_implemented = 0
-        char = 1
-        uint8 = 2
-        uint16 = 3
-        uint32 = 4
-        uint64 = 5
-        string = 6
-        bin = 7
-        string_array = 8
-        i18n_string = 9
-
-    class HeaderTags(Enum):
+    class HeaderTags(IntEnum):
         signatures = 62
         header_immutable = 63
         i18n_table = 100
@@ -378,40 +361,57 @@ class Rpm(KaitaiStruct):
         post_untrans_flags = 5108
         sys_users = 5109
 
-    class RpmTypes(Enum):
+    class OperatingSystems(IntEnum):
+        linux = 1
+        irix = 2
+        no_os = 255
+
+    class RecordTypes(IntEnum):
+        not_implemented = 0
+        char = 1
+        uint8 = 2
+        uint16 = 3
+        uint32 = 4
+        uint64 = 5
+        string = 6
+        bin = 7
+        string_array = 8
+        i18n_string = 9
+
+    class RpmTypes(IntEnum):
         binary = 0
         source = 1
 
-    class Architectures(Enum):
-        x86 = 1
-        alpha = 2
-        sparc = 3
-        mips = 4
-        ppc = 5
-        m68k = 6
-        sgi = 7
-        rs6000 = 8
-        ia64 = 9
-        sparc64 = 10
-        mips64 = 11
-        arm = 12
-        m68k_mint = 13
-        s390 = 14
-        s390x = 15
-        ppc64 = 16
-        sh = 17
-        xtensa = 18
-        aarch64 = 19
-        mips_r6 = 20
-        mips64_r6 = 21
-        riscv = 22
-        loongarch64 = 23
-        no_arch = 255
+    class SignatureTags(IntEnum):
+        signatures = 62
+        header_immutable = 63
+        i18n_table = 100
+        bad_sha1_1_obsolete = 264
+        bad_sha1_2_obsolete = 265
+        dsa = 267
+        rsa = 268
+        sha1 = 269
+        long_size = 270
+        long_archive_size = 271
+        sha256 = 273
+        file_signatures = 274
+        file_signature_length = 275
+        verity_signatures = 276
+        verity_signature_algo = 277
+        size = 1000
+        le_md5_1_obsolete = 1001
+        pgp = 1002
+        le_md5_2_obsolete = 1003
+        md5 = 1004
+        gpg = 1005
+        pgp5_obsolete = 1006
+        payload_size = 1007
+        reserved_space = 1008
     SEQ_FIELDS = ["lead", "signature", "signature_padding", "_unnamed3", "header", "_unnamed5", "signature_tags_steps"]
     def __init__(self, _io, _parent=None, _root=None):
-        self._io = _io
+        super(Rpm, self).__init__(_io)
         self._parent = _parent
-        self._root = _root if _root else self
+        self._root = _root or self
         self._debug = collections.defaultdict(dict)
 
     def _read(self):
@@ -424,9 +424,10 @@ class Rpm(KaitaiStruct):
         self.signature._read()
         self._debug['signature']['end'] = self._io.pos()
         self._debug['signature_padding']['start'] = self._io.pos()
-        self.signature_padding = self._io.read_bytes((-(self._io.pos()) % 8))
+        self.signature_padding = self._io.read_bytes(-(self._io.pos()) % 8)
         self._debug['signature_padding']['end'] = self._io.pos()
         if self.ofs_header < 0:
+            pass
             self._debug['_unnamed3']['start'] = self._io.pos()
             self._unnamed3 = self._io.read_bytes(0)
             self._debug['_unnamed3']['end'] = self._io.pos()
@@ -436,43 +437,303 @@ class Rpm(KaitaiStruct):
         self.header._read()
         self._debug['header']['end'] = self._io.pos()
         if self.ofs_payload < 0:
+            pass
             self._debug['_unnamed5']['start'] = self._io.pos()
             self._unnamed5 = self._io.read_bytes(0)
             self._debug['_unnamed5']['end'] = self._io.pos()
 
         self._debug['signature_tags_steps']['start'] = self._io.pos()
-        self.signature_tags_steps = [None] * (self.signature.header_record.num_index_records)
+        self._debug['signature_tags_steps']['arr'] = []
+        self.signature_tags_steps = []
         for i in range(self.signature.header_record.num_index_records):
-            if not 'arr' in self._debug['signature_tags_steps']:
-                self._debug['signature_tags_steps']['arr'] = []
             self._debug['signature_tags_steps']['arr'].append({'start': self._io.pos()})
-            _t_signature_tags_steps = Rpm.SignatureTagsStep(i, (-1 if i < 1 else self.signature_tags_steps[(i - 1)].size_tag_idx), self._io, self, self._root)
-            _t_signature_tags_steps._read()
-            self.signature_tags_steps[i] = _t_signature_tags_steps
+            _t_signature_tags_steps = Rpm.SignatureTagsStep(i, (-1 if i < 1 else self.signature_tags_steps[i - 1].size_tag_idx), self._io, self, self._root)
+            try:
+                _t_signature_tags_steps._read()
+            finally:
+                self.signature_tags_steps.append(_t_signature_tags_steps)
             self._debug['signature_tags_steps']['arr'][i]['end'] = self._io.pos()
 
         self._debug['signature_tags_steps']['end'] = self._io.pos()
 
-    class RecordTypeStringArray(KaitaiStruct):
-        SEQ_FIELDS = ["values"]
-        def __init__(self, num_values, _io, _parent=None, _root=None):
-            self._io = _io
+
+    def _fetch_instances(self):
+        pass
+        self.lead._fetch_instances()
+        self.signature._fetch_instances()
+        if self.ofs_header < 0:
+            pass
+
+        self.header._fetch_instances()
+        if self.ofs_payload < 0:
+            pass
+
+        for i in range(len(self.signature_tags_steps)):
+            pass
+            self.signature_tags_steps[i]._fetch_instances()
+
+        _ = self.payload
+        if hasattr(self, '_m_payload'):
+            pass
+
+
+    class Dummy(KaitaiStruct):
+        SEQ_FIELDS = []
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Rpm.Dummy, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
-            self.num_values = num_values
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
-            self._debug['values']['start'] = self._io.pos()
-            self.values = [None] * (self.num_values)
-            for i in range(self.num_values):
-                if not 'arr' in self._debug['values']:
-                    self._debug['values']['arr'] = []
-                self._debug['values']['arr'].append({'start': self._io.pos()})
-                self.values[i] = (self._io.read_bytes_term(0, False, True, True)).decode(u"UTF-8")
-                self._debug['values']['arr'][i]['end'] = self._io.pos()
+            pass
 
-            self._debug['values']['end'] = self._io.pos()
+
+        def _fetch_instances(self):
+            pass
+
+
+    class Header(KaitaiStruct):
+        """header structure used for both the "header" and "signature", but some tag
+        values have different meanings in signature and header (hence they use
+        different enums)
+        """
+        SEQ_FIELDS = ["header_record", "index_records", "storage_section"]
+        def __init__(self, is_signature, _io, _parent=None, _root=None):
+            super(Rpm.Header, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self.is_signature = is_signature
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['header_record']['start'] = self._io.pos()
+            self.header_record = Rpm.HeaderRecord(self._io, self, self._root)
+            self.header_record._read()
+            self._debug['header_record']['end'] = self._io.pos()
+            self._debug['index_records']['start'] = self._io.pos()
+            self._debug['index_records']['arr'] = []
+            self.index_records = []
+            for i in range(self.header_record.num_index_records):
+                self._debug['index_records']['arr'].append({'start': self._io.pos()})
+                _t_index_records = Rpm.HeaderIndexRecord(self._io, self, self._root)
+                try:
+                    _t_index_records._read()
+                finally:
+                    self.index_records.append(_t_index_records)
+                self._debug['index_records']['arr'][i]['end'] = self._io.pos()
+
+            self._debug['index_records']['end'] = self._io.pos()
+            self._debug['storage_section']['start'] = self._io.pos()
+            self._raw_storage_section = self._io.read_bytes(self.header_record.len_storage_section)
+            _io__raw_storage_section = KaitaiStream(BytesIO(self._raw_storage_section))
+            self.storage_section = Rpm.Dummy(_io__raw_storage_section, self, self._root)
+            self.storage_section._read()
+            self._debug['storage_section']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            self.header_record._fetch_instances()
+            for i in range(len(self.index_records)):
+                pass
+                self.index_records[i]._fetch_instances()
+
+            self.storage_section._fetch_instances()
+
+        @property
+        def is_header(self):
+            if hasattr(self, '_m_is_header'):
+                return self._m_is_header
+
+            self._m_is_header = (not (self.is_signature))
+            return getattr(self, '_m_is_header', None)
+
+
+    class HeaderIndexRecord(KaitaiStruct):
+        SEQ_FIELDS = ["tag_raw", "record_type", "ofs_body", "count"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Rpm.HeaderIndexRecord, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['tag_raw']['start'] = self._io.pos()
+            self.tag_raw = self._io.read_u4be()
+            self._debug['tag_raw']['end'] = self._io.pos()
+            self._debug['record_type']['start'] = self._io.pos()
+            self.record_type = KaitaiStream.resolve_enum(Rpm.RecordTypes, self._io.read_u4be())
+            self._debug['record_type']['end'] = self._io.pos()
+            self._debug['ofs_body']['start'] = self._io.pos()
+            self.ofs_body = self._io.read_u4be()
+            self._debug['ofs_body']['end'] = self._io.pos()
+            self._debug['count']['start'] = self._io.pos()
+            self.count = self._io.read_u4be()
+            self._debug['count']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            _ = self.body
+            if hasattr(self, '_m_body'):
+                pass
+                _on = self.record_type
+                if _on == Rpm.RecordTypes.bin:
+                    pass
+                    self._m_body._fetch_instances()
+                elif _on == Rpm.RecordTypes.char:
+                    pass
+                    self._m_body._fetch_instances()
+                elif _on == Rpm.RecordTypes.i18n_string:
+                    pass
+                    self._m_body._fetch_instances()
+                elif _on == Rpm.RecordTypes.string:
+                    pass
+                    self._m_body._fetch_instances()
+                elif _on == Rpm.RecordTypes.string_array:
+                    pass
+                    self._m_body._fetch_instances()
+                elif _on == Rpm.RecordTypes.uint16:
+                    pass
+                    self._m_body._fetch_instances()
+                elif _on == Rpm.RecordTypes.uint32:
+                    pass
+                    self._m_body._fetch_instances()
+                elif _on == Rpm.RecordTypes.uint64:
+                    pass
+                    self._m_body._fetch_instances()
+                elif _on == Rpm.RecordTypes.uint8:
+                    pass
+                    self._m_body._fetch_instances()
+
+
+        @property
+        def body(self):
+            if hasattr(self, '_m_body'):
+                return self._m_body
+
+            io = self._parent.storage_section._io
+            _pos = io.pos()
+            io.seek(self.ofs_body)
+            self._debug['_m_body']['start'] = io.pos()
+            _on = self.record_type
+            if _on == Rpm.RecordTypes.bin:
+                pass
+                self._m_body = Rpm.RecordTypeBin(self.len_value, io, self, self._root)
+                self._m_body._read()
+            elif _on == Rpm.RecordTypes.char:
+                pass
+                self._m_body = Rpm.RecordTypeUint8(self.num_values, io, self, self._root)
+                self._m_body._read()
+            elif _on == Rpm.RecordTypes.i18n_string:
+                pass
+                self._m_body = Rpm.RecordTypeStringArray(self.num_values, io, self, self._root)
+                self._m_body._read()
+            elif _on == Rpm.RecordTypes.string:
+                pass
+                self._m_body = Rpm.RecordTypeString(io, self, self._root)
+                self._m_body._read()
+            elif _on == Rpm.RecordTypes.string_array:
+                pass
+                self._m_body = Rpm.RecordTypeStringArray(self.num_values, io, self, self._root)
+                self._m_body._read()
+            elif _on == Rpm.RecordTypes.uint16:
+                pass
+                self._m_body = Rpm.RecordTypeUint16(self.num_values, io, self, self._root)
+                self._m_body._read()
+            elif _on == Rpm.RecordTypes.uint32:
+                pass
+                self._m_body = Rpm.RecordTypeUint32(self.num_values, io, self, self._root)
+                self._m_body._read()
+            elif _on == Rpm.RecordTypes.uint64:
+                pass
+                self._m_body = Rpm.RecordTypeUint64(self.num_values, io, self, self._root)
+                self._m_body._read()
+            elif _on == Rpm.RecordTypes.uint8:
+                pass
+                self._m_body = Rpm.RecordTypeUint8(self.num_values, io, self, self._root)
+                self._m_body._read()
+            self._debug['_m_body']['end'] = io.pos()
+            io.seek(_pos)
+            return getattr(self, '_m_body', None)
+
+        @property
+        def header_tag(self):
+            if hasattr(self, '_m_header_tag'):
+                return self._m_header_tag
+
+            if self._parent.is_header:
+                pass
+                self._m_header_tag = KaitaiStream.resolve_enum(Rpm.HeaderTags, self.tag_raw)
+
+            return getattr(self, '_m_header_tag', None)
+
+        @property
+        def len_value(self):
+            if hasattr(self, '_m_len_value'):
+                return self._m_len_value
+
+            if self.record_type == Rpm.RecordTypes.bin:
+                pass
+                self._m_len_value = self.count
+
+            return getattr(self, '_m_len_value', None)
+
+        @property
+        def num_values(self):
+            if hasattr(self, '_m_num_values'):
+                return self._m_num_values
+
+            if self.record_type != Rpm.RecordTypes.bin:
+                pass
+                self._m_num_values = self.count
+
+            return getattr(self, '_m_num_values', None)
+
+        @property
+        def signature_tag(self):
+            if hasattr(self, '_m_signature_tag'):
+                return self._m_signature_tag
+
+            if self._parent.is_signature:
+                pass
+                self._m_signature_tag = KaitaiStream.resolve_enum(Rpm.SignatureTags, self.tag_raw)
+
+            return getattr(self, '_m_signature_tag', None)
+
+
+    class HeaderRecord(KaitaiStruct):
+        SEQ_FIELDS = ["magic", "reserved", "num_index_records", "len_storage_section"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Rpm.HeaderRecord, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['magic']['start'] = self._io.pos()
+            self.magic = self._io.read_bytes(4)
+            self._debug['magic']['end'] = self._io.pos()
+            if not self.magic == b"\x8E\xAD\xE8\x01":
+                raise kaitaistruct.ValidationNotEqualError(b"\x8E\xAD\xE8\x01", self.magic, self._io, u"/types/header_record/seq/0")
+            self._debug['reserved']['start'] = self._io.pos()
+            self.reserved = self._io.read_bytes(4)
+            self._debug['reserved']['end'] = self._io.pos()
+            if not self.reserved == b"\x00\x00\x00\x00":
+                raise kaitaistruct.ValidationNotEqualError(b"\x00\x00\x00\x00", self.reserved, self._io, u"/types/header_record/seq/1")
+            self._debug['num_index_records']['start'] = self._io.pos()
+            self.num_index_records = self._io.read_u4be()
+            self._debug['num_index_records']['end'] = self._io.pos()
+            if not self.num_index_records >= 1:
+                raise kaitaistruct.ValidationLessThanError(1, self.num_index_records, self._io, u"/types/header_record/seq/2")
+            self._debug['len_storage_section']['start'] = self._io.pos()
+            self.len_storage_section = self._io.read_u4be()
+            self._debug['len_storage_section']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
 
 
     class Lead(KaitaiStruct):
@@ -492,9 +753,9 @@ class Rpm(KaitaiStruct):
         """
         SEQ_FIELDS = ["magic", "version", "type", "architecture", "package_name", "os", "signature_type", "reserved"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Rpm.Lead, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -529,203 +790,212 @@ class Rpm(KaitaiStruct):
             self._debug['reserved']['end'] = self._io.pos()
 
 
-    class RecordTypeString(KaitaiStruct):
+        def _fetch_instances(self):
+            pass
+            self.version._fetch_instances()
+
+
+    class RecordTypeBin(KaitaiStruct):
         SEQ_FIELDS = ["values"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+        def __init__(self, len_value, _io, _parent=None, _root=None):
+            super(Rpm.RecordTypeBin, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
+            self.len_value = len_value
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
             self._debug['values']['start'] = self._io.pos()
-            self.values = [None] * (1)
+            self._debug['values']['arr'] = []
+            self.values = []
             for i in range(1):
-                if not 'arr' in self._debug['values']:
-                    self._debug['values']['arr'] = []
                 self._debug['values']['arr'].append({'start': self._io.pos()})
-                self.values[i] = (self._io.read_bytes_term(0, False, True, True)).decode(u"UTF-8")
+                self.values.append(self._io.read_bytes(self.len_value))
                 self._debug['values']['arr'][i]['end'] = self._io.pos()
 
             self._debug['values']['end'] = self._io.pos()
 
 
-    class SignatureTagsStep(KaitaiStruct):
-        SEQ_FIELDS = []
-        def __init__(self, idx, prev_size_tag_idx, _io, _parent=None, _root=None):
-            self._io = _io
+        def _fetch_instances(self):
+            pass
+            for i in range(len(self.values)):
+                pass
+
+
+
+    class RecordTypeString(KaitaiStruct):
+        SEQ_FIELDS = ["values"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Rpm.RecordTypeString, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
-            self.idx = idx
-            self.prev_size_tag_idx = prev_size_tag_idx
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
+            self._debug['values']['start'] = self._io.pos()
+            self._debug['values']['arr'] = []
+            self.values = []
+            for i in range(1):
+                self._debug['values']['arr'].append({'start': self._io.pos()})
+                self.values.append((self._io.read_bytes_term(0, False, True, True)).decode(u"UTF-8"))
+                self._debug['values']['arr'][i]['end'] = self._io.pos()
+
+            self._debug['values']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
             pass
-
-        @property
-        def size_tag_idx(self):
-            if hasattr(self, '_m_size_tag_idx'):
-                return self._m_size_tag_idx if hasattr(self, '_m_size_tag_idx') else None
-
-            self._m_size_tag_idx = (self.prev_size_tag_idx if self.prev_size_tag_idx != -1 else (self.idx if  ((self._parent.signature.index_records[self.idx].signature_tag == Rpm.SignatureTags.size) and (self._parent.signature.index_records[self.idx].record_type == Rpm.RecordTypes.uint32) and (self._parent.signature.index_records[self.idx].num_values >= 1))  else -1))
-            return self._m_size_tag_idx if hasattr(self, '_m_size_tag_idx') else None
+            for i in range(len(self.values)):
+                pass
 
 
-    class RecordTypeUint32(KaitaiStruct):
+
+    class RecordTypeStringArray(KaitaiStruct):
         SEQ_FIELDS = ["values"]
         def __init__(self, num_values, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Rpm.RecordTypeStringArray, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self.num_values = num_values
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
             self._debug['values']['start'] = self._io.pos()
-            self.values = [None] * (self.num_values)
+            self._debug['values']['arr'] = []
+            self.values = []
             for i in range(self.num_values):
-                if not 'arr' in self._debug['values']:
-                    self._debug['values']['arr'] = []
                 self._debug['values']['arr'].append({'start': self._io.pos()})
-                self.values[i] = self._io.read_u4be()
+                self.values.append((self._io.read_bytes_term(0, False, True, True)).decode(u"UTF-8"))
                 self._debug['values']['arr'][i]['end'] = self._io.pos()
 
             self._debug['values']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            for i in range(len(self.values)):
+                pass
+
 
 
     class RecordTypeUint16(KaitaiStruct):
         SEQ_FIELDS = ["values"]
         def __init__(self, num_values, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Rpm.RecordTypeUint16, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self.num_values = num_values
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
             self._debug['values']['start'] = self._io.pos()
-            self.values = [None] * (self.num_values)
+            self._debug['values']['arr'] = []
+            self.values = []
             for i in range(self.num_values):
-                if not 'arr' in self._debug['values']:
-                    self._debug['values']['arr'] = []
                 self._debug['values']['arr'].append({'start': self._io.pos()})
-                self.values[i] = self._io.read_u2be()
+                self.values.append(self._io.read_u2be())
                 self._debug['values']['arr'][i]['end'] = self._io.pos()
 
             self._debug['values']['end'] = self._io.pos()
 
 
-    class HeaderIndexRecord(KaitaiStruct):
-        SEQ_FIELDS = ["tag_raw", "record_type", "ofs_body", "count"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+        def _fetch_instances(self):
+            pass
+            for i in range(len(self.values)):
+                pass
+
+
+
+    class RecordTypeUint32(KaitaiStruct):
+        SEQ_FIELDS = ["values"]
+        def __init__(self, num_values, _io, _parent=None, _root=None):
+            super(Rpm.RecordTypeUint32, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
+            self.num_values = num_values
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
-            self._debug['tag_raw']['start'] = self._io.pos()
-            self.tag_raw = self._io.read_u4be()
-            self._debug['tag_raw']['end'] = self._io.pos()
-            self._debug['record_type']['start'] = self._io.pos()
-            self.record_type = KaitaiStream.resolve_enum(Rpm.RecordTypes, self._io.read_u4be())
-            self._debug['record_type']['end'] = self._io.pos()
-            self._debug['ofs_body']['start'] = self._io.pos()
-            self.ofs_body = self._io.read_u4be()
-            self._debug['ofs_body']['end'] = self._io.pos()
-            self._debug['count']['start'] = self._io.pos()
-            self.count = self._io.read_u4be()
-            self._debug['count']['end'] = self._io.pos()
+            self._debug['values']['start'] = self._io.pos()
+            self._debug['values']['arr'] = []
+            self.values = []
+            for i in range(self.num_values):
+                self._debug['values']['arr'].append({'start': self._io.pos()})
+                self.values.append(self._io.read_u4be())
+                self._debug['values']['arr'][i]['end'] = self._io.pos()
 
-        @property
-        def num_values(self):
-            if hasattr(self, '_m_num_values'):
-                return self._m_num_values if hasattr(self, '_m_num_values') else None
+            self._debug['values']['end'] = self._io.pos()
 
-            if self.record_type != Rpm.RecordTypes.bin:
-                self._m_num_values = self.count
 
-            return self._m_num_values if hasattr(self, '_m_num_values') else None
+        def _fetch_instances(self):
+            pass
+            for i in range(len(self.values)):
+                pass
 
-        @property
-        def body(self):
-            if hasattr(self, '_m_body'):
-                return self._m_body if hasattr(self, '_m_body') else None
 
-            io = self._parent.storage_section._io
-            _pos = io.pos()
-            io.seek(self.ofs_body)
-            self._debug['_m_body']['start'] = io.pos()
-            _on = self.record_type
-            if _on == Rpm.RecordTypes.uint32:
-                self._m_body = Rpm.RecordTypeUint32(self.num_values, io, self, self._root)
-                self._m_body._read()
-            elif _on == Rpm.RecordTypes.uint64:
-                self._m_body = Rpm.RecordTypeUint64(self.num_values, io, self, self._root)
-                self._m_body._read()
-            elif _on == Rpm.RecordTypes.bin:
-                self._m_body = Rpm.RecordTypeBin(self.len_value, io, self, self._root)
-                self._m_body._read()
-            elif _on == Rpm.RecordTypes.string:
-                self._m_body = Rpm.RecordTypeString(io, self, self._root)
-                self._m_body._read()
-            elif _on == Rpm.RecordTypes.uint8:
-                self._m_body = Rpm.RecordTypeUint8(self.num_values, io, self, self._root)
-                self._m_body._read()
-            elif _on == Rpm.RecordTypes.i18n_string:
-                self._m_body = Rpm.RecordTypeStringArray(self.num_values, io, self, self._root)
-                self._m_body._read()
-            elif _on == Rpm.RecordTypes.uint16:
-                self._m_body = Rpm.RecordTypeUint16(self.num_values, io, self, self._root)
-                self._m_body._read()
-            elif _on == Rpm.RecordTypes.char:
-                self._m_body = Rpm.RecordTypeUint8(self.num_values, io, self, self._root)
-                self._m_body._read()
-            elif _on == Rpm.RecordTypes.string_array:
-                self._m_body = Rpm.RecordTypeStringArray(self.num_values, io, self, self._root)
-                self._m_body._read()
-            self._debug['_m_body']['end'] = io.pos()
-            io.seek(_pos)
-            return self._m_body if hasattr(self, '_m_body') else None
 
-        @property
-        def signature_tag(self):
-            if hasattr(self, '_m_signature_tag'):
-                return self._m_signature_tag if hasattr(self, '_m_signature_tag') else None
+    class RecordTypeUint64(KaitaiStruct):
+        SEQ_FIELDS = ["values"]
+        def __init__(self, num_values, _io, _parent=None, _root=None):
+            super(Rpm.RecordTypeUint64, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self.num_values = num_values
+            self._debug = collections.defaultdict(dict)
 
-            if self._parent.is_signature:
-                self._m_signature_tag = KaitaiStream.resolve_enum(Rpm.SignatureTags, self.tag_raw)
+        def _read(self):
+            self._debug['values']['start'] = self._io.pos()
+            self._debug['values']['arr'] = []
+            self.values = []
+            for i in range(self.num_values):
+                self._debug['values']['arr'].append({'start': self._io.pos()})
+                self.values.append(self._io.read_u8be())
+                self._debug['values']['arr'][i]['end'] = self._io.pos()
 
-            return self._m_signature_tag if hasattr(self, '_m_signature_tag') else None
+            self._debug['values']['end'] = self._io.pos()
 
-        @property
-        def len_value(self):
-            if hasattr(self, '_m_len_value'):
-                return self._m_len_value if hasattr(self, '_m_len_value') else None
 
-            if self.record_type == Rpm.RecordTypes.bin:
-                self._m_len_value = self.count
+        def _fetch_instances(self):
+            pass
+            for i in range(len(self.values)):
+                pass
 
-            return self._m_len_value if hasattr(self, '_m_len_value') else None
 
-        @property
-        def header_tag(self):
-            if hasattr(self, '_m_header_tag'):
-                return self._m_header_tag if hasattr(self, '_m_header_tag') else None
 
-            if self._parent.is_header:
-                self._m_header_tag = KaitaiStream.resolve_enum(Rpm.HeaderTags, self.tag_raw)
+    class RecordTypeUint8(KaitaiStruct):
+        SEQ_FIELDS = ["values"]
+        def __init__(self, num_values, _io, _parent=None, _root=None):
+            super(Rpm.RecordTypeUint8, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self.num_values = num_values
+            self._debug = collections.defaultdict(dict)
 
-            return self._m_header_tag if hasattr(self, '_m_header_tag') else None
+        def _read(self):
+            self._debug['values']['start'] = self._io.pos()
+            self._debug['values']['arr'] = []
+            self.values = []
+            for i in range(self.num_values):
+                self._debug['values']['arr'].append({'start': self._io.pos()})
+                self.values.append(self._io.read_u1())
+                self._debug['values']['arr'][i]['end'] = self._io.pos()
+
+            self._debug['values']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            for i in range(len(self.values)):
+                pass
+
 
 
     class RpmVersion(KaitaiStruct):
         SEQ_FIELDS = ["major", "minor"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Rpm.RpmVersion, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -741,193 +1011,86 @@ class Rpm(KaitaiStruct):
             self._debug['minor']['end'] = self._io.pos()
 
 
-    class Dummy(KaitaiStruct):
+        def _fetch_instances(self):
+            pass
+
+
+    class SignatureTagsStep(KaitaiStruct):
         SEQ_FIELDS = []
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+        def __init__(self, idx, prev_size_tag_idx, _io, _parent=None, _root=None):
+            super(Rpm.SignatureTagsStep, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
+            self.idx = idx
+            self.prev_size_tag_idx = prev_size_tag_idx
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
             pass
 
 
-    class RecordTypeUint8(KaitaiStruct):
-        SEQ_FIELDS = ["values"]
-        def __init__(self, num_values, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self.num_values = num_values
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['values']['start'] = self._io.pos()
-            self.values = [None] * (self.num_values)
-            for i in range(self.num_values):
-                if not 'arr' in self._debug['values']:
-                    self._debug['values']['arr'] = []
-                self._debug['values']['arr'].append({'start': self._io.pos()})
-                self.values[i] = self._io.read_u1()
-                self._debug['values']['arr'][i]['end'] = self._io.pos()
-
-            self._debug['values']['end'] = self._io.pos()
-
-
-    class RecordTypeUint64(KaitaiStruct):
-        SEQ_FIELDS = ["values"]
-        def __init__(self, num_values, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self.num_values = num_values
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['values']['start'] = self._io.pos()
-            self.values = [None] * (self.num_values)
-            for i in range(self.num_values):
-                if not 'arr' in self._debug['values']:
-                    self._debug['values']['arr'] = []
-                self._debug['values']['arr'].append({'start': self._io.pos()})
-                self.values[i] = self._io.read_u8be()
-                self._debug['values']['arr'][i]['end'] = self._io.pos()
-
-            self._debug['values']['end'] = self._io.pos()
-
-
-    class RecordTypeBin(KaitaiStruct):
-        SEQ_FIELDS = ["values"]
-        def __init__(self, len_value, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self.len_value = len_value
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['values']['start'] = self._io.pos()
-            self.values = [None] * (1)
-            for i in range(1):
-                if not 'arr' in self._debug['values']:
-                    self._debug['values']['arr'] = []
-                self._debug['values']['arr'].append({'start': self._io.pos()})
-                self.values[i] = self._io.read_bytes(self.len_value)
-                self._debug['values']['arr'][i]['end'] = self._io.pos()
-
-            self._debug['values']['end'] = self._io.pos()
-
-
-    class HeaderRecord(KaitaiStruct):
-        SEQ_FIELDS = ["magic", "reserved", "num_index_records", "len_storage_section"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['magic']['start'] = self._io.pos()
-            self.magic = self._io.read_bytes(4)
-            self._debug['magic']['end'] = self._io.pos()
-            if not self.magic == b"\x8E\xAD\xE8\x01":
-                raise kaitaistruct.ValidationNotEqualError(b"\x8E\xAD\xE8\x01", self.magic, self._io, u"/types/header_record/seq/0")
-            self._debug['reserved']['start'] = self._io.pos()
-            self.reserved = self._io.read_bytes(4)
-            self._debug['reserved']['end'] = self._io.pos()
-            if not self.reserved == b"\x00\x00\x00\x00":
-                raise kaitaistruct.ValidationNotEqualError(b"\x00\x00\x00\x00", self.reserved, self._io, u"/types/header_record/seq/1")
-            self._debug['num_index_records']['start'] = self._io.pos()
-            self.num_index_records = self._io.read_u4be()
-            self._debug['num_index_records']['end'] = self._io.pos()
-            if not self.num_index_records >= 1:
-                raise kaitaistruct.ValidationLessThanError(1, self.num_index_records, self._io, u"/types/header_record/seq/2")
-            self._debug['len_storage_section']['start'] = self._io.pos()
-            self.len_storage_section = self._io.read_u4be()
-            self._debug['len_storage_section']['end'] = self._io.pos()
-
-
-    class Header(KaitaiStruct):
-        """header structure used for both the "header" and "signature", but some tag
-        values have different meanings in signature and header (hence they use
-        different enums)
-        """
-        SEQ_FIELDS = ["header_record", "index_records", "storage_section"]
-        def __init__(self, is_signature, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self.is_signature = is_signature
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['header_record']['start'] = self._io.pos()
-            self.header_record = Rpm.HeaderRecord(self._io, self, self._root)
-            self.header_record._read()
-            self._debug['header_record']['end'] = self._io.pos()
-            self._debug['index_records']['start'] = self._io.pos()
-            self.index_records = [None] * (self.header_record.num_index_records)
-            for i in range(self.header_record.num_index_records):
-                if not 'arr' in self._debug['index_records']:
-                    self._debug['index_records']['arr'] = []
-                self._debug['index_records']['arr'].append({'start': self._io.pos()})
-                _t_index_records = Rpm.HeaderIndexRecord(self._io, self, self._root)
-                _t_index_records._read()
-                self.index_records[i] = _t_index_records
-                self._debug['index_records']['arr'][i]['end'] = self._io.pos()
-
-            self._debug['index_records']['end'] = self._io.pos()
-            self._debug['storage_section']['start'] = self._io.pos()
-            self._raw_storage_section = self._io.read_bytes(self.header_record.len_storage_section)
-            _io__raw_storage_section = KaitaiStream(BytesIO(self._raw_storage_section))
-            self.storage_section = Rpm.Dummy(_io__raw_storage_section, self, self._root)
-            self.storage_section._read()
-            self._debug['storage_section']['end'] = self._io.pos()
+        def _fetch_instances(self):
+            pass
 
         @property
-        def is_header(self):
-            if hasattr(self, '_m_is_header'):
-                return self._m_is_header if hasattr(self, '_m_is_header') else None
+        def size_tag_idx(self):
+            if hasattr(self, '_m_size_tag_idx'):
+                return self._m_size_tag_idx
 
-            self._m_is_header = not (self.is_signature)
-            return self._m_is_header if hasattr(self, '_m_is_header') else None
+            self._m_size_tag_idx = (self.prev_size_tag_idx if self.prev_size_tag_idx != -1 else (self.idx if  ((self._parent.signature.index_records[self.idx].signature_tag == Rpm.SignatureTags.size) and (self._parent.signature.index_records[self.idx].record_type == Rpm.RecordTypes.uint32) and (self._parent.signature.index_records[self.idx].num_values >= 1))  else -1))
+            return getattr(self, '_m_size_tag_idx', None)
 
 
     @property
     def has_signature_size_tag(self):
         if hasattr(self, '_m_has_signature_size_tag'):
-            return self._m_has_signature_size_tag if hasattr(self, '_m_has_signature_size_tag') else None
+            return self._m_has_signature_size_tag
 
         self._m_has_signature_size_tag = self.signature_tags_steps[-1].size_tag_idx != -1
-        return self._m_has_signature_size_tag if hasattr(self, '_m_has_signature_size_tag') else None
+        return getattr(self, '_m_has_signature_size_tag', None)
 
     @property
-    def signature_size_tag(self):
-        if hasattr(self, '_m_signature_size_tag'):
-            return self._m_signature_size_tag if hasattr(self, '_m_signature_size_tag') else None
+    def len_header(self):
+        if hasattr(self, '_m_len_header'):
+            return self._m_len_header
 
-        if self.has_signature_size_tag:
-            self._m_signature_size_tag = self.signature.index_records[self.signature_tags_steps[-1].size_tag_idx]
-
-        return self._m_signature_size_tag if hasattr(self, '_m_signature_size_tag') else None
+        self._m_len_header = self.ofs_payload - self.ofs_header
+        return getattr(self, '_m_len_header', None)
 
     @property
     def len_payload(self):
         if hasattr(self, '_m_len_payload'):
-            return self._m_len_payload if hasattr(self, '_m_len_payload') else None
+            return self._m_len_payload
 
         if self.has_signature_size_tag:
-            self._m_len_payload = (self.signature_size_tag.body.values[0] - self.len_header)
+            pass
+            self._m_len_payload = self.signature_size_tag.body.values[0] - self.len_header
 
-        return self._m_len_payload if hasattr(self, '_m_len_payload') else None
+        return getattr(self, '_m_len_payload', None)
+
+    @property
+    def ofs_header(self):
+        if hasattr(self, '_m_ofs_header'):
+            return self._m_ofs_header
+
+        self._m_ofs_header = self._io.pos()
+        return getattr(self, '_m_ofs_header', None)
+
+    @property
+    def ofs_payload(self):
+        if hasattr(self, '_m_ofs_payload'):
+            return self._m_ofs_payload
+
+        self._m_ofs_payload = self._io.pos()
+        return getattr(self, '_m_ofs_payload', None)
 
     @property
     def payload(self):
         if hasattr(self, '_m_payload'):
-            return self._m_payload if hasattr(self, '_m_payload') else None
+            return self._m_payload
 
         if self.has_signature_size_tag:
+            pass
             _pos = self._io.pos()
             self._io.seek(self.ofs_payload)
             self._debug['_m_payload']['start'] = self._io.pos()
@@ -935,30 +1098,17 @@ class Rpm(KaitaiStruct):
             self._debug['_m_payload']['end'] = self._io.pos()
             self._io.seek(_pos)
 
-        return self._m_payload if hasattr(self, '_m_payload') else None
+        return getattr(self, '_m_payload', None)
 
     @property
-    def len_header(self):
-        if hasattr(self, '_m_len_header'):
-            return self._m_len_header if hasattr(self, '_m_len_header') else None
+    def signature_size_tag(self):
+        if hasattr(self, '_m_signature_size_tag'):
+            return self._m_signature_size_tag
 
-        self._m_len_header = (self.ofs_payload - self.ofs_header)
-        return self._m_len_header if hasattr(self, '_m_len_header') else None
+        if self.has_signature_size_tag:
+            pass
+            self._m_signature_size_tag = self.signature.index_records[self.signature_tags_steps[-1].size_tag_idx]
 
-    @property
-    def ofs_header(self):
-        if hasattr(self, '_m_ofs_header'):
-            return self._m_ofs_header if hasattr(self, '_m_ofs_header') else None
-
-        self._m_ofs_header = self._io.pos()
-        return self._m_ofs_header if hasattr(self, '_m_ofs_header') else None
-
-    @property
-    def ofs_payload(self):
-        if hasattr(self, '_m_ofs_payload'):
-            return self._m_ofs_payload if hasattr(self, '_m_ofs_payload') else None
-
-        self._m_ofs_payload = self._io.pos()
-        return self._m_ofs_payload if hasattr(self, '_m_ofs_payload') else None
+        return getattr(self, '_m_signature_size_tag', None)
 
 

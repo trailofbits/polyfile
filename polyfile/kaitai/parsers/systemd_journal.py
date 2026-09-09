@@ -1,14 +1,14 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
+# type: ignore
 
-from packaging.version import parse as parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
-from enum import Enum
+from enum import IntEnum
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
-    raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
+    raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class SystemdJournal(KaitaiStruct):
     """systemd, a popular user-space system/service management suite on Linux,
@@ -24,15 +24,15 @@ class SystemdJournal(KaitaiStruct):
        Source - https://www.freedesktop.org/wiki/Software/systemd/journal-files/
     """
 
-    class State(Enum):
+    class State(IntEnum):
         offline = 0
         online = 1
         archived = 2
     SEQ_FIELDS = ["header", "objects"]
     def __init__(self, _io, _parent=None, _root=None):
-        self._io = _io
+        super(SystemdJournal, self).__init__(_io)
         self._parent = _parent
-        self._root = _root if _root else self
+        self._root = _root or self
         self._debug = collections.defaultdict(dict)
 
     def _read(self):
@@ -43,24 +43,180 @@ class SystemdJournal(KaitaiStruct):
         self.header._read()
         self._debug['header']['end'] = self._io.pos()
         self._debug['objects']['start'] = self._io.pos()
-        self.objects = [None] * (self.header.num_objects)
+        self._debug['objects']['arr'] = []
+        self.objects = []
         for i in range(self.header.num_objects):
-            if not 'arr' in self._debug['objects']:
-                self._debug['objects']['arr'] = []
             self._debug['objects']['arr'].append({'start': self._io.pos()})
             _t_objects = SystemdJournal.JournalObject(self._io, self, self._root)
-            _t_objects._read()
-            self.objects[i] = _t_objects
+            try:
+                _t_objects._read()
+            finally:
+                self.objects.append(_t_objects)
             self._debug['objects']['arr'][i]['end'] = self._io.pos()
 
         self._debug['objects']['end'] = self._io.pos()
 
+
+    def _fetch_instances(self):
+        pass
+        self.header._fetch_instances()
+        for i in range(len(self.objects)):
+            pass
+            self.objects[i]._fetch_instances()
+
+        _ = self.data_hash_table
+        if hasattr(self, '_m_data_hash_table'):
+            pass
+
+        _ = self.field_hash_table
+        if hasattr(self, '_m_field_hash_table'):
+            pass
+
+        _ = self.len_header
+        if hasattr(self, '_m_len_header'):
+            pass
+
+
+    class DataObject(KaitaiStruct):
+        """Data objects are designed to carry log payload, typically in
+        form of a "key=value" string in `payload` attribute.
+        
+        .. seealso::
+           Source - https://www.freedesktop.org/wiki/Software/systemd/journal-files/#dataobjects
+        """
+        SEQ_FIELDS = ["hash", "ofs_next_hash", "ofs_head_field", "ofs_entry", "ofs_entry_array", "num_entries", "payload"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(SystemdJournal.DataObject, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['hash']['start'] = self._io.pos()
+            self.hash = self._io.read_u8le()
+            self._debug['hash']['end'] = self._io.pos()
+            self._debug['ofs_next_hash']['start'] = self._io.pos()
+            self.ofs_next_hash = self._io.read_u8le()
+            self._debug['ofs_next_hash']['end'] = self._io.pos()
+            self._debug['ofs_head_field']['start'] = self._io.pos()
+            self.ofs_head_field = self._io.read_u8le()
+            self._debug['ofs_head_field']['end'] = self._io.pos()
+            self._debug['ofs_entry']['start'] = self._io.pos()
+            self.ofs_entry = self._io.read_u8le()
+            self._debug['ofs_entry']['end'] = self._io.pos()
+            self._debug['ofs_entry_array']['start'] = self._io.pos()
+            self.ofs_entry_array = self._io.read_u8le()
+            self._debug['ofs_entry_array']['end'] = self._io.pos()
+            self._debug['num_entries']['start'] = self._io.pos()
+            self.num_entries = self._io.read_u8le()
+            self._debug['num_entries']['end'] = self._io.pos()
+            self._debug['payload']['start'] = self._io.pos()
+            self.payload = self._io.read_bytes_full()
+            self._debug['payload']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            _ = self.entry
+            if hasattr(self, '_m_entry'):
+                pass
+                self._m_entry._fetch_instances()
+
+            _ = self.entry_array
+            if hasattr(self, '_m_entry_array'):
+                pass
+                self._m_entry_array._fetch_instances()
+
+            _ = self.head_field
+            if hasattr(self, '_m_head_field'):
+                pass
+                self._m_head_field._fetch_instances()
+
+            _ = self.next_hash
+            if hasattr(self, '_m_next_hash'):
+                pass
+                self._m_next_hash._fetch_instances()
+
+
+        @property
+        def entry(self):
+            if hasattr(self, '_m_entry'):
+                return self._m_entry
+
+            if self.ofs_entry != 0:
+                pass
+                io = self._root._io
+                _pos = io.pos()
+                io.seek(self.ofs_entry)
+                self._debug['_m_entry']['start'] = io.pos()
+                self._m_entry = SystemdJournal.JournalObject(io, self, self._root)
+                self._m_entry._read()
+                self._debug['_m_entry']['end'] = io.pos()
+                io.seek(_pos)
+
+            return getattr(self, '_m_entry', None)
+
+        @property
+        def entry_array(self):
+            if hasattr(self, '_m_entry_array'):
+                return self._m_entry_array
+
+            if self.ofs_entry_array != 0:
+                pass
+                io = self._root._io
+                _pos = io.pos()
+                io.seek(self.ofs_entry_array)
+                self._debug['_m_entry_array']['start'] = io.pos()
+                self._m_entry_array = SystemdJournal.JournalObject(io, self, self._root)
+                self._m_entry_array._read()
+                self._debug['_m_entry_array']['end'] = io.pos()
+                io.seek(_pos)
+
+            return getattr(self, '_m_entry_array', None)
+
+        @property
+        def head_field(self):
+            if hasattr(self, '_m_head_field'):
+                return self._m_head_field
+
+            if self.ofs_head_field != 0:
+                pass
+                io = self._root._io
+                _pos = io.pos()
+                io.seek(self.ofs_head_field)
+                self._debug['_m_head_field']['start'] = io.pos()
+                self._m_head_field = SystemdJournal.JournalObject(io, self, self._root)
+                self._m_head_field._read()
+                self._debug['_m_head_field']['end'] = io.pos()
+                io.seek(_pos)
+
+            return getattr(self, '_m_head_field', None)
+
+        @property
+        def next_hash(self):
+            if hasattr(self, '_m_next_hash'):
+                return self._m_next_hash
+
+            if self.ofs_next_hash != 0:
+                pass
+                io = self._root._io
+                _pos = io.pos()
+                io.seek(self.ofs_next_hash)
+                self._debug['_m_next_hash']['start'] = io.pos()
+                self._m_next_hash = SystemdJournal.JournalObject(io, self, self._root)
+                self._m_next_hash._read()
+                self._debug['_m_next_hash']['end'] = io.pos()
+                io.seek(_pos)
+
+            return getattr(self, '_m_next_hash', None)
+
+
     class Header(KaitaiStruct):
         SEQ_FIELDS = ["signature", "compatible_flags", "incompatible_flags", "state", "reserved", "file_id", "machine_id", "boot_id", "seqnum_id", "len_header", "len_arena", "ofs_data_hash_table", "len_data_hash_table", "ofs_field_hash_table", "len_field_hash_table", "ofs_tail_object", "num_objects", "num_entries", "tail_entry_seqnum", "head_entry_seqnum", "ofs_entry_array", "head_entry_realtime", "tail_entry_realtime", "tail_entry_monotonic", "num_data", "num_fields", "num_tags", "num_entry_arrays"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(SystemdJournal.Header, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -138,25 +294,45 @@ class SystemdJournal(KaitaiStruct):
             self._debug['tail_entry_monotonic']['start'] = self._io.pos()
             self.tail_entry_monotonic = self._io.read_u8le()
             self._debug['tail_entry_monotonic']['end'] = self._io.pos()
-            if not (self._io.is_eof()):
+            if (not (self._io.is_eof())):
+                pass
                 self._debug['num_data']['start'] = self._io.pos()
                 self.num_data = self._io.read_u8le()
                 self._debug['num_data']['end'] = self._io.pos()
 
-            if not (self._io.is_eof()):
+            if (not (self._io.is_eof())):
+                pass
                 self._debug['num_fields']['start'] = self._io.pos()
                 self.num_fields = self._io.read_u8le()
                 self._debug['num_fields']['end'] = self._io.pos()
 
-            if not (self._io.is_eof()):
+            if (not (self._io.is_eof())):
+                pass
                 self._debug['num_tags']['start'] = self._io.pos()
                 self.num_tags = self._io.read_u8le()
                 self._debug['num_tags']['end'] = self._io.pos()
 
-            if not (self._io.is_eof()):
+            if (not (self._io.is_eof())):
+                pass
                 self._debug['num_entry_arrays']['start'] = self._io.pos()
                 self.num_entry_arrays = self._io.read_u8le()
                 self._debug['num_entry_arrays']['end'] = self._io.pos()
+
+
+
+        def _fetch_instances(self):
+            pass
+            if (not (self._io.is_eof())):
+                pass
+
+            if (not (self._io.is_eof())):
+                pass
+
+            if (not (self._io.is_eof())):
+                pass
+
+            if (not (self._io.is_eof())):
+                pass
 
 
 
@@ -166,7 +342,7 @@ class SystemdJournal(KaitaiStruct):
            Source - https://www.freedesktop.org/wiki/Software/systemd/journal-files/#objects
         """
 
-        class ObjectTypes(Enum):
+        class ObjectTypes(IntEnum):
             unused = 0
             data = 1
             field = 2
@@ -177,14 +353,14 @@ class SystemdJournal(KaitaiStruct):
             tag = 7
         SEQ_FIELDS = ["padding", "object_type", "flags", "reserved", "len_object", "payload"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(SystemdJournal.JournalObject, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
             self._debug['padding']['start'] = self._io.pos()
-            self.padding = self._io.read_bytes(((8 - self._io.pos()) % 8))
+            self.padding = self._io.read_bytes((8 - self._io.pos()) % 8)
             self._debug['padding']['end'] = self._io.pos()
             self._debug['object_type']['start'] = self._io.pos()
             self.object_type = KaitaiStream.resolve_enum(SystemdJournal.JournalObject.ObjectTypes, self._io.read_u1())
@@ -201,141 +377,31 @@ class SystemdJournal(KaitaiStruct):
             self._debug['payload']['start'] = self._io.pos()
             _on = self.object_type
             if _on == SystemdJournal.JournalObject.ObjectTypes.data:
-                self._raw_payload = self._io.read_bytes((self.len_object - 16))
+                pass
+                self._raw_payload = self._io.read_bytes(self.len_object - 16)
                 _io__raw_payload = KaitaiStream(BytesIO(self._raw_payload))
                 self.payload = SystemdJournal.DataObject(_io__raw_payload, self, self._root)
                 self.payload._read()
             else:
-                self.payload = self._io.read_bytes((self.len_object - 16))
+                pass
+                self.payload = self._io.read_bytes(self.len_object - 16)
             self._debug['payload']['end'] = self._io.pos()
 
 
-    class DataObject(KaitaiStruct):
-        """Data objects are designed to carry log payload, typically in
-        form of a "key=value" string in `payload` attribute.
-        
-        .. seealso::
-           Source - https://www.freedesktop.org/wiki/Software/systemd/journal-files/#dataobjects
-        """
-        SEQ_FIELDS = ["hash", "ofs_next_hash", "ofs_head_field", "ofs_entry", "ofs_entry_array", "num_entries", "payload"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
+        def _fetch_instances(self):
+            pass
+            _on = self.object_type
+            if _on == SystemdJournal.JournalObject.ObjectTypes.data:
+                pass
+                self.payload._fetch_instances()
+            else:
+                pass
 
-        def _read(self):
-            self._debug['hash']['start'] = self._io.pos()
-            self.hash = self._io.read_u8le()
-            self._debug['hash']['end'] = self._io.pos()
-            self._debug['ofs_next_hash']['start'] = self._io.pos()
-            self.ofs_next_hash = self._io.read_u8le()
-            self._debug['ofs_next_hash']['end'] = self._io.pos()
-            self._debug['ofs_head_field']['start'] = self._io.pos()
-            self.ofs_head_field = self._io.read_u8le()
-            self._debug['ofs_head_field']['end'] = self._io.pos()
-            self._debug['ofs_entry']['start'] = self._io.pos()
-            self.ofs_entry = self._io.read_u8le()
-            self._debug['ofs_entry']['end'] = self._io.pos()
-            self._debug['ofs_entry_array']['start'] = self._io.pos()
-            self.ofs_entry_array = self._io.read_u8le()
-            self._debug['ofs_entry_array']['end'] = self._io.pos()
-            self._debug['num_entries']['start'] = self._io.pos()
-            self.num_entries = self._io.read_u8le()
-            self._debug['num_entries']['end'] = self._io.pos()
-            self._debug['payload']['start'] = self._io.pos()
-            self.payload = self._io.read_bytes_full()
-            self._debug['payload']['end'] = self._io.pos()
-
-        @property
-        def next_hash(self):
-            if hasattr(self, '_m_next_hash'):
-                return self._m_next_hash if hasattr(self, '_m_next_hash') else None
-
-            if self.ofs_next_hash != 0:
-                io = self._root._io
-                _pos = io.pos()
-                io.seek(self.ofs_next_hash)
-                self._debug['_m_next_hash']['start'] = io.pos()
-                self._m_next_hash = SystemdJournal.JournalObject(io, self, self._root)
-                self._m_next_hash._read()
-                self._debug['_m_next_hash']['end'] = io.pos()
-                io.seek(_pos)
-
-            return self._m_next_hash if hasattr(self, '_m_next_hash') else None
-
-        @property
-        def head_field(self):
-            if hasattr(self, '_m_head_field'):
-                return self._m_head_field if hasattr(self, '_m_head_field') else None
-
-            if self.ofs_head_field != 0:
-                io = self._root._io
-                _pos = io.pos()
-                io.seek(self.ofs_head_field)
-                self._debug['_m_head_field']['start'] = io.pos()
-                self._m_head_field = SystemdJournal.JournalObject(io, self, self._root)
-                self._m_head_field._read()
-                self._debug['_m_head_field']['end'] = io.pos()
-                io.seek(_pos)
-
-            return self._m_head_field if hasattr(self, '_m_head_field') else None
-
-        @property
-        def entry(self):
-            if hasattr(self, '_m_entry'):
-                return self._m_entry if hasattr(self, '_m_entry') else None
-
-            if self.ofs_entry != 0:
-                io = self._root._io
-                _pos = io.pos()
-                io.seek(self.ofs_entry)
-                self._debug['_m_entry']['start'] = io.pos()
-                self._m_entry = SystemdJournal.JournalObject(io, self, self._root)
-                self._m_entry._read()
-                self._debug['_m_entry']['end'] = io.pos()
-                io.seek(_pos)
-
-            return self._m_entry if hasattr(self, '_m_entry') else None
-
-        @property
-        def entry_array(self):
-            if hasattr(self, '_m_entry_array'):
-                return self._m_entry_array if hasattr(self, '_m_entry_array') else None
-
-            if self.ofs_entry_array != 0:
-                io = self._root._io
-                _pos = io.pos()
-                io.seek(self.ofs_entry_array)
-                self._debug['_m_entry_array']['start'] = io.pos()
-                self._m_entry_array = SystemdJournal.JournalObject(io, self, self._root)
-                self._m_entry_array._read()
-                self._debug['_m_entry_array']['end'] = io.pos()
-                io.seek(_pos)
-
-            return self._m_entry_array if hasattr(self, '_m_entry_array') else None
-
-
-    @property
-    def len_header(self):
-        """Header length is used to set substream size, as it thus required
-        prior to declaration of header.
-        """
-        if hasattr(self, '_m_len_header'):
-            return self._m_len_header if hasattr(self, '_m_len_header') else None
-
-        _pos = self._io.pos()
-        self._io.seek(88)
-        self._debug['_m_len_header']['start'] = self._io.pos()
-        self._m_len_header = self._io.read_u8le()
-        self._debug['_m_len_header']['end'] = self._io.pos()
-        self._io.seek(_pos)
-        return self._m_len_header if hasattr(self, '_m_len_header') else None
 
     @property
     def data_hash_table(self):
         if hasattr(self, '_m_data_hash_table'):
-            return self._m_data_hash_table if hasattr(self, '_m_data_hash_table') else None
+            return self._m_data_hash_table
 
         _pos = self._io.pos()
         self._io.seek(self.header.ofs_data_hash_table)
@@ -343,12 +409,12 @@ class SystemdJournal(KaitaiStruct):
         self._m_data_hash_table = self._io.read_bytes(self.header.len_data_hash_table)
         self._debug['_m_data_hash_table']['end'] = self._io.pos()
         self._io.seek(_pos)
-        return self._m_data_hash_table if hasattr(self, '_m_data_hash_table') else None
+        return getattr(self, '_m_data_hash_table', None)
 
     @property
     def field_hash_table(self):
         if hasattr(self, '_m_field_hash_table'):
-            return self._m_field_hash_table if hasattr(self, '_m_field_hash_table') else None
+            return self._m_field_hash_table
 
         _pos = self._io.pos()
         self._io.seek(self.header.ofs_field_hash_table)
@@ -356,6 +422,22 @@ class SystemdJournal(KaitaiStruct):
         self._m_field_hash_table = self._io.read_bytes(self.header.len_field_hash_table)
         self._debug['_m_field_hash_table']['end'] = self._io.pos()
         self._io.seek(_pos)
-        return self._m_field_hash_table if hasattr(self, '_m_field_hash_table') else None
+        return getattr(self, '_m_field_hash_table', None)
+
+    @property
+    def len_header(self):
+        """Header length is used to set substream size, as it thus required
+        prior to declaration of header.
+        """
+        if hasattr(self, '_m_len_header'):
+            return self._m_len_header
+
+        _pos = self._io.pos()
+        self._io.seek(88)
+        self._debug['_m_len_header']['start'] = self._io.pos()
+        self._m_len_header = self._io.read_u8le()
+        self._debug['_m_len_header']['end'] = self._io.pos()
+        self._io.seek(_pos)
+        return getattr(self, '_m_len_header', None)
 
 

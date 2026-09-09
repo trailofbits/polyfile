@@ -1,16 +1,16 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
+# type: ignore
 
-from packaging.version import parse as parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
-from enum import Enum
+from polyfile.kaitai.parsers import asn1_der
+from enum import IntEnum
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
-    raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
+    raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
-from polyfile.kaitai.parsers import asn1_der
 class MachO(KaitaiStruct):
     """
     .. seealso::
@@ -41,13 +41,7 @@ class MachO(KaitaiStruct):
        Source - https://opensource.apple.com/source/dyld/dyld-852/src/ImageLoaderMachOCompressed.cpp.auto.html
     """
 
-    class MagicType(Enum):
-        macho_le_x86 = 3472551422
-        macho_le_x64 = 3489328638
-        macho_be_x86 = 4277009102
-        macho_be_x64 = 4277009103
-
-    class CpuType(Enum):
+    class CpuType(IntEnum):
         vax = 1
         romp = 2
         ns32032 = 4
@@ -69,7 +63,7 @@ class MachO(KaitaiStruct):
         powerpc64 = 16777234
         any = 4294967295
 
-    class FileType(Enum):
+    class FileType(IntEnum):
         object = 1
         execute = 2
         fvmlib = 3
@@ -82,7 +76,7 @@ class MachO(KaitaiStruct):
         dsym = 10
         kext_bundle = 11
 
-    class LoadCommandType(Enum):
+    class LoadCommandType(IntEnum):
         segment = 1
         symtab = 2
         symseg = 3
@@ -134,11 +128,17 @@ class MachO(KaitaiStruct):
         dyld_info_only = 2147483682
         load_upward_dylib = 2147483683
         main = 2147483688
+
+    class MagicType(IntEnum):
+        macho_le_x86 = 3472551422
+        macho_le_x64 = 3489328638
+        macho_be_x86 = 4277009102
+        macho_be_x64 = 4277009103
     SEQ_FIELDS = ["magic", "header", "load_commands"]
     def __init__(self, _io, _parent=None, _root=None):
-        self._io = _io
+        super(MachO, self).__init__(_io)
         self._parent = _parent
-        self._root = _root if _root else self
+        self._root = _root or self
         self._debug = collections.defaultdict(dict)
 
     def _read(self):
@@ -150,119 +150,139 @@ class MachO(KaitaiStruct):
         self.header._read()
         self._debug['header']['end'] = self._io.pos()
         self._debug['load_commands']['start'] = self._io.pos()
-        self.load_commands = [None] * (self.header.ncmds)
+        self._debug['load_commands']['arr'] = []
+        self.load_commands = []
         for i in range(self.header.ncmds):
-            if not 'arr' in self._debug['load_commands']:
-                self._debug['load_commands']['arr'] = []
             self._debug['load_commands']['arr'].append({'start': self._io.pos()})
             _t_load_commands = MachO.LoadCommand(self._io, self, self._root)
-            _t_load_commands._read()
-            self.load_commands[i] = _t_load_commands
+            try:
+                _t_load_commands._read()
+            finally:
+                self.load_commands.append(_t_load_commands)
             self._debug['load_commands']['arr'][i]['end'] = self._io.pos()
 
         self._debug['load_commands']['end'] = self._io.pos()
 
-    class RpathCommand(KaitaiStruct):
-        SEQ_FIELDS = ["path_offset", "path"]
+
+    def _fetch_instances(self):
+        pass
+        self.header._fetch_instances()
+        for i in range(len(self.load_commands)):
+            pass
+            self.load_commands[i]._fetch_instances()
+
+
+    class BuildVersionCommand(KaitaiStruct):
+        SEQ_FIELDS = ["platform", "minos", "sdk", "ntools", "tools"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(MachO.BuildVersionCommand, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
-            self._debug['path_offset']['start'] = self._io.pos()
-            self.path_offset = self._io.read_u4le()
-            self._debug['path_offset']['end'] = self._io.pos()
-            self._debug['path']['start'] = self._io.pos()
-            self.path = (self._io.read_bytes_term(0, False, True, True)).decode(u"utf-8")
-            self._debug['path']['end'] = self._io.pos()
+            self._debug['platform']['start'] = self._io.pos()
+            self.platform = self._io.read_u4le()
+            self._debug['platform']['end'] = self._io.pos()
+            self._debug['minos']['start'] = self._io.pos()
+            self.minos = self._io.read_u4le()
+            self._debug['minos']['end'] = self._io.pos()
+            self._debug['sdk']['start'] = self._io.pos()
+            self.sdk = self._io.read_u4le()
+            self._debug['sdk']['end'] = self._io.pos()
+            self._debug['ntools']['start'] = self._io.pos()
+            self.ntools = self._io.read_u4le()
+            self._debug['ntools']['end'] = self._io.pos()
+            self._debug['tools']['start'] = self._io.pos()
+            self._debug['tools']['arr'] = []
+            self.tools = []
+            for i in range(self.ntools):
+                self._debug['tools']['arr'].append({'start': self._io.pos()})
+                _t_tools = MachO.BuildVersionCommand.BuildToolVersion(self._io, self, self._root)
+                try:
+                    _t_tools._read()
+                finally:
+                    self.tools.append(_t_tools)
+                self._debug['tools']['arr'][i]['end'] = self._io.pos()
+
+            self._debug['tools']['end'] = self._io.pos()
 
 
-    class Uleb128(KaitaiStruct):
-        SEQ_FIELDS = ["b1", "b2", "b3", "b4", "b5", "b6", "b7", "b8", "b9", "b10"]
+        def _fetch_instances(self):
+            pass
+            for i in range(len(self.tools)):
+                pass
+                self.tools[i]._fetch_instances()
+
+
+        class BuildToolVersion(KaitaiStruct):
+            SEQ_FIELDS = ["tool", "version"]
+            def __init__(self, _io, _parent=None, _root=None):
+                super(MachO.BuildVersionCommand.BuildToolVersion, self).__init__(_io)
+                self._parent = _parent
+                self._root = _root
+                self._debug = collections.defaultdict(dict)
+
+            def _read(self):
+                self._debug['tool']['start'] = self._io.pos()
+                self.tool = self._io.read_u4le()
+                self._debug['tool']['end'] = self._io.pos()
+                self._debug['version']['start'] = self._io.pos()
+                self.version = self._io.read_u4le()
+                self._debug['version']['end'] = self._io.pos()
+
+
+            def _fetch_instances(self):
+                pass
+
+
+
+    class CodeSignatureCommand(KaitaiStruct):
+        SEQ_FIELDS = ["data_off", "data_size"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(MachO.CodeSignatureCommand, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
-            self._debug['b1']['start'] = self._io.pos()
-            self.b1 = self._io.read_u1()
-            self._debug['b1']['end'] = self._io.pos()
-            if (self.b1 & 128) != 0:
-                self._debug['b2']['start'] = self._io.pos()
-                self.b2 = self._io.read_u1()
-                self._debug['b2']['end'] = self._io.pos()
+            self._debug['data_off']['start'] = self._io.pos()
+            self.data_off = self._io.read_u4le()
+            self._debug['data_off']['end'] = self._io.pos()
+            self._debug['data_size']['start'] = self._io.pos()
+            self.data_size = self._io.read_u4le()
+            self._debug['data_size']['end'] = self._io.pos()
 
-            if (self.b2 & 128) != 0:
-                self._debug['b3']['start'] = self._io.pos()
-                self.b3 = self._io.read_u1()
-                self._debug['b3']['end'] = self._io.pos()
 
-            if (self.b3 & 128) != 0:
-                self._debug['b4']['start'] = self._io.pos()
-                self.b4 = self._io.read_u1()
-                self._debug['b4']['end'] = self._io.pos()
-
-            if (self.b4 & 128) != 0:
-                self._debug['b5']['start'] = self._io.pos()
-                self.b5 = self._io.read_u1()
-                self._debug['b5']['end'] = self._io.pos()
-
-            if (self.b5 & 128) != 0:
-                self._debug['b6']['start'] = self._io.pos()
-                self.b6 = self._io.read_u1()
-                self._debug['b6']['end'] = self._io.pos()
-
-            if (self.b6 & 128) != 0:
-                self._debug['b7']['start'] = self._io.pos()
-                self.b7 = self._io.read_u1()
-                self._debug['b7']['end'] = self._io.pos()
-
-            if (self.b7 & 128) != 0:
-                self._debug['b8']['start'] = self._io.pos()
-                self.b8 = self._io.read_u1()
-                self._debug['b8']['end'] = self._io.pos()
-
-            if (self.b8 & 128) != 0:
-                self._debug['b9']['start'] = self._io.pos()
-                self.b9 = self._io.read_u1()
-                self._debug['b9']['end'] = self._io.pos()
-
-            if (self.b9 & 128) != 0:
-                self._debug['b10']['start'] = self._io.pos()
-                self.b10 = self._io.read_u1()
-                self._debug['b10']['end'] = self._io.pos()
+        def _fetch_instances(self):
+            pass
+            _ = self.code_signature
+            if hasattr(self, '_m_code_signature'):
+                pass
+                self._m_code_signature._fetch_instances()
 
 
         @property
-        def value(self):
-            if hasattr(self, '_m_value'):
-                return self._m_value if hasattr(self, '_m_value') else None
+        def code_signature(self):
+            if hasattr(self, '_m_code_signature'):
+                return self._m_code_signature
 
-            self._m_value = (((self.b1 % 128) << 0) + (0 if (self.b1 & 128) == 0 else (((self.b2 % 128) << 7) + (0 if (self.b2 & 128) == 0 else (((self.b3 % 128) << 14) + (0 if (self.b3 & 128) == 0 else (((self.b4 % 128) << 21) + (0 if (self.b4 & 128) == 0 else (((self.b5 % 128) << 28) + (0 if (self.b5 & 128) == 0 else (((self.b6 % 128) << 35) + (0 if (self.b6 & 128) == 0 else (((self.b7 % 128) << 42) + (0 if (self.b7 & 128) == 0 else (((self.b8 % 128) << 49) + (0 if (self.b8 & 128) == 0 else (((self.b9 % 128) << 56) + (0 if (self.b8 & 128) == 0 else ((self.b10 % 128) << 63)))))))))))))))))))
-            return self._m_value if hasattr(self, '_m_value') else None
-
-
-    class SourceVersionCommand(KaitaiStruct):
-        SEQ_FIELDS = ["version"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['version']['start'] = self._io.pos()
-            self.version = self._io.read_u8le()
-            self._debug['version']['end'] = self._io.pos()
+            io = self._root._io
+            _pos = io.pos()
+            io.seek(self.data_off)
+            self._debug['_m_code_signature']['start'] = io.pos()
+            self._raw__m_code_signature = io.read_bytes(self.data_size)
+            _io__raw__m_code_signature = KaitaiStream(BytesIO(self._raw__m_code_signature))
+            self._m_code_signature = MachO.CsBlob(_io__raw__m_code_signature, self, self._root)
+            self._m_code_signature._read()
+            self._debug['_m_code_signature']['end'] = io.pos()
+            io.seek(_pos)
+            return getattr(self, '_m_code_signature', None)
 
 
     class CsBlob(KaitaiStruct):
 
-        class CsMagic(Enum):
+        class CsMagic(IntEnum):
             blob_wrapper = 4208855809
             requirement = 4208856064
             requirements = 4208856065
@@ -273,9 +293,9 @@ class MachO(KaitaiStruct):
             der_entitlements = 4208882034
         SEQ_FIELDS = ["magic", "length", "body"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(MachO.CsBlob, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -287,56 +307,168 @@ class MachO(KaitaiStruct):
             self._debug['length']['end'] = self._io.pos()
             self._debug['body']['start'] = self._io.pos()
             _on = self.magic
-            if _on == MachO.CsBlob.CsMagic.requirement:
-                self._raw_body = self._io.read_bytes((self.length - 8))
-                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
-                self.body = MachO.CsBlob.Requirement(_io__raw_body, self, self._root)
-                self.body._read()
-            elif _on == MachO.CsBlob.CsMagic.code_directory:
-                self._raw_body = self._io.read_bytes((self.length - 8))
-                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
-                self.body = MachO.CsBlob.CodeDirectory(_io__raw_body, self, self._root)
-                self.body._read()
-            elif _on == MachO.CsBlob.CsMagic.requirements:
-                self._raw_body = self._io.read_bytes((self.length - 8))
-                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
-                self.body = MachO.CsBlob.Requirements(_io__raw_body, self, self._root)
-                self.body._read()
-            elif _on == MachO.CsBlob.CsMagic.blob_wrapper:
-                self._raw_body = self._io.read_bytes((self.length - 8))
+            if _on == MachO.CsBlob.CsMagic.blob_wrapper:
+                pass
+                self._raw_body = self._io.read_bytes(self.length - 8)
                 _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
                 self.body = MachO.CsBlob.BlobWrapper(_io__raw_body, self, self._root)
                 self.body._read()
+            elif _on == MachO.CsBlob.CsMagic.code_directory:
+                pass
+                self._raw_body = self._io.read_bytes(self.length - 8)
+                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
+                self.body = MachO.CsBlob.CodeDirectory(_io__raw_body, self, self._root)
+                self.body._read()
+            elif _on == MachO.CsBlob.CsMagic.der_entitlements:
+                pass
+                self._raw_body = self._io.read_bytes(self.length - 8)
+                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
+                self.body = asn1_der.Asn1Der(_io__raw_body)
+                self.body._read()
+            elif _on == MachO.CsBlob.CsMagic.detached_signature:
+                pass
+                self._raw_body = self._io.read_bytes(self.length - 8)
+                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
+                self.body = MachO.CsBlob.SuperBlob(_io__raw_body, self, self._root)
+                self.body._read()
             elif _on == MachO.CsBlob.CsMagic.embedded_signature:
-                self._raw_body = self._io.read_bytes((self.length - 8))
+                pass
+                self._raw_body = self._io.read_bytes(self.length - 8)
                 _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
                 self.body = MachO.CsBlob.SuperBlob(_io__raw_body, self, self._root)
                 self.body._read()
             elif _on == MachO.CsBlob.CsMagic.entitlements:
-                self._raw_body = self._io.read_bytes((self.length - 8))
+                pass
+                self._raw_body = self._io.read_bytes(self.length - 8)
                 _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
                 self.body = MachO.CsBlob.Entitlements(_io__raw_body, self, self._root)
                 self.body._read()
-            elif _on == MachO.CsBlob.CsMagic.detached_signature:
-                self._raw_body = self._io.read_bytes((self.length - 8))
+            elif _on == MachO.CsBlob.CsMagic.requirement:
+                pass
+                self._raw_body = self._io.read_bytes(self.length - 8)
                 _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
-                self.body = MachO.CsBlob.SuperBlob(_io__raw_body, self, self._root)
+                self.body = MachO.CsBlob.Requirement(_io__raw_body, self, self._root)
                 self.body._read()
-            elif _on == MachO.CsBlob.CsMagic.der_entitlements:
-                self._raw_body = self._io.read_bytes((self.length - 8))
+            elif _on == MachO.CsBlob.CsMagic.requirements:
+                pass
+                self._raw_body = self._io.read_bytes(self.length - 8)
                 _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
-                self.body = asn1_der.Asn1Der(_io__raw_body)
+                self.body = MachO.CsBlob.Requirements(_io__raw_body, self, self._root)
                 self.body._read()
             else:
-                self.body = self._io.read_bytes((self.length - 8))
+                pass
+                self.body = self._io.read_bytes(self.length - 8)
             self._debug['body']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            _on = self.magic
+            if _on == MachO.CsBlob.CsMagic.blob_wrapper:
+                pass
+                self.body._fetch_instances()
+            elif _on == MachO.CsBlob.CsMagic.code_directory:
+                pass
+                self.body._fetch_instances()
+            elif _on == MachO.CsBlob.CsMagic.der_entitlements:
+                pass
+                self.body._fetch_instances()
+            elif _on == MachO.CsBlob.CsMagic.detached_signature:
+                pass
+                self.body._fetch_instances()
+            elif _on == MachO.CsBlob.CsMagic.embedded_signature:
+                pass
+                self.body._fetch_instances()
+            elif _on == MachO.CsBlob.CsMagic.entitlements:
+                pass
+                self.body._fetch_instances()
+            elif _on == MachO.CsBlob.CsMagic.requirement:
+                pass
+                self.body._fetch_instances()
+            elif _on == MachO.CsBlob.CsMagic.requirements:
+                pass
+                self.body._fetch_instances()
+            else:
+                pass
+
+        class BlobIndex(KaitaiStruct):
+
+            class CsslotType(IntEnum):
+                code_directory = 0
+                info_slot = 1
+                requirements = 2
+                resource_dir = 3
+                application = 4
+                entitlements = 5
+                der_entitlements = 7
+                alternate_code_directories = 4096
+                signature_slot = 65536
+            SEQ_FIELDS = ["type", "offset"]
+            def __init__(self, _io, _parent=None, _root=None):
+                super(MachO.CsBlob.BlobIndex, self).__init__(_io)
+                self._parent = _parent
+                self._root = _root
+                self._debug = collections.defaultdict(dict)
+
+            def _read(self):
+                self._debug['type']['start'] = self._io.pos()
+                self.type = KaitaiStream.resolve_enum(MachO.CsBlob.BlobIndex.CsslotType, self._io.read_u4be())
+                self._debug['type']['end'] = self._io.pos()
+                self._debug['offset']['start'] = self._io.pos()
+                self.offset = self._io.read_u4be()
+                self._debug['offset']['end'] = self._io.pos()
+
+
+            def _fetch_instances(self):
+                pass
+                _ = self.blob
+                if hasattr(self, '_m_blob'):
+                    pass
+                    self._m_blob._fetch_instances()
+
+
+            @property
+            def blob(self):
+                if hasattr(self, '_m_blob'):
+                    return self._m_blob
+
+                io = self._parent._io
+                _pos = io.pos()
+                io.seek(self.offset - 8)
+                self._debug['_m_blob']['start'] = io.pos()
+                self._raw__m_blob = io.read_bytes_full()
+                _io__raw__m_blob = KaitaiStream(BytesIO(self._raw__m_blob))
+                self._m_blob = MachO.CsBlob(_io__raw__m_blob, self, self._root)
+                self._m_blob._read()
+                self._debug['_m_blob']['end'] = io.pos()
+                io.seek(_pos)
+                return getattr(self, '_m_blob', None)
+
+
+        class BlobWrapper(KaitaiStruct):
+            SEQ_FIELDS = ["data"]
+            def __init__(self, _io, _parent=None, _root=None):
+                super(MachO.CsBlob.BlobWrapper, self).__init__(_io)
+                self._parent = _parent
+                self._root = _root
+                self._debug = collections.defaultdict(dict)
+
+            def _read(self):
+                self._debug['data']['start'] = self._io.pos()
+                self.data = self._io.read_bytes_full()
+                self._debug['data']['end'] = self._io.pos()
+
+
+            def _fetch_instances(self):
+                pass
+
 
         class CodeDirectory(KaitaiStruct):
             SEQ_FIELDS = ["version", "flags", "hash_offset", "ident_offset", "n_special_slots", "n_code_slots", "code_limit", "hash_size", "hash_type", "spare1", "page_size", "spare2", "scatter_offset", "team_id_offset"]
             def __init__(self, _io, _parent=None, _root=None):
-                self._io = _io
+                super(MachO.CsBlob.CodeDirectory, self).__init__(_io)
                 self._parent = _parent
-                self._root = _root if _root else self
+                self._root = _root
                 self._debug = collections.defaultdict(dict)
 
             def _read(self):
@@ -377,69 +509,95 @@ class MachO(KaitaiStruct):
                 self.spare2 = self._io.read_u4be()
                 self._debug['spare2']['end'] = self._io.pos()
                 if self.version >= 131328:
+                    pass
                     self._debug['scatter_offset']['start'] = self._io.pos()
                     self.scatter_offset = self._io.read_u4be()
                     self._debug['scatter_offset']['end'] = self._io.pos()
 
                 if self.version >= 131584:
+                    pass
                     self._debug['team_id_offset']['start'] = self._io.pos()
                     self.team_id_offset = self._io.read_u4be()
                     self._debug['team_id_offset']['end'] = self._io.pos()
 
 
-            @property
-            def ident(self):
+
+            def _fetch_instances(self):
+                pass
+                if self.version >= 131328:
+                    pass
+
+                if self.version >= 131584:
+                    pass
+
+                _ = self.hashes
+                if hasattr(self, '_m_hashes'):
+                    pass
+                    for i in range(len(self._m_hashes)):
+                        pass
+
+
+                _ = self.ident
                 if hasattr(self, '_m_ident'):
-                    return self._m_ident if hasattr(self, '_m_ident') else None
+                    pass
 
-                _pos = self._io.pos()
-                self._io.seek((self.ident_offset - 8))
-                self._debug['_m_ident']['start'] = self._io.pos()
-                self._m_ident = (self._io.read_bytes_term(0, False, True, True)).decode(u"utf-8")
-                self._debug['_m_ident']['end'] = self._io.pos()
-                self._io.seek(_pos)
-                return self._m_ident if hasattr(self, '_m_ident') else None
-
-            @property
-            def team_id(self):
+                _ = self.team_id
                 if hasattr(self, '_m_team_id'):
-                    return self._m_team_id if hasattr(self, '_m_team_id') else None
+                    pass
 
-                _pos = self._io.pos()
-                self._io.seek((self.team_id_offset - 8))
-                self._debug['_m_team_id']['start'] = self._io.pos()
-                self._m_team_id = (self._io.read_bytes_term(0, False, True, True)).decode(u"utf-8")
-                self._debug['_m_team_id']['end'] = self._io.pos()
-                self._io.seek(_pos)
-                return self._m_team_id if hasattr(self, '_m_team_id') else None
 
             @property
             def hashes(self):
                 if hasattr(self, '_m_hashes'):
-                    return self._m_hashes if hasattr(self, '_m_hashes') else None
+                    return self._m_hashes
 
                 _pos = self._io.pos()
-                self._io.seek(((self.hash_offset - 8) - (self.hash_size * self.n_special_slots)))
+                self._io.seek((self.hash_offset - 8) - self.hash_size * self.n_special_slots)
                 self._debug['_m_hashes']['start'] = self._io.pos()
-                self._m_hashes = [None] * ((self.n_special_slots + self.n_code_slots))
-                for i in range((self.n_special_slots + self.n_code_slots)):
-                    if not 'arr' in self._debug['_m_hashes']:
-                        self._debug['_m_hashes']['arr'] = []
+                self._debug['_m_hashes']['arr'] = []
+                self._m_hashes = []
+                for i in range(self.n_special_slots + self.n_code_slots):
                     self._debug['_m_hashes']['arr'].append({'start': self._io.pos()})
-                    self._m_hashes[i] = self._io.read_bytes(self.hash_size)
+                    self._m_hashes.append(self._io.read_bytes(self.hash_size))
                     self._debug['_m_hashes']['arr'][i]['end'] = self._io.pos()
 
                 self._debug['_m_hashes']['end'] = self._io.pos()
                 self._io.seek(_pos)
-                return self._m_hashes if hasattr(self, '_m_hashes') else None
+                return getattr(self, '_m_hashes', None)
+
+            @property
+            def ident(self):
+                if hasattr(self, '_m_ident'):
+                    return self._m_ident
+
+                _pos = self._io.pos()
+                self._io.seek(self.ident_offset - 8)
+                self._debug['_m_ident']['start'] = self._io.pos()
+                self._m_ident = (self._io.read_bytes_term(0, False, True, True)).decode(u"UTF-8")
+                self._debug['_m_ident']['end'] = self._io.pos()
+                self._io.seek(_pos)
+                return getattr(self, '_m_ident', None)
+
+            @property
+            def team_id(self):
+                if hasattr(self, '_m_team_id'):
+                    return self._m_team_id
+
+                _pos = self._io.pos()
+                self._io.seek(self.team_id_offset - 8)
+                self._debug['_m_team_id']['start'] = self._io.pos()
+                self._m_team_id = (self._io.read_bytes_term(0, False, True, True)).decode(u"UTF-8")
+                self._debug['_m_team_id']['end'] = self._io.pos()
+                self._io.seek(_pos)
+                return getattr(self, '_m_team_id', None)
 
 
         class Data(KaitaiStruct):
             SEQ_FIELDS = ["length", "value", "padding"]
             def __init__(self, _io, _parent=None, _root=None):
-                self._io = _io
+                super(MachO.CsBlob.Data, self).__init__(_io)
                 self._parent = _parent
-                self._root = _root if _root else self
+                self._root = _root
                 self._debug = collections.defaultdict(dict)
 
             def _read(self):
@@ -450,39 +608,39 @@ class MachO(KaitaiStruct):
                 self.value = self._io.read_bytes(self.length)
                 self._debug['value']['end'] = self._io.pos()
                 self._debug['padding']['start'] = self._io.pos()
-                self.padding = self._io.read_bytes((-(self.length) % 4))
+                self.padding = self._io.read_bytes(-(self.length) % 4)
                 self._debug['padding']['end'] = self._io.pos()
 
 
-        class SuperBlob(KaitaiStruct):
-            SEQ_FIELDS = ["count", "blobs"]
+            def _fetch_instances(self):
+                pass
+
+
+        class Entitlements(KaitaiStruct):
+            SEQ_FIELDS = ["data"]
             def __init__(self, _io, _parent=None, _root=None):
-                self._io = _io
+                super(MachO.CsBlob.Entitlements, self).__init__(_io)
                 self._parent = _parent
-                self._root = _root if _root else self
+                self._root = _root
                 self._debug = collections.defaultdict(dict)
 
             def _read(self):
-                self._debug['count']['start'] = self._io.pos()
-                self.count = self._io.read_u4be()
-                self._debug['count']['end'] = self._io.pos()
-                self._debug['blobs']['start'] = self._io.pos()
-                self.blobs = [None] * (self.count)
-                for i in range(self.count):
-                    if not 'arr' in self._debug['blobs']:
-                        self._debug['blobs']['arr'] = []
-                    self._debug['blobs']['arr'].append({'start': self._io.pos()})
-                    _t_blobs = MachO.CsBlob.BlobIndex(self._io, self, self._root)
-                    _t_blobs._read()
-                    self.blobs[i] = _t_blobs
-                    self._debug['blobs']['arr'][i]['end'] = self._io.pos()
+                self._debug['data']['start'] = self._io.pos()
+                self.data = self._io.read_bytes_full()
+                self._debug['data']['end'] = self._io.pos()
 
-                self._debug['blobs']['end'] = self._io.pos()
+
+            def _fetch_instances(self):
+                pass
 
 
         class Expr(KaitaiStruct):
 
-            class OpEnum(Enum):
+            class CertSlot(IntEnum):
+                left_cert = 0
+                anchor_cert = 4294967295
+
+            class OpEnum(IntEnum):
                 false = 0
                 true = 1
                 ident = 2
@@ -500,15 +658,11 @@ class MachO(KaitaiStruct):
                 cert_generic = 14
                 apple_generic_anchor = 15
                 entitlement_field = 16
-
-            class CertSlot(Enum):
-                left_cert = 0
-                anchor_cert = 4294967295
             SEQ_FIELDS = ["op", "data"]
             def __init__(self, _io, _parent=None, _root=None):
-                self._io = _io
+                super(MachO.CsBlob.Expr, self).__init__(_io)
                 self._parent = _parent
-                self._root = _root if _root else self
+                self._root = _root
                 self._debug = collections.defaultdict(dict)
 
             def _read(self):
@@ -517,86 +671,182 @@ class MachO(KaitaiStruct):
                 self._debug['op']['end'] = self._io.pos()
                 self._debug['data']['start'] = self._io.pos()
                 _on = self.op
-                if _on == MachO.CsBlob.Expr.OpEnum.ident:
-                    self.data = MachO.CsBlob.Expr.IdentExpr(self._io, self, self._root)
-                    self.data._read()
-                elif _on == MachO.CsBlob.Expr.OpEnum.or_op:
-                    self.data = MachO.CsBlob.Expr.OrExpr(self._io, self, self._root)
-                    self.data._read()
-                elif _on == MachO.CsBlob.Expr.OpEnum.info_key_value:
-                    self.data = MachO.CsBlob.Data(self._io, self, self._root)
-                    self.data._read()
-                elif _on == MachO.CsBlob.Expr.OpEnum.anchor_hash:
+                if _on == MachO.CsBlob.Expr.OpEnum.anchor_hash:
+                    pass
                     self.data = MachO.CsBlob.Expr.AnchorHashExpr(self._io, self, self._root)
                     self.data._read()
-                elif _on == MachO.CsBlob.Expr.OpEnum.info_key_field:
-                    self.data = MachO.CsBlob.Expr.InfoKeyFieldExpr(self._io, self, self._root)
-                    self.data._read()
-                elif _on == MachO.CsBlob.Expr.OpEnum.not_op:
-                    self.data = MachO.CsBlob.Expr(self._io, self, self._root)
-                    self.data._read()
-                elif _on == MachO.CsBlob.Expr.OpEnum.entitlement_field:
-                    self.data = MachO.CsBlob.Expr.EntitlementFieldExpr(self._io, self, self._root)
-                    self.data._read()
-                elif _on == MachO.CsBlob.Expr.OpEnum.trusted_cert:
-                    self.data = MachO.CsBlob.Expr.CertSlotExpr(self._io, self, self._root)
-                    self.data._read()
                 elif _on == MachO.CsBlob.Expr.OpEnum.and_op:
+                    pass
                     self.data = MachO.CsBlob.Expr.AndExpr(self._io, self, self._root)
                     self.data._read()
-                elif _on == MachO.CsBlob.Expr.OpEnum.cert_generic:
-                    self.data = MachO.CsBlob.Expr.CertGenericExpr(self._io, self, self._root)
-                    self.data._read()
-                elif _on == MachO.CsBlob.Expr.OpEnum.cert_field:
-                    self.data = MachO.CsBlob.Expr.CertFieldExpr(self._io, self, self._root)
+                elif _on == MachO.CsBlob.Expr.OpEnum.apple_generic_anchor:
+                    pass
+                    self.data = MachO.CsBlob.Expr.AppleGenericAnchorExpr(self._io, self, self._root)
                     self.data._read()
                 elif _on == MachO.CsBlob.Expr.OpEnum.cd_hash:
+                    pass
                     self.data = MachO.CsBlob.Data(self._io, self, self._root)
                     self.data._read()
-                elif _on == MachO.CsBlob.Expr.OpEnum.apple_generic_anchor:
-                    self.data = MachO.CsBlob.Expr.AppleGenericAnchorExpr(self._io, self, self._root)
+                elif _on == MachO.CsBlob.Expr.OpEnum.cert_field:
+                    pass
+                    self.data = MachO.CsBlob.Expr.CertFieldExpr(self._io, self, self._root)
+                    self.data._read()
+                elif _on == MachO.CsBlob.Expr.OpEnum.cert_generic:
+                    pass
+                    self.data = MachO.CsBlob.Expr.CertGenericExpr(self._io, self, self._root)
+                    self.data._read()
+                elif _on == MachO.CsBlob.Expr.OpEnum.entitlement_field:
+                    pass
+                    self.data = MachO.CsBlob.Expr.EntitlementFieldExpr(self._io, self, self._root)
+                    self.data._read()
+                elif _on == MachO.CsBlob.Expr.OpEnum.ident:
+                    pass
+                    self.data = MachO.CsBlob.Expr.IdentExpr(self._io, self, self._root)
+                    self.data._read()
+                elif _on == MachO.CsBlob.Expr.OpEnum.info_key_field:
+                    pass
+                    self.data = MachO.CsBlob.Expr.InfoKeyFieldExpr(self._io, self, self._root)
+                    self.data._read()
+                elif _on == MachO.CsBlob.Expr.OpEnum.info_key_value:
+                    pass
+                    self.data = MachO.CsBlob.Data(self._io, self, self._root)
+                    self.data._read()
+                elif _on == MachO.CsBlob.Expr.OpEnum.not_op:
+                    pass
+                    self.data = MachO.CsBlob.Expr(self._io, self, self._root)
+                    self.data._read()
+                elif _on == MachO.CsBlob.Expr.OpEnum.or_op:
+                    pass
+                    self.data = MachO.CsBlob.Expr.OrExpr(self._io, self, self._root)
+                    self.data._read()
+                elif _on == MachO.CsBlob.Expr.OpEnum.trusted_cert:
+                    pass
+                    self.data = MachO.CsBlob.Expr.CertSlotExpr(self._io, self, self._root)
                     self.data._read()
                 self._debug['data']['end'] = self._io.pos()
 
-            class InfoKeyFieldExpr(KaitaiStruct):
-                SEQ_FIELDS = ["data", "match"]
+
+            def _fetch_instances(self):
+                pass
+                _on = self.op
+                if _on == MachO.CsBlob.Expr.OpEnum.anchor_hash:
+                    pass
+                    self.data._fetch_instances()
+                elif _on == MachO.CsBlob.Expr.OpEnum.and_op:
+                    pass
+                    self.data._fetch_instances()
+                elif _on == MachO.CsBlob.Expr.OpEnum.apple_generic_anchor:
+                    pass
+                    self.data._fetch_instances()
+                elif _on == MachO.CsBlob.Expr.OpEnum.cd_hash:
+                    pass
+                    self.data._fetch_instances()
+                elif _on == MachO.CsBlob.Expr.OpEnum.cert_field:
+                    pass
+                    self.data._fetch_instances()
+                elif _on == MachO.CsBlob.Expr.OpEnum.cert_generic:
+                    pass
+                    self.data._fetch_instances()
+                elif _on == MachO.CsBlob.Expr.OpEnum.entitlement_field:
+                    pass
+                    self.data._fetch_instances()
+                elif _on == MachO.CsBlob.Expr.OpEnum.ident:
+                    pass
+                    self.data._fetch_instances()
+                elif _on == MachO.CsBlob.Expr.OpEnum.info_key_field:
+                    pass
+                    self.data._fetch_instances()
+                elif _on == MachO.CsBlob.Expr.OpEnum.info_key_value:
+                    pass
+                    self.data._fetch_instances()
+                elif _on == MachO.CsBlob.Expr.OpEnum.not_op:
+                    pass
+                    self.data._fetch_instances()
+                elif _on == MachO.CsBlob.Expr.OpEnum.or_op:
+                    pass
+                    self.data._fetch_instances()
+                elif _on == MachO.CsBlob.Expr.OpEnum.trusted_cert:
+                    pass
+                    self.data._fetch_instances()
+
+            class AnchorHashExpr(KaitaiStruct):
+                SEQ_FIELDS = ["cert_slot", "data"]
                 def __init__(self, _io, _parent=None, _root=None):
-                    self._io = _io
+                    super(MachO.CsBlob.Expr.AnchorHashExpr, self).__init__(_io)
                     self._parent = _parent
-                    self._root = _root if _root else self
+                    self._root = _root
                     self._debug = collections.defaultdict(dict)
 
                 def _read(self):
+                    self._debug['cert_slot']['start'] = self._io.pos()
+                    self.cert_slot = KaitaiStream.resolve_enum(MachO.CsBlob.Expr.CertSlot, self._io.read_u4be())
+                    self._debug['cert_slot']['end'] = self._io.pos()
                     self._debug['data']['start'] = self._io.pos()
                     self.data = MachO.CsBlob.Data(self._io, self, self._root)
                     self.data._read()
                     self._debug['data']['end'] = self._io.pos()
-                    self._debug['match']['start'] = self._io.pos()
-                    self.match = MachO.CsBlob.Match(self._io, self, self._root)
-                    self.match._read()
-                    self._debug['match']['end'] = self._io.pos()
 
 
-            class CertSlotExpr(KaitaiStruct):
-                SEQ_FIELDS = ["value"]
+                def _fetch_instances(self):
+                    pass
+                    self.data._fetch_instances()
+
+
+            class AndExpr(KaitaiStruct):
+                SEQ_FIELDS = ["left", "right"]
                 def __init__(self, _io, _parent=None, _root=None):
-                    self._io = _io
+                    super(MachO.CsBlob.Expr.AndExpr, self).__init__(_io)
                     self._parent = _parent
-                    self._root = _root if _root else self
+                    self._root = _root
                     self._debug = collections.defaultdict(dict)
 
                 def _read(self):
-                    self._debug['value']['start'] = self._io.pos()
-                    self.value = KaitaiStream.resolve_enum(MachO.CsBlob.Expr.CertSlot, self._io.read_u4be())
-                    self._debug['value']['end'] = self._io.pos()
+                    self._debug['left']['start'] = self._io.pos()
+                    self.left = MachO.CsBlob.Expr(self._io, self, self._root)
+                    self.left._read()
+                    self._debug['left']['end'] = self._io.pos()
+                    self._debug['right']['start'] = self._io.pos()
+                    self.right = MachO.CsBlob.Expr(self._io, self, self._root)
+                    self.right._read()
+                    self._debug['right']['end'] = self._io.pos()
 
 
-            class CertGenericExpr(KaitaiStruct):
+                def _fetch_instances(self):
+                    pass
+                    self.left._fetch_instances()
+                    self.right._fetch_instances()
+
+
+            class AppleGenericAnchorExpr(KaitaiStruct):
+                SEQ_FIELDS = []
+                def __init__(self, _io, _parent=None, _root=None):
+                    super(MachO.CsBlob.Expr.AppleGenericAnchorExpr, self).__init__(_io)
+                    self._parent = _parent
+                    self._root = _root
+                    self._debug = collections.defaultdict(dict)
+
+                def _read(self):
+                    pass
+
+
+                def _fetch_instances(self):
+                    pass
+
+                @property
+                def value(self):
+                    if hasattr(self, '_m_value'):
+                        return self._m_value
+
+                    self._m_value = u"anchor apple generic"
+                    return getattr(self, '_m_value', None)
+
+
+            class CertFieldExpr(KaitaiStruct):
                 SEQ_FIELDS = ["cert_slot", "data", "match"]
                 def __init__(self, _io, _parent=None, _root=None):
-                    self._io = _io
+                    super(MachO.CsBlob.Expr.CertFieldExpr, self).__init__(_io)
                     self._parent = _parent
-                    self._root = _root if _root else self
+                    self._root = _root
                     self._debug = collections.defaultdict(dict)
 
                 def _read(self):
@@ -613,12 +863,89 @@ class MachO(KaitaiStruct):
                     self._debug['match']['end'] = self._io.pos()
 
 
+                def _fetch_instances(self):
+                    pass
+                    self.data._fetch_instances()
+                    self.match._fetch_instances()
+
+
+            class CertGenericExpr(KaitaiStruct):
+                SEQ_FIELDS = ["cert_slot", "data", "match"]
+                def __init__(self, _io, _parent=None, _root=None):
+                    super(MachO.CsBlob.Expr.CertGenericExpr, self).__init__(_io)
+                    self._parent = _parent
+                    self._root = _root
+                    self._debug = collections.defaultdict(dict)
+
+                def _read(self):
+                    self._debug['cert_slot']['start'] = self._io.pos()
+                    self.cert_slot = KaitaiStream.resolve_enum(MachO.CsBlob.Expr.CertSlot, self._io.read_u4be())
+                    self._debug['cert_slot']['end'] = self._io.pos()
+                    self._debug['data']['start'] = self._io.pos()
+                    self.data = MachO.CsBlob.Data(self._io, self, self._root)
+                    self.data._read()
+                    self._debug['data']['end'] = self._io.pos()
+                    self._debug['match']['start'] = self._io.pos()
+                    self.match = MachO.CsBlob.Match(self._io, self, self._root)
+                    self.match._read()
+                    self._debug['match']['end'] = self._io.pos()
+
+
+                def _fetch_instances(self):
+                    pass
+                    self.data._fetch_instances()
+                    self.match._fetch_instances()
+
+
+            class CertSlotExpr(KaitaiStruct):
+                SEQ_FIELDS = ["value"]
+                def __init__(self, _io, _parent=None, _root=None):
+                    super(MachO.CsBlob.Expr.CertSlotExpr, self).__init__(_io)
+                    self._parent = _parent
+                    self._root = _root
+                    self._debug = collections.defaultdict(dict)
+
+                def _read(self):
+                    self._debug['value']['start'] = self._io.pos()
+                    self.value = KaitaiStream.resolve_enum(MachO.CsBlob.Expr.CertSlot, self._io.read_u4be())
+                    self._debug['value']['end'] = self._io.pos()
+
+
+                def _fetch_instances(self):
+                    pass
+
+
+            class EntitlementFieldExpr(KaitaiStruct):
+                SEQ_FIELDS = ["data", "match"]
+                def __init__(self, _io, _parent=None, _root=None):
+                    super(MachO.CsBlob.Expr.EntitlementFieldExpr, self).__init__(_io)
+                    self._parent = _parent
+                    self._root = _root
+                    self._debug = collections.defaultdict(dict)
+
+                def _read(self):
+                    self._debug['data']['start'] = self._io.pos()
+                    self.data = MachO.CsBlob.Data(self._io, self, self._root)
+                    self.data._read()
+                    self._debug['data']['end'] = self._io.pos()
+                    self._debug['match']['start'] = self._io.pos()
+                    self.match = MachO.CsBlob.Match(self._io, self, self._root)
+                    self.match._read()
+                    self._debug['match']['end'] = self._io.pos()
+
+
+                def _fetch_instances(self):
+                    pass
+                    self.data._fetch_instances()
+                    self.match._fetch_instances()
+
+
             class IdentExpr(KaitaiStruct):
                 SEQ_FIELDS = ["identifier"]
                 def __init__(self, _io, _parent=None, _root=None):
-                    self._io = _io
+                    super(MachO.CsBlob.Expr.IdentExpr, self).__init__(_io)
                     self._parent = _parent
-                    self._root = _root if _root else self
+                    self._root = _root
                     self._debug = collections.defaultdict(dict)
 
                 def _read(self):
@@ -628,72 +955,17 @@ class MachO(KaitaiStruct):
                     self._debug['identifier']['end'] = self._io.pos()
 
 
-            class CertFieldExpr(KaitaiStruct):
-                SEQ_FIELDS = ["cert_slot", "data", "match"]
-                def __init__(self, _io, _parent=None, _root=None):
-                    self._io = _io
-                    self._parent = _parent
-                    self._root = _root if _root else self
-                    self._debug = collections.defaultdict(dict)
-
-                def _read(self):
-                    self._debug['cert_slot']['start'] = self._io.pos()
-                    self.cert_slot = KaitaiStream.resolve_enum(MachO.CsBlob.Expr.CertSlot, self._io.read_u4be())
-                    self._debug['cert_slot']['end'] = self._io.pos()
-                    self._debug['data']['start'] = self._io.pos()
-                    self.data = MachO.CsBlob.Data(self._io, self, self._root)
-                    self.data._read()
-                    self._debug['data']['end'] = self._io.pos()
-                    self._debug['match']['start'] = self._io.pos()
-                    self.match = MachO.CsBlob.Match(self._io, self, self._root)
-                    self.match._read()
-                    self._debug['match']['end'] = self._io.pos()
-
-
-            class AnchorHashExpr(KaitaiStruct):
-                SEQ_FIELDS = ["cert_slot", "data"]
-                def __init__(self, _io, _parent=None, _root=None):
-                    self._io = _io
-                    self._parent = _parent
-                    self._root = _root if _root else self
-                    self._debug = collections.defaultdict(dict)
-
-                def _read(self):
-                    self._debug['cert_slot']['start'] = self._io.pos()
-                    self.cert_slot = KaitaiStream.resolve_enum(MachO.CsBlob.Expr.CertSlot, self._io.read_u4be())
-                    self._debug['cert_slot']['end'] = self._io.pos()
-                    self._debug['data']['start'] = self._io.pos()
-                    self.data = MachO.CsBlob.Data(self._io, self, self._root)
-                    self.data._read()
-                    self._debug['data']['end'] = self._io.pos()
-
-
-            class AppleGenericAnchorExpr(KaitaiStruct):
-                SEQ_FIELDS = []
-                def __init__(self, _io, _parent=None, _root=None):
-                    self._io = _io
-                    self._parent = _parent
-                    self._root = _root if _root else self
-                    self._debug = collections.defaultdict(dict)
-
-                def _read(self):
+                def _fetch_instances(self):
                     pass
-
-                @property
-                def value(self):
-                    if hasattr(self, '_m_value'):
-                        return self._m_value if hasattr(self, '_m_value') else None
-
-                    self._m_value = u"anchor apple generic"
-                    return self._m_value if hasattr(self, '_m_value') else None
+                    self.identifier._fetch_instances()
 
 
-            class EntitlementFieldExpr(KaitaiStruct):
+            class InfoKeyFieldExpr(KaitaiStruct):
                 SEQ_FIELDS = ["data", "match"]
                 def __init__(self, _io, _parent=None, _root=None):
-                    self._io = _io
+                    super(MachO.CsBlob.Expr.InfoKeyFieldExpr, self).__init__(_io)
                     self._parent = _parent
-                    self._root = _root if _root else self
+                    self._root = _root
                     self._debug = collections.defaultdict(dict)
 
                 def _read(self):
@@ -707,31 +979,18 @@ class MachO(KaitaiStruct):
                     self._debug['match']['end'] = self._io.pos()
 
 
-            class AndExpr(KaitaiStruct):
-                SEQ_FIELDS = ["left", "right"]
-                def __init__(self, _io, _parent=None, _root=None):
-                    self._io = _io
-                    self._parent = _parent
-                    self._root = _root if _root else self
-                    self._debug = collections.defaultdict(dict)
-
-                def _read(self):
-                    self._debug['left']['start'] = self._io.pos()
-                    self.left = MachO.CsBlob.Expr(self._io, self, self._root)
-                    self.left._read()
-                    self._debug['left']['end'] = self._io.pos()
-                    self._debug['right']['start'] = self._io.pos()
-                    self.right = MachO.CsBlob.Expr(self._io, self, self._root)
-                    self.right._read()
-                    self._debug['right']['end'] = self._io.pos()
+                def _fetch_instances(self):
+                    pass
+                    self.data._fetch_instances()
+                    self.match._fetch_instances()
 
 
             class OrExpr(KaitaiStruct):
                 SEQ_FIELDS = ["left", "right"]
                 def __init__(self, _io, _parent=None, _root=None):
-                    self._io = _io
+                    super(MachO.CsBlob.Expr.OrExpr, self).__init__(_io)
                     self._parent = _parent
-                    self._root = _root if _root else self
+                    self._root = _root
                     self._debug = collections.defaultdict(dict)
 
                 def _read(self):
@@ -745,55 +1004,16 @@ class MachO(KaitaiStruct):
                     self._debug['right']['end'] = self._io.pos()
 
 
+                def _fetch_instances(self):
+                    pass
+                    self.left._fetch_instances()
+                    self.right._fetch_instances()
 
-        class BlobIndex(KaitaiStruct):
-
-            class CsslotType(Enum):
-                code_directory = 0
-                info_slot = 1
-                requirements = 2
-                resource_dir = 3
-                application = 4
-                entitlements = 5
-                der_entitlements = 7
-                alternate_code_directories = 4096
-                signature_slot = 65536
-            SEQ_FIELDS = ["type", "offset"]
-            def __init__(self, _io, _parent=None, _root=None):
-                self._io = _io
-                self._parent = _parent
-                self._root = _root if _root else self
-                self._debug = collections.defaultdict(dict)
-
-            def _read(self):
-                self._debug['type']['start'] = self._io.pos()
-                self.type = KaitaiStream.resolve_enum(MachO.CsBlob.BlobIndex.CsslotType, self._io.read_u4be())
-                self._debug['type']['end'] = self._io.pos()
-                self._debug['offset']['start'] = self._io.pos()
-                self.offset = self._io.read_u4be()
-                self._debug['offset']['end'] = self._io.pos()
-
-            @property
-            def blob(self):
-                if hasattr(self, '_m_blob'):
-                    return self._m_blob if hasattr(self, '_m_blob') else None
-
-                io = self._parent._io
-                _pos = io.pos()
-                io.seek((self.offset - 8))
-                self._debug['_m_blob']['start'] = io.pos()
-                self._raw__m_blob = io.read_bytes_full()
-                _io__raw__m_blob = KaitaiStream(BytesIO(self._raw__m_blob))
-                self._m_blob = MachO.CsBlob(_io__raw__m_blob, self, self._root)
-                self._m_blob._read()
-                self._debug['_m_blob']['end'] = io.pos()
-                io.seek(_pos)
-                return self._m_blob if hasattr(self, '_m_blob') else None
 
 
         class Match(KaitaiStruct):
 
-            class Op(Enum):
+            class Op(IntEnum):
                 exists = 0
                 equal = 1
                 contains = 2
@@ -805,9 +1025,9 @@ class MachO(KaitaiStruct):
                 greater_equal = 8
             SEQ_FIELDS = ["match_op", "data"]
             def __init__(self, _io, _parent=None, _root=None):
-                self._io = _io
+                super(MachO.CsBlob.Match, self).__init__(_io)
                 self._parent = _parent
-                self._root = _root if _root else self
+                self._root = _root
                 self._debug = collections.defaultdict(dict)
 
             def _read(self):
@@ -815,6 +1035,7 @@ class MachO(KaitaiStruct):
                 self.match_op = KaitaiStream.resolve_enum(MachO.CsBlob.Match.Op, self._io.read_u4be())
                 self._debug['match_op']['end'] = self._io.pos()
                 if self.match_op != MachO.CsBlob.Match.Op.exists:
+                    pass
                     self._debug['data']['start'] = self._io.pos()
                     self.data = MachO.CsBlob.Data(self._io, self, self._root)
                     self.data._read()
@@ -822,12 +1043,20 @@ class MachO(KaitaiStruct):
 
 
 
+            def _fetch_instances(self):
+                pass
+                if self.match_op != MachO.CsBlob.Match.Op.exists:
+                    pass
+                    self.data._fetch_instances()
+
+
+
         class Requirement(KaitaiStruct):
             SEQ_FIELDS = ["kind", "expr"]
             def __init__(self, _io, _parent=None, _root=None):
-                self._io = _io
+                super(MachO.CsBlob.Requirement, self).__init__(_io)
                 self._parent = _parent
-                self._root = _root if _root else self
+                self._root = _root
                 self._debug = collections.defaultdict(dict)
 
             def _read(self):
@@ -840,12 +1069,17 @@ class MachO(KaitaiStruct):
                 self._debug['expr']['end'] = self._io.pos()
 
 
+            def _fetch_instances(self):
+                pass
+                self.expr._fetch_instances()
+
+
         class Requirements(KaitaiStruct):
             SEQ_FIELDS = ["count", "items"]
             def __init__(self, _io, _parent=None, _root=None):
-                self._io = _io
+                super(MachO.CsBlob.Requirements, self).__init__(_io)
                 self._parent = _parent
-                self._root = _root if _root else self
+                self._root = _root
                 self._debug = collections.defaultdict(dict)
 
             def _read(self):
@@ -853,59 +1087,40 @@ class MachO(KaitaiStruct):
                 self.count = self._io.read_u4be()
                 self._debug['count']['end'] = self._io.pos()
                 self._debug['items']['start'] = self._io.pos()
-                self.items = [None] * (self.count)
+                self._debug['items']['arr'] = []
+                self.items = []
                 for i in range(self.count):
-                    if not 'arr' in self._debug['items']:
-                        self._debug['items']['arr'] = []
                     self._debug['items']['arr'].append({'start': self._io.pos()})
                     _t_items = MachO.CsBlob.RequirementsBlobIndex(self._io, self, self._root)
-                    _t_items._read()
-                    self.items[i] = _t_items
+                    try:
+                        _t_items._read()
+                    finally:
+                        self.items.append(_t_items)
                     self._debug['items']['arr'][i]['end'] = self._io.pos()
 
                 self._debug['items']['end'] = self._io.pos()
 
 
-        class BlobWrapper(KaitaiStruct):
-            SEQ_FIELDS = ["data"]
-            def __init__(self, _io, _parent=None, _root=None):
-                self._io = _io
-                self._parent = _parent
-                self._root = _root if _root else self
-                self._debug = collections.defaultdict(dict)
+            def _fetch_instances(self):
+                pass
+                for i in range(len(self.items)):
+                    pass
+                    self.items[i]._fetch_instances()
 
-            def _read(self):
-                self._debug['data']['start'] = self._io.pos()
-                self.data = self._io.read_bytes_full()
-                self._debug['data']['end'] = self._io.pos()
-
-
-        class Entitlements(KaitaiStruct):
-            SEQ_FIELDS = ["data"]
-            def __init__(self, _io, _parent=None, _root=None):
-                self._io = _io
-                self._parent = _parent
-                self._root = _root if _root else self
-                self._debug = collections.defaultdict(dict)
-
-            def _read(self):
-                self._debug['data']['start'] = self._io.pos()
-                self.data = self._io.read_bytes_full()
-                self._debug['data']['end'] = self._io.pos()
 
 
         class RequirementsBlobIndex(KaitaiStruct):
 
-            class RequirementType(Enum):
+            class RequirementType(IntEnum):
                 host = 1
                 guest = 2
                 designated = 3
                 library = 4
             SEQ_FIELDS = ["type", "offset"]
             def __init__(self, _io, _parent=None, _root=None):
-                self._io = _io
+                super(MachO.CsBlob.RequirementsBlobIndex, self).__init__(_io)
                 self._parent = _parent
-                self._root = _root if _root else self
+                self._root = _root
                 self._debug = collections.defaultdict(dict)
 
             def _read(self):
@@ -916,853 +1131,594 @@ class MachO(KaitaiStruct):
                 self.offset = self._io.read_u4be()
                 self._debug['offset']['end'] = self._io.pos()
 
+
+            def _fetch_instances(self):
+                pass
+                _ = self.value
+                if hasattr(self, '_m_value'):
+                    pass
+                    self._m_value._fetch_instances()
+
+
             @property
             def value(self):
                 if hasattr(self, '_m_value'):
-                    return self._m_value if hasattr(self, '_m_value') else None
+                    return self._m_value
 
                 _pos = self._io.pos()
-                self._io.seek((self.offset - 8))
+                self._io.seek(self.offset - 8)
                 self._debug['_m_value']['start'] = self._io.pos()
                 self._m_value = MachO.CsBlob(self._io, self, self._root)
                 self._m_value._read()
                 self._debug['_m_value']['end'] = self._io.pos()
                 self._io.seek(_pos)
-                return self._m_value if hasattr(self, '_m_value') else None
+                return getattr(self, '_m_value', None)
 
 
-
-    class BuildVersionCommand(KaitaiStruct):
-        SEQ_FIELDS = ["platform", "minos", "sdk", "ntools", "tools"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['platform']['start'] = self._io.pos()
-            self.platform = self._io.read_u4le()
-            self._debug['platform']['end'] = self._io.pos()
-            self._debug['minos']['start'] = self._io.pos()
-            self.minos = self._io.read_u4le()
-            self._debug['minos']['end'] = self._io.pos()
-            self._debug['sdk']['start'] = self._io.pos()
-            self.sdk = self._io.read_u4le()
-            self._debug['sdk']['end'] = self._io.pos()
-            self._debug['ntools']['start'] = self._io.pos()
-            self.ntools = self._io.read_u4le()
-            self._debug['ntools']['end'] = self._io.pos()
-            self._debug['tools']['start'] = self._io.pos()
-            self.tools = [None] * (self.ntools)
-            for i in range(self.ntools):
-                if not 'arr' in self._debug['tools']:
-                    self._debug['tools']['arr'] = []
-                self._debug['tools']['arr'].append({'start': self._io.pos()})
-                _t_tools = MachO.BuildVersionCommand.BuildToolVersion(self._io, self, self._root)
-                _t_tools._read()
-                self.tools[i] = _t_tools
-                self._debug['tools']['arr'][i]['end'] = self._io.pos()
-
-            self._debug['tools']['end'] = self._io.pos()
-
-        class BuildToolVersion(KaitaiStruct):
-            SEQ_FIELDS = ["tool", "version"]
+        class SuperBlob(KaitaiStruct):
+            SEQ_FIELDS = ["count", "blobs"]
             def __init__(self, _io, _parent=None, _root=None):
-                self._io = _io
+                super(MachO.CsBlob.SuperBlob, self).__init__(_io)
                 self._parent = _parent
-                self._root = _root if _root else self
+                self._root = _root
                 self._debug = collections.defaultdict(dict)
 
             def _read(self):
-                self._debug['tool']['start'] = self._io.pos()
-                self.tool = self._io.read_u4le()
-                self._debug['tool']['end'] = self._io.pos()
-                self._debug['version']['start'] = self._io.pos()
-                self.version = self._io.read_u4le()
-                self._debug['version']['end'] = self._io.pos()
+                self._debug['count']['start'] = self._io.pos()
+                self.count = self._io.read_u4be()
+                self._debug['count']['end'] = self._io.pos()
+                self._debug['blobs']['start'] = self._io.pos()
+                self._debug['blobs']['arr'] = []
+                self.blobs = []
+                for i in range(self.count):
+                    self._debug['blobs']['arr'].append({'start': self._io.pos()})
+                    _t_blobs = MachO.CsBlob.BlobIndex(self._io, self, self._root)
+                    try:
+                        _t_blobs._read()
+                    finally:
+                        self.blobs.append(_t_blobs)
+                    self._debug['blobs']['arr'][i]['end'] = self._io.pos()
+
+                self._debug['blobs']['end'] = self._io.pos()
+
+
+            def _fetch_instances(self):
+                pass
+                for i in range(len(self.blobs)):
+                    pass
+                    self.blobs[i]._fetch_instances()
 
 
 
-    class RoutinesCommand(KaitaiStruct):
-        SEQ_FIELDS = ["init_address", "init_module", "reserved"]
+
+    class DyldInfoCommand(KaitaiStruct):
+
+        class BindOpcode(IntEnum):
+            done = 0
+            set_dylib_ordinal_immediate = 16
+            set_dylib_ordinal_uleb = 32
+            set_dylib_special_immediate = 48
+            set_symbol_trailing_flags_immediate = 64
+            set_type_immediate = 80
+            set_append_sleb = 96
+            set_segment_and_offset_uleb = 112
+            add_address_uleb = 128
+            do_bind = 144
+            do_bind_add_address_uleb = 160
+            do_bind_add_address_immediate_scaled = 176
+            do_bind_uleb_times_skipping_uleb = 192
+        SEQ_FIELDS = ["rebase_off", "rebase_size", "bind_off", "bind_size", "weak_bind_off", "weak_bind_size", "lazy_bind_off", "lazy_bind_size", "export_off", "export_size"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(MachO.DyldInfoCommand, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
-            self._debug['init_address']['start'] = self._io.pos()
-            self.init_address = self._io.read_u4le()
-            self._debug['init_address']['end'] = self._io.pos()
-            self._debug['init_module']['start'] = self._io.pos()
-            self.init_module = self._io.read_u4le()
-            self._debug['init_module']['end'] = self._io.pos()
-            self._debug['reserved']['start'] = self._io.pos()
-            self.reserved = self._io.read_bytes(24)
-            self._debug['reserved']['end'] = self._io.pos()
+            self._debug['rebase_off']['start'] = self._io.pos()
+            self.rebase_off = self._io.read_u4le()
+            self._debug['rebase_off']['end'] = self._io.pos()
+            self._debug['rebase_size']['start'] = self._io.pos()
+            self.rebase_size = self._io.read_u4le()
+            self._debug['rebase_size']['end'] = self._io.pos()
+            self._debug['bind_off']['start'] = self._io.pos()
+            self.bind_off = self._io.read_u4le()
+            self._debug['bind_off']['end'] = self._io.pos()
+            self._debug['bind_size']['start'] = self._io.pos()
+            self.bind_size = self._io.read_u4le()
+            self._debug['bind_size']['end'] = self._io.pos()
+            self._debug['weak_bind_off']['start'] = self._io.pos()
+            self.weak_bind_off = self._io.read_u4le()
+            self._debug['weak_bind_off']['end'] = self._io.pos()
+            self._debug['weak_bind_size']['start'] = self._io.pos()
+            self.weak_bind_size = self._io.read_u4le()
+            self._debug['weak_bind_size']['end'] = self._io.pos()
+            self._debug['lazy_bind_off']['start'] = self._io.pos()
+            self.lazy_bind_off = self._io.read_u4le()
+            self._debug['lazy_bind_off']['end'] = self._io.pos()
+            self._debug['lazy_bind_size']['start'] = self._io.pos()
+            self.lazy_bind_size = self._io.read_u4le()
+            self._debug['lazy_bind_size']['end'] = self._io.pos()
+            self._debug['export_off']['start'] = self._io.pos()
+            self.export_off = self._io.read_u4le()
+            self._debug['export_off']['end'] = self._io.pos()
+            self._debug['export_size']['start'] = self._io.pos()
+            self.export_size = self._io.read_u4le()
+            self._debug['export_size']['end'] = self._io.pos()
 
 
-    class MachoFlags(KaitaiStruct):
-        SEQ_FIELDS = []
-        def __init__(self, value, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self.value = value
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
+        def _fetch_instances(self):
             pass
-
-        @property
-        def subsections_via_symbols(self):
-            """safe to divide up the sections into sub-sections via symbols for dead code stripping."""
-            if hasattr(self, '_m_subsections_via_symbols'):
-                return self._m_subsections_via_symbols if hasattr(self, '_m_subsections_via_symbols') else None
-
-            self._m_subsections_via_symbols = (self.value & 8192) != 0
-            return self._m_subsections_via_symbols if hasattr(self, '_m_subsections_via_symbols') else None
-
-        @property
-        def dead_strippable_dylib(self):
-            if hasattr(self, '_m_dead_strippable_dylib'):
-                return self._m_dead_strippable_dylib if hasattr(self, '_m_dead_strippable_dylib') else None
-
-            self._m_dead_strippable_dylib = (self.value & 4194304) != 0
-            return self._m_dead_strippable_dylib if hasattr(self, '_m_dead_strippable_dylib') else None
-
-        @property
-        def weak_defines(self):
-            """the final linked image contains external weak symbols."""
-            if hasattr(self, '_m_weak_defines'):
-                return self._m_weak_defines if hasattr(self, '_m_weak_defines') else None
-
-            self._m_weak_defines = (self.value & 32768) != 0
-            return self._m_weak_defines if hasattr(self, '_m_weak_defines') else None
-
-        @property
-        def prebound(self):
-            """the file has its dynamic undefined references prebound."""
-            if hasattr(self, '_m_prebound'):
-                return self._m_prebound if hasattr(self, '_m_prebound') else None
-
-            self._m_prebound = (self.value & 16) != 0
-            return self._m_prebound if hasattr(self, '_m_prebound') else None
-
-        @property
-        def all_mods_bound(self):
-            """indicates that this binary binds to all two-level namespace modules of its dependent libraries. only used when MH_PREBINDABLE and MH_TWOLEVEL are both set."""
-            if hasattr(self, '_m_all_mods_bound'):
-                return self._m_all_mods_bound if hasattr(self, '_m_all_mods_bound') else None
-
-            self._m_all_mods_bound = (self.value & 4096) != 0
-            return self._m_all_mods_bound if hasattr(self, '_m_all_mods_bound') else None
-
-        @property
-        def has_tlv_descriptors(self):
-            if hasattr(self, '_m_has_tlv_descriptors'):
-                return self._m_has_tlv_descriptors if hasattr(self, '_m_has_tlv_descriptors') else None
-
-            self._m_has_tlv_descriptors = (self.value & 8388608) != 0
-            return self._m_has_tlv_descriptors if hasattr(self, '_m_has_tlv_descriptors') else None
-
-        @property
-        def force_flat(self):
-            """the executable is forcing all images to use flat name space bindings."""
-            if hasattr(self, '_m_force_flat'):
-                return self._m_force_flat if hasattr(self, '_m_force_flat') else None
-
-            self._m_force_flat = (self.value & 256) != 0
-            return self._m_force_flat if hasattr(self, '_m_force_flat') else None
-
-        @property
-        def root_safe(self):
-            """When this bit is set, the binary declares it is safe for use in processes with uid zero."""
-            if hasattr(self, '_m_root_safe'):
-                return self._m_root_safe if hasattr(self, '_m_root_safe') else None
-
-            self._m_root_safe = (self.value & 262144) != 0
-            return self._m_root_safe if hasattr(self, '_m_root_safe') else None
-
-        @property
-        def no_undefs(self):
-            """the object file has no undefined references."""
-            if hasattr(self, '_m_no_undefs'):
-                return self._m_no_undefs if hasattr(self, '_m_no_undefs') else None
-
-            self._m_no_undefs = (self.value & 1) != 0
-            return self._m_no_undefs if hasattr(self, '_m_no_undefs') else None
-
-        @property
-        def setuid_safe(self):
-            """When this bit is set, the binary declares it is safe for use in processes when issetugid() is true."""
-            if hasattr(self, '_m_setuid_safe'):
-                return self._m_setuid_safe if hasattr(self, '_m_setuid_safe') else None
-
-            self._m_setuid_safe = (self.value & 524288) != 0
-            return self._m_setuid_safe if hasattr(self, '_m_setuid_safe') else None
-
-        @property
-        def no_heap_execution(self):
-            if hasattr(self, '_m_no_heap_execution'):
-                return self._m_no_heap_execution if hasattr(self, '_m_no_heap_execution') else None
-
-            self._m_no_heap_execution = (self.value & 16777216) != 0
-            return self._m_no_heap_execution if hasattr(self, '_m_no_heap_execution') else None
-
-        @property
-        def no_reexported_dylibs(self):
-            """When this bit is set on a dylib, the static linker does not need to examine dependent dylibs to see if any are re-exported."""
-            if hasattr(self, '_m_no_reexported_dylibs'):
-                return self._m_no_reexported_dylibs if hasattr(self, '_m_no_reexported_dylibs') else None
-
-            self._m_no_reexported_dylibs = (self.value & 1048576) != 0
-            return self._m_no_reexported_dylibs if hasattr(self, '_m_no_reexported_dylibs') else None
-
-        @property
-        def no_multi_defs(self):
-            """this umbrella guarantees no multiple defintions of symbols in its sub-images so the two-level namespace hints can always be used."""
-            if hasattr(self, '_m_no_multi_defs'):
-                return self._m_no_multi_defs if hasattr(self, '_m_no_multi_defs') else None
-
-            self._m_no_multi_defs = (self.value & 512) != 0
-            return self._m_no_multi_defs if hasattr(self, '_m_no_multi_defs') else None
-
-        @property
-        def app_extension_safe(self):
-            if hasattr(self, '_m_app_extension_safe'):
-                return self._m_app_extension_safe if hasattr(self, '_m_app_extension_safe') else None
-
-            self._m_app_extension_safe = (self.value & 33554432) != 0
-            return self._m_app_extension_safe if hasattr(self, '_m_app_extension_safe') else None
-
-        @property
-        def prebindable(self):
-            """the binary is not prebound but can have its prebinding redone. only used when MH_PREBOUND is not set."""
-            if hasattr(self, '_m_prebindable'):
-                return self._m_prebindable if hasattr(self, '_m_prebindable') else None
-
-            self._m_prebindable = (self.value & 2048) != 0
-            return self._m_prebindable if hasattr(self, '_m_prebindable') else None
-
-        @property
-        def incr_link(self):
-            """the object file is the output of an incremental link against a base file and can't be link edited again."""
-            if hasattr(self, '_m_incr_link'):
-                return self._m_incr_link if hasattr(self, '_m_incr_link') else None
-
-            self._m_incr_link = (self.value & 2) != 0
-            return self._m_incr_link if hasattr(self, '_m_incr_link') else None
-
-        @property
-        def bind_at_load(self):
-            """the object file's undefined references are bound by the dynamic linker when loaded."""
-            if hasattr(self, '_m_bind_at_load'):
-                return self._m_bind_at_load if hasattr(self, '_m_bind_at_load') else None
-
-            self._m_bind_at_load = (self.value & 8) != 0
-            return self._m_bind_at_load if hasattr(self, '_m_bind_at_load') else None
-
-        @property
-        def canonical(self):
-            """the binary has been canonicalized via the unprebind operation."""
-            if hasattr(self, '_m_canonical'):
-                return self._m_canonical if hasattr(self, '_m_canonical') else None
-
-            self._m_canonical = (self.value & 16384) != 0
-            return self._m_canonical if hasattr(self, '_m_canonical') else None
-
-        @property
-        def two_level(self):
-            """the image is using two-level name space bindings."""
-            if hasattr(self, '_m_two_level'):
-                return self._m_two_level if hasattr(self, '_m_two_level') else None
-
-            self._m_two_level = (self.value & 128) != 0
-            return self._m_two_level if hasattr(self, '_m_two_level') else None
-
-        @property
-        def split_segs(self):
-            """the file has its read-only and read-write segments split."""
-            if hasattr(self, '_m_split_segs'):
-                return self._m_split_segs if hasattr(self, '_m_split_segs') else None
-
-            self._m_split_segs = (self.value & 32) != 0
-            return self._m_split_segs if hasattr(self, '_m_split_segs') else None
-
-        @property
-        def lazy_init(self):
-            """the shared library init routine is to be run lazily via catching memory faults to its writeable segments (obsolete)."""
-            if hasattr(self, '_m_lazy_init'):
-                return self._m_lazy_init if hasattr(self, '_m_lazy_init') else None
-
-            self._m_lazy_init = (self.value & 64) != 0
-            return self._m_lazy_init if hasattr(self, '_m_lazy_init') else None
-
-        @property
-        def allow_stack_execution(self):
-            """When this bit is set, all stacks in the task will be given stack execution privilege.  Only used in MH_EXECUTE filetypes."""
-            if hasattr(self, '_m_allow_stack_execution'):
-                return self._m_allow_stack_execution if hasattr(self, '_m_allow_stack_execution') else None
-
-            self._m_allow_stack_execution = (self.value & 131072) != 0
-            return self._m_allow_stack_execution if hasattr(self, '_m_allow_stack_execution') else None
-
-        @property
-        def binds_to_weak(self):
-            """the final linked image uses weak symbols."""
-            if hasattr(self, '_m_binds_to_weak'):
-                return self._m_binds_to_weak if hasattr(self, '_m_binds_to_weak') else None
-
-            self._m_binds_to_weak = (self.value & 65536) != 0
-            return self._m_binds_to_weak if hasattr(self, '_m_binds_to_weak') else None
-
-        @property
-        def no_fix_prebinding(self):
-            """do not have dyld notify the prebinding agent about this executable."""
-            if hasattr(self, '_m_no_fix_prebinding'):
-                return self._m_no_fix_prebinding if hasattr(self, '_m_no_fix_prebinding') else None
-
-            self._m_no_fix_prebinding = (self.value & 1024) != 0
-            return self._m_no_fix_prebinding if hasattr(self, '_m_no_fix_prebinding') else None
-
-        @property
-        def dyld_link(self):
-            """the object file is input for the dynamic linker and can't be staticly link edited again."""
-            if hasattr(self, '_m_dyld_link'):
-                return self._m_dyld_link if hasattr(self, '_m_dyld_link') else None
-
-            self._m_dyld_link = (self.value & 4) != 0
-            return self._m_dyld_link if hasattr(self, '_m_dyld_link') else None
-
-        @property
-        def pie(self):
-            """When this bit is set, the OS will load the main executable at a random address. Only used in MH_EXECUTE filetypes."""
-            if hasattr(self, '_m_pie'):
-                return self._m_pie if hasattr(self, '_m_pie') else None
-
-            self._m_pie = (self.value & 2097152) != 0
-            return self._m_pie if hasattr(self, '_m_pie') else None
-
-
-    class RoutinesCommand64(KaitaiStruct):
-        SEQ_FIELDS = ["init_address", "init_module", "reserved"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['init_address']['start'] = self._io.pos()
-            self.init_address = self._io.read_u8le()
-            self._debug['init_address']['end'] = self._io.pos()
-            self._debug['init_module']['start'] = self._io.pos()
-            self.init_module = self._io.read_u8le()
-            self._debug['init_module']['end'] = self._io.pos()
-            self._debug['reserved']['start'] = self._io.pos()
-            self.reserved = self._io.read_bytes(48)
-            self._debug['reserved']['end'] = self._io.pos()
-
-
-    class LinkerOptionCommand(KaitaiStruct):
-        SEQ_FIELDS = ["num_strings", "strings"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['num_strings']['start'] = self._io.pos()
-            self.num_strings = self._io.read_u4le()
-            self._debug['num_strings']['end'] = self._io.pos()
-            self._debug['strings']['start'] = self._io.pos()
-            self.strings = [None] * (self.num_strings)
-            for i in range(self.num_strings):
-                if not 'arr' in self._debug['strings']:
-                    self._debug['strings']['arr'] = []
-                self._debug['strings']['arr'].append({'start': self._io.pos()})
-                self.strings[i] = (self._io.read_bytes_term(0, False, True, True)).decode(u"utf-8")
-                self._debug['strings']['arr'][i]['end'] = self._io.pos()
-
-            self._debug['strings']['end'] = self._io.pos()
-
-
-    class SegmentCommand64(KaitaiStruct):
-        SEQ_FIELDS = ["segname", "vmaddr", "vmsize", "fileoff", "filesize", "maxprot", "initprot", "nsects", "flags", "sections"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['segname']['start'] = self._io.pos()
-            self.segname = (KaitaiStream.bytes_strip_right(self._io.read_bytes(16), 0)).decode(u"ascii")
-            self._debug['segname']['end'] = self._io.pos()
-            self._debug['vmaddr']['start'] = self._io.pos()
-            self.vmaddr = self._io.read_u8le()
-            self._debug['vmaddr']['end'] = self._io.pos()
-            self._debug['vmsize']['start'] = self._io.pos()
-            self.vmsize = self._io.read_u8le()
-            self._debug['vmsize']['end'] = self._io.pos()
-            self._debug['fileoff']['start'] = self._io.pos()
-            self.fileoff = self._io.read_u8le()
-            self._debug['fileoff']['end'] = self._io.pos()
-            self._debug['filesize']['start'] = self._io.pos()
-            self.filesize = self._io.read_u8le()
-            self._debug['filesize']['end'] = self._io.pos()
-            self._debug['maxprot']['start'] = self._io.pos()
-            self.maxprot = MachO.VmProt(self._io, self, self._root)
-            self.maxprot._read()
-            self._debug['maxprot']['end'] = self._io.pos()
-            self._debug['initprot']['start'] = self._io.pos()
-            self.initprot = MachO.VmProt(self._io, self, self._root)
-            self.initprot._read()
-            self._debug['initprot']['end'] = self._io.pos()
-            self._debug['nsects']['start'] = self._io.pos()
-            self.nsects = self._io.read_u4le()
-            self._debug['nsects']['end'] = self._io.pos()
-            self._debug['flags']['start'] = self._io.pos()
-            self.flags = self._io.read_u4le()
-            self._debug['flags']['end'] = self._io.pos()
-            self._debug['sections']['start'] = self._io.pos()
-            self.sections = [None] * (self.nsects)
-            for i in range(self.nsects):
-                if not 'arr' in self._debug['sections']:
-                    self._debug['sections']['arr'] = []
-                self._debug['sections']['arr'].append({'start': self._io.pos()})
-                _t_sections = MachO.SegmentCommand64.Section64(self._io, self, self._root)
-                _t_sections._read()
-                self.sections[i] = _t_sections
-                self._debug['sections']['arr'][i]['end'] = self._io.pos()
-
-            self._debug['sections']['end'] = self._io.pos()
-
-        class Section64(KaitaiStruct):
-            SEQ_FIELDS = ["sect_name", "seg_name", "addr", "size", "offset", "align", "reloff", "nreloc", "flags", "reserved1", "reserved2", "reserved3"]
+            _ = self.bind
+            if hasattr(self, '_m_bind'):
+                pass
+                self._m_bind._fetch_instances()
+
+            _ = self.exports
+            if hasattr(self, '_m_exports'):
+                pass
+                self._m_exports._fetch_instances()
+
+            _ = self.lazy_bind
+            if hasattr(self, '_m_lazy_bind'):
+                pass
+                self._m_lazy_bind._fetch_instances()
+
+            _ = self.rebase
+            if hasattr(self, '_m_rebase'):
+                pass
+                self._m_rebase._fetch_instances()
+
+            _ = self.weak_bind
+            if hasattr(self, '_m_weak_bind'):
+                pass
+                self._m_weak_bind._fetch_instances()
+
+
+        class BindData(KaitaiStruct):
+            SEQ_FIELDS = ["items"]
             def __init__(self, _io, _parent=None, _root=None):
-                self._io = _io
+                super(MachO.DyldInfoCommand.BindData, self).__init__(_io)
                 self._parent = _parent
-                self._root = _root if _root else self
+                self._root = _root
                 self._debug = collections.defaultdict(dict)
 
             def _read(self):
-                self._debug['sect_name']['start'] = self._io.pos()
-                self.sect_name = (KaitaiStream.bytes_strip_right(self._io.read_bytes(16), 0)).decode(u"ascii")
-                self._debug['sect_name']['end'] = self._io.pos()
-                self._debug['seg_name']['start'] = self._io.pos()
-                self.seg_name = (KaitaiStream.bytes_strip_right(self._io.read_bytes(16), 0)).decode(u"ascii")
-                self._debug['seg_name']['end'] = self._io.pos()
-                self._debug['addr']['start'] = self._io.pos()
-                self.addr = self._io.read_u8le()
-                self._debug['addr']['end'] = self._io.pos()
-                self._debug['size']['start'] = self._io.pos()
-                self.size = self._io.read_u8le()
-                self._debug['size']['end'] = self._io.pos()
-                self._debug['offset']['start'] = self._io.pos()
-                self.offset = self._io.read_u4le()
-                self._debug['offset']['end'] = self._io.pos()
-                self._debug['align']['start'] = self._io.pos()
-                self.align = self._io.read_u4le()
-                self._debug['align']['end'] = self._io.pos()
-                self._debug['reloff']['start'] = self._io.pos()
-                self.reloff = self._io.read_u4le()
-                self._debug['reloff']['end'] = self._io.pos()
-                self._debug['nreloc']['start'] = self._io.pos()
-                self.nreloc = self._io.read_u4le()
-                self._debug['nreloc']['end'] = self._io.pos()
-                self._debug['flags']['start'] = self._io.pos()
-                self.flags = self._io.read_u4le()
-                self._debug['flags']['end'] = self._io.pos()
-                self._debug['reserved1']['start'] = self._io.pos()
-                self.reserved1 = self._io.read_u4le()
-                self._debug['reserved1']['end'] = self._io.pos()
-                self._debug['reserved2']['start'] = self._io.pos()
-                self.reserved2 = self._io.read_u4le()
-                self._debug['reserved2']['end'] = self._io.pos()
-                self._debug['reserved3']['start'] = self._io.pos()
-                self.reserved3 = self._io.read_u4le()
-                self._debug['reserved3']['end'] = self._io.pos()
-
-            class CfStringList(KaitaiStruct):
-                SEQ_FIELDS = ["items"]
-                def __init__(self, _io, _parent=None, _root=None):
-                    self._io = _io
-                    self._parent = _parent
-                    self._root = _root if _root else self
-                    self._debug = collections.defaultdict(dict)
-
-                def _read(self):
-                    self._debug['items']['start'] = self._io.pos()
-                    self.items = []
-                    i = 0
-                    while not self._io.is_eof():
-                        if not 'arr' in self._debug['items']:
-                            self._debug['items']['arr'] = []
-                        self._debug['items']['arr'].append({'start': self._io.pos()})
-                        _t_items = MachO.SegmentCommand64.Section64.CfString(self._io, self, self._root)
+                self._debug['items']['start'] = self._io.pos()
+                self._debug['items']['arr'] = []
+                self.items = []
+                i = 0
+                while not self._io.is_eof():
+                    self._debug['items']['arr'].append({'start': self._io.pos()})
+                    _t_items = MachO.DyldInfoCommand.BindItem(self._io, self, self._root)
+                    try:
                         _t_items._read()
+                    finally:
                         self.items.append(_t_items)
-                        self._debug['items']['arr'][len(self.items) - 1]['end'] = self._io.pos()
-                        i += 1
+                    self._debug['items']['arr'][len(self.items) - 1]['end'] = self._io.pos()
+                    i += 1
 
-                    self._debug['items']['end'] = self._io.pos()
-
-
-            class CfString(KaitaiStruct):
-                SEQ_FIELDS = ["isa", "info", "data", "length"]
-                def __init__(self, _io, _parent=None, _root=None):
-                    self._io = _io
-                    self._parent = _parent
-                    self._root = _root if _root else self
-                    self._debug = collections.defaultdict(dict)
-
-                def _read(self):
-                    self._debug['isa']['start'] = self._io.pos()
-                    self.isa = self._io.read_u8le()
-                    self._debug['isa']['end'] = self._io.pos()
-                    self._debug['info']['start'] = self._io.pos()
-                    self.info = self._io.read_u8le()
-                    self._debug['info']['end'] = self._io.pos()
-                    self._debug['data']['start'] = self._io.pos()
-                    self.data = self._io.read_u8le()
-                    self._debug['data']['end'] = self._io.pos()
-                    self._debug['length']['start'] = self._io.pos()
-                    self.length = self._io.read_u8le()
-                    self._debug['length']['end'] = self._io.pos()
+                self._debug['items']['end'] = self._io.pos()
 
 
-            class EhFrameItem(KaitaiStruct):
-                SEQ_FIELDS = ["length", "length64", "id", "body"]
-                def __init__(self, _io, _parent=None, _root=None):
-                    self._io = _io
-                    self._parent = _parent
-                    self._root = _root if _root else self
-                    self._debug = collections.defaultdict(dict)
-
-                def _read(self):
-                    self._debug['length']['start'] = self._io.pos()
-                    self.length = self._io.read_u4le()
-                    self._debug['length']['end'] = self._io.pos()
-                    if self.length == 4294967295:
-                        self._debug['length64']['start'] = self._io.pos()
-                        self.length64 = self._io.read_u8le()
-                        self._debug['length64']['end'] = self._io.pos()
-
-                    self._debug['id']['start'] = self._io.pos()
-                    self.id = self._io.read_u4le()
-                    self._debug['id']['end'] = self._io.pos()
-                    if self.length > 0:
-                        self._debug['body']['start'] = self._io.pos()
-                        _on = self.id
-                        if _on == 0:
-                            self._raw_body = self._io.read_bytes((self.length - 4))
-                            _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
-                            self.body = MachO.SegmentCommand64.Section64.EhFrameItem.Cie(_io__raw_body, self, self._root)
-                            self.body._read()
-                        else:
-                            self.body = self._io.read_bytes((self.length - 4))
-                        self._debug['body']['end'] = self._io.pos()
-
-
-                class CharChain(KaitaiStruct):
-                    SEQ_FIELDS = ["chr", "next"]
-                    def __init__(self, _io, _parent=None, _root=None):
-                        self._io = _io
-                        self._parent = _parent
-                        self._root = _root if _root else self
-                        self._debug = collections.defaultdict(dict)
-
-                    def _read(self):
-                        self._debug['chr']['start'] = self._io.pos()
-                        self.chr = self._io.read_u1()
-                        self._debug['chr']['end'] = self._io.pos()
-                        if self.chr != 0:
-                            self._debug['next']['start'] = self._io.pos()
-                            self.next = MachO.SegmentCommand64.Section64.EhFrameItem.CharChain(self._io, self, self._root)
-                            self.next._read()
-                            self._debug['next']['end'] = self._io.pos()
+            def _fetch_instances(self):
+                pass
+                for i in range(len(self.items)):
+                    pass
+                    self.items[i]._fetch_instances()
 
 
 
-                class Cie(KaitaiStruct):
-                    SEQ_FIELDS = ["version", "aug_str", "code_alignment_factor", "data_alignment_factor", "return_address_register", "augmentation"]
-                    def __init__(self, _io, _parent=None, _root=None):
-                        self._io = _io
-                        self._parent = _parent
-                        self._root = _root if _root else self
-                        self._debug = collections.defaultdict(dict)
+        class BindItem(KaitaiStruct):
+            SEQ_FIELDS = ["opcode_and_immediate", "uleb", "skip", "symbol"]
+            def __init__(self, _io, _parent=None, _root=None):
+                super(MachO.DyldInfoCommand.BindItem, self).__init__(_io)
+                self._parent = _parent
+                self._root = _root
+                self._debug = collections.defaultdict(dict)
 
-                    def _read(self):
-                        self._debug['version']['start'] = self._io.pos()
-                        self.version = self._io.read_u1()
-                        self._debug['version']['end'] = self._io.pos()
-                        self._debug['aug_str']['start'] = self._io.pos()
-                        self.aug_str = MachO.SegmentCommand64.Section64.EhFrameItem.CharChain(self._io, self, self._root)
-                        self.aug_str._read()
-                        self._debug['aug_str']['end'] = self._io.pos()
-                        self._debug['code_alignment_factor']['start'] = self._io.pos()
-                        self.code_alignment_factor = MachO.Uleb128(self._io, self, self._root)
-                        self.code_alignment_factor._read()
-                        self._debug['code_alignment_factor']['end'] = self._io.pos()
-                        self._debug['data_alignment_factor']['start'] = self._io.pos()
-                        self.data_alignment_factor = MachO.Uleb128(self._io, self, self._root)
-                        self.data_alignment_factor._read()
-                        self._debug['data_alignment_factor']['end'] = self._io.pos()
-                        self._debug['return_address_register']['start'] = self._io.pos()
-                        self.return_address_register = self._io.read_u1()
-                        self._debug['return_address_register']['end'] = self._io.pos()
-                        if self.aug_str.chr == 122:
-                            self._debug['augmentation']['start'] = self._io.pos()
-                            self.augmentation = MachO.SegmentCommand64.Section64.EhFrameItem.AugmentationEntry(self._io, self, self._root)
-                            self.augmentation._read()
-                            self._debug['augmentation']['end'] = self._io.pos()
+            def _read(self):
+                self._debug['opcode_and_immediate']['start'] = self._io.pos()
+                self.opcode_and_immediate = self._io.read_u1()
+                self._debug['opcode_and_immediate']['end'] = self._io.pos()
+                if  ((self.opcode == MachO.DyldInfoCommand.BindOpcode.set_dylib_ordinal_uleb) or (self.opcode == MachO.DyldInfoCommand.BindOpcode.set_append_sleb) or (self.opcode == MachO.DyldInfoCommand.BindOpcode.set_segment_and_offset_uleb) or (self.opcode == MachO.DyldInfoCommand.BindOpcode.add_address_uleb) or (self.opcode == MachO.DyldInfoCommand.BindOpcode.do_bind_add_address_uleb) or (self.opcode == MachO.DyldInfoCommand.BindOpcode.do_bind_uleb_times_skipping_uleb)) :
+                    pass
+                    self._debug['uleb']['start'] = self._io.pos()
+                    self.uleb = MachO.Uleb128(self._io, self, self._root)
+                    self.uleb._read()
+                    self._debug['uleb']['end'] = self._io.pos()
 
+                if self.opcode == MachO.DyldInfoCommand.BindOpcode.do_bind_uleb_times_skipping_uleb:
+                    pass
+                    self._debug['skip']['start'] = self._io.pos()
+                    self.skip = MachO.Uleb128(self._io, self, self._root)
+                    self.skip._read()
+                    self._debug['skip']['end'] = self._io.pos()
 
-
-                class AugmentationEntry(KaitaiStruct):
-                    SEQ_FIELDS = ["length", "fde_pointer_encoding"]
-                    def __init__(self, _io, _parent=None, _root=None):
-                        self._io = _io
-                        self._parent = _parent
-                        self._root = _root if _root else self
-                        self._debug = collections.defaultdict(dict)
-
-                    def _read(self):
-                        self._debug['length']['start'] = self._io.pos()
-                        self.length = MachO.Uleb128(self._io, self, self._root)
-                        self.length._read()
-                        self._debug['length']['end'] = self._io.pos()
-                        if self._parent.aug_str.next.chr == 82:
-                            self._debug['fde_pointer_encoding']['start'] = self._io.pos()
-                            self.fde_pointer_encoding = self._io.read_u1()
-                            self._debug['fde_pointer_encoding']['end'] = self._io.pos()
+                if self.opcode == MachO.DyldInfoCommand.BindOpcode.set_symbol_trailing_flags_immediate:
+                    pass
+                    self._debug['symbol']['start'] = self._io.pos()
+                    self.symbol = (self._io.read_bytes_term(0, False, True, True)).decode(u"ASCII")
+                    self._debug['symbol']['end'] = self._io.pos()
 
 
 
+            def _fetch_instances(self):
+                pass
+                if  ((self.opcode == MachO.DyldInfoCommand.BindOpcode.set_dylib_ordinal_uleb) or (self.opcode == MachO.DyldInfoCommand.BindOpcode.set_append_sleb) or (self.opcode == MachO.DyldInfoCommand.BindOpcode.set_segment_and_offset_uleb) or (self.opcode == MachO.DyldInfoCommand.BindOpcode.add_address_uleb) or (self.opcode == MachO.DyldInfoCommand.BindOpcode.do_bind_add_address_uleb) or (self.opcode == MachO.DyldInfoCommand.BindOpcode.do_bind_uleb_times_skipping_uleb)) :
+                    pass
+                    self.uleb._fetch_instances()
 
-            class EhFrame(KaitaiStruct):
-                SEQ_FIELDS = ["items"]
-                def __init__(self, _io, _parent=None, _root=None):
-                    self._io = _io
-                    self._parent = _parent
-                    self._root = _root if _root else self
-                    self._debug = collections.defaultdict(dict)
+                if self.opcode == MachO.DyldInfoCommand.BindOpcode.do_bind_uleb_times_skipping_uleb:
+                    pass
+                    self.skip._fetch_instances()
 
-                def _read(self):
-                    self._debug['items']['start'] = self._io.pos()
-                    self.items = []
-                    i = 0
-                    while not self._io.is_eof():
-                        if not 'arr' in self._debug['items']:
-                            self._debug['items']['arr'] = []
-                        self._debug['items']['arr'].append({'start': self._io.pos()})
-                        _t_items = MachO.SegmentCommand64.Section64.EhFrameItem(self._io, self, self._root)
-                        _t_items._read()
-                        self.items.append(_t_items)
-                        self._debug['items']['arr'][len(self.items) - 1]['end'] = self._io.pos()
-                        i += 1
-
-                    self._debug['items']['end'] = self._io.pos()
-
-
-            class PointerList(KaitaiStruct):
-                SEQ_FIELDS = ["items"]
-                def __init__(self, _io, _parent=None, _root=None):
-                    self._io = _io
-                    self._parent = _parent
-                    self._root = _root if _root else self
-                    self._debug = collections.defaultdict(dict)
-
-                def _read(self):
-                    self._debug['items']['start'] = self._io.pos()
-                    self.items = []
-                    i = 0
-                    while not self._io.is_eof():
-                        if not 'arr' in self._debug['items']:
-                            self._debug['items']['arr'] = []
-                        self._debug['items']['arr'].append({'start': self._io.pos()})
-                        self.items.append(self._io.read_u8le())
-                        self._debug['items']['arr'][len(self.items) - 1]['end'] = self._io.pos()
-                        i += 1
-
-                    self._debug['items']['end'] = self._io.pos()
-
-
-            class StringList(KaitaiStruct):
-                SEQ_FIELDS = ["strings"]
-                def __init__(self, _io, _parent=None, _root=None):
-                    self._io = _io
-                    self._parent = _parent
-                    self._root = _root if _root else self
-                    self._debug = collections.defaultdict(dict)
-
-                def _read(self):
-                    self._debug['strings']['start'] = self._io.pos()
-                    self.strings = []
-                    i = 0
-                    while not self._io.is_eof():
-                        if not 'arr' in self._debug['strings']:
-                            self._debug['strings']['arr'] = []
-                        self._debug['strings']['arr'].append({'start': self._io.pos()})
-                        self.strings.append((self._io.read_bytes_term(0, False, True, True)).decode(u"ascii"))
-                        self._debug['strings']['arr'][len(self.strings) - 1]['end'] = self._io.pos()
-                        i += 1
-
-                    self._debug['strings']['end'] = self._io.pos()
+                if self.opcode == MachO.DyldInfoCommand.BindOpcode.set_symbol_trailing_flags_immediate:
+                    pass
 
 
             @property
-            def data(self):
-                if hasattr(self, '_m_data'):
-                    return self._m_data if hasattr(self, '_m_data') else None
+            def immediate(self):
+                if hasattr(self, '_m_immediate'):
+                    return self._m_immediate
 
+                self._m_immediate = self.opcode_and_immediate & 15
+                return getattr(self, '_m_immediate', None)
+
+            @property
+            def opcode(self):
+                if hasattr(self, '_m_opcode'):
+                    return self._m_opcode
+
+                self._m_opcode = KaitaiStream.resolve_enum(MachO.DyldInfoCommand.BindOpcode, self.opcode_and_immediate & 240)
+                return getattr(self, '_m_opcode', None)
+
+
+        class ExportNode(KaitaiStruct):
+            SEQ_FIELDS = ["terminal_size", "children_count", "children", "terminal"]
+            def __init__(self, _io, _parent=None, _root=None):
+                super(MachO.DyldInfoCommand.ExportNode, self).__init__(_io)
+                self._parent = _parent
+                self._root = _root
+                self._debug = collections.defaultdict(dict)
+
+            def _read(self):
+                self._debug['terminal_size']['start'] = self._io.pos()
+                self.terminal_size = MachO.Uleb128(self._io, self, self._root)
+                self.terminal_size._read()
+                self._debug['terminal_size']['end'] = self._io.pos()
+                self._debug['children_count']['start'] = self._io.pos()
+                self.children_count = self._io.read_u1()
+                self._debug['children_count']['end'] = self._io.pos()
+                self._debug['children']['start'] = self._io.pos()
+                self._debug['children']['arr'] = []
+                self.children = []
+                for i in range(self.children_count):
+                    self._debug['children']['arr'].append({'start': self._io.pos()})
+                    _t_children = MachO.DyldInfoCommand.ExportNode.Child(self._io, self, self._root)
+                    try:
+                        _t_children._read()
+                    finally:
+                        self.children.append(_t_children)
+                    self._debug['children']['arr'][i]['end'] = self._io.pos()
+
+                self._debug['children']['end'] = self._io.pos()
+                self._debug['terminal']['start'] = self._io.pos()
+                self.terminal = self._io.read_bytes(self.terminal_size.value)
+                self._debug['terminal']['end'] = self._io.pos()
+
+
+            def _fetch_instances(self):
+                pass
+                self.terminal_size._fetch_instances()
+                for i in range(len(self.children)):
+                    pass
+                    self.children[i]._fetch_instances()
+
+
+            class Child(KaitaiStruct):
+                SEQ_FIELDS = ["name", "node_offset"]
+                def __init__(self, _io, _parent=None, _root=None):
+                    super(MachO.DyldInfoCommand.ExportNode.Child, self).__init__(_io)
+                    self._parent = _parent
+                    self._root = _root
+                    self._debug = collections.defaultdict(dict)
+
+                def _read(self):
+                    self._debug['name']['start'] = self._io.pos()
+                    self.name = (self._io.read_bytes_term(0, False, True, True)).decode(u"ASCII")
+                    self._debug['name']['end'] = self._io.pos()
+                    self._debug['node_offset']['start'] = self._io.pos()
+                    self.node_offset = MachO.Uleb128(self._io, self, self._root)
+                    self.node_offset._read()
+                    self._debug['node_offset']['end'] = self._io.pos()
+
+
+                def _fetch_instances(self):
+                    pass
+                    self.node_offset._fetch_instances()
+                    _ = self.value
+                    if hasattr(self, '_m_value'):
+                        pass
+                        self._m_value._fetch_instances()
+
+
+                @property
+                def value(self):
+                    if hasattr(self, '_m_value'):
+                        return self._m_value
+
+                    _pos = self._io.pos()
+                    self._io.seek(self.node_offset.value)
+                    self._debug['_m_value']['start'] = self._io.pos()
+                    self._m_value = MachO.DyldInfoCommand.ExportNode(self._io, self, self._root)
+                    self._m_value._read()
+                    self._debug['_m_value']['end'] = self._io.pos()
+                    self._io.seek(_pos)
+                    return getattr(self, '_m_value', None)
+
+
+
+        class RebaseData(KaitaiStruct):
+
+            class Opcode(IntEnum):
+                done = 0
+                set_type_immediate = 16
+                set_segment_and_offset_uleb = 32
+                add_address_uleb = 48
+                add_address_immediate_scaled = 64
+                do_rebase_immediate_times = 80
+                do_rebase_uleb_times = 96
+                do_rebase_add_address_uleb = 112
+                do_rebase_uleb_times_skipping_uleb = 128
+            SEQ_FIELDS = ["items"]
+            def __init__(self, _io, _parent=None, _root=None):
+                super(MachO.DyldInfoCommand.RebaseData, self).__init__(_io)
+                self._parent = _parent
+                self._root = _root
+                self._debug = collections.defaultdict(dict)
+
+            def _read(self):
+                self._debug['items']['start'] = self._io.pos()
+                self._debug['items']['arr'] = []
+                self.items = []
+                i = 0
+                while True:
+                    self._debug['items']['arr'].append({'start': self._io.pos()})
+                    _t_items = MachO.DyldInfoCommand.RebaseData.RebaseItem(self._io, self, self._root)
+                    try:
+                        _t_items._read()
+                    finally:
+                        _ = _t_items
+                        self.items.append(_)
+                    self._debug['items']['arr'][len(self.items) - 1]['end'] = self._io.pos()
+                    if _.opcode == MachO.DyldInfoCommand.RebaseData.Opcode.done:
+                        break
+                    i += 1
+                self._debug['items']['end'] = self._io.pos()
+
+
+            def _fetch_instances(self):
+                pass
+                for i in range(len(self.items)):
+                    pass
+                    self.items[i]._fetch_instances()
+
+
+            class RebaseItem(KaitaiStruct):
+                SEQ_FIELDS = ["opcode_and_immediate", "uleb", "skip"]
+                def __init__(self, _io, _parent=None, _root=None):
+                    super(MachO.DyldInfoCommand.RebaseData.RebaseItem, self).__init__(_io)
+                    self._parent = _parent
+                    self._root = _root
+                    self._debug = collections.defaultdict(dict)
+
+                def _read(self):
+                    self._debug['opcode_and_immediate']['start'] = self._io.pos()
+                    self.opcode_and_immediate = self._io.read_u1()
+                    self._debug['opcode_and_immediate']['end'] = self._io.pos()
+                    if  ((self.opcode == MachO.DyldInfoCommand.RebaseData.Opcode.set_segment_and_offset_uleb) or (self.opcode == MachO.DyldInfoCommand.RebaseData.Opcode.add_address_uleb) or (self.opcode == MachO.DyldInfoCommand.RebaseData.Opcode.do_rebase_uleb_times) or (self.opcode == MachO.DyldInfoCommand.RebaseData.Opcode.do_rebase_add_address_uleb) or (self.opcode == MachO.DyldInfoCommand.RebaseData.Opcode.do_rebase_uleb_times_skipping_uleb)) :
+                        pass
+                        self._debug['uleb']['start'] = self._io.pos()
+                        self.uleb = MachO.Uleb128(self._io, self, self._root)
+                        self.uleb._read()
+                        self._debug['uleb']['end'] = self._io.pos()
+
+                    if self.opcode == MachO.DyldInfoCommand.RebaseData.Opcode.do_rebase_uleb_times_skipping_uleb:
+                        pass
+                        self._debug['skip']['start'] = self._io.pos()
+                        self.skip = MachO.Uleb128(self._io, self, self._root)
+                        self.skip._read()
+                        self._debug['skip']['end'] = self._io.pos()
+
+
+
+                def _fetch_instances(self):
+                    pass
+                    if  ((self.opcode == MachO.DyldInfoCommand.RebaseData.Opcode.set_segment_and_offset_uleb) or (self.opcode == MachO.DyldInfoCommand.RebaseData.Opcode.add_address_uleb) or (self.opcode == MachO.DyldInfoCommand.RebaseData.Opcode.do_rebase_uleb_times) or (self.opcode == MachO.DyldInfoCommand.RebaseData.Opcode.do_rebase_add_address_uleb) or (self.opcode == MachO.DyldInfoCommand.RebaseData.Opcode.do_rebase_uleb_times_skipping_uleb)) :
+                        pass
+                        self.uleb._fetch_instances()
+
+                    if self.opcode == MachO.DyldInfoCommand.RebaseData.Opcode.do_rebase_uleb_times_skipping_uleb:
+                        pass
+                        self.skip._fetch_instances()
+
+
+                @property
+                def immediate(self):
+                    if hasattr(self, '_m_immediate'):
+                        return self._m_immediate
+
+                    self._m_immediate = self.opcode_and_immediate & 15
+                    return getattr(self, '_m_immediate', None)
+
+                @property
+                def opcode(self):
+                    if hasattr(self, '_m_opcode'):
+                        return self._m_opcode
+
+                    self._m_opcode = KaitaiStream.resolve_enum(MachO.DyldInfoCommand.RebaseData.Opcode, self.opcode_and_immediate & 240)
+                    return getattr(self, '_m_opcode', None)
+
+
+
+        @property
+        def bind(self):
+            if hasattr(self, '_m_bind'):
+                return self._m_bind
+
+            if self.bind_size != 0:
+                pass
                 io = self._root._io
                 _pos = io.pos()
-                io.seek(self.offset)
-                self._debug['_m_data']['start'] = io.pos()
-                _on = self.sect_name
-                if _on == u"__objc_nlclslist":
-                    self._raw__m_data = io.read_bytes(self.size)
-                    _io__raw__m_data = KaitaiStream(BytesIO(self._raw__m_data))
-                    self._m_data = MachO.SegmentCommand64.Section64.PointerList(_io__raw__m_data, self, self._root)
-                    self._m_data._read()
-                elif _on == u"__objc_methname":
-                    self._raw__m_data = io.read_bytes(self.size)
-                    _io__raw__m_data = KaitaiStream(BytesIO(self._raw__m_data))
-                    self._m_data = MachO.SegmentCommand64.Section64.StringList(_io__raw__m_data, self, self._root)
-                    self._m_data._read()
-                elif _on == u"__nl_symbol_ptr":
-                    self._raw__m_data = io.read_bytes(self.size)
-                    _io__raw__m_data = KaitaiStream(BytesIO(self._raw__m_data))
-                    self._m_data = MachO.SegmentCommand64.Section64.PointerList(_io__raw__m_data, self, self._root)
-                    self._m_data._read()
-                elif _on == u"__la_symbol_ptr":
-                    self._raw__m_data = io.read_bytes(self.size)
-                    _io__raw__m_data = KaitaiStream(BytesIO(self._raw__m_data))
-                    self._m_data = MachO.SegmentCommand64.Section64.PointerList(_io__raw__m_data, self, self._root)
-                    self._m_data._read()
-                elif _on == u"__objc_selrefs":
-                    self._raw__m_data = io.read_bytes(self.size)
-                    _io__raw__m_data = KaitaiStream(BytesIO(self._raw__m_data))
-                    self._m_data = MachO.SegmentCommand64.Section64.PointerList(_io__raw__m_data, self, self._root)
-                    self._m_data._read()
-                elif _on == u"__cstring":
-                    self._raw__m_data = io.read_bytes(self.size)
-                    _io__raw__m_data = KaitaiStream(BytesIO(self._raw__m_data))
-                    self._m_data = MachO.SegmentCommand64.Section64.StringList(_io__raw__m_data, self, self._root)
-                    self._m_data._read()
-                elif _on == u"__objc_classlist":
-                    self._raw__m_data = io.read_bytes(self.size)
-                    _io__raw__m_data = KaitaiStream(BytesIO(self._raw__m_data))
-                    self._m_data = MachO.SegmentCommand64.Section64.PointerList(_io__raw__m_data, self, self._root)
-                    self._m_data._read()
-                elif _on == u"__objc_protolist":
-                    self._raw__m_data = io.read_bytes(self.size)
-                    _io__raw__m_data = KaitaiStream(BytesIO(self._raw__m_data))
-                    self._m_data = MachO.SegmentCommand64.Section64.PointerList(_io__raw__m_data, self, self._root)
-                    self._m_data._read()
-                elif _on == u"__objc_imageinfo":
-                    self._raw__m_data = io.read_bytes(self.size)
-                    _io__raw__m_data = KaitaiStream(BytesIO(self._raw__m_data))
-                    self._m_data = MachO.SegmentCommand64.Section64.PointerList(_io__raw__m_data, self, self._root)
-                    self._m_data._read()
-                elif _on == u"__objc_methtype":
-                    self._raw__m_data = io.read_bytes(self.size)
-                    _io__raw__m_data = KaitaiStream(BytesIO(self._raw__m_data))
-                    self._m_data = MachO.SegmentCommand64.Section64.StringList(_io__raw__m_data, self, self._root)
-                    self._m_data._read()
-                elif _on == u"__cfstring":
-                    self._raw__m_data = io.read_bytes(self.size)
-                    _io__raw__m_data = KaitaiStream(BytesIO(self._raw__m_data))
-                    self._m_data = MachO.SegmentCommand64.Section64.CfStringList(_io__raw__m_data, self, self._root)
-                    self._m_data._read()
-                elif _on == u"__objc_classrefs":
-                    self._raw__m_data = io.read_bytes(self.size)
-                    _io__raw__m_data = KaitaiStream(BytesIO(self._raw__m_data))
-                    self._m_data = MachO.SegmentCommand64.Section64.PointerList(_io__raw__m_data, self, self._root)
-                    self._m_data._read()
-                elif _on == u"__objc_protorefs":
-                    self._raw__m_data = io.read_bytes(self.size)
-                    _io__raw__m_data = KaitaiStream(BytesIO(self._raw__m_data))
-                    self._m_data = MachO.SegmentCommand64.Section64.PointerList(_io__raw__m_data, self, self._root)
-                    self._m_data._read()
-                elif _on == u"__objc_classname":
-                    self._raw__m_data = io.read_bytes(self.size)
-                    _io__raw__m_data = KaitaiStream(BytesIO(self._raw__m_data))
-                    self._m_data = MachO.SegmentCommand64.Section64.StringList(_io__raw__m_data, self, self._root)
-                    self._m_data._read()
-                elif _on == u"__got":
-                    self._raw__m_data = io.read_bytes(self.size)
-                    _io__raw__m_data = KaitaiStream(BytesIO(self._raw__m_data))
-                    self._m_data = MachO.SegmentCommand64.Section64.PointerList(_io__raw__m_data, self, self._root)
-                    self._m_data._read()
-                elif _on == u"__eh_frame":
-                    self._raw__m_data = io.read_bytes(self.size)
-                    _io__raw__m_data = KaitaiStream(BytesIO(self._raw__m_data))
-                    self._m_data = MachO.SegmentCommand64.Section64.EhFrame(_io__raw__m_data, self, self._root)
-                    self._m_data._read()
-                elif _on == u"__objc_superrefs":
-                    self._raw__m_data = io.read_bytes(self.size)
-                    _io__raw__m_data = KaitaiStream(BytesIO(self._raw__m_data))
-                    self._m_data = MachO.SegmentCommand64.Section64.PointerList(_io__raw__m_data, self, self._root)
-                    self._m_data._read()
-                else:
-                    self._m_data = io.read_bytes(self.size)
-                self._debug['_m_data']['end'] = io.pos()
+                io.seek(self.bind_off)
+                self._debug['_m_bind']['start'] = io.pos()
+                self._raw__m_bind = io.read_bytes(self.bind_size)
+                _io__raw__m_bind = KaitaiStream(BytesIO(self._raw__m_bind))
+                self._m_bind = MachO.DyldInfoCommand.BindData(_io__raw__m_bind, self, self._root)
+                self._m_bind._read()
+                self._debug['_m_bind']['end'] = io.pos()
                 io.seek(_pos)
-                return self._m_data if hasattr(self, '_m_data') else None
+
+            return getattr(self, '_m_bind', None)
+
+        @property
+        def exports(self):
+            if hasattr(self, '_m_exports'):
+                return self._m_exports
+
+            if self.export_size != 0:
+                pass
+                io = self._root._io
+                _pos = io.pos()
+                io.seek(self.export_off)
+                self._debug['_m_exports']['start'] = io.pos()
+                self._raw__m_exports = io.read_bytes(self.export_size)
+                _io__raw__m_exports = KaitaiStream(BytesIO(self._raw__m_exports))
+                self._m_exports = MachO.DyldInfoCommand.ExportNode(_io__raw__m_exports, self, self._root)
+                self._m_exports._read()
+                self._debug['_m_exports']['end'] = io.pos()
+                io.seek(_pos)
+
+            return getattr(self, '_m_exports', None)
+
+        @property
+        def lazy_bind(self):
+            if hasattr(self, '_m_lazy_bind'):
+                return self._m_lazy_bind
+
+            if self.lazy_bind_size != 0:
+                pass
+                io = self._root._io
+                _pos = io.pos()
+                io.seek(self.lazy_bind_off)
+                self._debug['_m_lazy_bind']['start'] = io.pos()
+                self._raw__m_lazy_bind = io.read_bytes(self.lazy_bind_size)
+                _io__raw__m_lazy_bind = KaitaiStream(BytesIO(self._raw__m_lazy_bind))
+                self._m_lazy_bind = MachO.DyldInfoCommand.BindData(_io__raw__m_lazy_bind, self, self._root)
+                self._m_lazy_bind._read()
+                self._debug['_m_lazy_bind']['end'] = io.pos()
+                io.seek(_pos)
+
+            return getattr(self, '_m_lazy_bind', None)
+
+        @property
+        def rebase(self):
+            if hasattr(self, '_m_rebase'):
+                return self._m_rebase
+
+            if self.rebase_size != 0:
+                pass
+                io = self._root._io
+                _pos = io.pos()
+                io.seek(self.rebase_off)
+                self._debug['_m_rebase']['start'] = io.pos()
+                self._raw__m_rebase = io.read_bytes(self.rebase_size)
+                _io__raw__m_rebase = KaitaiStream(BytesIO(self._raw__m_rebase))
+                self._m_rebase = MachO.DyldInfoCommand.RebaseData(_io__raw__m_rebase, self, self._root)
+                self._m_rebase._read()
+                self._debug['_m_rebase']['end'] = io.pos()
+                io.seek(_pos)
+
+            return getattr(self, '_m_rebase', None)
+
+        @property
+        def weak_bind(self):
+            if hasattr(self, '_m_weak_bind'):
+                return self._m_weak_bind
+
+            if self.weak_bind_size != 0:
+                pass
+                io = self._root._io
+                _pos = io.pos()
+                io.seek(self.weak_bind_off)
+                self._debug['_m_weak_bind']['start'] = io.pos()
+                self._raw__m_weak_bind = io.read_bytes(self.weak_bind_size)
+                _io__raw__m_weak_bind = KaitaiStream(BytesIO(self._raw__m_weak_bind))
+                self._m_weak_bind = MachO.DyldInfoCommand.BindData(_io__raw__m_weak_bind, self, self._root)
+                self._m_weak_bind._read()
+                self._debug['_m_weak_bind']['end'] = io.pos()
+                io.seek(_pos)
+
+            return getattr(self, '_m_weak_bind', None)
 
 
-
-    class VmProt(KaitaiStruct):
-        SEQ_FIELDS = ["strip_read", "is_mask", "reserved0", "copy", "no_change", "execute", "write", "read", "reserved1"]
+    class DylibCommand(KaitaiStruct):
+        SEQ_FIELDS = ["name_offset", "timestamp", "current_version", "compatibility_version", "name"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(MachO.DylibCommand, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
-            self._debug['strip_read']['start'] = self._io.pos()
-            self.strip_read = self._io.read_bits_int_be(1) != 0
-            self._debug['strip_read']['end'] = self._io.pos()
-            self._debug['is_mask']['start'] = self._io.pos()
-            self.is_mask = self._io.read_bits_int_be(1) != 0
-            self._debug['is_mask']['end'] = self._io.pos()
-            self._debug['reserved0']['start'] = self._io.pos()
-            self.reserved0 = self._io.read_bits_int_be(1) != 0
-            self._debug['reserved0']['end'] = self._io.pos()
-            self._debug['copy']['start'] = self._io.pos()
-            self.copy = self._io.read_bits_int_be(1) != 0
-            self._debug['copy']['end'] = self._io.pos()
-            self._debug['no_change']['start'] = self._io.pos()
-            self.no_change = self._io.read_bits_int_be(1) != 0
-            self._debug['no_change']['end'] = self._io.pos()
-            self._debug['execute']['start'] = self._io.pos()
-            self.execute = self._io.read_bits_int_be(1) != 0
-            self._debug['execute']['end'] = self._io.pos()
-            self._debug['write']['start'] = self._io.pos()
-            self.write = self._io.read_bits_int_be(1) != 0
-            self._debug['write']['end'] = self._io.pos()
-            self._debug['read']['start'] = self._io.pos()
-            self.read = self._io.read_bits_int_be(1) != 0
-            self._debug['read']['end'] = self._io.pos()
-            self._debug['reserved1']['start'] = self._io.pos()
-            self.reserved1 = self._io.read_bits_int_be(24)
-            self._debug['reserved1']['end'] = self._io.pos()
+            self._debug['name_offset']['start'] = self._io.pos()
+            self.name_offset = self._io.read_u4le()
+            self._debug['name_offset']['end'] = self._io.pos()
+            self._debug['timestamp']['start'] = self._io.pos()
+            self.timestamp = self._io.read_u4le()
+            self._debug['timestamp']['end'] = self._io.pos()
+            self._debug['current_version']['start'] = self._io.pos()
+            self.current_version = self._io.read_u4le()
+            self._debug['current_version']['end'] = self._io.pos()
+            self._debug['compatibility_version']['start'] = self._io.pos()
+            self.compatibility_version = self._io.read_u4le()
+            self._debug['compatibility_version']['end'] = self._io.pos()
+            self._debug['name']['start'] = self._io.pos()
+            self.name = (self._io.read_bytes_term(0, False, True, True)).decode(u"UTF-8")
+            self._debug['name']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+
+
+    class DylinkerCommand(KaitaiStruct):
+        SEQ_FIELDS = ["name"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(MachO.DylinkerCommand, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['name']['start'] = self._io.pos()
+            self.name = MachO.LcStr(self._io, self, self._root)
+            self.name._read()
+            self._debug['name']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            self.name._fetch_instances()
 
 
     class DysymtabCommand(KaitaiStruct):
         SEQ_FIELDS = ["i_local_sym", "n_local_sym", "i_ext_def_sym", "n_ext_def_sym", "i_undef_sym", "n_undef_sym", "toc_off", "n_toc", "mod_tab_off", "n_mod_tab", "ext_ref_sym_off", "n_ext_ref_syms", "indirect_sym_off", "n_indirect_syms", "ext_rel_off", "n_ext_rel", "loc_rel_off", "n_loc_rel"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(MachO.DysymtabCommand, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -1821,34 +1777,560 @@ class MachO(KaitaiStruct):
             self.n_loc_rel = self._io.read_u4le()
             self._debug['n_loc_rel']['end'] = self._io.pos()
 
+
+        def _fetch_instances(self):
+            pass
+            _ = self.indirect_symbols
+            if hasattr(self, '_m_indirect_symbols'):
+                pass
+                for i in range(len(self._m_indirect_symbols)):
+                    pass
+
+
+
         @property
         def indirect_symbols(self):
             if hasattr(self, '_m_indirect_symbols'):
-                return self._m_indirect_symbols if hasattr(self, '_m_indirect_symbols') else None
+                return self._m_indirect_symbols
 
             io = self._root._io
             _pos = io.pos()
             io.seek(self.indirect_sym_off)
             self._debug['_m_indirect_symbols']['start'] = io.pos()
-            self._m_indirect_symbols = [None] * (self.n_indirect_syms)
+            self._debug['_m_indirect_symbols']['arr'] = []
+            self._m_indirect_symbols = []
             for i in range(self.n_indirect_syms):
-                if not 'arr' in self._debug['_m_indirect_symbols']:
-                    self._debug['_m_indirect_symbols']['arr'] = []
                 self._debug['_m_indirect_symbols']['arr'].append({'start': io.pos()})
-                self._m_indirect_symbols[i] = io.read_u4le()
+                self._m_indirect_symbols.append(io.read_u4le())
                 self._debug['_m_indirect_symbols']['arr'][i]['end'] = io.pos()
 
             self._debug['_m_indirect_symbols']['end'] = io.pos()
             io.seek(_pos)
-            return self._m_indirect_symbols if hasattr(self, '_m_indirect_symbols') else None
+            return getattr(self, '_m_indirect_symbols', None)
+
+
+    class EncryptionInfoCommand(KaitaiStruct):
+        SEQ_FIELDS = ["cryptoff", "cryptsize", "cryptid", "pad"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(MachO.EncryptionInfoCommand, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['cryptoff']['start'] = self._io.pos()
+            self.cryptoff = self._io.read_u4le()
+            self._debug['cryptoff']['end'] = self._io.pos()
+            self._debug['cryptsize']['start'] = self._io.pos()
+            self.cryptsize = self._io.read_u4le()
+            self._debug['cryptsize']['end'] = self._io.pos()
+            self._debug['cryptid']['start'] = self._io.pos()
+            self.cryptid = self._io.read_u4le()
+            self._debug['cryptid']['end'] = self._io.pos()
+            if  ((self._root.magic == MachO.MagicType.macho_be_x64) or (self._root.magic == MachO.MagicType.macho_le_x64)) :
+                pass
+                self._debug['pad']['start'] = self._io.pos()
+                self.pad = self._io.read_u4le()
+                self._debug['pad']['end'] = self._io.pos()
+
+
+
+        def _fetch_instances(self):
+            pass
+            if  ((self._root.magic == MachO.MagicType.macho_be_x64) or (self._root.magic == MachO.MagicType.macho_le_x64)) :
+                pass
+
+
+
+    class EntryPointCommand(KaitaiStruct):
+        SEQ_FIELDS = ["entry_off", "stack_size"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(MachO.EntryPointCommand, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['entry_off']['start'] = self._io.pos()
+            self.entry_off = self._io.read_u8le()
+            self._debug['entry_off']['end'] = self._io.pos()
+            self._debug['stack_size']['start'] = self._io.pos()
+            self.stack_size = self._io.read_u8le()
+            self._debug['stack_size']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+
+
+    class LcStr(KaitaiStruct):
+        SEQ_FIELDS = ["length", "value"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(MachO.LcStr, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['length']['start'] = self._io.pos()
+            self.length = self._io.read_u4le()
+            self._debug['length']['end'] = self._io.pos()
+            self._debug['value']['start'] = self._io.pos()
+            self.value = (self._io.read_bytes_term(0, False, True, True)).decode(u"UTF-8")
+            self._debug['value']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+
+
+    class LinkeditDataCommand(KaitaiStruct):
+        SEQ_FIELDS = ["data_off", "data_size"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(MachO.LinkeditDataCommand, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['data_off']['start'] = self._io.pos()
+            self.data_off = self._io.read_u4le()
+            self._debug['data_off']['end'] = self._io.pos()
+            self._debug['data_size']['start'] = self._io.pos()
+            self.data_size = self._io.read_u4le()
+            self._debug['data_size']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+
+
+    class LinkerOptionCommand(KaitaiStruct):
+        SEQ_FIELDS = ["num_strings", "strings"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(MachO.LinkerOptionCommand, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['num_strings']['start'] = self._io.pos()
+            self.num_strings = self._io.read_u4le()
+            self._debug['num_strings']['end'] = self._io.pos()
+            self._debug['strings']['start'] = self._io.pos()
+            self._debug['strings']['arr'] = []
+            self.strings = []
+            for i in range(self.num_strings):
+                self._debug['strings']['arr'].append({'start': self._io.pos()})
+                self.strings.append((self._io.read_bytes_term(0, False, True, True)).decode(u"UTF-8"))
+                self._debug['strings']['arr'][i]['end'] = self._io.pos()
+
+            self._debug['strings']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            for i in range(len(self.strings)):
+                pass
+
+
+
+    class LoadCommand(KaitaiStruct):
+        SEQ_FIELDS = ["type", "size", "body"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(MachO.LoadCommand, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['type']['start'] = self._io.pos()
+            self.type = KaitaiStream.resolve_enum(MachO.LoadCommandType, self._io.read_u4le())
+            self._debug['type']['end'] = self._io.pos()
+            self._debug['size']['start'] = self._io.pos()
+            self.size = self._io.read_u4le()
+            self._debug['size']['end'] = self._io.pos()
+            self._debug['body']['start'] = self._io.pos()
+            _on = self.type
+            if _on == MachO.LoadCommandType.build_version:
+                pass
+                self._raw_body = self._io.read_bytes(self.size - 8)
+                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
+                self.body = MachO.BuildVersionCommand(_io__raw_body, self, self._root)
+                self.body._read()
+            elif _on == MachO.LoadCommandType.code_signature:
+                pass
+                self._raw_body = self._io.read_bytes(self.size - 8)
+                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
+                self.body = MachO.CodeSignatureCommand(_io__raw_body, self, self._root)
+                self.body._read()
+            elif _on == MachO.LoadCommandType.data_in_code:
+                pass
+                self._raw_body = self._io.read_bytes(self.size - 8)
+                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
+                self.body = MachO.LinkeditDataCommand(_io__raw_body, self, self._root)
+                self.body._read()
+            elif _on == MachO.LoadCommandType.dyld_environment:
+                pass
+                self._raw_body = self._io.read_bytes(self.size - 8)
+                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
+                self.body = MachO.DylinkerCommand(_io__raw_body, self, self._root)
+                self.body._read()
+            elif _on == MachO.LoadCommandType.dyld_info:
+                pass
+                self._raw_body = self._io.read_bytes(self.size - 8)
+                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
+                self.body = MachO.DyldInfoCommand(_io__raw_body, self, self._root)
+                self.body._read()
+            elif _on == MachO.LoadCommandType.dyld_info_only:
+                pass
+                self._raw_body = self._io.read_bytes(self.size - 8)
+                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
+                self.body = MachO.DyldInfoCommand(_io__raw_body, self, self._root)
+                self.body._read()
+            elif _on == MachO.LoadCommandType.dylib_code_sign_drs:
+                pass
+                self._raw_body = self._io.read_bytes(self.size - 8)
+                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
+                self.body = MachO.LinkeditDataCommand(_io__raw_body, self, self._root)
+                self.body._read()
+            elif _on == MachO.LoadCommandType.dysymtab:
+                pass
+                self._raw_body = self._io.read_bytes(self.size - 8)
+                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
+                self.body = MachO.DysymtabCommand(_io__raw_body, self, self._root)
+                self.body._read()
+            elif _on == MachO.LoadCommandType.encryption_info:
+                pass
+                self._raw_body = self._io.read_bytes(self.size - 8)
+                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
+                self.body = MachO.EncryptionInfoCommand(_io__raw_body, self, self._root)
+                self.body._read()
+            elif _on == MachO.LoadCommandType.encryption_info_64:
+                pass
+                self._raw_body = self._io.read_bytes(self.size - 8)
+                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
+                self.body = MachO.EncryptionInfoCommand(_io__raw_body, self, self._root)
+                self.body._read()
+            elif _on == MachO.LoadCommandType.function_starts:
+                pass
+                self._raw_body = self._io.read_bytes(self.size - 8)
+                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
+                self.body = MachO.LinkeditDataCommand(_io__raw_body, self, self._root)
+                self.body._read()
+            elif _on == MachO.LoadCommandType.id_dylib:
+                pass
+                self._raw_body = self._io.read_bytes(self.size - 8)
+                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
+                self.body = MachO.DylibCommand(_io__raw_body, self, self._root)
+                self.body._read()
+            elif _on == MachO.LoadCommandType.id_dylinker:
+                pass
+                self._raw_body = self._io.read_bytes(self.size - 8)
+                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
+                self.body = MachO.DylinkerCommand(_io__raw_body, self, self._root)
+                self.body._read()
+            elif _on == MachO.LoadCommandType.lazy_load_dylib:
+                pass
+                self._raw_body = self._io.read_bytes(self.size - 8)
+                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
+                self.body = MachO.DylibCommand(_io__raw_body, self, self._root)
+                self.body._read()
+            elif _on == MachO.LoadCommandType.linker_optimization_hint:
+                pass
+                self._raw_body = self._io.read_bytes(self.size - 8)
+                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
+                self.body = MachO.LinkeditDataCommand(_io__raw_body, self, self._root)
+                self.body._read()
+            elif _on == MachO.LoadCommandType.linker_option:
+                pass
+                self._raw_body = self._io.read_bytes(self.size - 8)
+                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
+                self.body = MachO.LinkerOptionCommand(_io__raw_body, self, self._root)
+                self.body._read()
+            elif _on == MachO.LoadCommandType.load_dylib:
+                pass
+                self._raw_body = self._io.read_bytes(self.size - 8)
+                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
+                self.body = MachO.DylibCommand(_io__raw_body, self, self._root)
+                self.body._read()
+            elif _on == MachO.LoadCommandType.load_dylinker:
+                pass
+                self._raw_body = self._io.read_bytes(self.size - 8)
+                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
+                self.body = MachO.DylinkerCommand(_io__raw_body, self, self._root)
+                self.body._read()
+            elif _on == MachO.LoadCommandType.load_upward_dylib:
+                pass
+                self._raw_body = self._io.read_bytes(self.size - 8)
+                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
+                self.body = MachO.DylibCommand(_io__raw_body, self, self._root)
+                self.body._read()
+            elif _on == MachO.LoadCommandType.load_weak_dylib:
+                pass
+                self._raw_body = self._io.read_bytes(self.size - 8)
+                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
+                self.body = MachO.DylibCommand(_io__raw_body, self, self._root)
+                self.body._read()
+            elif _on == MachO.LoadCommandType.main:
+                pass
+                self._raw_body = self._io.read_bytes(self.size - 8)
+                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
+                self.body = MachO.EntryPointCommand(_io__raw_body, self, self._root)
+                self.body._read()
+            elif _on == MachO.LoadCommandType.reexport_dylib:
+                pass
+                self._raw_body = self._io.read_bytes(self.size - 8)
+                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
+                self.body = MachO.DylibCommand(_io__raw_body, self, self._root)
+                self.body._read()
+            elif _on == MachO.LoadCommandType.routines:
+                pass
+                self._raw_body = self._io.read_bytes(self.size - 8)
+                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
+                self.body = MachO.RoutinesCommand(_io__raw_body, self, self._root)
+                self.body._read()
+            elif _on == MachO.LoadCommandType.routines_64:
+                pass
+                self._raw_body = self._io.read_bytes(self.size - 8)
+                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
+                self.body = MachO.RoutinesCommand64(_io__raw_body, self, self._root)
+                self.body._read()
+            elif _on == MachO.LoadCommandType.rpath:
+                pass
+                self._raw_body = self._io.read_bytes(self.size - 8)
+                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
+                self.body = MachO.RpathCommand(_io__raw_body, self, self._root)
+                self.body._read()
+            elif _on == MachO.LoadCommandType.segment:
+                pass
+                self._raw_body = self._io.read_bytes(self.size - 8)
+                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
+                self.body = MachO.SegmentCommand(_io__raw_body, self, self._root)
+                self.body._read()
+            elif _on == MachO.LoadCommandType.segment_64:
+                pass
+                self._raw_body = self._io.read_bytes(self.size - 8)
+                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
+                self.body = MachO.SegmentCommand64(_io__raw_body, self, self._root)
+                self.body._read()
+            elif _on == MachO.LoadCommandType.segment_split_info:
+                pass
+                self._raw_body = self._io.read_bytes(self.size - 8)
+                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
+                self.body = MachO.LinkeditDataCommand(_io__raw_body, self, self._root)
+                self.body._read()
+            elif _on == MachO.LoadCommandType.source_version:
+                pass
+                self._raw_body = self._io.read_bytes(self.size - 8)
+                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
+                self.body = MachO.SourceVersionCommand(_io__raw_body, self, self._root)
+                self.body._read()
+            elif _on == MachO.LoadCommandType.sub_client:
+                pass
+                self._raw_body = self._io.read_bytes(self.size - 8)
+                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
+                self.body = MachO.SubCommand(_io__raw_body, self, self._root)
+                self.body._read()
+            elif _on == MachO.LoadCommandType.sub_framework:
+                pass
+                self._raw_body = self._io.read_bytes(self.size - 8)
+                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
+                self.body = MachO.SubCommand(_io__raw_body, self, self._root)
+                self.body._read()
+            elif _on == MachO.LoadCommandType.sub_library:
+                pass
+                self._raw_body = self._io.read_bytes(self.size - 8)
+                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
+                self.body = MachO.SubCommand(_io__raw_body, self, self._root)
+                self.body._read()
+            elif _on == MachO.LoadCommandType.sub_umbrella:
+                pass
+                self._raw_body = self._io.read_bytes(self.size - 8)
+                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
+                self.body = MachO.SubCommand(_io__raw_body, self, self._root)
+                self.body._read()
+            elif _on == MachO.LoadCommandType.symtab:
+                pass
+                self._raw_body = self._io.read_bytes(self.size - 8)
+                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
+                self.body = MachO.SymtabCommand(_io__raw_body, self, self._root)
+                self.body._read()
+            elif _on == MachO.LoadCommandType.twolevel_hints:
+                pass
+                self._raw_body = self._io.read_bytes(self.size - 8)
+                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
+                self.body = MachO.TwolevelHintsCommand(_io__raw_body, self, self._root)
+                self.body._read()
+            elif _on == MachO.LoadCommandType.uuid:
+                pass
+                self._raw_body = self._io.read_bytes(self.size - 8)
+                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
+                self.body = MachO.UuidCommand(_io__raw_body, self, self._root)
+                self.body._read()
+            elif _on == MachO.LoadCommandType.version_min_iphoneos:
+                pass
+                self._raw_body = self._io.read_bytes(self.size - 8)
+                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
+                self.body = MachO.VersionMinCommand(_io__raw_body, self, self._root)
+                self.body._read()
+            elif _on == MachO.LoadCommandType.version_min_macosx:
+                pass
+                self._raw_body = self._io.read_bytes(self.size - 8)
+                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
+                self.body = MachO.VersionMinCommand(_io__raw_body, self, self._root)
+                self.body._read()
+            elif _on == MachO.LoadCommandType.version_min_tvos:
+                pass
+                self._raw_body = self._io.read_bytes(self.size - 8)
+                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
+                self.body = MachO.VersionMinCommand(_io__raw_body, self, self._root)
+                self.body._read()
+            elif _on == MachO.LoadCommandType.version_min_watchos:
+                pass
+                self._raw_body = self._io.read_bytes(self.size - 8)
+                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
+                self.body = MachO.VersionMinCommand(_io__raw_body, self, self._root)
+                self.body._read()
+            else:
+                pass
+                self.body = self._io.read_bytes(self.size - 8)
+            self._debug['body']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            _on = self.type
+            if _on == MachO.LoadCommandType.build_version:
+                pass
+                self.body._fetch_instances()
+            elif _on == MachO.LoadCommandType.code_signature:
+                pass
+                self.body._fetch_instances()
+            elif _on == MachO.LoadCommandType.data_in_code:
+                pass
+                self.body._fetch_instances()
+            elif _on == MachO.LoadCommandType.dyld_environment:
+                pass
+                self.body._fetch_instances()
+            elif _on == MachO.LoadCommandType.dyld_info:
+                pass
+                self.body._fetch_instances()
+            elif _on == MachO.LoadCommandType.dyld_info_only:
+                pass
+                self.body._fetch_instances()
+            elif _on == MachO.LoadCommandType.dylib_code_sign_drs:
+                pass
+                self.body._fetch_instances()
+            elif _on == MachO.LoadCommandType.dysymtab:
+                pass
+                self.body._fetch_instances()
+            elif _on == MachO.LoadCommandType.encryption_info:
+                pass
+                self.body._fetch_instances()
+            elif _on == MachO.LoadCommandType.encryption_info_64:
+                pass
+                self.body._fetch_instances()
+            elif _on == MachO.LoadCommandType.function_starts:
+                pass
+                self.body._fetch_instances()
+            elif _on == MachO.LoadCommandType.id_dylib:
+                pass
+                self.body._fetch_instances()
+            elif _on == MachO.LoadCommandType.id_dylinker:
+                pass
+                self.body._fetch_instances()
+            elif _on == MachO.LoadCommandType.lazy_load_dylib:
+                pass
+                self.body._fetch_instances()
+            elif _on == MachO.LoadCommandType.linker_optimization_hint:
+                pass
+                self.body._fetch_instances()
+            elif _on == MachO.LoadCommandType.linker_option:
+                pass
+                self.body._fetch_instances()
+            elif _on == MachO.LoadCommandType.load_dylib:
+                pass
+                self.body._fetch_instances()
+            elif _on == MachO.LoadCommandType.load_dylinker:
+                pass
+                self.body._fetch_instances()
+            elif _on == MachO.LoadCommandType.load_upward_dylib:
+                pass
+                self.body._fetch_instances()
+            elif _on == MachO.LoadCommandType.load_weak_dylib:
+                pass
+                self.body._fetch_instances()
+            elif _on == MachO.LoadCommandType.main:
+                pass
+                self.body._fetch_instances()
+            elif _on == MachO.LoadCommandType.reexport_dylib:
+                pass
+                self.body._fetch_instances()
+            elif _on == MachO.LoadCommandType.routines:
+                pass
+                self.body._fetch_instances()
+            elif _on == MachO.LoadCommandType.routines_64:
+                pass
+                self.body._fetch_instances()
+            elif _on == MachO.LoadCommandType.rpath:
+                pass
+                self.body._fetch_instances()
+            elif _on == MachO.LoadCommandType.segment:
+                pass
+                self.body._fetch_instances()
+            elif _on == MachO.LoadCommandType.segment_64:
+                pass
+                self.body._fetch_instances()
+            elif _on == MachO.LoadCommandType.segment_split_info:
+                pass
+                self.body._fetch_instances()
+            elif _on == MachO.LoadCommandType.source_version:
+                pass
+                self.body._fetch_instances()
+            elif _on == MachO.LoadCommandType.sub_client:
+                pass
+                self.body._fetch_instances()
+            elif _on == MachO.LoadCommandType.sub_framework:
+                pass
+                self.body._fetch_instances()
+            elif _on == MachO.LoadCommandType.sub_library:
+                pass
+                self.body._fetch_instances()
+            elif _on == MachO.LoadCommandType.sub_umbrella:
+                pass
+                self.body._fetch_instances()
+            elif _on == MachO.LoadCommandType.symtab:
+                pass
+                self.body._fetch_instances()
+            elif _on == MachO.LoadCommandType.twolevel_hints:
+                pass
+                self.body._fetch_instances()
+            elif _on == MachO.LoadCommandType.uuid:
+                pass
+                self.body._fetch_instances()
+            elif _on == MachO.LoadCommandType.version_min_iphoneos:
+                pass
+                self.body._fetch_instances()
+            elif _on == MachO.LoadCommandType.version_min_macosx:
+                pass
+                self.body._fetch_instances()
+            elif _on == MachO.LoadCommandType.version_min_tvos:
+                pass
+                self.body._fetch_instances()
+            elif _on == MachO.LoadCommandType.version_min_watchos:
+                pass
+                self.body._fetch_instances()
+            else:
+                pass
 
 
     class MachHeader(KaitaiStruct):
         SEQ_FIELDS = ["cputype", "cpusubtype", "filetype", "ncmds", "sizeofcmds", "flags", "reserved"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(MachO.MachHeader, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -1871,574 +2353,363 @@ class MachO(KaitaiStruct):
             self.flags = self._io.read_u4le()
             self._debug['flags']['end'] = self._io.pos()
             if  ((self._root.magic == MachO.MagicType.macho_be_x64) or (self._root.magic == MachO.MagicType.macho_le_x64)) :
+                pass
                 self._debug['reserved']['start'] = self._io.pos()
                 self.reserved = self._io.read_u4le()
                 self._debug['reserved']['end'] = self._io.pos()
 
 
+
+        def _fetch_instances(self):
+            pass
+            if  ((self._root.magic == MachO.MagicType.macho_be_x64) or (self._root.magic == MachO.MagicType.macho_le_x64)) :
+                pass
+
+            _ = self.flags_obj
+            if hasattr(self, '_m_flags_obj'):
+                pass
+                self._m_flags_obj._fetch_instances()
+
+
         @property
         def flags_obj(self):
             if hasattr(self, '_m_flags_obj'):
-                return self._m_flags_obj if hasattr(self, '_m_flags_obj') else None
+                return self._m_flags_obj
 
             self._debug['_m_flags_obj']['start'] = self._io.pos()
             self._m_flags_obj = MachO.MachoFlags(self.flags, self._io, self, self._root)
             self._m_flags_obj._read()
             self._debug['_m_flags_obj']['end'] = self._io.pos()
-            return self._m_flags_obj if hasattr(self, '_m_flags_obj') else None
+            return getattr(self, '_m_flags_obj', None)
 
 
-    class LinkeditDataCommand(KaitaiStruct):
-        SEQ_FIELDS = ["data_off", "data_size"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+    class MachoFlags(KaitaiStruct):
+        SEQ_FIELDS = []
+        def __init__(self, value, _io, _parent=None, _root=None):
+            super(MachO.MachoFlags, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
+            self.value = value
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
-            self._debug['data_off']['start'] = self._io.pos()
-            self.data_off = self._io.read_u4le()
-            self._debug['data_off']['end'] = self._io.pos()
-            self._debug['data_size']['start'] = self._io.pos()
-            self.data_size = self._io.read_u4le()
-            self._debug['data_size']['end'] = self._io.pos()
+            pass
 
 
-    class SubCommand(KaitaiStruct):
-        SEQ_FIELDS = ["name"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['name']['start'] = self._io.pos()
-            self.name = MachO.LcStr(self._io, self, self._root)
-            self.name._read()
-            self._debug['name']['end'] = self._io.pos()
-
-
-    class TwolevelHintsCommand(KaitaiStruct):
-        SEQ_FIELDS = ["offset", "num_hints"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['offset']['start'] = self._io.pos()
-            self.offset = self._io.read_u4le()
-            self._debug['offset']['end'] = self._io.pos()
-            self._debug['num_hints']['start'] = self._io.pos()
-            self.num_hints = self._io.read_u4le()
-            self._debug['num_hints']['end'] = self._io.pos()
-
-
-    class Version(KaitaiStruct):
-        SEQ_FIELDS = ["p1", "minor", "major", "release"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['p1']['start'] = self._io.pos()
-            self.p1 = self._io.read_u1()
-            self._debug['p1']['end'] = self._io.pos()
-            self._debug['minor']['start'] = self._io.pos()
-            self.minor = self._io.read_u1()
-            self._debug['minor']['end'] = self._io.pos()
-            self._debug['major']['start'] = self._io.pos()
-            self.major = self._io.read_u1()
-            self._debug['major']['end'] = self._io.pos()
-            self._debug['release']['start'] = self._io.pos()
-            self.release = self._io.read_u1()
-            self._debug['release']['end'] = self._io.pos()
-
-
-    class EncryptionInfoCommand(KaitaiStruct):
-        SEQ_FIELDS = ["cryptoff", "cryptsize", "cryptid", "pad"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['cryptoff']['start'] = self._io.pos()
-            self.cryptoff = self._io.read_u4le()
-            self._debug['cryptoff']['end'] = self._io.pos()
-            self._debug['cryptsize']['start'] = self._io.pos()
-            self.cryptsize = self._io.read_u4le()
-            self._debug['cryptsize']['end'] = self._io.pos()
-            self._debug['cryptid']['start'] = self._io.pos()
-            self.cryptid = self._io.read_u4le()
-            self._debug['cryptid']['end'] = self._io.pos()
-            if  ((self._root.magic == MachO.MagicType.macho_be_x64) or (self._root.magic == MachO.MagicType.macho_le_x64)) :
-                self._debug['pad']['start'] = self._io.pos()
-                self.pad = self._io.read_u4le()
-                self._debug['pad']['end'] = self._io.pos()
-
-
-
-    class CodeSignatureCommand(KaitaiStruct):
-        SEQ_FIELDS = ["data_off", "data_size"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['data_off']['start'] = self._io.pos()
-            self.data_off = self._io.read_u4le()
-            self._debug['data_off']['end'] = self._io.pos()
-            self._debug['data_size']['start'] = self._io.pos()
-            self.data_size = self._io.read_u4le()
-            self._debug['data_size']['end'] = self._io.pos()
+        def _fetch_instances(self):
+            pass
 
         @property
-        def code_signature(self):
-            if hasattr(self, '_m_code_signature'):
-                return self._m_code_signature if hasattr(self, '_m_code_signature') else None
+        def all_mods_bound(self):
+            """indicates that this binary binds to all two-level namespace modules of its dependent libraries. only used when MH_PREBINDABLE and MH_TWOLEVEL are both set."""
+            if hasattr(self, '_m_all_mods_bound'):
+                return self._m_all_mods_bound
 
-            io = self._root._io
-            _pos = io.pos()
-            io.seek(self.data_off)
-            self._debug['_m_code_signature']['start'] = io.pos()
-            self._raw__m_code_signature = io.read_bytes(self.data_size)
-            _io__raw__m_code_signature = KaitaiStream(BytesIO(self._raw__m_code_signature))
-            self._m_code_signature = MachO.CsBlob(_io__raw__m_code_signature, self, self._root)
-            self._m_code_signature._read()
-            self._debug['_m_code_signature']['end'] = io.pos()
-            io.seek(_pos)
-            return self._m_code_signature if hasattr(self, '_m_code_signature') else None
+            self._m_all_mods_bound = self.value & 4096 != 0
+            return getattr(self, '_m_all_mods_bound', None)
+
+        @property
+        def allow_stack_execution(self):
+            """When this bit is set, all stacks in the task will be given stack execution privilege.  Only used in MH_EXECUTE filetypes."""
+            if hasattr(self, '_m_allow_stack_execution'):
+                return self._m_allow_stack_execution
+
+            self._m_allow_stack_execution = self.value & 131072 != 0
+            return getattr(self, '_m_allow_stack_execution', None)
+
+        @property
+        def app_extension_safe(self):
+            if hasattr(self, '_m_app_extension_safe'):
+                return self._m_app_extension_safe
+
+            self._m_app_extension_safe = self.value & 33554432 != 0
+            return getattr(self, '_m_app_extension_safe', None)
+
+        @property
+        def bind_at_load(self):
+            """the object file's undefined references are bound by the dynamic linker when loaded."""
+            if hasattr(self, '_m_bind_at_load'):
+                return self._m_bind_at_load
+
+            self._m_bind_at_load = self.value & 8 != 0
+            return getattr(self, '_m_bind_at_load', None)
+
+        @property
+        def binds_to_weak(self):
+            """the final linked image uses weak symbols."""
+            if hasattr(self, '_m_binds_to_weak'):
+                return self._m_binds_to_weak
+
+            self._m_binds_to_weak = self.value & 65536 != 0
+            return getattr(self, '_m_binds_to_weak', None)
+
+        @property
+        def canonical(self):
+            """the binary has been canonicalized via the unprebind operation."""
+            if hasattr(self, '_m_canonical'):
+                return self._m_canonical
+
+            self._m_canonical = self.value & 16384 != 0
+            return getattr(self, '_m_canonical', None)
+
+        @property
+        def dead_strippable_dylib(self):
+            if hasattr(self, '_m_dead_strippable_dylib'):
+                return self._m_dead_strippable_dylib
+
+            self._m_dead_strippable_dylib = self.value & 4194304 != 0
+            return getattr(self, '_m_dead_strippable_dylib', None)
+
+        @property
+        def dyld_link(self):
+            """the object file is input for the dynamic linker and can't be statically link-edited again."""
+            if hasattr(self, '_m_dyld_link'):
+                return self._m_dyld_link
+
+            self._m_dyld_link = self.value & 4 != 0
+            return getattr(self, '_m_dyld_link', None)
+
+        @property
+        def force_flat(self):
+            """the executable is forcing all images to use flat name space bindings."""
+            if hasattr(self, '_m_force_flat'):
+                return self._m_force_flat
+
+            self._m_force_flat = self.value & 256 != 0
+            return getattr(self, '_m_force_flat', None)
+
+        @property
+        def has_tlv_descriptors(self):
+            if hasattr(self, '_m_has_tlv_descriptors'):
+                return self._m_has_tlv_descriptors
+
+            self._m_has_tlv_descriptors = self.value & 8388608 != 0
+            return getattr(self, '_m_has_tlv_descriptors', None)
+
+        @property
+        def incr_link(self):
+            """the object file is the output of an incremental link against a base file and can't be link-edited again."""
+            if hasattr(self, '_m_incr_link'):
+                return self._m_incr_link
+
+            self._m_incr_link = self.value & 2 != 0
+            return getattr(self, '_m_incr_link', None)
+
+        @property
+        def lazy_init(self):
+            """the shared library init routine is to be run lazily via catching memory faults to its writeable segments (obsolete)."""
+            if hasattr(self, '_m_lazy_init'):
+                return self._m_lazy_init
+
+            self._m_lazy_init = self.value & 64 != 0
+            return getattr(self, '_m_lazy_init', None)
+
+        @property
+        def no_fix_prebinding(self):
+            """do not have dyld notify the prebinding agent about this executable."""
+            if hasattr(self, '_m_no_fix_prebinding'):
+                return self._m_no_fix_prebinding
+
+            self._m_no_fix_prebinding = self.value & 1024 != 0
+            return getattr(self, '_m_no_fix_prebinding', None)
+
+        @property
+        def no_heap_execution(self):
+            if hasattr(self, '_m_no_heap_execution'):
+                return self._m_no_heap_execution
+
+            self._m_no_heap_execution = self.value & 16777216 != 0
+            return getattr(self, '_m_no_heap_execution', None)
+
+        @property
+        def no_multi_defs(self):
+            """this umbrella guarantees no multiple definitions of symbols in its sub-images so the two-level namespace hints can always be used."""
+            if hasattr(self, '_m_no_multi_defs'):
+                return self._m_no_multi_defs
+
+            self._m_no_multi_defs = self.value & 512 != 0
+            return getattr(self, '_m_no_multi_defs', None)
+
+        @property
+        def no_reexported_dylibs(self):
+            """When this bit is set on a dylib, the static linker does not need to examine dependent dylibs to see if any are re-exported."""
+            if hasattr(self, '_m_no_reexported_dylibs'):
+                return self._m_no_reexported_dylibs
+
+            self._m_no_reexported_dylibs = self.value & 1048576 != 0
+            return getattr(self, '_m_no_reexported_dylibs', None)
+
+        @property
+        def no_undefs(self):
+            """the object file has no undefined references."""
+            if hasattr(self, '_m_no_undefs'):
+                return self._m_no_undefs
+
+            self._m_no_undefs = self.value & 1 != 0
+            return getattr(self, '_m_no_undefs', None)
+
+        @property
+        def pie(self):
+            """When this bit is set, the OS will load the main executable at a random address. Only used in MH_EXECUTE filetypes."""
+            if hasattr(self, '_m_pie'):
+                return self._m_pie
+
+            self._m_pie = self.value & 2097152 != 0
+            return getattr(self, '_m_pie', None)
+
+        @property
+        def prebindable(self):
+            """the binary is not prebound but can have its prebinding redone. only used when MH_PREBOUND is not set."""
+            if hasattr(self, '_m_prebindable'):
+                return self._m_prebindable
+
+            self._m_prebindable = self.value & 2048 != 0
+            return getattr(self, '_m_prebindable', None)
+
+        @property
+        def prebound(self):
+            """the file has its dynamic undefined references prebound."""
+            if hasattr(self, '_m_prebound'):
+                return self._m_prebound
+
+            self._m_prebound = self.value & 16 != 0
+            return getattr(self, '_m_prebound', None)
+
+        @property
+        def root_safe(self):
+            """When this bit is set, the binary declares it is safe for use in processes with uid zero."""
+            if hasattr(self, '_m_root_safe'):
+                return self._m_root_safe
+
+            self._m_root_safe = self.value & 262144 != 0
+            return getattr(self, '_m_root_safe', None)
+
+        @property
+        def setuid_safe(self):
+            """When this bit is set, the binary declares it is safe for use in processes when issetugid() is true."""
+            if hasattr(self, '_m_setuid_safe'):
+                return self._m_setuid_safe
+
+            self._m_setuid_safe = self.value & 524288 != 0
+            return getattr(self, '_m_setuid_safe', None)
+
+        @property
+        def split_segs(self):
+            """the file has its read-only and read-write segments split."""
+            if hasattr(self, '_m_split_segs'):
+                return self._m_split_segs
+
+            self._m_split_segs = self.value & 32 != 0
+            return getattr(self, '_m_split_segs', None)
+
+        @property
+        def subsections_via_symbols(self):
+            """safe to divide up the sections into sub-sections via symbols for dead code stripping."""
+            if hasattr(self, '_m_subsections_via_symbols'):
+                return self._m_subsections_via_symbols
+
+            self._m_subsections_via_symbols = self.value & 8192 != 0
+            return getattr(self, '_m_subsections_via_symbols', None)
+
+        @property
+        def two_level(self):
+            """the image is using two-level name space bindings."""
+            if hasattr(self, '_m_two_level'):
+                return self._m_two_level
+
+            self._m_two_level = self.value & 128 != 0
+            return getattr(self, '_m_two_level', None)
+
+        @property
+        def weak_defines(self):
+            """the final linked image contains external weak symbols."""
+            if hasattr(self, '_m_weak_defines'):
+                return self._m_weak_defines
+
+            self._m_weak_defines = self.value & 32768 != 0
+            return getattr(self, '_m_weak_defines', None)
 
 
-    class DyldInfoCommand(KaitaiStruct):
-
-        class BindOpcode(Enum):
-            done = 0
-            set_dylib_ordinal_immediate = 16
-            set_dylib_ordinal_uleb = 32
-            set_dylib_special_immediate = 48
-            set_symbol_trailing_flags_immediate = 64
-            set_type_immediate = 80
-            set_append_sleb = 96
-            set_segment_and_offset_uleb = 112
-            add_address_uleb = 128
-            do_bind = 144
-            do_bind_add_address_uleb = 160
-            do_bind_add_address_immediate_scaled = 176
-            do_bind_uleb_times_skipping_uleb = 192
-        SEQ_FIELDS = ["rebase_off", "rebase_size", "bind_off", "bind_size", "weak_bind_off", "weak_bind_size", "lazy_bind_off", "lazy_bind_size", "export_off", "export_size"]
+    class RoutinesCommand(KaitaiStruct):
+        SEQ_FIELDS = ["init_address", "init_module", "reserved"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(MachO.RoutinesCommand, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
-            self._debug['rebase_off']['start'] = self._io.pos()
-            self.rebase_off = self._io.read_u4le()
-            self._debug['rebase_off']['end'] = self._io.pos()
-            self._debug['rebase_size']['start'] = self._io.pos()
-            self.rebase_size = self._io.read_u4le()
-            self._debug['rebase_size']['end'] = self._io.pos()
-            self._debug['bind_off']['start'] = self._io.pos()
-            self.bind_off = self._io.read_u4le()
-            self._debug['bind_off']['end'] = self._io.pos()
-            self._debug['bind_size']['start'] = self._io.pos()
-            self.bind_size = self._io.read_u4le()
-            self._debug['bind_size']['end'] = self._io.pos()
-            self._debug['weak_bind_off']['start'] = self._io.pos()
-            self.weak_bind_off = self._io.read_u4le()
-            self._debug['weak_bind_off']['end'] = self._io.pos()
-            self._debug['weak_bind_size']['start'] = self._io.pos()
-            self.weak_bind_size = self._io.read_u4le()
-            self._debug['weak_bind_size']['end'] = self._io.pos()
-            self._debug['lazy_bind_off']['start'] = self._io.pos()
-            self.lazy_bind_off = self._io.read_u4le()
-            self._debug['lazy_bind_off']['end'] = self._io.pos()
-            self._debug['lazy_bind_size']['start'] = self._io.pos()
-            self.lazy_bind_size = self._io.read_u4le()
-            self._debug['lazy_bind_size']['end'] = self._io.pos()
-            self._debug['export_off']['start'] = self._io.pos()
-            self.export_off = self._io.read_u4le()
-            self._debug['export_off']['end'] = self._io.pos()
-            self._debug['export_size']['start'] = self._io.pos()
-            self.export_size = self._io.read_u4le()
-            self._debug['export_size']['end'] = self._io.pos()
-
-        class RebaseData(KaitaiStruct):
-
-            class Opcode(Enum):
-                done = 0
-                set_type_immediate = 16
-                set_segment_and_offset_uleb = 32
-                add_address_uleb = 48
-                add_address_immediate_scaled = 64
-                do_rebase_immediate_times = 80
-                do_rebase_uleb_times = 96
-                do_rebase_add_address_uleb = 112
-                do_rebase_uleb_times_skipping_uleb = 128
-            SEQ_FIELDS = ["items"]
-            def __init__(self, _io, _parent=None, _root=None):
-                self._io = _io
-                self._parent = _parent
-                self._root = _root if _root else self
-                self._debug = collections.defaultdict(dict)
-
-            def _read(self):
-                self._debug['items']['start'] = self._io.pos()
-                self.items = []
-                i = 0
-                while True:
-                    if not 'arr' in self._debug['items']:
-                        self._debug['items']['arr'] = []
-                    self._debug['items']['arr'].append({'start': self._io.pos()})
-                    _t_items = MachO.DyldInfoCommand.RebaseData.RebaseItem(self._io, self, self._root)
-                    _t_items._read()
-                    _ = _t_items
-                    self.items.append(_)
-                    self._debug['items']['arr'][len(self.items) - 1]['end'] = self._io.pos()
-                    if _.opcode == MachO.DyldInfoCommand.RebaseData.Opcode.done:
-                        break
-                    i += 1
-                self._debug['items']['end'] = self._io.pos()
-
-            class RebaseItem(KaitaiStruct):
-                SEQ_FIELDS = ["opcode_and_immediate", "uleb", "skip"]
-                def __init__(self, _io, _parent=None, _root=None):
-                    self._io = _io
-                    self._parent = _parent
-                    self._root = _root if _root else self
-                    self._debug = collections.defaultdict(dict)
-
-                def _read(self):
-                    self._debug['opcode_and_immediate']['start'] = self._io.pos()
-                    self.opcode_and_immediate = self._io.read_u1()
-                    self._debug['opcode_and_immediate']['end'] = self._io.pos()
-                    if  ((self.opcode == MachO.DyldInfoCommand.RebaseData.Opcode.set_segment_and_offset_uleb) or (self.opcode == MachO.DyldInfoCommand.RebaseData.Opcode.add_address_uleb) or (self.opcode == MachO.DyldInfoCommand.RebaseData.Opcode.do_rebase_uleb_times) or (self.opcode == MachO.DyldInfoCommand.RebaseData.Opcode.do_rebase_add_address_uleb) or (self.opcode == MachO.DyldInfoCommand.RebaseData.Opcode.do_rebase_uleb_times_skipping_uleb)) :
-                        self._debug['uleb']['start'] = self._io.pos()
-                        self.uleb = MachO.Uleb128(self._io, self, self._root)
-                        self.uleb._read()
-                        self._debug['uleb']['end'] = self._io.pos()
-
-                    if self.opcode == MachO.DyldInfoCommand.RebaseData.Opcode.do_rebase_uleb_times_skipping_uleb:
-                        self._debug['skip']['start'] = self._io.pos()
-                        self.skip = MachO.Uleb128(self._io, self, self._root)
-                        self.skip._read()
-                        self._debug['skip']['end'] = self._io.pos()
+            self._debug['init_address']['start'] = self._io.pos()
+            self.init_address = self._io.read_u4le()
+            self._debug['init_address']['end'] = self._io.pos()
+            self._debug['init_module']['start'] = self._io.pos()
+            self.init_module = self._io.read_u4le()
+            self._debug['init_module']['end'] = self._io.pos()
+            self._debug['reserved']['start'] = self._io.pos()
+            self.reserved = self._io.read_bytes(24)
+            self._debug['reserved']['end'] = self._io.pos()
 
 
-                @property
-                def opcode(self):
-                    if hasattr(self, '_m_opcode'):
-                        return self._m_opcode if hasattr(self, '_m_opcode') else None
-
-                    self._m_opcode = KaitaiStream.resolve_enum(MachO.DyldInfoCommand.RebaseData.Opcode, (self.opcode_and_immediate & 240))
-                    return self._m_opcode if hasattr(self, '_m_opcode') else None
-
-                @property
-                def immediate(self):
-                    if hasattr(self, '_m_immediate'):
-                        return self._m_immediate if hasattr(self, '_m_immediate') else None
-
-                    self._m_immediate = (self.opcode_and_immediate & 15)
-                    return self._m_immediate if hasattr(self, '_m_immediate') else None
+        def _fetch_instances(self):
+            pass
 
 
-
-        class BindItem(KaitaiStruct):
-            SEQ_FIELDS = ["opcode_and_immediate", "uleb", "skip", "symbol"]
-            def __init__(self, _io, _parent=None, _root=None):
-                self._io = _io
-                self._parent = _parent
-                self._root = _root if _root else self
-                self._debug = collections.defaultdict(dict)
-
-            def _read(self):
-                self._debug['opcode_and_immediate']['start'] = self._io.pos()
-                self.opcode_and_immediate = self._io.read_u1()
-                self._debug['opcode_and_immediate']['end'] = self._io.pos()
-                if  ((self.opcode == MachO.DyldInfoCommand.BindOpcode.set_dylib_ordinal_uleb) or (self.opcode == MachO.DyldInfoCommand.BindOpcode.set_append_sleb) or (self.opcode == MachO.DyldInfoCommand.BindOpcode.set_segment_and_offset_uleb) or (self.opcode == MachO.DyldInfoCommand.BindOpcode.add_address_uleb) or (self.opcode == MachO.DyldInfoCommand.BindOpcode.do_bind_add_address_uleb) or (self.opcode == MachO.DyldInfoCommand.BindOpcode.do_bind_uleb_times_skipping_uleb)) :
-                    self._debug['uleb']['start'] = self._io.pos()
-                    self.uleb = MachO.Uleb128(self._io, self, self._root)
-                    self.uleb._read()
-                    self._debug['uleb']['end'] = self._io.pos()
-
-                if self.opcode == MachO.DyldInfoCommand.BindOpcode.do_bind_uleb_times_skipping_uleb:
-                    self._debug['skip']['start'] = self._io.pos()
-                    self.skip = MachO.Uleb128(self._io, self, self._root)
-                    self.skip._read()
-                    self._debug['skip']['end'] = self._io.pos()
-
-                if self.opcode == MachO.DyldInfoCommand.BindOpcode.set_symbol_trailing_flags_immediate:
-                    self._debug['symbol']['start'] = self._io.pos()
-                    self.symbol = (self._io.read_bytes_term(0, False, True, True)).decode(u"ascii")
-                    self._debug['symbol']['end'] = self._io.pos()
-
-
-            @property
-            def opcode(self):
-                if hasattr(self, '_m_opcode'):
-                    return self._m_opcode if hasattr(self, '_m_opcode') else None
-
-                self._m_opcode = KaitaiStream.resolve_enum(MachO.DyldInfoCommand.BindOpcode, (self.opcode_and_immediate & 240))
-                return self._m_opcode if hasattr(self, '_m_opcode') else None
-
-            @property
-            def immediate(self):
-                if hasattr(self, '_m_immediate'):
-                    return self._m_immediate if hasattr(self, '_m_immediate') else None
-
-                self._m_immediate = (self.opcode_and_immediate & 15)
-                return self._m_immediate if hasattr(self, '_m_immediate') else None
-
-
-        class BindData(KaitaiStruct):
-            SEQ_FIELDS = ["items"]
-            def __init__(self, _io, _parent=None, _root=None):
-                self._io = _io
-                self._parent = _parent
-                self._root = _root if _root else self
-                self._debug = collections.defaultdict(dict)
-
-            def _read(self):
-                self._debug['items']['start'] = self._io.pos()
-                self.items = []
-                i = 0
-                while not self._io.is_eof():
-                    if not 'arr' in self._debug['items']:
-                        self._debug['items']['arr'] = []
-                    self._debug['items']['arr'].append({'start': self._io.pos()})
-                    _t_items = MachO.DyldInfoCommand.BindItem(self._io, self, self._root)
-                    _t_items._read()
-                    self.items.append(_t_items)
-                    self._debug['items']['arr'][len(self.items) - 1]['end'] = self._io.pos()
-                    i += 1
-
-                self._debug['items']['end'] = self._io.pos()
-
-
-        class ExportNode(KaitaiStruct):
-            SEQ_FIELDS = ["terminal_size", "children_count", "children", "terminal"]
-            def __init__(self, _io, _parent=None, _root=None):
-                self._io = _io
-                self._parent = _parent
-                self._root = _root if _root else self
-                self._debug = collections.defaultdict(dict)
-
-            def _read(self):
-                self._debug['terminal_size']['start'] = self._io.pos()
-                self.terminal_size = MachO.Uleb128(self._io, self, self._root)
-                self.terminal_size._read()
-                self._debug['terminal_size']['end'] = self._io.pos()
-                self._debug['children_count']['start'] = self._io.pos()
-                self.children_count = self._io.read_u1()
-                self._debug['children_count']['end'] = self._io.pos()
-                self._debug['children']['start'] = self._io.pos()
-                self.children = [None] * (self.children_count)
-                for i in range(self.children_count):
-                    if not 'arr' in self._debug['children']:
-                        self._debug['children']['arr'] = []
-                    self._debug['children']['arr'].append({'start': self._io.pos()})
-                    _t_children = MachO.DyldInfoCommand.ExportNode.Child(self._io, self, self._root)
-                    _t_children._read()
-                    self.children[i] = _t_children
-                    self._debug['children']['arr'][i]['end'] = self._io.pos()
-
-                self._debug['children']['end'] = self._io.pos()
-                self._debug['terminal']['start'] = self._io.pos()
-                self.terminal = self._io.read_bytes(self.terminal_size.value)
-                self._debug['terminal']['end'] = self._io.pos()
-
-            class Child(KaitaiStruct):
-                SEQ_FIELDS = ["name", "node_offset"]
-                def __init__(self, _io, _parent=None, _root=None):
-                    self._io = _io
-                    self._parent = _parent
-                    self._root = _root if _root else self
-                    self._debug = collections.defaultdict(dict)
-
-                def _read(self):
-                    self._debug['name']['start'] = self._io.pos()
-                    self.name = (self._io.read_bytes_term(0, False, True, True)).decode(u"ascii")
-                    self._debug['name']['end'] = self._io.pos()
-                    self._debug['node_offset']['start'] = self._io.pos()
-                    self.node_offset = MachO.Uleb128(self._io, self, self._root)
-                    self.node_offset._read()
-                    self._debug['node_offset']['end'] = self._io.pos()
-
-                @property
-                def value(self):
-                    if hasattr(self, '_m_value'):
-                        return self._m_value if hasattr(self, '_m_value') else None
-
-                    _pos = self._io.pos()
-                    self._io.seek(self.node_offset.value)
-                    self._debug['_m_value']['start'] = self._io.pos()
-                    self._m_value = MachO.DyldInfoCommand.ExportNode(self._io, self, self._root)
-                    self._m_value._read()
-                    self._debug['_m_value']['end'] = self._io.pos()
-                    self._io.seek(_pos)
-                    return self._m_value if hasattr(self, '_m_value') else None
-
-
-
-        @property
-        def bind(self):
-            if hasattr(self, '_m_bind'):
-                return self._m_bind if hasattr(self, '_m_bind') else None
-
-            if self.bind_size != 0:
-                io = self._root._io
-                _pos = io.pos()
-                io.seek(self.bind_off)
-                self._debug['_m_bind']['start'] = io.pos()
-                self._raw__m_bind = io.read_bytes(self.bind_size)
-                _io__raw__m_bind = KaitaiStream(BytesIO(self._raw__m_bind))
-                self._m_bind = MachO.DyldInfoCommand.BindData(_io__raw__m_bind, self, self._root)
-                self._m_bind._read()
-                self._debug['_m_bind']['end'] = io.pos()
-                io.seek(_pos)
-
-            return self._m_bind if hasattr(self, '_m_bind') else None
-
-        @property
-        def exports(self):
-            if hasattr(self, '_m_exports'):
-                return self._m_exports if hasattr(self, '_m_exports') else None
-
-            if self.export_size != 0:
-                io = self._root._io
-                _pos = io.pos()
-                io.seek(self.export_off)
-                self._debug['_m_exports']['start'] = io.pos()
-                self._raw__m_exports = io.read_bytes(self.export_size)
-                _io__raw__m_exports = KaitaiStream(BytesIO(self._raw__m_exports))
-                self._m_exports = MachO.DyldInfoCommand.ExportNode(_io__raw__m_exports, self, self._root)
-                self._m_exports._read()
-                self._debug['_m_exports']['end'] = io.pos()
-                io.seek(_pos)
-
-            return self._m_exports if hasattr(self, '_m_exports') else None
-
-        @property
-        def weak_bind(self):
-            if hasattr(self, '_m_weak_bind'):
-                return self._m_weak_bind if hasattr(self, '_m_weak_bind') else None
-
-            if self.weak_bind_size != 0:
-                io = self._root._io
-                _pos = io.pos()
-                io.seek(self.weak_bind_off)
-                self._debug['_m_weak_bind']['start'] = io.pos()
-                self._raw__m_weak_bind = io.read_bytes(self.weak_bind_size)
-                _io__raw__m_weak_bind = KaitaiStream(BytesIO(self._raw__m_weak_bind))
-                self._m_weak_bind = MachO.DyldInfoCommand.BindData(_io__raw__m_weak_bind, self, self._root)
-                self._m_weak_bind._read()
-                self._debug['_m_weak_bind']['end'] = io.pos()
-                io.seek(_pos)
-
-            return self._m_weak_bind if hasattr(self, '_m_weak_bind') else None
-
-        @property
-        def rebase(self):
-            if hasattr(self, '_m_rebase'):
-                return self._m_rebase if hasattr(self, '_m_rebase') else None
-
-            if self.rebase_size != 0:
-                io = self._root._io
-                _pos = io.pos()
-                io.seek(self.rebase_off)
-                self._debug['_m_rebase']['start'] = io.pos()
-                self._raw__m_rebase = io.read_bytes(self.rebase_size)
-                _io__raw__m_rebase = KaitaiStream(BytesIO(self._raw__m_rebase))
-                self._m_rebase = MachO.DyldInfoCommand.RebaseData(_io__raw__m_rebase, self, self._root)
-                self._m_rebase._read()
-                self._debug['_m_rebase']['end'] = io.pos()
-                io.seek(_pos)
-
-            return self._m_rebase if hasattr(self, '_m_rebase') else None
-
-        @property
-        def lazy_bind(self):
-            if hasattr(self, '_m_lazy_bind'):
-                return self._m_lazy_bind if hasattr(self, '_m_lazy_bind') else None
-
-            if self.lazy_bind_size != 0:
-                io = self._root._io
-                _pos = io.pos()
-                io.seek(self.lazy_bind_off)
-                self._debug['_m_lazy_bind']['start'] = io.pos()
-                self._raw__m_lazy_bind = io.read_bytes(self.lazy_bind_size)
-                _io__raw__m_lazy_bind = KaitaiStream(BytesIO(self._raw__m_lazy_bind))
-                self._m_lazy_bind = MachO.DyldInfoCommand.BindData(_io__raw__m_lazy_bind, self, self._root)
-                self._m_lazy_bind._read()
-                self._debug['_m_lazy_bind']['end'] = io.pos()
-                io.seek(_pos)
-
-            return self._m_lazy_bind if hasattr(self, '_m_lazy_bind') else None
-
-
-    class DylinkerCommand(KaitaiStruct):
-        SEQ_FIELDS = ["name"]
+    class RoutinesCommand64(KaitaiStruct):
+        SEQ_FIELDS = ["init_address", "init_module", "reserved"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(MachO.RoutinesCommand64, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
-            self._debug['name']['start'] = self._io.pos()
-            self.name = MachO.LcStr(self._io, self, self._root)
-            self.name._read()
-            self._debug['name']['end'] = self._io.pos()
+            self._debug['init_address']['start'] = self._io.pos()
+            self.init_address = self._io.read_u8le()
+            self._debug['init_address']['end'] = self._io.pos()
+            self._debug['init_module']['start'] = self._io.pos()
+            self.init_module = self._io.read_u8le()
+            self._debug['init_module']['end'] = self._io.pos()
+            self._debug['reserved']['start'] = self._io.pos()
+            self.reserved = self._io.read_bytes(48)
+            self._debug['reserved']['end'] = self._io.pos()
 
 
-    class DylibCommand(KaitaiStruct):
-        SEQ_FIELDS = ["name_offset", "timestamp", "current_version", "compatibility_version", "name"]
+        def _fetch_instances(self):
+            pass
+
+
+    class RpathCommand(KaitaiStruct):
+        SEQ_FIELDS = ["path_offset", "path"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(MachO.RpathCommand, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
-            self._debug['name_offset']['start'] = self._io.pos()
-            self.name_offset = self._io.read_u4le()
-            self._debug['name_offset']['end'] = self._io.pos()
-            self._debug['timestamp']['start'] = self._io.pos()
-            self.timestamp = self._io.read_u4le()
-            self._debug['timestamp']['end'] = self._io.pos()
-            self._debug['current_version']['start'] = self._io.pos()
-            self.current_version = self._io.read_u4le()
-            self._debug['current_version']['end'] = self._io.pos()
-            self._debug['compatibility_version']['start'] = self._io.pos()
-            self.compatibility_version = self._io.read_u4le()
-            self._debug['compatibility_version']['end'] = self._io.pos()
-            self._debug['name']['start'] = self._io.pos()
-            self.name = (self._io.read_bytes_term(0, False, True, True)).decode(u"utf-8")
-            self._debug['name']['end'] = self._io.pos()
+            self._debug['path_offset']['start'] = self._io.pos()
+            self.path_offset = self._io.read_u4le()
+            self._debug['path_offset']['end'] = self._io.pos()
+            self._debug['path']['start'] = self._io.pos()
+            self.path = (self._io.read_bytes_term(0, False, True, True)).decode(u"UTF-8")
+            self._debug['path']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
 
 
     class SegmentCommand(KaitaiStruct):
         SEQ_FIELDS = ["segname", "vmaddr", "vmsize", "fileoff", "filesize", "maxprot", "initprot", "nsects", "flags", "sections"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(MachO.SegmentCommand, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
             self._debug['segname']['start'] = self._io.pos()
-            self.segname = (KaitaiStream.bytes_strip_right(self._io.read_bytes(16), 0)).decode(u"ascii")
+            self.segname = (KaitaiStream.bytes_strip_right(self._io.read_bytes(16), 0)).decode(u"ASCII")
             self._debug['segname']['end'] = self._io.pos()
             self._debug['vmaddr']['start'] = self._io.pos()
             self.vmaddr = self._io.read_u4le()
@@ -2467,32 +2738,43 @@ class MachO(KaitaiStruct):
             self.flags = self._io.read_u4le()
             self._debug['flags']['end'] = self._io.pos()
             self._debug['sections']['start'] = self._io.pos()
-            self.sections = [None] * (self.nsects)
+            self._debug['sections']['arr'] = []
+            self.sections = []
             for i in range(self.nsects):
-                if not 'arr' in self._debug['sections']:
-                    self._debug['sections']['arr'] = []
                 self._debug['sections']['arr'].append({'start': self._io.pos()})
                 _t_sections = MachO.SegmentCommand.Section(self._io, self, self._root)
-                _t_sections._read()
-                self.sections[i] = _t_sections
+                try:
+                    _t_sections._read()
+                finally:
+                    self.sections.append(_t_sections)
                 self._debug['sections']['arr'][i]['end'] = self._io.pos()
 
             self._debug['sections']['end'] = self._io.pos()
 
+
+        def _fetch_instances(self):
+            pass
+            self.maxprot._fetch_instances()
+            self.initprot._fetch_instances()
+            for i in range(len(self.sections)):
+                pass
+                self.sections[i]._fetch_instances()
+
+
         class Section(KaitaiStruct):
             SEQ_FIELDS = ["sect_name", "seg_name", "addr", "size", "offset", "align", "reloff", "nreloc", "flags", "reserved1", "reserved2"]
             def __init__(self, _io, _parent=None, _root=None):
-                self._io = _io
+                super(MachO.SegmentCommand.Section, self).__init__(_io)
                 self._parent = _parent
-                self._root = _root if _root else self
+                self._root = _root
                 self._debug = collections.defaultdict(dict)
 
             def _read(self):
                 self._debug['sect_name']['start'] = self._io.pos()
-                self.sect_name = (KaitaiStream.bytes_strip_right(self._io.read_bytes(16), 0)).decode(u"ascii")
+                self.sect_name = (KaitaiStream.bytes_strip_right(self._io.read_bytes(16), 0)).decode(u"ASCII")
                 self._debug['sect_name']['end'] = self._io.pos()
                 self._debug['seg_name']['start'] = self._io.pos()
-                self.seg_name = (KaitaiStream.bytes_strip_right(self._io.read_bytes(16), 0)).decode(u"ascii")
+                self.seg_name = (KaitaiStream.bytes_strip_right(self._io.read_bytes(16), 0)).decode(u"ASCII")
                 self._debug['seg_name']['end'] = self._io.pos()
                 self._debug['addr']['start'] = self._io.pos()
                 self.addr = self._io.read_u4le()
@@ -2522,10 +2804,18 @@ class MachO(KaitaiStruct):
                 self.reserved2 = self._io.read_u4le()
                 self._debug['reserved2']['end'] = self._io.pos()
 
+
+            def _fetch_instances(self):
+                pass
+                _ = self.data
+                if hasattr(self, '_m_data'):
+                    pass
+
+
             @property
             def data(self):
                 if hasattr(self, '_m_data'):
-                    return self._m_data if hasattr(self, '_m_data') else None
+                    return self._m_data
 
                 io = self._root._io
                 _pos = io.pos()
@@ -2534,269 +2824,657 @@ class MachO(KaitaiStruct):
                 self._m_data = io.read_bytes(self.size)
                 self._debug['_m_data']['end'] = io.pos()
                 io.seek(_pos)
-                return self._m_data if hasattr(self, '_m_data') else None
+                return getattr(self, '_m_data', None)
 
 
 
-    class LcStr(KaitaiStruct):
-        SEQ_FIELDS = ["length", "value"]
+    class SegmentCommand64(KaitaiStruct):
+        SEQ_FIELDS = ["segname", "vmaddr", "vmsize", "fileoff", "filesize", "maxprot", "initprot", "nsects", "flags", "sections"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(MachO.SegmentCommand64, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
-            self._debug['length']['start'] = self._io.pos()
-            self.length = self._io.read_u4le()
-            self._debug['length']['end'] = self._io.pos()
-            self._debug['value']['start'] = self._io.pos()
-            self.value = (self._io.read_bytes_term(0, False, True, True)).decode(u"UTF-8")
-            self._debug['value']['end'] = self._io.pos()
+            self._debug['segname']['start'] = self._io.pos()
+            self.segname = (KaitaiStream.bytes_strip_right(self._io.read_bytes(16), 0)).decode(u"ASCII")
+            self._debug['segname']['end'] = self._io.pos()
+            self._debug['vmaddr']['start'] = self._io.pos()
+            self.vmaddr = self._io.read_u8le()
+            self._debug['vmaddr']['end'] = self._io.pos()
+            self._debug['vmsize']['start'] = self._io.pos()
+            self.vmsize = self._io.read_u8le()
+            self._debug['vmsize']['end'] = self._io.pos()
+            self._debug['fileoff']['start'] = self._io.pos()
+            self.fileoff = self._io.read_u8le()
+            self._debug['fileoff']['end'] = self._io.pos()
+            self._debug['filesize']['start'] = self._io.pos()
+            self.filesize = self._io.read_u8le()
+            self._debug['filesize']['end'] = self._io.pos()
+            self._debug['maxprot']['start'] = self._io.pos()
+            self.maxprot = MachO.VmProt(self._io, self, self._root)
+            self.maxprot._read()
+            self._debug['maxprot']['end'] = self._io.pos()
+            self._debug['initprot']['start'] = self._io.pos()
+            self.initprot = MachO.VmProt(self._io, self, self._root)
+            self.initprot._read()
+            self._debug['initprot']['end'] = self._io.pos()
+            self._debug['nsects']['start'] = self._io.pos()
+            self.nsects = self._io.read_u4le()
+            self._debug['nsects']['end'] = self._io.pos()
+            self._debug['flags']['start'] = self._io.pos()
+            self.flags = self._io.read_u4le()
+            self._debug['flags']['end'] = self._io.pos()
+            self._debug['sections']['start'] = self._io.pos()
+            self._debug['sections']['arr'] = []
+            self.sections = []
+            for i in range(self.nsects):
+                self._debug['sections']['arr'].append({'start': self._io.pos()})
+                _t_sections = MachO.SegmentCommand64.Section64(self._io, self, self._root)
+                try:
+                    _t_sections._read()
+                finally:
+                    self.sections.append(_t_sections)
+                self._debug['sections']['arr'][i]['end'] = self._io.pos()
+
+            self._debug['sections']['end'] = self._io.pos()
 
 
-    class LoadCommand(KaitaiStruct):
-        SEQ_FIELDS = ["type", "size", "body"]
+        def _fetch_instances(self):
+            pass
+            self.maxprot._fetch_instances()
+            self.initprot._fetch_instances()
+            for i in range(len(self.sections)):
+                pass
+                self.sections[i]._fetch_instances()
+
+
+        class Section64(KaitaiStruct):
+            SEQ_FIELDS = ["sect_name", "seg_name", "addr", "size", "offset", "align", "reloff", "nreloc", "flags", "reserved1", "reserved2", "reserved3"]
+            def __init__(self, _io, _parent=None, _root=None):
+                super(MachO.SegmentCommand64.Section64, self).__init__(_io)
+                self._parent = _parent
+                self._root = _root
+                self._debug = collections.defaultdict(dict)
+
+            def _read(self):
+                self._debug['sect_name']['start'] = self._io.pos()
+                self.sect_name = (KaitaiStream.bytes_strip_right(self._io.read_bytes(16), 0)).decode(u"ASCII")
+                self._debug['sect_name']['end'] = self._io.pos()
+                self._debug['seg_name']['start'] = self._io.pos()
+                self.seg_name = (KaitaiStream.bytes_strip_right(self._io.read_bytes(16), 0)).decode(u"ASCII")
+                self._debug['seg_name']['end'] = self._io.pos()
+                self._debug['addr']['start'] = self._io.pos()
+                self.addr = self._io.read_u8le()
+                self._debug['addr']['end'] = self._io.pos()
+                self._debug['size']['start'] = self._io.pos()
+                self.size = self._io.read_u8le()
+                self._debug['size']['end'] = self._io.pos()
+                self._debug['offset']['start'] = self._io.pos()
+                self.offset = self._io.read_u4le()
+                self._debug['offset']['end'] = self._io.pos()
+                self._debug['align']['start'] = self._io.pos()
+                self.align = self._io.read_u4le()
+                self._debug['align']['end'] = self._io.pos()
+                self._debug['reloff']['start'] = self._io.pos()
+                self.reloff = self._io.read_u4le()
+                self._debug['reloff']['end'] = self._io.pos()
+                self._debug['nreloc']['start'] = self._io.pos()
+                self.nreloc = self._io.read_u4le()
+                self._debug['nreloc']['end'] = self._io.pos()
+                self._debug['flags']['start'] = self._io.pos()
+                self.flags = self._io.read_u4le()
+                self._debug['flags']['end'] = self._io.pos()
+                self._debug['reserved1']['start'] = self._io.pos()
+                self.reserved1 = self._io.read_u4le()
+                self._debug['reserved1']['end'] = self._io.pos()
+                self._debug['reserved2']['start'] = self._io.pos()
+                self.reserved2 = self._io.read_u4le()
+                self._debug['reserved2']['end'] = self._io.pos()
+                self._debug['reserved3']['start'] = self._io.pos()
+                self.reserved3 = self._io.read_u4le()
+                self._debug['reserved3']['end'] = self._io.pos()
+
+
+            def _fetch_instances(self):
+                pass
+                _ = self.data
+                if hasattr(self, '_m_data'):
+                    pass
+                    _on = self.sect_name
+                    if _on == u"__cfstring":
+                        pass
+                        self._m_data._fetch_instances()
+                    elif _on == u"__cstring":
+                        pass
+                        self._m_data._fetch_instances()
+                    elif _on == u"__eh_frame":
+                        pass
+                        self._m_data._fetch_instances()
+                    elif _on == u"__got":
+                        pass
+                        self._m_data._fetch_instances()
+                    elif _on == u"__la_symbol_ptr":
+                        pass
+                        self._m_data._fetch_instances()
+                    elif _on == u"__nl_symbol_ptr":
+                        pass
+                        self._m_data._fetch_instances()
+                    elif _on == u"__objc_classlist":
+                        pass
+                        self._m_data._fetch_instances()
+                    elif _on == u"__objc_classname":
+                        pass
+                        self._m_data._fetch_instances()
+                    elif _on == u"__objc_classrefs":
+                        pass
+                        self._m_data._fetch_instances()
+                    elif _on == u"__objc_imageinfo":
+                        pass
+                        self._m_data._fetch_instances()
+                    elif _on == u"__objc_methname":
+                        pass
+                        self._m_data._fetch_instances()
+                    elif _on == u"__objc_methtype":
+                        pass
+                        self._m_data._fetch_instances()
+                    elif _on == u"__objc_nlclslist":
+                        pass
+                        self._m_data._fetch_instances()
+                    elif _on == u"__objc_protolist":
+                        pass
+                        self._m_data._fetch_instances()
+                    elif _on == u"__objc_protorefs":
+                        pass
+                        self._m_data._fetch_instances()
+                    elif _on == u"__objc_selrefs":
+                        pass
+                        self._m_data._fetch_instances()
+                    elif _on == u"__objc_superrefs":
+                        pass
+                        self._m_data._fetch_instances()
+                    else:
+                        pass
+
+
+            class CfString(KaitaiStruct):
+                SEQ_FIELDS = ["isa", "info", "data", "length"]
+                def __init__(self, _io, _parent=None, _root=None):
+                    super(MachO.SegmentCommand64.Section64.CfString, self).__init__(_io)
+                    self._parent = _parent
+                    self._root = _root
+                    self._debug = collections.defaultdict(dict)
+
+                def _read(self):
+                    self._debug['isa']['start'] = self._io.pos()
+                    self.isa = self._io.read_u8le()
+                    self._debug['isa']['end'] = self._io.pos()
+                    self._debug['info']['start'] = self._io.pos()
+                    self.info = self._io.read_u8le()
+                    self._debug['info']['end'] = self._io.pos()
+                    self._debug['data']['start'] = self._io.pos()
+                    self.data = self._io.read_u8le()
+                    self._debug['data']['end'] = self._io.pos()
+                    self._debug['length']['start'] = self._io.pos()
+                    self.length = self._io.read_u8le()
+                    self._debug['length']['end'] = self._io.pos()
+
+
+                def _fetch_instances(self):
+                    pass
+
+
+            class CfStringList(KaitaiStruct):
+                SEQ_FIELDS = ["items"]
+                def __init__(self, _io, _parent=None, _root=None):
+                    super(MachO.SegmentCommand64.Section64.CfStringList, self).__init__(_io)
+                    self._parent = _parent
+                    self._root = _root
+                    self._debug = collections.defaultdict(dict)
+
+                def _read(self):
+                    self._debug['items']['start'] = self._io.pos()
+                    self._debug['items']['arr'] = []
+                    self.items = []
+                    i = 0
+                    while not self._io.is_eof():
+                        self._debug['items']['arr'].append({'start': self._io.pos()})
+                        _t_items = MachO.SegmentCommand64.Section64.CfString(self._io, self, self._root)
+                        try:
+                            _t_items._read()
+                        finally:
+                            self.items.append(_t_items)
+                        self._debug['items']['arr'][len(self.items) - 1]['end'] = self._io.pos()
+                        i += 1
+
+                    self._debug['items']['end'] = self._io.pos()
+
+
+                def _fetch_instances(self):
+                    pass
+                    for i in range(len(self.items)):
+                        pass
+                        self.items[i]._fetch_instances()
+
+
+
+            class EhFrame(KaitaiStruct):
+                SEQ_FIELDS = ["items"]
+                def __init__(self, _io, _parent=None, _root=None):
+                    super(MachO.SegmentCommand64.Section64.EhFrame, self).__init__(_io)
+                    self._parent = _parent
+                    self._root = _root
+                    self._debug = collections.defaultdict(dict)
+
+                def _read(self):
+                    self._debug['items']['start'] = self._io.pos()
+                    self._debug['items']['arr'] = []
+                    self.items = []
+                    i = 0
+                    while not self._io.is_eof():
+                        self._debug['items']['arr'].append({'start': self._io.pos()})
+                        _t_items = MachO.SegmentCommand64.Section64.EhFrameItem(self._io, self, self._root)
+                        try:
+                            _t_items._read()
+                        finally:
+                            self.items.append(_t_items)
+                        self._debug['items']['arr'][len(self.items) - 1]['end'] = self._io.pos()
+                        i += 1
+
+                    self._debug['items']['end'] = self._io.pos()
+
+
+                def _fetch_instances(self):
+                    pass
+                    for i in range(len(self.items)):
+                        pass
+                        self.items[i]._fetch_instances()
+
+
+
+            class EhFrameItem(KaitaiStruct):
+                SEQ_FIELDS = ["length", "length64", "id", "body"]
+                def __init__(self, _io, _parent=None, _root=None):
+                    super(MachO.SegmentCommand64.Section64.EhFrameItem, self).__init__(_io)
+                    self._parent = _parent
+                    self._root = _root
+                    self._debug = collections.defaultdict(dict)
+
+                def _read(self):
+                    self._debug['length']['start'] = self._io.pos()
+                    self.length = self._io.read_u4le()
+                    self._debug['length']['end'] = self._io.pos()
+                    if self.length == 4294967295:
+                        pass
+                        self._debug['length64']['start'] = self._io.pos()
+                        self.length64 = self._io.read_u8le()
+                        self._debug['length64']['end'] = self._io.pos()
+
+                    self._debug['id']['start'] = self._io.pos()
+                    self.id = self._io.read_u4le()
+                    self._debug['id']['end'] = self._io.pos()
+                    if self.length > 0:
+                        pass
+                        self._debug['body']['start'] = self._io.pos()
+                        _on = self.id
+                        if _on == 0:
+                            pass
+                            self._raw_body = self._io.read_bytes(self.length - 4)
+                            _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
+                            self.body = MachO.SegmentCommand64.Section64.EhFrameItem.Cie(_io__raw_body, self, self._root)
+                            self.body._read()
+                        else:
+                            pass
+                            self.body = self._io.read_bytes(self.length - 4)
+                        self._debug['body']['end'] = self._io.pos()
+
+
+
+                def _fetch_instances(self):
+                    pass
+                    if self.length == 4294967295:
+                        pass
+
+                    if self.length > 0:
+                        pass
+                        _on = self.id
+                        if _on == 0:
+                            pass
+                            self.body._fetch_instances()
+                        else:
+                            pass
+
+
+                class AugmentationEntry(KaitaiStruct):
+                    SEQ_FIELDS = ["length", "fde_pointer_encoding"]
+                    def __init__(self, _io, _parent=None, _root=None):
+                        super(MachO.SegmentCommand64.Section64.EhFrameItem.AugmentationEntry, self).__init__(_io)
+                        self._parent = _parent
+                        self._root = _root
+                        self._debug = collections.defaultdict(dict)
+
+                    def _read(self):
+                        self._debug['length']['start'] = self._io.pos()
+                        self.length = MachO.Uleb128(self._io, self, self._root)
+                        self.length._read()
+                        self._debug['length']['end'] = self._io.pos()
+                        if self._parent.aug_str.next.chr == 82:
+                            pass
+                            self._debug['fde_pointer_encoding']['start'] = self._io.pos()
+                            self.fde_pointer_encoding = self._io.read_u1()
+                            self._debug['fde_pointer_encoding']['end'] = self._io.pos()
+
+
+
+                    def _fetch_instances(self):
+                        pass
+                        self.length._fetch_instances()
+                        if self._parent.aug_str.next.chr == 82:
+                            pass
+
+
+
+                class CharChain(KaitaiStruct):
+                    SEQ_FIELDS = ["chr", "next"]
+                    def __init__(self, _io, _parent=None, _root=None):
+                        super(MachO.SegmentCommand64.Section64.EhFrameItem.CharChain, self).__init__(_io)
+                        self._parent = _parent
+                        self._root = _root
+                        self._debug = collections.defaultdict(dict)
+
+                    def _read(self):
+                        self._debug['chr']['start'] = self._io.pos()
+                        self.chr = self._io.read_u1()
+                        self._debug['chr']['end'] = self._io.pos()
+                        if self.chr != 0:
+                            pass
+                            self._debug['next']['start'] = self._io.pos()
+                            self.next = MachO.SegmentCommand64.Section64.EhFrameItem.CharChain(self._io, self, self._root)
+                            self.next._read()
+                            self._debug['next']['end'] = self._io.pos()
+
+
+
+                    def _fetch_instances(self):
+                        pass
+                        if self.chr != 0:
+                            pass
+                            self.next._fetch_instances()
+
+
+
+                class Cie(KaitaiStruct):
+                    SEQ_FIELDS = ["version", "aug_str", "code_alignment_factor", "data_alignment_factor", "return_address_register", "augmentation"]
+                    def __init__(self, _io, _parent=None, _root=None):
+                        super(MachO.SegmentCommand64.Section64.EhFrameItem.Cie, self).__init__(_io)
+                        self._parent = _parent
+                        self._root = _root
+                        self._debug = collections.defaultdict(dict)
+
+                    def _read(self):
+                        self._debug['version']['start'] = self._io.pos()
+                        self.version = self._io.read_u1()
+                        self._debug['version']['end'] = self._io.pos()
+                        self._debug['aug_str']['start'] = self._io.pos()
+                        self.aug_str = MachO.SegmentCommand64.Section64.EhFrameItem.CharChain(self._io, self, self._root)
+                        self.aug_str._read()
+                        self._debug['aug_str']['end'] = self._io.pos()
+                        self._debug['code_alignment_factor']['start'] = self._io.pos()
+                        self.code_alignment_factor = MachO.Uleb128(self._io, self, self._root)
+                        self.code_alignment_factor._read()
+                        self._debug['code_alignment_factor']['end'] = self._io.pos()
+                        self._debug['data_alignment_factor']['start'] = self._io.pos()
+                        self.data_alignment_factor = MachO.Uleb128(self._io, self, self._root)
+                        self.data_alignment_factor._read()
+                        self._debug['data_alignment_factor']['end'] = self._io.pos()
+                        self._debug['return_address_register']['start'] = self._io.pos()
+                        self.return_address_register = self._io.read_u1()
+                        self._debug['return_address_register']['end'] = self._io.pos()
+                        if self.aug_str.chr == 122:
+                            pass
+                            self._debug['augmentation']['start'] = self._io.pos()
+                            self.augmentation = MachO.SegmentCommand64.Section64.EhFrameItem.AugmentationEntry(self._io, self, self._root)
+                            self.augmentation._read()
+                            self._debug['augmentation']['end'] = self._io.pos()
+
+
+
+                    def _fetch_instances(self):
+                        pass
+                        self.aug_str._fetch_instances()
+                        self.code_alignment_factor._fetch_instances()
+                        self.data_alignment_factor._fetch_instances()
+                        if self.aug_str.chr == 122:
+                            pass
+                            self.augmentation._fetch_instances()
+
+
+
+
+            class PointerList(KaitaiStruct):
+                SEQ_FIELDS = ["items"]
+                def __init__(self, _io, _parent=None, _root=None):
+                    super(MachO.SegmentCommand64.Section64.PointerList, self).__init__(_io)
+                    self._parent = _parent
+                    self._root = _root
+                    self._debug = collections.defaultdict(dict)
+
+                def _read(self):
+                    self._debug['items']['start'] = self._io.pos()
+                    self._debug['items']['arr'] = []
+                    self.items = []
+                    i = 0
+                    while not self._io.is_eof():
+                        self._debug['items']['arr'].append({'start': self._io.pos()})
+                        self.items.append(self._io.read_u8le())
+                        self._debug['items']['arr'][len(self.items) - 1]['end'] = self._io.pos()
+                        i += 1
+
+                    self._debug['items']['end'] = self._io.pos()
+
+
+                def _fetch_instances(self):
+                    pass
+                    for i in range(len(self.items)):
+                        pass
+
+
+
+            class StringList(KaitaiStruct):
+                SEQ_FIELDS = ["strings"]
+                def __init__(self, _io, _parent=None, _root=None):
+                    super(MachO.SegmentCommand64.Section64.StringList, self).__init__(_io)
+                    self._parent = _parent
+                    self._root = _root
+                    self._debug = collections.defaultdict(dict)
+
+                def _read(self):
+                    self._debug['strings']['start'] = self._io.pos()
+                    self._debug['strings']['arr'] = []
+                    self.strings = []
+                    i = 0
+                    while not self._io.is_eof():
+                        self._debug['strings']['arr'].append({'start': self._io.pos()})
+                        self.strings.append((self._io.read_bytes_term(0, False, True, True)).decode(u"ASCII"))
+                        self._debug['strings']['arr'][len(self.strings) - 1]['end'] = self._io.pos()
+                        i += 1
+
+                    self._debug['strings']['end'] = self._io.pos()
+
+
+                def _fetch_instances(self):
+                    pass
+                    for i in range(len(self.strings)):
+                        pass
+
+
+
+            @property
+            def data(self):
+                if hasattr(self, '_m_data'):
+                    return self._m_data
+
+                io = self._root._io
+                _pos = io.pos()
+                io.seek(self.offset)
+                self._debug['_m_data']['start'] = io.pos()
+                _on = self.sect_name
+                if _on == u"__cfstring":
+                    pass
+                    self._raw__m_data = io.read_bytes(self.size)
+                    _io__raw__m_data = KaitaiStream(BytesIO(self._raw__m_data))
+                    self._m_data = MachO.SegmentCommand64.Section64.CfStringList(_io__raw__m_data, self, self._root)
+                    self._m_data._read()
+                elif _on == u"__cstring":
+                    pass
+                    self._raw__m_data = io.read_bytes(self.size)
+                    _io__raw__m_data = KaitaiStream(BytesIO(self._raw__m_data))
+                    self._m_data = MachO.SegmentCommand64.Section64.StringList(_io__raw__m_data, self, self._root)
+                    self._m_data._read()
+                elif _on == u"__eh_frame":
+                    pass
+                    self._raw__m_data = io.read_bytes(self.size)
+                    _io__raw__m_data = KaitaiStream(BytesIO(self._raw__m_data))
+                    self._m_data = MachO.SegmentCommand64.Section64.EhFrame(_io__raw__m_data, self, self._root)
+                    self._m_data._read()
+                elif _on == u"__got":
+                    pass
+                    self._raw__m_data = io.read_bytes(self.size)
+                    _io__raw__m_data = KaitaiStream(BytesIO(self._raw__m_data))
+                    self._m_data = MachO.SegmentCommand64.Section64.PointerList(_io__raw__m_data, self, self._root)
+                    self._m_data._read()
+                elif _on == u"__la_symbol_ptr":
+                    pass
+                    self._raw__m_data = io.read_bytes(self.size)
+                    _io__raw__m_data = KaitaiStream(BytesIO(self._raw__m_data))
+                    self._m_data = MachO.SegmentCommand64.Section64.PointerList(_io__raw__m_data, self, self._root)
+                    self._m_data._read()
+                elif _on == u"__nl_symbol_ptr":
+                    pass
+                    self._raw__m_data = io.read_bytes(self.size)
+                    _io__raw__m_data = KaitaiStream(BytesIO(self._raw__m_data))
+                    self._m_data = MachO.SegmentCommand64.Section64.PointerList(_io__raw__m_data, self, self._root)
+                    self._m_data._read()
+                elif _on == u"__objc_classlist":
+                    pass
+                    self._raw__m_data = io.read_bytes(self.size)
+                    _io__raw__m_data = KaitaiStream(BytesIO(self._raw__m_data))
+                    self._m_data = MachO.SegmentCommand64.Section64.PointerList(_io__raw__m_data, self, self._root)
+                    self._m_data._read()
+                elif _on == u"__objc_classname":
+                    pass
+                    self._raw__m_data = io.read_bytes(self.size)
+                    _io__raw__m_data = KaitaiStream(BytesIO(self._raw__m_data))
+                    self._m_data = MachO.SegmentCommand64.Section64.StringList(_io__raw__m_data, self, self._root)
+                    self._m_data._read()
+                elif _on == u"__objc_classrefs":
+                    pass
+                    self._raw__m_data = io.read_bytes(self.size)
+                    _io__raw__m_data = KaitaiStream(BytesIO(self._raw__m_data))
+                    self._m_data = MachO.SegmentCommand64.Section64.PointerList(_io__raw__m_data, self, self._root)
+                    self._m_data._read()
+                elif _on == u"__objc_imageinfo":
+                    pass
+                    self._raw__m_data = io.read_bytes(self.size)
+                    _io__raw__m_data = KaitaiStream(BytesIO(self._raw__m_data))
+                    self._m_data = MachO.SegmentCommand64.Section64.PointerList(_io__raw__m_data, self, self._root)
+                    self._m_data._read()
+                elif _on == u"__objc_methname":
+                    pass
+                    self._raw__m_data = io.read_bytes(self.size)
+                    _io__raw__m_data = KaitaiStream(BytesIO(self._raw__m_data))
+                    self._m_data = MachO.SegmentCommand64.Section64.StringList(_io__raw__m_data, self, self._root)
+                    self._m_data._read()
+                elif _on == u"__objc_methtype":
+                    pass
+                    self._raw__m_data = io.read_bytes(self.size)
+                    _io__raw__m_data = KaitaiStream(BytesIO(self._raw__m_data))
+                    self._m_data = MachO.SegmentCommand64.Section64.StringList(_io__raw__m_data, self, self._root)
+                    self._m_data._read()
+                elif _on == u"__objc_nlclslist":
+                    pass
+                    self._raw__m_data = io.read_bytes(self.size)
+                    _io__raw__m_data = KaitaiStream(BytesIO(self._raw__m_data))
+                    self._m_data = MachO.SegmentCommand64.Section64.PointerList(_io__raw__m_data, self, self._root)
+                    self._m_data._read()
+                elif _on == u"__objc_protolist":
+                    pass
+                    self._raw__m_data = io.read_bytes(self.size)
+                    _io__raw__m_data = KaitaiStream(BytesIO(self._raw__m_data))
+                    self._m_data = MachO.SegmentCommand64.Section64.PointerList(_io__raw__m_data, self, self._root)
+                    self._m_data._read()
+                elif _on == u"__objc_protorefs":
+                    pass
+                    self._raw__m_data = io.read_bytes(self.size)
+                    _io__raw__m_data = KaitaiStream(BytesIO(self._raw__m_data))
+                    self._m_data = MachO.SegmentCommand64.Section64.PointerList(_io__raw__m_data, self, self._root)
+                    self._m_data._read()
+                elif _on == u"__objc_selrefs":
+                    pass
+                    self._raw__m_data = io.read_bytes(self.size)
+                    _io__raw__m_data = KaitaiStream(BytesIO(self._raw__m_data))
+                    self._m_data = MachO.SegmentCommand64.Section64.PointerList(_io__raw__m_data, self, self._root)
+                    self._m_data._read()
+                elif _on == u"__objc_superrefs":
+                    pass
+                    self._raw__m_data = io.read_bytes(self.size)
+                    _io__raw__m_data = KaitaiStream(BytesIO(self._raw__m_data))
+                    self._m_data = MachO.SegmentCommand64.Section64.PointerList(_io__raw__m_data, self, self._root)
+                    self._m_data._read()
+                else:
+                    pass
+                    self._m_data = io.read_bytes(self.size)
+                self._debug['_m_data']['end'] = io.pos()
+                io.seek(_pos)
+                return getattr(self, '_m_data', None)
+
+
+
+    class SourceVersionCommand(KaitaiStruct):
+        SEQ_FIELDS = ["version"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(MachO.SourceVersionCommand, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
-            self._debug['type']['start'] = self._io.pos()
-            self.type = KaitaiStream.resolve_enum(MachO.LoadCommandType, self._io.read_u4le())
-            self._debug['type']['end'] = self._io.pos()
-            self._debug['size']['start'] = self._io.pos()
-            self.size = self._io.read_u4le()
-            self._debug['size']['end'] = self._io.pos()
-            self._debug['body']['start'] = self._io.pos()
-            _on = self.type
-            if _on == MachO.LoadCommandType.id_dylinker:
-                self._raw_body = self._io.read_bytes((self.size - 8))
-                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
-                self.body = MachO.DylinkerCommand(_io__raw_body, self, self._root)
-                self.body._read()
-            elif _on == MachO.LoadCommandType.reexport_dylib:
-                self._raw_body = self._io.read_bytes((self.size - 8))
-                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
-                self.body = MachO.DylibCommand(_io__raw_body, self, self._root)
-                self.body._read()
-            elif _on == MachO.LoadCommandType.build_version:
-                self._raw_body = self._io.read_bytes((self.size - 8))
-                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
-                self.body = MachO.BuildVersionCommand(_io__raw_body, self, self._root)
-                self.body._read()
-            elif _on == MachO.LoadCommandType.source_version:
-                self._raw_body = self._io.read_bytes((self.size - 8))
-                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
-                self.body = MachO.SourceVersionCommand(_io__raw_body, self, self._root)
-                self.body._read()
-            elif _on == MachO.LoadCommandType.function_starts:
-                self._raw_body = self._io.read_bytes((self.size - 8))
-                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
-                self.body = MachO.LinkeditDataCommand(_io__raw_body, self, self._root)
-                self.body._read()
-            elif _on == MachO.LoadCommandType.rpath:
-                self._raw_body = self._io.read_bytes((self.size - 8))
-                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
-                self.body = MachO.RpathCommand(_io__raw_body, self, self._root)
-                self.body._read()
-            elif _on == MachO.LoadCommandType.sub_framework:
-                self._raw_body = self._io.read_bytes((self.size - 8))
-                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
-                self.body = MachO.SubCommand(_io__raw_body, self, self._root)
-                self.body._read()
-            elif _on == MachO.LoadCommandType.routines:
-                self._raw_body = self._io.read_bytes((self.size - 8))
-                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
-                self.body = MachO.RoutinesCommand(_io__raw_body, self, self._root)
-                self.body._read()
-            elif _on == MachO.LoadCommandType.sub_library:
-                self._raw_body = self._io.read_bytes((self.size - 8))
-                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
-                self.body = MachO.SubCommand(_io__raw_body, self, self._root)
-                self.body._read()
-            elif _on == MachO.LoadCommandType.dyld_info_only:
-                self._raw_body = self._io.read_bytes((self.size - 8))
-                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
-                self.body = MachO.DyldInfoCommand(_io__raw_body, self, self._root)
-                self.body._read()
-            elif _on == MachO.LoadCommandType.dyld_environment:
-                self._raw_body = self._io.read_bytes((self.size - 8))
-                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
-                self.body = MachO.DylinkerCommand(_io__raw_body, self, self._root)
-                self.body._read()
-            elif _on == MachO.LoadCommandType.load_dylinker:
-                self._raw_body = self._io.read_bytes((self.size - 8))
-                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
-                self.body = MachO.DylinkerCommand(_io__raw_body, self, self._root)
-                self.body._read()
-            elif _on == MachO.LoadCommandType.segment_split_info:
-                self._raw_body = self._io.read_bytes((self.size - 8))
-                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
-                self.body = MachO.LinkeditDataCommand(_io__raw_body, self, self._root)
-                self.body._read()
-            elif _on == MachO.LoadCommandType.main:
-                self._raw_body = self._io.read_bytes((self.size - 8))
-                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
-                self.body = MachO.EntryPointCommand(_io__raw_body, self, self._root)
-                self.body._read()
-            elif _on == MachO.LoadCommandType.load_dylib:
-                self._raw_body = self._io.read_bytes((self.size - 8))
-                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
-                self.body = MachO.DylibCommand(_io__raw_body, self, self._root)
-                self.body._read()
-            elif _on == MachO.LoadCommandType.encryption_info:
-                self._raw_body = self._io.read_bytes((self.size - 8))
-                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
-                self.body = MachO.EncryptionInfoCommand(_io__raw_body, self, self._root)
-                self.body._read()
-            elif _on == MachO.LoadCommandType.dysymtab:
-                self._raw_body = self._io.read_bytes((self.size - 8))
-                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
-                self.body = MachO.DysymtabCommand(_io__raw_body, self, self._root)
-                self.body._read()
-            elif _on == MachO.LoadCommandType.twolevel_hints:
-                self._raw_body = self._io.read_bytes((self.size - 8))
-                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
-                self.body = MachO.TwolevelHintsCommand(_io__raw_body, self, self._root)
-                self.body._read()
-            elif _on == MachO.LoadCommandType.encryption_info_64:
-                self._raw_body = self._io.read_bytes((self.size - 8))
-                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
-                self.body = MachO.EncryptionInfoCommand(_io__raw_body, self, self._root)
-                self.body._read()
-            elif _on == MachO.LoadCommandType.linker_option:
-                self._raw_body = self._io.read_bytes((self.size - 8))
-                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
-                self.body = MachO.LinkerOptionCommand(_io__raw_body, self, self._root)
-                self.body._read()
-            elif _on == MachO.LoadCommandType.dyld_info:
-                self._raw_body = self._io.read_bytes((self.size - 8))
-                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
-                self.body = MachO.DyldInfoCommand(_io__raw_body, self, self._root)
-                self.body._read()
-            elif _on == MachO.LoadCommandType.version_min_tvos:
-                self._raw_body = self._io.read_bytes((self.size - 8))
-                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
-                self.body = MachO.VersionMinCommand(_io__raw_body, self, self._root)
-                self.body._read()
-            elif _on == MachO.LoadCommandType.load_upward_dylib:
-                self._raw_body = self._io.read_bytes((self.size - 8))
-                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
-                self.body = MachO.DylibCommand(_io__raw_body, self, self._root)
-                self.body._read()
-            elif _on == MachO.LoadCommandType.segment_64:
-                self._raw_body = self._io.read_bytes((self.size - 8))
-                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
-                self.body = MachO.SegmentCommand64(_io__raw_body, self, self._root)
-                self.body._read()
-            elif _on == MachO.LoadCommandType.segment:
-                self._raw_body = self._io.read_bytes((self.size - 8))
-                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
-                self.body = MachO.SegmentCommand(_io__raw_body, self, self._root)
-                self.body._read()
-            elif _on == MachO.LoadCommandType.sub_umbrella:
-                self._raw_body = self._io.read_bytes((self.size - 8))
-                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
-                self.body = MachO.SubCommand(_io__raw_body, self, self._root)
-                self.body._read()
-            elif _on == MachO.LoadCommandType.version_min_watchos:
-                self._raw_body = self._io.read_bytes((self.size - 8))
-                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
-                self.body = MachO.VersionMinCommand(_io__raw_body, self, self._root)
-                self.body._read()
-            elif _on == MachO.LoadCommandType.routines_64:
-                self._raw_body = self._io.read_bytes((self.size - 8))
-                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
-                self.body = MachO.RoutinesCommand64(_io__raw_body, self, self._root)
-                self.body._read()
-            elif _on == MachO.LoadCommandType.id_dylib:
-                self._raw_body = self._io.read_bytes((self.size - 8))
-                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
-                self.body = MachO.DylibCommand(_io__raw_body, self, self._root)
-                self.body._read()
-            elif _on == MachO.LoadCommandType.sub_client:
-                self._raw_body = self._io.read_bytes((self.size - 8))
-                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
-                self.body = MachO.SubCommand(_io__raw_body, self, self._root)
-                self.body._read()
-            elif _on == MachO.LoadCommandType.dylib_code_sign_drs:
-                self._raw_body = self._io.read_bytes((self.size - 8))
-                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
-                self.body = MachO.LinkeditDataCommand(_io__raw_body, self, self._root)
-                self.body._read()
-            elif _on == MachO.LoadCommandType.symtab:
-                self._raw_body = self._io.read_bytes((self.size - 8))
-                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
-                self.body = MachO.SymtabCommand(_io__raw_body, self, self._root)
-                self.body._read()
-            elif _on == MachO.LoadCommandType.linker_optimization_hint:
-                self._raw_body = self._io.read_bytes((self.size - 8))
-                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
-                self.body = MachO.LinkeditDataCommand(_io__raw_body, self, self._root)
-                self.body._read()
-            elif _on == MachO.LoadCommandType.data_in_code:
-                self._raw_body = self._io.read_bytes((self.size - 8))
-                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
-                self.body = MachO.LinkeditDataCommand(_io__raw_body, self, self._root)
-                self.body._read()
-            elif _on == MachO.LoadCommandType.code_signature:
-                self._raw_body = self._io.read_bytes((self.size - 8))
-                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
-                self.body = MachO.CodeSignatureCommand(_io__raw_body, self, self._root)
-                self.body._read()
-            elif _on == MachO.LoadCommandType.version_min_iphoneos:
-                self._raw_body = self._io.read_bytes((self.size - 8))
-                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
-                self.body = MachO.VersionMinCommand(_io__raw_body, self, self._root)
-                self.body._read()
-            elif _on == MachO.LoadCommandType.load_weak_dylib:
-                self._raw_body = self._io.read_bytes((self.size - 8))
-                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
-                self.body = MachO.DylibCommand(_io__raw_body, self, self._root)
-                self.body._read()
-            elif _on == MachO.LoadCommandType.lazy_load_dylib:
-                self._raw_body = self._io.read_bytes((self.size - 8))
-                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
-                self.body = MachO.DylibCommand(_io__raw_body, self, self._root)
-                self.body._read()
-            elif _on == MachO.LoadCommandType.uuid:
-                self._raw_body = self._io.read_bytes((self.size - 8))
-                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
-                self.body = MachO.UuidCommand(_io__raw_body, self, self._root)
-                self.body._read()
-            elif _on == MachO.LoadCommandType.version_min_macosx:
-                self._raw_body = self._io.read_bytes((self.size - 8))
-                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
-                self.body = MachO.VersionMinCommand(_io__raw_body, self, self._root)
-                self.body._read()
-            else:
-                self.body = self._io.read_bytes((self.size - 8))
-            self._debug['body']['end'] = self._io.pos()
+            self._debug['version']['start'] = self._io.pos()
+            self.version = self._io.read_u8le()
+            self._debug['version']['end'] = self._io.pos()
 
 
-    class UuidCommand(KaitaiStruct):
-        SEQ_FIELDS = ["uuid"]
+        def _fetch_instances(self):
+            pass
+
+
+    class SubCommand(KaitaiStruct):
+        SEQ_FIELDS = ["name"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(MachO.SubCommand, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
-            self._debug['uuid']['start'] = self._io.pos()
-            self.uuid = self._io.read_bytes(16)
-            self._debug['uuid']['end'] = self._io.pos()
+            self._debug['name']['start'] = self._io.pos()
+            self.name = MachO.LcStr(self._io, self, self._root)
+            self.name._read()
+            self._debug['name']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            self.name._fetch_instances()
 
 
     class SymtabCommand(KaitaiStruct):
         SEQ_FIELDS = ["sym_off", "n_syms", "str_off", "str_size"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(MachO.SymtabCommand, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -2813,81 +3491,41 @@ class MachO(KaitaiStruct):
             self.str_size = self._io.read_u4le()
             self._debug['str_size']['end'] = self._io.pos()
 
-        class StrTable(KaitaiStruct):
-            SEQ_FIELDS = ["unknown", "items"]
-            def __init__(self, _io, _parent=None, _root=None):
-                self._io = _io
-                self._parent = _parent
-                self._root = _root if _root else self
-                self._debug = collections.defaultdict(dict)
 
-            def _read(self):
-                self._debug['unknown']['start'] = self._io.pos()
-                self.unknown = self._io.read_u4le()
-                self._debug['unknown']['end'] = self._io.pos()
-                self._debug['items']['start'] = self._io.pos()
-                self.items = []
-                i = 0
-                while True:
-                    if not 'arr' in self._debug['items']:
-                        self._debug['items']['arr'] = []
-                    self._debug['items']['arr'].append({'start': self._io.pos()})
-                    _ = (self._io.read_bytes_term(0, False, True, False)).decode(u"utf-8")
-                    self.items.append(_)
-                    self._debug['items']['arr'][len(self.items) - 1]['end'] = self._io.pos()
-                    if _ == u"":
-                        break
-                    i += 1
-                self._debug['items']['end'] = self._io.pos()
+        def _fetch_instances(self):
+            pass
+            _ = self.strs
+            if hasattr(self, '_m_strs'):
+                pass
+                self._m_strs._fetch_instances()
 
+            _ = self.symbols
+            if hasattr(self, '_m_symbols'):
+                pass
+                for i in range(len(self._m_symbols)):
+                    pass
+                    _on = self._root.magic
+                    if _on == MachO.MagicType.macho_be_x64:
+                        pass
+                        self._m_symbols[i]._fetch_instances()
+                    elif _on == MachO.MagicType.macho_be_x86:
+                        pass
+                        self._m_symbols[i]._fetch_instances()
+                    elif _on == MachO.MagicType.macho_le_x64:
+                        pass
+                        self._m_symbols[i]._fetch_instances()
+                    elif _on == MachO.MagicType.macho_le_x86:
+                        pass
+                        self._m_symbols[i]._fetch_instances()
 
-        class Nlist64(KaitaiStruct):
-            SEQ_FIELDS = ["un", "type", "sect", "desc", "value"]
-            def __init__(self, _io, _parent=None, _root=None):
-                self._io = _io
-                self._parent = _parent
-                self._root = _root if _root else self
-                self._debug = collections.defaultdict(dict)
-
-            def _read(self):
-                self._debug['un']['start'] = self._io.pos()
-                self.un = self._io.read_u4le()
-                self._debug['un']['end'] = self._io.pos()
-                self._debug['type']['start'] = self._io.pos()
-                self.type = self._io.read_u1()
-                self._debug['type']['end'] = self._io.pos()
-                self._debug['sect']['start'] = self._io.pos()
-                self.sect = self._io.read_u1()
-                self._debug['sect']['end'] = self._io.pos()
-                self._debug['desc']['start'] = self._io.pos()
-                self.desc = self._io.read_u2le()
-                self._debug['desc']['end'] = self._io.pos()
-                self._debug['value']['start'] = self._io.pos()
-                self.value = self._io.read_u8le()
-                self._debug['value']['end'] = self._io.pos()
-
-            @property
-            def name(self):
-                if hasattr(self, '_m_name'):
-                    return self._m_name if hasattr(self, '_m_name') else None
-
-                if self.un != 0:
-                    _pos = self._io.pos()
-                    self._io.seek((self._parent.str_off + self.un))
-                    self._debug['_m_name']['start'] = self._io.pos()
-                    self._m_name = (self._io.read_bytes_term(0, False, True, True)).decode(u"utf-8")
-                    self._debug['_m_name']['end'] = self._io.pos()
-                    self._io.seek(_pos)
-
-                return self._m_name if hasattr(self, '_m_name') else None
 
 
         class Nlist(KaitaiStruct):
             SEQ_FIELDS = ["un", "type", "sect", "desc", "value"]
             def __init__(self, _io, _parent=None, _root=None):
-                self._io = _io
+                super(MachO.SymtabCommand.Nlist, self).__init__(_io)
                 self._parent = _parent
-                self._root = _root if _root else self
+                self._root = _root
                 self._debug = collections.defaultdict(dict)
 
             def _read(self):
@@ -2907,79 +3545,119 @@ class MachO(KaitaiStruct):
                 self.value = self._io.read_u4le()
                 self._debug['value']['end'] = self._io.pos()
 
+
+            def _fetch_instances(self):
+                pass
+                _ = self.name
+                if hasattr(self, '_m_name'):
+                    pass
+
+
             @property
             def name(self):
                 if hasattr(self, '_m_name'):
-                    return self._m_name if hasattr(self, '_m_name') else None
+                    return self._m_name
 
                 if self.un != 0:
+                    pass
                     _pos = self._io.pos()
-                    self._io.seek((self._parent.str_off + self.un))
+                    self._io.seek(self._parent.str_off + self.un)
                     self._debug['_m_name']['start'] = self._io.pos()
-                    self._m_name = (self._io.read_bytes_term(0, False, True, True)).decode(u"utf-8")
+                    self._m_name = (self._io.read_bytes_term(0, False, True, True)).decode(u"UTF-8")
                     self._debug['_m_name']['end'] = self._io.pos()
                     self._io.seek(_pos)
 
-                return self._m_name if hasattr(self, '_m_name') else None
+                return getattr(self, '_m_name', None)
 
 
-        @property
-        def symbols(self):
-            if hasattr(self, '_m_symbols'):
-                return self._m_symbols if hasattr(self, '_m_symbols') else None
+        class Nlist64(KaitaiStruct):
+            SEQ_FIELDS = ["un", "type", "sect", "desc", "value"]
+            def __init__(self, _io, _parent=None, _root=None):
+                super(MachO.SymtabCommand.Nlist64, self).__init__(_io)
+                self._parent = _parent
+                self._root = _root
+                self._debug = collections.defaultdict(dict)
 
-            io = self._root._io
-            _pos = io.pos()
-            io.seek(self.sym_off)
-            self._debug['_m_symbols']['start'] = io.pos()
-            self._m_symbols = [None] * (self.n_syms)
-            for i in range(self.n_syms):
-                if not 'arr' in self._debug['_m_symbols']:
-                    self._debug['_m_symbols']['arr'] = []
-                self._debug['_m_symbols']['arr'].append({'start': io.pos()})
-                _on = self._root.magic
-                if _on == MachO.MagicType.macho_le_x64:
-                    if not 'arr' in self._debug['_m_symbols']:
-                        self._debug['_m_symbols']['arr'] = []
-                    self._debug['_m_symbols']['arr'].append({'start': io.pos()})
-                    _t__m_symbols = MachO.SymtabCommand.Nlist64(io, self, self._root)
-                    _t__m_symbols._read()
-                    self._m_symbols[i] = _t__m_symbols
-                    self._debug['_m_symbols']['arr'][i]['end'] = io.pos()
-                elif _on == MachO.MagicType.macho_be_x64:
-                    if not 'arr' in self._debug['_m_symbols']:
-                        self._debug['_m_symbols']['arr'] = []
-                    self._debug['_m_symbols']['arr'].append({'start': io.pos()})
-                    _t__m_symbols = MachO.SymtabCommand.Nlist64(io, self, self._root)
-                    _t__m_symbols._read()
-                    self._m_symbols[i] = _t__m_symbols
-                    self._debug['_m_symbols']['arr'][i]['end'] = io.pos()
-                elif _on == MachO.MagicType.macho_le_x86:
-                    if not 'arr' in self._debug['_m_symbols']:
-                        self._debug['_m_symbols']['arr'] = []
-                    self._debug['_m_symbols']['arr'].append({'start': io.pos()})
-                    _t__m_symbols = MachO.SymtabCommand.Nlist(io, self, self._root)
-                    _t__m_symbols._read()
-                    self._m_symbols[i] = _t__m_symbols
-                    self._debug['_m_symbols']['arr'][i]['end'] = io.pos()
-                elif _on == MachO.MagicType.macho_be_x86:
-                    if not 'arr' in self._debug['_m_symbols']:
-                        self._debug['_m_symbols']['arr'] = []
-                    self._debug['_m_symbols']['arr'].append({'start': io.pos()})
-                    _t__m_symbols = MachO.SymtabCommand.Nlist(io, self, self._root)
-                    _t__m_symbols._read()
-                    self._m_symbols[i] = _t__m_symbols
-                    self._debug['_m_symbols']['arr'][i]['end'] = io.pos()
-                self._debug['_m_symbols']['arr'][i]['end'] = io.pos()
+            def _read(self):
+                self._debug['un']['start'] = self._io.pos()
+                self.un = self._io.read_u4le()
+                self._debug['un']['end'] = self._io.pos()
+                self._debug['type']['start'] = self._io.pos()
+                self.type = self._io.read_u1()
+                self._debug['type']['end'] = self._io.pos()
+                self._debug['sect']['start'] = self._io.pos()
+                self.sect = self._io.read_u1()
+                self._debug['sect']['end'] = self._io.pos()
+                self._debug['desc']['start'] = self._io.pos()
+                self.desc = self._io.read_u2le()
+                self._debug['desc']['end'] = self._io.pos()
+                self._debug['value']['start'] = self._io.pos()
+                self.value = self._io.read_u8le()
+                self._debug['value']['end'] = self._io.pos()
 
-            self._debug['_m_symbols']['end'] = io.pos()
-            io.seek(_pos)
-            return self._m_symbols if hasattr(self, '_m_symbols') else None
+
+            def _fetch_instances(self):
+                pass
+                _ = self.name
+                if hasattr(self, '_m_name'):
+                    pass
+
+
+            @property
+            def name(self):
+                if hasattr(self, '_m_name'):
+                    return self._m_name
+
+                if self.un != 0:
+                    pass
+                    _pos = self._io.pos()
+                    self._io.seek(self._parent.str_off + self.un)
+                    self._debug['_m_name']['start'] = self._io.pos()
+                    self._m_name = (self._io.read_bytes_term(0, False, True, True)).decode(u"UTF-8")
+                    self._debug['_m_name']['end'] = self._io.pos()
+                    self._io.seek(_pos)
+
+                return getattr(self, '_m_name', None)
+
+
+        class StrTable(KaitaiStruct):
+            SEQ_FIELDS = ["unknown", "items"]
+            def __init__(self, _io, _parent=None, _root=None):
+                super(MachO.SymtabCommand.StrTable, self).__init__(_io)
+                self._parent = _parent
+                self._root = _root
+                self._debug = collections.defaultdict(dict)
+
+            def _read(self):
+                self._debug['unknown']['start'] = self._io.pos()
+                self.unknown = self._io.read_u4le()
+                self._debug['unknown']['end'] = self._io.pos()
+                self._debug['items']['start'] = self._io.pos()
+                self._debug['items']['arr'] = []
+                self.items = []
+                i = 0
+                while True:
+                    self._debug['items']['arr'].append({'start': self._io.pos()})
+                    _ = (self._io.read_bytes_term(0, False, True, False)).decode(u"UTF-8")
+                    self.items.append(_)
+                    self._debug['items']['arr'][len(self.items) - 1]['end'] = self._io.pos()
+                    if _ == u"":
+                        break
+                    i += 1
+                self._debug['items']['end'] = self._io.pos()
+
+
+            def _fetch_instances(self):
+                pass
+                for i in range(len(self.items)):
+                    pass
+
+
 
         @property
         def strs(self):
             if hasattr(self, '_m_strs'):
-                return self._m_strs if hasattr(self, '_m_strs') else None
+                return self._m_strs
 
             io = self._root._io
             _pos = io.pos()
@@ -2991,15 +3669,236 @@ class MachO(KaitaiStruct):
             self._m_strs._read()
             self._debug['_m_strs']['end'] = io.pos()
             io.seek(_pos)
-            return self._m_strs if hasattr(self, '_m_strs') else None
+            return getattr(self, '_m_strs', None)
+
+        @property
+        def symbols(self):
+            if hasattr(self, '_m_symbols'):
+                return self._m_symbols
+
+            io = self._root._io
+            _pos = io.pos()
+            io.seek(self.sym_off)
+            self._debug['_m_symbols']['start'] = io.pos()
+            self._debug['_m_symbols']['arr'] = []
+            self._m_symbols = []
+            for i in range(self.n_syms):
+                self._debug['_m_symbols']['arr'].append({'start': io.pos()})
+                _on = self._root.magic
+                if _on == MachO.MagicType.macho_be_x64:
+                    pass
+                    _t__m_symbols = MachO.SymtabCommand.Nlist64(io, self, self._root)
+                    try:
+                        _t__m_symbols._read()
+                    finally:
+                        self._m_symbols.append(_t__m_symbols)
+                elif _on == MachO.MagicType.macho_be_x86:
+                    pass
+                    _t__m_symbols = MachO.SymtabCommand.Nlist(io, self, self._root)
+                    try:
+                        _t__m_symbols._read()
+                    finally:
+                        self._m_symbols.append(_t__m_symbols)
+                elif _on == MachO.MagicType.macho_le_x64:
+                    pass
+                    _t__m_symbols = MachO.SymtabCommand.Nlist64(io, self, self._root)
+                    try:
+                        _t__m_symbols._read()
+                    finally:
+                        self._m_symbols.append(_t__m_symbols)
+                elif _on == MachO.MagicType.macho_le_x86:
+                    pass
+                    _t__m_symbols = MachO.SymtabCommand.Nlist(io, self, self._root)
+                    try:
+                        _t__m_symbols._read()
+                    finally:
+                        self._m_symbols.append(_t__m_symbols)
+                self._debug['_m_symbols']['arr'][i]['end'] = io.pos()
+
+            self._debug['_m_symbols']['end'] = io.pos()
+            io.seek(_pos)
+            return getattr(self, '_m_symbols', None)
+
+
+    class TwolevelHintsCommand(KaitaiStruct):
+        SEQ_FIELDS = ["offset", "num_hints"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(MachO.TwolevelHintsCommand, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['offset']['start'] = self._io.pos()
+            self.offset = self._io.read_u4le()
+            self._debug['offset']['end'] = self._io.pos()
+            self._debug['num_hints']['start'] = self._io.pos()
+            self.num_hints = self._io.read_u4le()
+            self._debug['num_hints']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+
+
+    class Uleb128(KaitaiStruct):
+        SEQ_FIELDS = ["b1", "b2", "b3", "b4", "b5", "b6", "b7", "b8", "b9", "b10"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(MachO.Uleb128, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['b1']['start'] = self._io.pos()
+            self.b1 = self._io.read_u1()
+            self._debug['b1']['end'] = self._io.pos()
+            if self.b1 & 128 != 0:
+                pass
+                self._debug['b2']['start'] = self._io.pos()
+                self.b2 = self._io.read_u1()
+                self._debug['b2']['end'] = self._io.pos()
+
+            if self.b2 & 128 != 0:
+                pass
+                self._debug['b3']['start'] = self._io.pos()
+                self.b3 = self._io.read_u1()
+                self._debug['b3']['end'] = self._io.pos()
+
+            if self.b3 & 128 != 0:
+                pass
+                self._debug['b4']['start'] = self._io.pos()
+                self.b4 = self._io.read_u1()
+                self._debug['b4']['end'] = self._io.pos()
+
+            if self.b4 & 128 != 0:
+                pass
+                self._debug['b5']['start'] = self._io.pos()
+                self.b5 = self._io.read_u1()
+                self._debug['b5']['end'] = self._io.pos()
+
+            if self.b5 & 128 != 0:
+                pass
+                self._debug['b6']['start'] = self._io.pos()
+                self.b6 = self._io.read_u1()
+                self._debug['b6']['end'] = self._io.pos()
+
+            if self.b6 & 128 != 0:
+                pass
+                self._debug['b7']['start'] = self._io.pos()
+                self.b7 = self._io.read_u1()
+                self._debug['b7']['end'] = self._io.pos()
+
+            if self.b7 & 128 != 0:
+                pass
+                self._debug['b8']['start'] = self._io.pos()
+                self.b8 = self._io.read_u1()
+                self._debug['b8']['end'] = self._io.pos()
+
+            if self.b8 & 128 != 0:
+                pass
+                self._debug['b9']['start'] = self._io.pos()
+                self.b9 = self._io.read_u1()
+                self._debug['b9']['end'] = self._io.pos()
+
+            if self.b9 & 128 != 0:
+                pass
+                self._debug['b10']['start'] = self._io.pos()
+                self.b10 = self._io.read_u1()
+                self._debug['b10']['end'] = self._io.pos()
+
+
+
+        def _fetch_instances(self):
+            pass
+            if self.b1 & 128 != 0:
+                pass
+
+            if self.b2 & 128 != 0:
+                pass
+
+            if self.b3 & 128 != 0:
+                pass
+
+            if self.b4 & 128 != 0:
+                pass
+
+            if self.b5 & 128 != 0:
+                pass
+
+            if self.b6 & 128 != 0:
+                pass
+
+            if self.b7 & 128 != 0:
+                pass
+
+            if self.b8 & 128 != 0:
+                pass
+
+            if self.b9 & 128 != 0:
+                pass
+
+
+        @property
+        def value(self):
+            if hasattr(self, '_m_value'):
+                return self._m_value
+
+            self._m_value = (self.b1 % 128 << 0) + (0 if self.b1 & 128 == 0 else (self.b2 % 128 << 7) + (0 if self.b2 & 128 == 0 else (self.b3 % 128 << 14) + (0 if self.b3 & 128 == 0 else (self.b4 % 128 << 21) + (0 if self.b4 & 128 == 0 else (self.b5 % 128 << 28) + (0 if self.b5 & 128 == 0 else (self.b6 % 128 << 35) + (0 if self.b6 & 128 == 0 else (self.b7 % 128 << 42) + (0 if self.b7 & 128 == 0 else (self.b8 % 128 << 49) + (0 if self.b8 & 128 == 0 else (self.b9 % 128 << 56) + (0 if self.b8 & 128 == 0 else self.b10 % 128 << 63)))))))))
+            return getattr(self, '_m_value', None)
+
+
+    class UuidCommand(KaitaiStruct):
+        SEQ_FIELDS = ["uuid"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(MachO.UuidCommand, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['uuid']['start'] = self._io.pos()
+            self.uuid = self._io.read_bytes(16)
+            self._debug['uuid']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+
+
+    class Version(KaitaiStruct):
+        SEQ_FIELDS = ["p1", "minor", "major", "release"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(MachO.Version, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['p1']['start'] = self._io.pos()
+            self.p1 = self._io.read_u1()
+            self._debug['p1']['end'] = self._io.pos()
+            self._debug['minor']['start'] = self._io.pos()
+            self.minor = self._io.read_u1()
+            self._debug['minor']['end'] = self._io.pos()
+            self._debug['major']['start'] = self._io.pos()
+            self.major = self._io.read_u1()
+            self._debug['major']['end'] = self._io.pos()
+            self._debug['release']['start'] = self._io.pos()
+            self.release = self._io.read_u1()
+            self._debug['release']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
 
 
     class VersionMinCommand(KaitaiStruct):
         SEQ_FIELDS = ["version", "sdk"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(MachO.VersionMinCommand, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -3013,21 +3912,52 @@ class MachO(KaitaiStruct):
             self._debug['sdk']['end'] = self._io.pos()
 
 
-    class EntryPointCommand(KaitaiStruct):
-        SEQ_FIELDS = ["entry_off", "stack_size"]
+        def _fetch_instances(self):
+            pass
+            self.version._fetch_instances()
+            self.sdk._fetch_instances()
+
+
+    class VmProt(KaitaiStruct):
+        SEQ_FIELDS = ["strip_read", "is_mask", "reserved0", "copy", "no_change", "execute", "write", "read", "reserved1"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(MachO.VmProt, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
-            self._debug['entry_off']['start'] = self._io.pos()
-            self.entry_off = self._io.read_u8le()
-            self._debug['entry_off']['end'] = self._io.pos()
-            self._debug['stack_size']['start'] = self._io.pos()
-            self.stack_size = self._io.read_u8le()
-            self._debug['stack_size']['end'] = self._io.pos()
+            self._debug['strip_read']['start'] = self._io.pos()
+            self.strip_read = self._io.read_bits_int_be(1) != 0
+            self._debug['strip_read']['end'] = self._io.pos()
+            self._debug['is_mask']['start'] = self._io.pos()
+            self.is_mask = self._io.read_bits_int_be(1) != 0
+            self._debug['is_mask']['end'] = self._io.pos()
+            self._debug['reserved0']['start'] = self._io.pos()
+            self.reserved0 = self._io.read_bits_int_be(1) != 0
+            self._debug['reserved0']['end'] = self._io.pos()
+            self._debug['copy']['start'] = self._io.pos()
+            self.copy = self._io.read_bits_int_be(1) != 0
+            self._debug['copy']['end'] = self._io.pos()
+            self._debug['no_change']['start'] = self._io.pos()
+            self.no_change = self._io.read_bits_int_be(1) != 0
+            self._debug['no_change']['end'] = self._io.pos()
+            self._debug['execute']['start'] = self._io.pos()
+            self.execute = self._io.read_bits_int_be(1) != 0
+            self._debug['execute']['end'] = self._io.pos()
+            self._debug['write']['start'] = self._io.pos()
+            self.write = self._io.read_bits_int_be(1) != 0
+            self._debug['write']['end'] = self._io.pos()
+            self._debug['read']['start'] = self._io.pos()
+            self.read = self._io.read_bits_int_be(1) != 0
+            self._debug['read']['end'] = self._io.pos()
+            self._debug['reserved1']['start'] = self._io.pos()
+            self.reserved1 = self._io.read_bits_int_be(24)
+            self._debug['reserved1']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
 
 
 

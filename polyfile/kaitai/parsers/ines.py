@@ -1,14 +1,14 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
+# type: ignore
 
-from packaging.version import parse as parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
-from enum import Enum
+from enum import IntEnum
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
-    raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
+    raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class Ines(KaitaiStruct):
     """
@@ -17,9 +17,9 @@ class Ines(KaitaiStruct):
     """
     SEQ_FIELDS = ["header", "trainer", "prg_rom", "chr_rom", "playchoice10", "title"]
     def __init__(self, _io, _parent=None, _root=None):
-        self._io = _io
+        super(Ines, self).__init__(_io)
         self._parent = _parent
-        self._root = _root if _root else self
+        self._root = _root or self
         self._debug = collections.defaultdict(dict)
 
     def _read(self):
@@ -30,34 +30,52 @@ class Ines(KaitaiStruct):
         self.header._read()
         self._debug['header']['end'] = self._io.pos()
         if self.header.f6.trainer:
+            pass
             self._debug['trainer']['start'] = self._io.pos()
             self.trainer = self._io.read_bytes(512)
             self._debug['trainer']['end'] = self._io.pos()
 
         self._debug['prg_rom']['start'] = self._io.pos()
-        self.prg_rom = self._io.read_bytes((self.header.len_prg_rom * 16384))
+        self.prg_rom = self._io.read_bytes(self.header.len_prg_rom * 16384)
         self._debug['prg_rom']['end'] = self._io.pos()
         self._debug['chr_rom']['start'] = self._io.pos()
-        self.chr_rom = self._io.read_bytes((self.header.len_chr_rom * 8192))
+        self.chr_rom = self._io.read_bytes(self.header.len_chr_rom * 8192)
         self._debug['chr_rom']['end'] = self._io.pos()
         if self.header.f7.playchoice10:
+            pass
             self._debug['playchoice10']['start'] = self._io.pos()
             self.playchoice10 = Ines.Playchoice10(self._io, self, self._root)
             self.playchoice10._read()
             self._debug['playchoice10']['end'] = self._io.pos()
 
-        if not (self._io.is_eof()):
+        if (not (self._io.is_eof())):
+            pass
             self._debug['title']['start'] = self._io.pos()
             self.title = (self._io.read_bytes_full()).decode(u"ASCII")
             self._debug['title']['end'] = self._io.pos()
 
 
+
+    def _fetch_instances(self):
+        pass
+        self.header._fetch_instances()
+        if self.header.f6.trainer:
+            pass
+
+        if self.header.f7.playchoice10:
+            pass
+            self.playchoice10._fetch_instances()
+
+        if (not (self._io.is_eof())):
+            pass
+
+
     class Header(KaitaiStruct):
         SEQ_FIELDS = ["magic", "len_prg_rom", "len_chr_rom", "f6", "f7", "len_prg_ram", "f9", "f10", "reserved"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Ines.Header, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -105,91 +123,13 @@ class Ines(KaitaiStruct):
             if not self.reserved == b"\x00\x00\x00\x00\x00":
                 raise kaitaistruct.ValidationNotEqualError(b"\x00\x00\x00\x00\x00", self.reserved, self._io, u"/types/header/seq/8")
 
-        class F6(KaitaiStruct):
-            """
-            .. seealso::
-               Source - https://www.nesdev.org/wiki/INES#Flags_6
-            """
 
-            class Mirroring(Enum):
-                horizontal = 0
-                vertical = 1
-            SEQ_FIELDS = ["lower_mapper", "four_screen", "trainer", "has_battery_ram", "mirroring"]
-            def __init__(self, _io, _parent=None, _root=None):
-                self._io = _io
-                self._parent = _parent
-                self._root = _root if _root else self
-                self._debug = collections.defaultdict(dict)
-
-            def _read(self):
-                self._debug['lower_mapper']['start'] = self._io.pos()
-                self.lower_mapper = self._io.read_bits_int_be(4)
-                self._debug['lower_mapper']['end'] = self._io.pos()
-                self._debug['four_screen']['start'] = self._io.pos()
-                self.four_screen = self._io.read_bits_int_be(1) != 0
-                self._debug['four_screen']['end'] = self._io.pos()
-                self._debug['trainer']['start'] = self._io.pos()
-                self.trainer = self._io.read_bits_int_be(1) != 0
-                self._debug['trainer']['end'] = self._io.pos()
-                self._debug['has_battery_ram']['start'] = self._io.pos()
-                self.has_battery_ram = self._io.read_bits_int_be(1) != 0
-                self._debug['has_battery_ram']['end'] = self._io.pos()
-                self._debug['mirroring']['start'] = self._io.pos()
-                self.mirroring = KaitaiStream.resolve_enum(Ines.Header.F6.Mirroring, self._io.read_bits_int_be(1))
-                self._debug['mirroring']['end'] = self._io.pos()
-
-
-        class F7(KaitaiStruct):
-            """
-            .. seealso::
-               Source - https://www.nesdev.org/wiki/INES#Flags_7
-            """
-            SEQ_FIELDS = ["upper_mapper", "format", "playchoice10", "vs_unisystem"]
-            def __init__(self, _io, _parent=None, _root=None):
-                self._io = _io
-                self._parent = _parent
-                self._root = _root if _root else self
-                self._debug = collections.defaultdict(dict)
-
-            def _read(self):
-                self._debug['upper_mapper']['start'] = self._io.pos()
-                self.upper_mapper = self._io.read_bits_int_be(4)
-                self._debug['upper_mapper']['end'] = self._io.pos()
-                self._debug['format']['start'] = self._io.pos()
-                self.format = self._io.read_bits_int_be(2)
-                self._debug['format']['end'] = self._io.pos()
-                self._debug['playchoice10']['start'] = self._io.pos()
-                self.playchoice10 = self._io.read_bits_int_be(1) != 0
-                self._debug['playchoice10']['end'] = self._io.pos()
-                self._debug['vs_unisystem']['start'] = self._io.pos()
-                self.vs_unisystem = self._io.read_bits_int_be(1) != 0
-                self._debug['vs_unisystem']['end'] = self._io.pos()
-
-
-        class F9(KaitaiStruct):
-            """
-            .. seealso::
-               Source - https://www.nesdev.org/wiki/INES#Flags_9
-            """
-
-            class TvSystem(Enum):
-                ntsc = 0
-                pal = 1
-            SEQ_FIELDS = ["reserved", "tv_system"]
-            def __init__(self, _io, _parent=None, _root=None):
-                self._io = _io
-                self._parent = _parent
-                self._root = _root if _root else self
-                self._debug = collections.defaultdict(dict)
-
-            def _read(self):
-                self._debug['reserved']['start'] = self._io.pos()
-                self.reserved = self._io.read_bits_int_be(7)
-                self._debug['reserved']['end'] = self._io.pos()
-                self._debug['tv_system']['start'] = self._io.pos()
-                self.tv_system = KaitaiStream.resolve_enum(Ines.Header.F9.TvSystem, self._io.read_bits_int_be(1))
-                self._debug['tv_system']['end'] = self._io.pos()
-
+        def _fetch_instances(self):
+            pass
+            self.f6._fetch_instances()
+            self.f7._fetch_instances()
+            self.f9._fetch_instances()
+            self.f10._fetch_instances()
 
         class F10(KaitaiStruct):
             """
@@ -197,16 +137,16 @@ class Ines(KaitaiStruct):
                Source - https://www.nesdev.org/wiki/INES#Flags_10
             """
 
-            class TvSystem(Enum):
+            class TvSystem(IntEnum):
                 ntsc = 0
                 dual1 = 1
                 pal = 2
                 dual2 = 3
             SEQ_FIELDS = ["reserved1", "bus_conflict", "prg_ram", "reserved2", "tv_system"]
             def __init__(self, _io, _parent=None, _root=None):
-                self._io = _io
+                super(Ines.Header.F10, self).__init__(_io)
                 self._parent = _parent
-                self._root = _root if _root else self
+                self._root = _root
                 self._debug = collections.defaultdict(dict)
 
             def _read(self):
@@ -227,6 +167,108 @@ class Ines(KaitaiStruct):
                 self._debug['tv_system']['end'] = self._io.pos()
 
 
+            def _fetch_instances(self):
+                pass
+
+
+        class F6(KaitaiStruct):
+            """
+            .. seealso::
+               Source - https://www.nesdev.org/wiki/INES#Flags_6
+            """
+
+            class Mirroring(IntEnum):
+                horizontal = 0
+                vertical = 1
+            SEQ_FIELDS = ["lower_mapper", "four_screen", "trainer", "has_battery_ram", "mirroring"]
+            def __init__(self, _io, _parent=None, _root=None):
+                super(Ines.Header.F6, self).__init__(_io)
+                self._parent = _parent
+                self._root = _root
+                self._debug = collections.defaultdict(dict)
+
+            def _read(self):
+                self._debug['lower_mapper']['start'] = self._io.pos()
+                self.lower_mapper = self._io.read_bits_int_be(4)
+                self._debug['lower_mapper']['end'] = self._io.pos()
+                self._debug['four_screen']['start'] = self._io.pos()
+                self.four_screen = self._io.read_bits_int_be(1) != 0
+                self._debug['four_screen']['end'] = self._io.pos()
+                self._debug['trainer']['start'] = self._io.pos()
+                self.trainer = self._io.read_bits_int_be(1) != 0
+                self._debug['trainer']['end'] = self._io.pos()
+                self._debug['has_battery_ram']['start'] = self._io.pos()
+                self.has_battery_ram = self._io.read_bits_int_be(1) != 0
+                self._debug['has_battery_ram']['end'] = self._io.pos()
+                self._debug['mirroring']['start'] = self._io.pos()
+                self.mirroring = KaitaiStream.resolve_enum(Ines.Header.F6.Mirroring, self._io.read_bits_int_be(1))
+                self._debug['mirroring']['end'] = self._io.pos()
+
+
+            def _fetch_instances(self):
+                pass
+
+
+        class F7(KaitaiStruct):
+            """
+            .. seealso::
+               Source - https://www.nesdev.org/wiki/INES#Flags_7
+            """
+            SEQ_FIELDS = ["upper_mapper", "format", "playchoice10", "vs_unisystem"]
+            def __init__(self, _io, _parent=None, _root=None):
+                super(Ines.Header.F7, self).__init__(_io)
+                self._parent = _parent
+                self._root = _root
+                self._debug = collections.defaultdict(dict)
+
+            def _read(self):
+                self._debug['upper_mapper']['start'] = self._io.pos()
+                self.upper_mapper = self._io.read_bits_int_be(4)
+                self._debug['upper_mapper']['end'] = self._io.pos()
+                self._debug['format']['start'] = self._io.pos()
+                self.format = self._io.read_bits_int_be(2)
+                self._debug['format']['end'] = self._io.pos()
+                self._debug['playchoice10']['start'] = self._io.pos()
+                self.playchoice10 = self._io.read_bits_int_be(1) != 0
+                self._debug['playchoice10']['end'] = self._io.pos()
+                self._debug['vs_unisystem']['start'] = self._io.pos()
+                self.vs_unisystem = self._io.read_bits_int_be(1) != 0
+                self._debug['vs_unisystem']['end'] = self._io.pos()
+
+
+            def _fetch_instances(self):
+                pass
+
+
+        class F9(KaitaiStruct):
+            """
+            .. seealso::
+               Source - https://www.nesdev.org/wiki/INES#Flags_9
+            """
+
+            class TvSystem(IntEnum):
+                ntsc = 0
+                pal = 1
+            SEQ_FIELDS = ["reserved", "tv_system"]
+            def __init__(self, _io, _parent=None, _root=None):
+                super(Ines.Header.F9, self).__init__(_io)
+                self._parent = _parent
+                self._root = _root
+                self._debug = collections.defaultdict(dict)
+
+            def _read(self):
+                self._debug['reserved']['start'] = self._io.pos()
+                self.reserved = self._io.read_bits_int_be(7)
+                self._debug['reserved']['end'] = self._io.pos()
+                self._debug['tv_system']['start'] = self._io.pos()
+                self.tv_system = KaitaiStream.resolve_enum(Ines.Header.F9.TvSystem, self._io.read_bits_int_be(1))
+                self._debug['tv_system']['end'] = self._io.pos()
+
+
+            def _fetch_instances(self):
+                pass
+
+
         @property
         def mapper(self):
             """
@@ -234,10 +276,10 @@ class Ines(KaitaiStruct):
                Source - https://www.nesdev.org/wiki/Mapper
             """
             if hasattr(self, '_m_mapper'):
-                return self._m_mapper if hasattr(self, '_m_mapper') else None
+                return self._m_mapper
 
-            self._m_mapper = (self.f6.lower_mapper | (self.f7.upper_mapper << 4))
-            return self._m_mapper if hasattr(self, '_m_mapper') else None
+            self._m_mapper = self.f6.lower_mapper | self.f7.upper_mapper << 4
+            return getattr(self, '_m_mapper', None)
 
 
     class Playchoice10(KaitaiStruct):
@@ -247,9 +289,9 @@ class Ines(KaitaiStruct):
         """
         SEQ_FIELDS = ["inst_rom", "prom"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Ines.Playchoice10, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -261,12 +303,17 @@ class Ines(KaitaiStruct):
             self.prom._read()
             self._debug['prom']['end'] = self._io.pos()
 
+
+        def _fetch_instances(self):
+            pass
+            self.prom._fetch_instances()
+
         class Prom(KaitaiStruct):
             SEQ_FIELDS = ["data", "counter_out"]
             def __init__(self, _io, _parent=None, _root=None):
-                self._io = _io
+                super(Ines.Playchoice10.Prom, self).__init__(_io)
                 self._parent = _parent
-                self._root = _root if _root else self
+                self._root = _root
                 self._debug = collections.defaultdict(dict)
 
             def _read(self):
@@ -276,6 +323,10 @@ class Ines(KaitaiStruct):
                 self._debug['counter_out']['start'] = self._io.pos()
                 self.counter_out = self._io.read_bytes(16)
                 self._debug['counter_out']['end'] = self._io.pos()
+
+
+            def _fetch_instances(self):
+                pass
 
 
 

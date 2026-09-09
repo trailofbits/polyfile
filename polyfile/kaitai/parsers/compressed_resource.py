@@ -1,15 +1,15 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
+# type: ignore
 
-from packaging.version import parse as parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
+from polyfile.kaitai.parsers import bytes_with_io
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
-    raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
+    raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
-from polyfile.kaitai.parsers import bytes_with_io
 class CompressedResource(KaitaiStruct):
     """Compressed Macintosh resource data,
     as stored in resources with the "compressed" attribute.
@@ -43,9 +43,9 @@ class CompressedResource(KaitaiStruct):
     """
     SEQ_FIELDS = ["header", "compressed_data"]
     def __init__(self, _io, _parent=None, _root=None):
-        self._io = _io
+        super(CompressedResource, self).__init__(_io)
         self._parent = _parent
-        self._root = _root if _root else self
+        self._root = _root or self
         self._debug = collections.defaultdict(dict)
 
     def _read(self):
@@ -57,15 +57,20 @@ class CompressedResource(KaitaiStruct):
         self.compressed_data = self._io.read_bytes_full()
         self._debug['compressed_data']['end'] = self._io.pos()
 
+
+    def _fetch_instances(self):
+        pass
+        self.header._fetch_instances()
+
     class Header(KaitaiStruct):
         """Compressed resource data header,
         as stored at the start of all compressed resources.
         """
         SEQ_FIELDS = ["common_part", "type_specific_part_raw_with_io"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(CompressedResource.Header, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -74,11 +79,28 @@ class CompressedResource(KaitaiStruct):
             self.common_part._read()
             self._debug['common_part']['end'] = self._io.pos()
             self._debug['type_specific_part_raw_with_io']['start'] = self._io.pos()
-            self._raw_type_specific_part_raw_with_io = self._io.read_bytes((self.common_part.len_header - 12))
+            self._raw_type_specific_part_raw_with_io = self._io.read_bytes(self.common_part.len_header - 12)
             _io__raw_type_specific_part_raw_with_io = KaitaiStream(BytesIO(self._raw_type_specific_part_raw_with_io))
             self.type_specific_part_raw_with_io = bytes_with_io.BytesWithIo(_io__raw_type_specific_part_raw_with_io)
             self.type_specific_part_raw_with_io._read()
             self._debug['type_specific_part_raw_with_io']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            self.common_part._fetch_instances()
+            self.type_specific_part_raw_with_io._fetch_instances()
+            _ = self.type_specific_part
+            if hasattr(self, '_m_type_specific_part'):
+                pass
+                _on = self.common_part.header_type
+                if _on == 8:
+                    pass
+                    self._m_type_specific_part._fetch_instances()
+                elif _on == 9:
+                    pass
+                    self._m_type_specific_part._fetch_instances()
+
 
         class CommonPart(KaitaiStruct):
             """The common part of a compressed resource data header.
@@ -86,9 +108,9 @@ class CompressedResource(KaitaiStruct):
             """
             SEQ_FIELDS = ["magic", "len_header", "header_type", "unknown", "len_decompressed"]
             def __init__(self, _io, _parent=None, _root=None):
-                self._io = _io
+                super(CompressedResource.Header.CommonPart, self).__init__(_io)
                 self._parent = _parent
-                self._root = _root if _root else self
+                self._root = _root
                 self._debug = collections.defaultdict(dict)
 
             def _read(self):
@@ -115,14 +137,18 @@ class CompressedResource(KaitaiStruct):
                 self._debug['len_decompressed']['end'] = self._io.pos()
 
 
+            def _fetch_instances(self):
+                pass
+
+
         class TypeSpecificPartType8(KaitaiStruct):
             """The type-specific part of a compressed resource header with header type `8`.
             """
             SEQ_FIELDS = ["working_buffer_fractional_size", "expansion_buffer_size", "decompressor_id", "reserved"]
             def __init__(self, _io, _parent=None, _root=None):
-                self._io = _io
+                super(CompressedResource.Header.TypeSpecificPartType8, self).__init__(_io)
                 self._parent = _parent
-                self._root = _root if _root else self
+                self._root = _root
                 self._debug = collections.defaultdict(dict)
 
             def _read(self):
@@ -142,14 +168,18 @@ class CompressedResource(KaitaiStruct):
                     raise kaitaistruct.ValidationNotEqualError(0, self.reserved, self._io, u"/types/header/types/type_specific_part_type_8/seq/3")
 
 
+            def _fetch_instances(self):
+                pass
+
+
         class TypeSpecificPartType9(KaitaiStruct):
             """The type-specific part of a compressed resource header with header type `9`.
             """
             SEQ_FIELDS = ["decompressor_id", "decompressor_specific_parameters_with_io"]
             def __init__(self, _io, _parent=None, _root=None):
-                self._io = _io
+                super(CompressedResource.Header.TypeSpecificPartType9, self).__init__(_io)
                 self._parent = _parent
-                self._root = _root if _root else self
+                self._root = _root
                 self._debug = collections.defaultdict(dict)
 
             def _read(self):
@@ -163,6 +193,11 @@ class CompressedResource(KaitaiStruct):
                 self.decompressor_specific_parameters_with_io._read()
                 self._debug['decompressor_specific_parameters_with_io']['end'] = self._io.pos()
 
+
+            def _fetch_instances(self):
+                pass
+                self.decompressor_specific_parameters_with_io._fetch_instances()
+
             @property
             def decompressor_specific_parameters(self):
                 """Decompressor-specific parameters.
@@ -173,22 +208,11 @@ class CompressedResource(KaitaiStruct):
                 so depending on the decompressor some parts of this field may be meaningless.
                 """
                 if hasattr(self, '_m_decompressor_specific_parameters'):
-                    return self._m_decompressor_specific_parameters if hasattr(self, '_m_decompressor_specific_parameters') else None
+                    return self._m_decompressor_specific_parameters
 
                 self._m_decompressor_specific_parameters = self.decompressor_specific_parameters_with_io.data
-                return self._m_decompressor_specific_parameters if hasattr(self, '_m_decompressor_specific_parameters') else None
+                return getattr(self, '_m_decompressor_specific_parameters', None)
 
-
-        @property
-        def type_specific_part_raw(self):
-            """The type-specific part of the header,
-            as a raw byte array.
-            """
-            if hasattr(self, '_m_type_specific_part_raw'):
-                return self._m_type_specific_part_raw if hasattr(self, '_m_type_specific_part_raw') else None
-
-            self._m_type_specific_part_raw = self.type_specific_part_raw_with_io.data
-            return self._m_type_specific_part_raw if hasattr(self, '_m_type_specific_part_raw') else None
 
         @property
         def type_specific_part(self):
@@ -196,7 +220,7 @@ class CompressedResource(KaitaiStruct):
             parsed according to the type from the common part.
             """
             if hasattr(self, '_m_type_specific_part'):
-                return self._m_type_specific_part if hasattr(self, '_m_type_specific_part') else None
+                return self._m_type_specific_part
 
             io = self.type_specific_part_raw_with_io._io
             _pos = io.pos()
@@ -204,14 +228,27 @@ class CompressedResource(KaitaiStruct):
             self._debug['_m_type_specific_part']['start'] = io.pos()
             _on = self.common_part.header_type
             if _on == 8:
+                pass
                 self._m_type_specific_part = CompressedResource.Header.TypeSpecificPartType8(io, self, self._root)
                 self._m_type_specific_part._read()
             elif _on == 9:
+                pass
                 self._m_type_specific_part = CompressedResource.Header.TypeSpecificPartType9(io, self, self._root)
                 self._m_type_specific_part._read()
             self._debug['_m_type_specific_part']['end'] = io.pos()
             io.seek(_pos)
-            return self._m_type_specific_part if hasattr(self, '_m_type_specific_part') else None
+            return getattr(self, '_m_type_specific_part', None)
+
+        @property
+        def type_specific_part_raw(self):
+            """The type-specific part of the header,
+            as a raw byte array.
+            """
+            if hasattr(self, '_m_type_specific_part_raw'):
+                return self._m_type_specific_part_raw
+
+            self._m_type_specific_part_raw = self.type_specific_part_raw_with_io.data
+            return getattr(self, '_m_type_specific_part_raw', None)
 
 
 

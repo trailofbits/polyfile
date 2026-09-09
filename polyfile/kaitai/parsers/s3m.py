@@ -1,14 +1,14 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
+# type: ignore
 
-from packaging.version import parse as parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
-from enum import Enum
+from enum import IntEnum
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
-    raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
+    raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class S3m(KaitaiStruct):
     """Scream Tracker 3 module is a tracker music file format that, as all
@@ -32,9 +32,9 @@ class S3m(KaitaiStruct):
     """
     SEQ_FIELDS = ["song_name", "magic1", "file_type", "reserved1", "num_orders", "num_instruments", "num_patterns", "flags", "version", "samples_format", "magic2", "global_volume", "initial_speed", "initial_tempo", "is_stereo", "master_volume", "ultra_click_removal", "has_custom_pan", "reserved2", "ofs_special", "channels", "orders", "instruments", "patterns", "channel_pans"]
     def __init__(self, _io, _parent=None, _root=None):
-        self._io = _io
+        super(S3m, self).__init__(_io)
         self._parent = _parent
-        self._root = _root if _root else self
+        self._root = _root or self
         self._debug = collections.defaultdict(dict)
 
     def _read(self):
@@ -90,7 +90,6 @@ class S3m(KaitaiStruct):
         self._debug['master_volume']['start'] = self._io.pos()
         self.master_volume = self._io.read_bits_int_be(7)
         self._debug['master_volume']['end'] = self._io.pos()
-        self._io.align_to_byte()
         self._debug['ultra_click_removal']['start'] = self._io.pos()
         self.ultra_click_removal = self._io.read_u1()
         self._debug['ultra_click_removal']['end'] = self._io.pos()
@@ -104,14 +103,15 @@ class S3m(KaitaiStruct):
         self.ofs_special = self._io.read_u2le()
         self._debug['ofs_special']['end'] = self._io.pos()
         self._debug['channels']['start'] = self._io.pos()
-        self.channels = [None] * (32)
+        self._debug['channels']['arr'] = []
+        self.channels = []
         for i in range(32):
-            if not 'arr' in self._debug['channels']:
-                self._debug['channels']['arr'] = []
             self._debug['channels']['arr'].append({'start': self._io.pos()})
             _t_channels = S3m.Channel(self._io, self, self._root)
-            _t_channels._read()
-            self.channels[i] = _t_channels
+            try:
+                _t_channels._read()
+            finally:
+                self.channels.append(_t_channels)
             self._debug['channels']['arr'][i]['end'] = self._io.pos()
 
         self._debug['channels']['end'] = self._io.pos()
@@ -119,50 +119,98 @@ class S3m(KaitaiStruct):
         self.orders = self._io.read_bytes(self.num_orders)
         self._debug['orders']['end'] = self._io.pos()
         self._debug['instruments']['start'] = self._io.pos()
-        self.instruments = [None] * (self.num_instruments)
+        self._debug['instruments']['arr'] = []
+        self.instruments = []
         for i in range(self.num_instruments):
-            if not 'arr' in self._debug['instruments']:
-                self._debug['instruments']['arr'] = []
             self._debug['instruments']['arr'].append({'start': self._io.pos()})
             _t_instruments = S3m.InstrumentPtr(self._io, self, self._root)
-            _t_instruments._read()
-            self.instruments[i] = _t_instruments
+            try:
+                _t_instruments._read()
+            finally:
+                self.instruments.append(_t_instruments)
             self._debug['instruments']['arr'][i]['end'] = self._io.pos()
 
         self._debug['instruments']['end'] = self._io.pos()
         self._debug['patterns']['start'] = self._io.pos()
-        self.patterns = [None] * (self.num_patterns)
+        self._debug['patterns']['arr'] = []
+        self.patterns = []
         for i in range(self.num_patterns):
-            if not 'arr' in self._debug['patterns']:
-                self._debug['patterns']['arr'] = []
             self._debug['patterns']['arr'].append({'start': self._io.pos()})
             _t_patterns = S3m.PatternPtr(self._io, self, self._root)
-            _t_patterns._read()
-            self.patterns[i] = _t_patterns
+            try:
+                _t_patterns._read()
+            finally:
+                self.patterns.append(_t_patterns)
             self._debug['patterns']['arr'][i]['end'] = self._io.pos()
 
         self._debug['patterns']['end'] = self._io.pos()
         if self.has_custom_pan == 252:
+            pass
             self._debug['channel_pans']['start'] = self._io.pos()
-            self.channel_pans = [None] * (32)
+            self._debug['channel_pans']['arr'] = []
+            self.channel_pans = []
             for i in range(32):
-                if not 'arr' in self._debug['channel_pans']:
-                    self._debug['channel_pans']['arr'] = []
                 self._debug['channel_pans']['arr'].append({'start': self._io.pos()})
                 _t_channel_pans = S3m.ChannelPan(self._io, self, self._root)
-                _t_channel_pans._read()
-                self.channel_pans[i] = _t_channel_pans
+                try:
+                    _t_channel_pans._read()
+                finally:
+                    self.channel_pans.append(_t_channel_pans)
                 self._debug['channel_pans']['arr'][i]['end'] = self._io.pos()
 
             self._debug['channel_pans']['end'] = self._io.pos()
 
 
+
+    def _fetch_instances(self):
+        pass
+        for i in range(len(self.channels)):
+            pass
+            self.channels[i]._fetch_instances()
+
+        for i in range(len(self.instruments)):
+            pass
+            self.instruments[i]._fetch_instances()
+
+        for i in range(len(self.patterns)):
+            pass
+            self.patterns[i]._fetch_instances()
+
+        if self.has_custom_pan == 252:
+            pass
+            for i in range(len(self.channel_pans)):
+                pass
+                self.channel_pans[i]._fetch_instances()
+
+
+
+    class Channel(KaitaiStruct):
+        SEQ_FIELDS = ["is_disabled", "ch_type"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(S3m.Channel, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['is_disabled']['start'] = self._io.pos()
+            self.is_disabled = self._io.read_bits_int_be(1) != 0
+            self._debug['is_disabled']['end'] = self._io.pos()
+            self._debug['ch_type']['start'] = self._io.pos()
+            self.ch_type = self._io.read_bits_int_be(7)
+            self._debug['ch_type']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+
+
     class ChannelPan(KaitaiStruct):
         SEQ_FIELDS = ["reserved1", "has_custom_pan", "reserved2", "pan"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(S3m.ChannelPan, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -180,202 +228,13 @@ class S3m(KaitaiStruct):
             self._debug['pan']['end'] = self._io.pos()
 
 
-    class PatternCell(KaitaiStruct):
-        SEQ_FIELDS = ["has_fx", "has_volume", "has_note_and_instrument", "channel_num", "note", "instrument", "volume", "fx_type", "fx_value"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['has_fx']['start'] = self._io.pos()
-            self.has_fx = self._io.read_bits_int_be(1) != 0
-            self._debug['has_fx']['end'] = self._io.pos()
-            self._debug['has_volume']['start'] = self._io.pos()
-            self.has_volume = self._io.read_bits_int_be(1) != 0
-            self._debug['has_volume']['end'] = self._io.pos()
-            self._debug['has_note_and_instrument']['start'] = self._io.pos()
-            self.has_note_and_instrument = self._io.read_bits_int_be(1) != 0
-            self._debug['has_note_and_instrument']['end'] = self._io.pos()
-            self._debug['channel_num']['start'] = self._io.pos()
-            self.channel_num = self._io.read_bits_int_be(5)
-            self._debug['channel_num']['end'] = self._io.pos()
-            self._io.align_to_byte()
-            if self.has_note_and_instrument:
-                self._debug['note']['start'] = self._io.pos()
-                self.note = self._io.read_u1()
-                self._debug['note']['end'] = self._io.pos()
-
-            if self.has_note_and_instrument:
-                self._debug['instrument']['start'] = self._io.pos()
-                self.instrument = self._io.read_u1()
-                self._debug['instrument']['end'] = self._io.pos()
-
-            if self.has_volume:
-                self._debug['volume']['start'] = self._io.pos()
-                self.volume = self._io.read_u1()
-                self._debug['volume']['end'] = self._io.pos()
-
-            if self.has_fx:
-                self._debug['fx_type']['start'] = self._io.pos()
-                self.fx_type = self._io.read_u1()
-                self._debug['fx_type']['end'] = self._io.pos()
-
-            if self.has_fx:
-                self._debug['fx_value']['start'] = self._io.pos()
-                self.fx_value = self._io.read_u1()
-                self._debug['fx_value']['end'] = self._io.pos()
-
-
-
-    class PatternCells(KaitaiStruct):
-        SEQ_FIELDS = ["cells"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['cells']['start'] = self._io.pos()
-            self.cells = []
-            i = 0
-            while not self._io.is_eof():
-                if not 'arr' in self._debug['cells']:
-                    self._debug['cells']['arr'] = []
-                self._debug['cells']['arr'].append({'start': self._io.pos()})
-                _t_cells = S3m.PatternCell(self._io, self, self._root)
-                _t_cells._read()
-                self.cells.append(_t_cells)
-                self._debug['cells']['arr'][len(self.cells) - 1]['end'] = self._io.pos()
-                i += 1
-
-            self._debug['cells']['end'] = self._io.pos()
-
-
-    class Channel(KaitaiStruct):
-        SEQ_FIELDS = ["is_disabled", "ch_type"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['is_disabled']['start'] = self._io.pos()
-            self.is_disabled = self._io.read_bits_int_be(1) != 0
-            self._debug['is_disabled']['end'] = self._io.pos()
-            self._debug['ch_type']['start'] = self._io.pos()
-            self.ch_type = self._io.read_bits_int_be(7)
-            self._debug['ch_type']['end'] = self._io.pos()
-
-
-    class SwappedU3(KaitaiStruct):
-        """Custom 3-byte integer, stored in mixed endian manner."""
-        SEQ_FIELDS = ["hi", "lo"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['hi']['start'] = self._io.pos()
-            self.hi = self._io.read_u1()
-            self._debug['hi']['end'] = self._io.pos()
-            self._debug['lo']['start'] = self._io.pos()
-            self.lo = self._io.read_u2le()
-            self._debug['lo']['end'] = self._io.pos()
-
-        @property
-        def value(self):
-            if hasattr(self, '_m_value'):
-                return self._m_value if hasattr(self, '_m_value') else None
-
-            self._m_value = (self.lo | (self.hi << 16))
-            return self._m_value if hasattr(self, '_m_value') else None
-
-
-    class Pattern(KaitaiStruct):
-        SEQ_FIELDS = ["size", "body"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['size']['start'] = self._io.pos()
-            self.size = self._io.read_u2le()
-            self._debug['size']['end'] = self._io.pos()
-            self._debug['body']['start'] = self._io.pos()
-            self._raw_body = self._io.read_bytes((self.size - 2))
-            _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
-            self.body = S3m.PatternCells(_io__raw_body, self, self._root)
-            self.body._read()
-            self._debug['body']['end'] = self._io.pos()
-
-
-    class PatternPtr(KaitaiStruct):
-        SEQ_FIELDS = ["paraptr"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['paraptr']['start'] = self._io.pos()
-            self.paraptr = self._io.read_u2le()
-            self._debug['paraptr']['end'] = self._io.pos()
-
-        @property
-        def body(self):
-            if hasattr(self, '_m_body'):
-                return self._m_body if hasattr(self, '_m_body') else None
-
-            _pos = self._io.pos()
-            self._io.seek((self.paraptr * 16))
-            self._debug['_m_body']['start'] = self._io.pos()
-            self._m_body = S3m.Pattern(self._io, self, self._root)
-            self._m_body._read()
-            self._debug['_m_body']['end'] = self._io.pos()
-            self._io.seek(_pos)
-            return self._m_body if hasattr(self, '_m_body') else None
-
-
-    class InstrumentPtr(KaitaiStruct):
-        SEQ_FIELDS = ["paraptr"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['paraptr']['start'] = self._io.pos()
-            self.paraptr = self._io.read_u2le()
-            self._debug['paraptr']['end'] = self._io.pos()
-
-        @property
-        def body(self):
-            if hasattr(self, '_m_body'):
-                return self._m_body if hasattr(self, '_m_body') else None
-
-            _pos = self._io.pos()
-            self._io.seek((self.paraptr * 16))
-            self._debug['_m_body']['start'] = self._io.pos()
-            self._m_body = S3m.Instrument(self._io, self, self._root)
-            self._m_body._read()
-            self._debug['_m_body']['end'] = self._io.pos()
-            self._io.seek(_pos)
-            return self._m_body if hasattr(self, '_m_body') else None
+        def _fetch_instances(self):
+            pass
 
 
     class Instrument(KaitaiStruct):
 
-        class InstTypes(Enum):
+        class InstTypes(IntEnum):
             sample = 1
             melodic = 2
             bass_drum = 3
@@ -385,9 +244,9 @@ class S3m(KaitaiStruct):
             hihat = 7
         SEQ_FIELDS = ["type", "filename", "body", "tuning_hz", "reserved2", "sample_name", "magic"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(S3m.Instrument, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -400,9 +259,11 @@ class S3m(KaitaiStruct):
             self._debug['body']['start'] = self._io.pos()
             _on = self.type
             if _on == S3m.Instrument.InstTypes.sample:
+                pass
                 self.body = S3m.Instrument.Sampled(self._io, self, self._root)
                 self.body._read()
             else:
+                pass
                 self.body = S3m.Instrument.Adlib(self._io, self, self._root)
                 self.body._read()
             self._debug['body']['end'] = self._io.pos()
@@ -421,12 +282,46 @@ class S3m(KaitaiStruct):
             if not self.magic == b"\x53\x43\x52\x53":
                 raise kaitaistruct.ValidationNotEqualError(b"\x53\x43\x52\x53", self.magic, self._io, u"/types/instrument/seq/6")
 
+
+        def _fetch_instances(self):
+            pass
+            _on = self.type
+            if _on == S3m.Instrument.InstTypes.sample:
+                pass
+                self.body._fetch_instances()
+            else:
+                pass
+                self.body._fetch_instances()
+
+        class Adlib(KaitaiStruct):
+            SEQ_FIELDS = ["reserved1", "_unnamed1"]
+            def __init__(self, _io, _parent=None, _root=None):
+                super(S3m.Instrument.Adlib, self).__init__(_io)
+                self._parent = _parent
+                self._root = _root
+                self._debug = collections.defaultdict(dict)
+
+            def _read(self):
+                self._debug['reserved1']['start'] = self._io.pos()
+                self.reserved1 = self._io.read_bytes(3)
+                self._debug['reserved1']['end'] = self._io.pos()
+                if not self.reserved1 == b"\x00\x00\x00":
+                    raise kaitaistruct.ValidationNotEqualError(b"\x00\x00\x00", self.reserved1, self._io, u"/types/instrument/types/adlib/seq/0")
+                self._debug['_unnamed1']['start'] = self._io.pos()
+                self._unnamed1 = self._io.read_bytes(16)
+                self._debug['_unnamed1']['end'] = self._io.pos()
+
+
+            def _fetch_instances(self):
+                pass
+
+
         class Sampled(KaitaiStruct):
             SEQ_FIELDS = ["paraptr_sample", "len_sample", "loop_begin", "loop_end", "default_volume", "reserved1", "is_packed", "flags"]
             def __init__(self, _io, _parent=None, _root=None):
-                self._io = _io
+                super(S3m.Instrument.Sampled, self).__init__(_io)
                 self._parent = _parent
-                self._root = _root if _root else self
+                self._root = _root
                 self._debug = collections.defaultdict(dict)
 
             def _read(self):
@@ -456,38 +351,263 @@ class S3m(KaitaiStruct):
                 self.flags = self._io.read_u1()
                 self._debug['flags']['end'] = self._io.pos()
 
+
+            def _fetch_instances(self):
+                pass
+                self.paraptr_sample._fetch_instances()
+                _ = self.sample
+                if hasattr(self, '_m_sample'):
+                    pass
+
+
             @property
             def sample(self):
                 if hasattr(self, '_m_sample'):
-                    return self._m_sample if hasattr(self, '_m_sample') else None
+                    return self._m_sample
 
                 _pos = self._io.pos()
-                self._io.seek((self.paraptr_sample.value * 16))
+                self._io.seek(self.paraptr_sample.value * 16)
                 self._debug['_m_sample']['start'] = self._io.pos()
                 self._m_sample = self._io.read_bytes(self.len_sample)
                 self._debug['_m_sample']['end'] = self._io.pos()
                 self._io.seek(_pos)
-                return self._m_sample if hasattr(self, '_m_sample') else None
+                return getattr(self, '_m_sample', None)
 
 
-        class Adlib(KaitaiStruct):
-            SEQ_FIELDS = ["reserved1", "_unnamed1"]
-            def __init__(self, _io, _parent=None, _root=None):
-                self._io = _io
-                self._parent = _parent
-                self._root = _root if _root else self
-                self._debug = collections.defaultdict(dict)
 
-            def _read(self):
-                self._debug['reserved1']['start'] = self._io.pos()
-                self.reserved1 = self._io.read_bytes(3)
-                self._debug['reserved1']['end'] = self._io.pos()
-                if not self.reserved1 == b"\x00\x00\x00":
-                    raise kaitaistruct.ValidationNotEqualError(b"\x00\x00\x00", self.reserved1, self._io, u"/types/instrument/types/adlib/seq/0")
-                self._debug['_unnamed1']['start'] = self._io.pos()
-                self._unnamed1 = self._io.read_bytes(16)
-                self._debug['_unnamed1']['end'] = self._io.pos()
+    class InstrumentPtr(KaitaiStruct):
+        SEQ_FIELDS = ["paraptr"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(S3m.InstrumentPtr, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
 
+        def _read(self):
+            self._debug['paraptr']['start'] = self._io.pos()
+            self.paraptr = self._io.read_u2le()
+            self._debug['paraptr']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            _ = self.body
+            if hasattr(self, '_m_body'):
+                pass
+                self._m_body._fetch_instances()
+
+
+        @property
+        def body(self):
+            if hasattr(self, '_m_body'):
+                return self._m_body
+
+            _pos = self._io.pos()
+            self._io.seek(self.paraptr * 16)
+            self._debug['_m_body']['start'] = self._io.pos()
+            self._m_body = S3m.Instrument(self._io, self, self._root)
+            self._m_body._read()
+            self._debug['_m_body']['end'] = self._io.pos()
+            self._io.seek(_pos)
+            return getattr(self, '_m_body', None)
+
+
+    class Pattern(KaitaiStruct):
+        SEQ_FIELDS = ["size", "body"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(S3m.Pattern, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['size']['start'] = self._io.pos()
+            self.size = self._io.read_u2le()
+            self._debug['size']['end'] = self._io.pos()
+            self._debug['body']['start'] = self._io.pos()
+            self._raw_body = self._io.read_bytes(self.size - 2)
+            _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
+            self.body = S3m.PatternCells(_io__raw_body, self, self._root)
+            self.body._read()
+            self._debug['body']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            self.body._fetch_instances()
+
+
+    class PatternCell(KaitaiStruct):
+        SEQ_FIELDS = ["has_fx", "has_volume", "has_note_and_instrument", "channel_num", "note", "instrument", "volume", "fx_type", "fx_value"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(S3m.PatternCell, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['has_fx']['start'] = self._io.pos()
+            self.has_fx = self._io.read_bits_int_be(1) != 0
+            self._debug['has_fx']['end'] = self._io.pos()
+            self._debug['has_volume']['start'] = self._io.pos()
+            self.has_volume = self._io.read_bits_int_be(1) != 0
+            self._debug['has_volume']['end'] = self._io.pos()
+            self._debug['has_note_and_instrument']['start'] = self._io.pos()
+            self.has_note_and_instrument = self._io.read_bits_int_be(1) != 0
+            self._debug['has_note_and_instrument']['end'] = self._io.pos()
+            self._debug['channel_num']['start'] = self._io.pos()
+            self.channel_num = self._io.read_bits_int_be(5)
+            self._debug['channel_num']['end'] = self._io.pos()
+            if self.has_note_and_instrument:
+                pass
+                self._debug['note']['start'] = self._io.pos()
+                self.note = self._io.read_u1()
+                self._debug['note']['end'] = self._io.pos()
+
+            if self.has_note_and_instrument:
+                pass
+                self._debug['instrument']['start'] = self._io.pos()
+                self.instrument = self._io.read_u1()
+                self._debug['instrument']['end'] = self._io.pos()
+
+            if self.has_volume:
+                pass
+                self._debug['volume']['start'] = self._io.pos()
+                self.volume = self._io.read_u1()
+                self._debug['volume']['end'] = self._io.pos()
+
+            if self.has_fx:
+                pass
+                self._debug['fx_type']['start'] = self._io.pos()
+                self.fx_type = self._io.read_u1()
+                self._debug['fx_type']['end'] = self._io.pos()
+
+            if self.has_fx:
+                pass
+                self._debug['fx_value']['start'] = self._io.pos()
+                self.fx_value = self._io.read_u1()
+                self._debug['fx_value']['end'] = self._io.pos()
+
+
+
+        def _fetch_instances(self):
+            pass
+            if self.has_note_and_instrument:
+                pass
+
+            if self.has_note_and_instrument:
+                pass
+
+            if self.has_volume:
+                pass
+
+            if self.has_fx:
+                pass
+
+            if self.has_fx:
+                pass
+
+
+
+    class PatternCells(KaitaiStruct):
+        SEQ_FIELDS = ["cells"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(S3m.PatternCells, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['cells']['start'] = self._io.pos()
+            self._debug['cells']['arr'] = []
+            self.cells = []
+            i = 0
+            while not self._io.is_eof():
+                self._debug['cells']['arr'].append({'start': self._io.pos()})
+                _t_cells = S3m.PatternCell(self._io, self, self._root)
+                try:
+                    _t_cells._read()
+                finally:
+                    self.cells.append(_t_cells)
+                self._debug['cells']['arr'][len(self.cells) - 1]['end'] = self._io.pos()
+                i += 1
+
+            self._debug['cells']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            for i in range(len(self.cells)):
+                pass
+                self.cells[i]._fetch_instances()
+
+
+
+    class PatternPtr(KaitaiStruct):
+        SEQ_FIELDS = ["paraptr"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(S3m.PatternPtr, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['paraptr']['start'] = self._io.pos()
+            self.paraptr = self._io.read_u2le()
+            self._debug['paraptr']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            _ = self.body
+            if hasattr(self, '_m_body'):
+                pass
+                self._m_body._fetch_instances()
+
+
+        @property
+        def body(self):
+            if hasattr(self, '_m_body'):
+                return self._m_body
+
+            _pos = self._io.pos()
+            self._io.seek(self.paraptr * 16)
+            self._debug['_m_body']['start'] = self._io.pos()
+            self._m_body = S3m.Pattern(self._io, self, self._root)
+            self._m_body._read()
+            self._debug['_m_body']['end'] = self._io.pos()
+            self._io.seek(_pos)
+            return getattr(self, '_m_body', None)
+
+
+    class SwappedU3(KaitaiStruct):
+        """Custom 3-byte integer, stored in mixed endian manner."""
+        SEQ_FIELDS = ["hi", "lo"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(S3m.SwappedU3, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['hi']['start'] = self._io.pos()
+            self.hi = self._io.read_u1()
+            self._debug['hi']['end'] = self._io.pos()
+            self._debug['lo']['start'] = self._io.pos()
+            self.lo = self._io.read_u2le()
+            self._debug['lo']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+
+        @property
+        def value(self):
+            if hasattr(self, '_m_value'):
+                return self._m_value
+
+            self._m_value = self.lo | self.hi << 16
+            return getattr(self, '_m_value', None)
 
 
 

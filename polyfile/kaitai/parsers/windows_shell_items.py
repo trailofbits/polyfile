@@ -1,13 +1,13 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
+# type: ignore
 
-from packaging.version import parse as parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
-    raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
+    raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class WindowsShellItems(KaitaiStruct):
     """Windows Shell Items (AKA "shellbags") is an undocumented set of
@@ -27,121 +27,36 @@ class WindowsShellItems(KaitaiStruct):
     """
     SEQ_FIELDS = ["items"]
     def __init__(self, _io, _parent=None, _root=None):
-        self._io = _io
+        super(WindowsShellItems, self).__init__(_io)
         self._parent = _parent
-        self._root = _root if _root else self
+        self._root = _root or self
         self._debug = collections.defaultdict(dict)
 
     def _read(self):
         self._debug['items']['start'] = self._io.pos()
+        self._debug['items']['arr'] = []
         self.items = []
         i = 0
         while True:
-            if not 'arr' in self._debug['items']:
-                self._debug['items']['arr'] = []
             self._debug['items']['arr'].append({'start': self._io.pos()})
             _t_items = WindowsShellItems.ShellItem(self._io, self, self._root)
-            _t_items._read()
-            _ = _t_items
-            self.items.append(_)
+            try:
+                _t_items._read()
+            finally:
+                _ = _t_items
+                self.items.append(_)
             self._debug['items']['arr'][len(self.items) - 1]['end'] = self._io.pos()
             if _.len_data == 0:
                 break
             i += 1
         self._debug['items']['end'] = self._io.pos()
 
-    class ShellItemData(KaitaiStruct):
-        SEQ_FIELDS = ["code", "body1", "body2"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
 
-        def _read(self):
-            self._debug['code']['start'] = self._io.pos()
-            self.code = self._io.read_u1()
-            self._debug['code']['end'] = self._io.pos()
-            self._debug['body1']['start'] = self._io.pos()
-            _on = self.code
-            if _on == 31:
-                self.body1 = WindowsShellItems.RootFolderBody(self._io, self, self._root)
-                self.body1._read()
-            self._debug['body1']['end'] = self._io.pos()
-            self._debug['body2']['start'] = self._io.pos()
-            _on = (self.code & 112)
-            if _on == 32:
-                self.body2 = WindowsShellItems.VolumeBody(self._io, self, self._root)
-                self.body2._read()
-            elif _on == 48:
-                self.body2 = WindowsShellItems.FileEntryBody(self._io, self, self._root)
-                self.body2._read()
-            self._debug['body2']['end'] = self._io.pos()
-
-
-    class ShellItem(KaitaiStruct):
-        """
-        .. seealso::
-           Section 2.2.2 - https://winprotocoldoc.blob.core.windows.net/productionwindowsarchives/MS-SHLLINK/[MS-SHLLINK].pdf
-        """
-        SEQ_FIELDS = ["len_data", "data"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['len_data']['start'] = self._io.pos()
-            self.len_data = self._io.read_u2le()
-            self._debug['len_data']['end'] = self._io.pos()
-            if self.len_data >= 2:
-                self._debug['data']['start'] = self._io.pos()
-                self._raw_data = self._io.read_bytes((self.len_data - 2))
-                _io__raw_data = KaitaiStream(BytesIO(self._raw_data))
-                self.data = WindowsShellItems.ShellItemData(_io__raw_data, self, self._root)
-                self.data._read()
-                self._debug['data']['end'] = self._io.pos()
-
-
-
-    class RootFolderBody(KaitaiStruct):
-        """
-        .. seealso::
-           Source - https://github.com/libyal/libfwsi/blob/main/documentation/Windows%20Shell%20Item%20format.asciidoc#32-root-folder-shell-item
-        """
-        SEQ_FIELDS = ["sort_index", "shell_folder_id"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['sort_index']['start'] = self._io.pos()
-            self.sort_index = self._io.read_u1()
-            self._debug['sort_index']['end'] = self._io.pos()
-            self._debug['shell_folder_id']['start'] = self._io.pos()
-            self.shell_folder_id = self._io.read_bytes(16)
-            self._debug['shell_folder_id']['end'] = self._io.pos()
-
-
-    class VolumeBody(KaitaiStruct):
-        """
-        .. seealso::
-           Source - https://github.com/libyal/libfwsi/blob/main/documentation/Windows%20Shell%20Item%20format.asciidoc#33-volume-shell-item
-        """
-        SEQ_FIELDS = ["flags"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['flags']['start'] = self._io.pos()
-            self.flags = self._io.read_u1()
-            self._debug['flags']['end'] = self._io.pos()
+    def _fetch_instances(self):
+        pass
+        for i in range(len(self.items)):
+            pass
+            self.items[i]._fetch_instances()
 
 
     class FileEntryBody(KaitaiStruct):
@@ -151,9 +66,9 @@ class WindowsShellItems(KaitaiStruct):
         """
         SEQ_FIELDS = ["_unnamed0", "file_size", "last_mod_time", "file_attrs"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(WindowsShellItems.FileEntryBody, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -170,21 +85,154 @@ class WindowsShellItems(KaitaiStruct):
             self.file_attrs = self._io.read_u2le()
             self._debug['file_attrs']['end'] = self._io.pos()
 
+
+        def _fetch_instances(self):
+            pass
+
         @property
         def is_dir(self):
             if hasattr(self, '_m_is_dir'):
-                return self._m_is_dir if hasattr(self, '_m_is_dir') else None
+                return self._m_is_dir
 
-            self._m_is_dir = (self._parent.code & 1) != 0
-            return self._m_is_dir if hasattr(self, '_m_is_dir') else None
+            self._m_is_dir = self._parent.code & 1 != 0
+            return getattr(self, '_m_is_dir', None)
 
         @property
         def is_file(self):
             if hasattr(self, '_m_is_file'):
-                return self._m_is_file if hasattr(self, '_m_is_file') else None
+                return self._m_is_file
 
-            self._m_is_file = (self._parent.code & 2) != 0
-            return self._m_is_file if hasattr(self, '_m_is_file') else None
+            self._m_is_file = self._parent.code & 2 != 0
+            return getattr(self, '_m_is_file', None)
+
+
+    class RootFolderBody(KaitaiStruct):
+        """
+        .. seealso::
+           Source - https://github.com/libyal/libfwsi/blob/main/documentation/Windows%20Shell%20Item%20format.asciidoc#32-root-folder-shell-item
+        """
+        SEQ_FIELDS = ["sort_index", "shell_folder_id"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(WindowsShellItems.RootFolderBody, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['sort_index']['start'] = self._io.pos()
+            self.sort_index = self._io.read_u1()
+            self._debug['sort_index']['end'] = self._io.pos()
+            self._debug['shell_folder_id']['start'] = self._io.pos()
+            self.shell_folder_id = self._io.read_bytes(16)
+            self._debug['shell_folder_id']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+
+
+    class ShellItem(KaitaiStruct):
+        """
+        .. seealso::
+           Section 2.2.2 - https://winprotocoldoc.blob.core.windows.net/productionwindowsarchives/MS-SHLLINK/[MS-SHLLINK].pdf
+        """
+        SEQ_FIELDS = ["len_data", "data"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(WindowsShellItems.ShellItem, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['len_data']['start'] = self._io.pos()
+            self.len_data = self._io.read_u2le()
+            self._debug['len_data']['end'] = self._io.pos()
+            if self.len_data >= 2:
+                pass
+                self._debug['data']['start'] = self._io.pos()
+                self._raw_data = self._io.read_bytes(self.len_data - 2)
+                _io__raw_data = KaitaiStream(BytesIO(self._raw_data))
+                self.data = WindowsShellItems.ShellItemData(_io__raw_data, self, self._root)
+                self.data._read()
+                self._debug['data']['end'] = self._io.pos()
+
+
+
+        def _fetch_instances(self):
+            pass
+            if self.len_data >= 2:
+                pass
+                self.data._fetch_instances()
+
+
+
+    class ShellItemData(KaitaiStruct):
+        SEQ_FIELDS = ["code", "body1", "body2"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(WindowsShellItems.ShellItemData, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['code']['start'] = self._io.pos()
+            self.code = self._io.read_u1()
+            self._debug['code']['end'] = self._io.pos()
+            self._debug['body1']['start'] = self._io.pos()
+            _on = self.code
+            if _on == 31:
+                pass
+                self.body1 = WindowsShellItems.RootFolderBody(self._io, self, self._root)
+                self.body1._read()
+            self._debug['body1']['end'] = self._io.pos()
+            self._debug['body2']['start'] = self._io.pos()
+            _on = self.code & 112
+            if _on == 32:
+                pass
+                self.body2 = WindowsShellItems.VolumeBody(self._io, self, self._root)
+                self.body2._read()
+            elif _on == 48:
+                pass
+                self.body2 = WindowsShellItems.FileEntryBody(self._io, self, self._root)
+                self.body2._read()
+            self._debug['body2']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            _on = self.code
+            if _on == 31:
+                pass
+                self.body1._fetch_instances()
+            _on = self.code & 112
+            if _on == 32:
+                pass
+                self.body2._fetch_instances()
+            elif _on == 48:
+                pass
+                self.body2._fetch_instances()
+
+
+    class VolumeBody(KaitaiStruct):
+        """
+        .. seealso::
+           Source - https://github.com/libyal/libfwsi/blob/main/documentation/Windows%20Shell%20Item%20format.asciidoc#33-volume-shell-item
+        """
+        SEQ_FIELDS = ["flags"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(WindowsShellItems.VolumeBody, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['flags']['start'] = self._io.pos()
+            self.flags = self._io.read_u1()
+            self._debug['flags']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
 
 
 

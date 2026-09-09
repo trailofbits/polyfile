@@ -1,13 +1,13 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
+# type: ignore
 
-from packaging.version import parse as parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
-    raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
+    raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class AndroidOpenglShadersCache(KaitaiStruct):
     """Android apps using directly or indirectly OpenGL cache compiled shaders
@@ -18,9 +18,9 @@ class AndroidOpenglShadersCache(KaitaiStruct):
     """
     SEQ_FIELDS = ["magic", "crc32", "contents"]
     def __init__(self, _io, _parent=None, _root=None):
-        self._io = _io
+        super(AndroidOpenglShadersCache, self).__init__(_io)
         self._parent = _parent
-        self._root = _root if _root else self
+        self._root = _root or self
         self._debug = collections.defaultdict(dict)
 
     def _read(self):
@@ -39,39 +39,27 @@ class AndroidOpenglShadersCache(KaitaiStruct):
         self.contents._read()
         self._debug['contents']['end'] = self._io.pos()
 
+
+    def _fetch_instances(self):
+        pass
+        self.contents._fetch_instances()
+
     class Alignment(KaitaiStruct):
         SEQ_FIELDS = ["alignment"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(AndroidOpenglShadersCache.Alignment, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
             self._debug['alignment']['start'] = self._io.pos()
-            self.alignment = self._io.read_bytes(((self._io.pos() + 3) & (~3 - self._io.pos())))
+            self.alignment = self._io.read_bytes(self._io.pos() + 3 & ~3 - self._io.pos())
             self._debug['alignment']['end'] = self._io.pos()
 
 
-    class PrefixedString(KaitaiStruct):
-        SEQ_FIELDS = ["len_str", "str", "alignment"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['len_str']['start'] = self._io.pos()
-            self.len_str = self._io.read_u4le()
-            self._debug['len_str']['end'] = self._io.pos()
-            self._debug['str']['start'] = self._io.pos()
-            self.str = (KaitaiStream.bytes_terminate(self._io.read_bytes(self.len_str), 0, False)).decode(u"ascii")
-            self._debug['str']['end'] = self._io.pos()
-            self._debug['alignment']['start'] = self._io.pos()
-            self.alignment = AndroidOpenglShadersCache.Alignment(self._io, self, self._root)
-            self.alignment._read()
-            self._debug['alignment']['end'] = self._io.pos()
+        def _fetch_instances(self):
+            pass
 
 
     class Cache(KaitaiStruct):
@@ -81,9 +69,9 @@ class AndroidOpenglShadersCache(KaitaiStruct):
         """
         SEQ_FIELDS = ["magic", "version", "device_version", "num_entries", "build_id", "entries"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(AndroidOpenglShadersCache.Cache, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -102,30 +90,44 @@ class AndroidOpenglShadersCache(KaitaiStruct):
             self.num_entries = self._io.read_u4le()
             self._debug['num_entries']['end'] = self._io.pos()
             if self.version >= 3:
+                pass
                 self._debug['build_id']['start'] = self._io.pos()
                 self.build_id = AndroidOpenglShadersCache.PrefixedString(self._io, self, self._root)
                 self.build_id._read()
                 self._debug['build_id']['end'] = self._io.pos()
 
             self._debug['entries']['start'] = self._io.pos()
-            self.entries = [None] * (self.num_entries)
+            self._debug['entries']['arr'] = []
+            self.entries = []
             for i in range(self.num_entries):
-                if not 'arr' in self._debug['entries']:
-                    self._debug['entries']['arr'] = []
                 self._debug['entries']['arr'].append({'start': self._io.pos()})
                 _t_entries = AndroidOpenglShadersCache.Cache.Entry(self._io, self, self._root)
-                _t_entries._read()
-                self.entries[i] = _t_entries
+                try:
+                    _t_entries._read()
+                finally:
+                    self.entries.append(_t_entries)
                 self._debug['entries']['arr'][i]['end'] = self._io.pos()
 
             self._debug['entries']['end'] = self._io.pos()
 
+
+        def _fetch_instances(self):
+            pass
+            if self.version >= 3:
+                pass
+                self.build_id._fetch_instances()
+
+            for i in range(len(self.entries)):
+                pass
+                self.entries[i]._fetch_instances()
+
+
         class Entry(KaitaiStruct):
             SEQ_FIELDS = ["len_key", "len_value", "key", "value", "alignment"]
             def __init__(self, _io, _parent=None, _root=None):
-                self._io = _io
+                super(AndroidOpenglShadersCache.Cache.Entry, self).__init__(_io)
                 self._parent = _parent
-                self._root = _root if _root else self
+                self._root = _root
                 self._debug = collections.defaultdict(dict)
 
             def _read(self):
@@ -146,6 +148,37 @@ class AndroidOpenglShadersCache(KaitaiStruct):
                 self.alignment._read()
                 self._debug['alignment']['end'] = self._io.pos()
 
+
+            def _fetch_instances(self):
+                pass
+                self.alignment._fetch_instances()
+
+
+
+    class PrefixedString(KaitaiStruct):
+        SEQ_FIELDS = ["len_str", "str", "alignment"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(AndroidOpenglShadersCache.PrefixedString, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['len_str']['start'] = self._io.pos()
+            self.len_str = self._io.read_u4le()
+            self._debug['len_str']['end'] = self._io.pos()
+            self._debug['str']['start'] = self._io.pos()
+            self.str = (KaitaiStream.bytes_terminate(self._io.read_bytes(self.len_str), 0, False)).decode(u"ASCII")
+            self._debug['str']['end'] = self._io.pos()
+            self._debug['alignment']['start'] = self._io.pos()
+            self.alignment = AndroidOpenglShadersCache.Alignment(self._io, self, self._root)
+            self.alignment._read()
+            self._debug['alignment']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            self.alignment._fetch_instances()
 
 
 

@@ -1,13 +1,13 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
+# type: ignore
 
-from packaging.version import parse as parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
-    raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
+    raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class AndroidBootldrHuawei(KaitaiStruct):
     """Format of `bootloader-*.img` files found in factory images of certain Android devices from Huawei:
@@ -39,9 +39,9 @@ class AndroidBootldrHuawei(KaitaiStruct):
     """
     SEQ_FIELDS = ["meta_header", "header_ext", "image_header"]
     def __init__(self, _io, _parent=None, _root=None):
-        self._io = _io
+        super(AndroidBootldrHuawei, self).__init__(_io)
         self._parent = _parent
-        self._root = _root if _root else self
+        self._root = _root or self
         self._debug = collections.defaultdict(dict)
 
     def _read(self):
@@ -50,7 +50,7 @@ class AndroidBootldrHuawei(KaitaiStruct):
         self.meta_header._read()
         self._debug['meta_header']['end'] = self._io.pos()
         self._debug['header_ext']['start'] = self._io.pos()
-        self.header_ext = self._io.read_bytes((self.meta_header.len_meta_header - 76))
+        self.header_ext = self._io.read_bytes(self.meta_header.len_meta_header - 76)
         self._debug['header_ext']['end'] = self._io.pos()
         self._debug['image_header']['start'] = self._io.pos()
         self._raw_image_header = self._io.read_bytes(self.meta_header.len_image_header)
@@ -59,12 +59,109 @@ class AndroidBootldrHuawei(KaitaiStruct):
         self.image_header._read()
         self._debug['image_header']['end'] = self._io.pos()
 
+
+    def _fetch_instances(self):
+        pass
+        self.meta_header._fetch_instances()
+        self.image_header._fetch_instances()
+
+    class ImageHdr(KaitaiStruct):
+        SEQ_FIELDS = ["entries"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(AndroidBootldrHuawei.ImageHdr, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['entries']['start'] = self._io.pos()
+            self._debug['entries']['arr'] = []
+            self.entries = []
+            i = 0
+            while not self._io.is_eof():
+                self._debug['entries']['arr'].append({'start': self._io.pos()})
+                _t_entries = AndroidBootldrHuawei.ImageHdrEntry(self._io, self, self._root)
+                try:
+                    _t_entries._read()
+                finally:
+                    self.entries.append(_t_entries)
+                self._debug['entries']['arr'][len(self.entries) - 1]['end'] = self._io.pos()
+                i += 1
+
+            self._debug['entries']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            for i in range(len(self.entries)):
+                pass
+                self.entries[i]._fetch_instances()
+
+
+
+    class ImageHdrEntry(KaitaiStruct):
+        SEQ_FIELDS = ["name", "ofs_body", "len_body"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(AndroidBootldrHuawei.ImageHdrEntry, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['name']['start'] = self._io.pos()
+            self.name = (KaitaiStream.bytes_terminate(self._io.read_bytes(72), 0, False)).decode(u"ASCII")
+            self._debug['name']['end'] = self._io.pos()
+            self._debug['ofs_body']['start'] = self._io.pos()
+            self.ofs_body = self._io.read_u4le()
+            self._debug['ofs_body']['end'] = self._io.pos()
+            self._debug['len_body']['start'] = self._io.pos()
+            self.len_body = self._io.read_u4le()
+            self._debug['len_body']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            _ = self.body
+            if hasattr(self, '_m_body'):
+                pass
+
+
+        @property
+        def body(self):
+            if hasattr(self, '_m_body'):
+                return self._m_body
+
+            if self.is_used:
+                pass
+                io = self._root._io
+                _pos = io.pos()
+                io.seek(self.ofs_body)
+                self._debug['_m_body']['start'] = io.pos()
+                self._m_body = io.read_bytes(self.len_body)
+                self._debug['_m_body']['end'] = io.pos()
+                io.seek(_pos)
+
+            return getattr(self, '_m_body', None)
+
+        @property
+        def is_used(self):
+            """
+            .. seealso::
+               Source - https://source.codeaurora.org/quic/la/device/qcom/common/tree/meta_image/meta_image.c?h=LA.UM.6.1.1&id=a68d284aee85#n119
+            """
+            if hasattr(self, '_m_is_used'):
+                return self._m_is_used
+
+            self._m_is_used =  ((self.ofs_body != 0) and (self.len_body != 0)) 
+            return getattr(self, '_m_is_used', None)
+
+
     class MetaHdr(KaitaiStruct):
         SEQ_FIELDS = ["magic", "version", "image_version", "len_meta_header", "len_image_header"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(AndroidBootldrHuawei.MetaHdr, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -88,12 +185,17 @@ class AndroidBootldrHuawei(KaitaiStruct):
             self._debug['len_image_header']['end'] = self._io.pos()
 
 
+        def _fetch_instances(self):
+            pass
+            self.version._fetch_instances()
+
+
     class Version(KaitaiStruct):
         SEQ_FIELDS = ["major", "minor"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(AndroidBootldrHuawei.Version, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -105,77 +207,8 @@ class AndroidBootldrHuawei(KaitaiStruct):
             self._debug['minor']['end'] = self._io.pos()
 
 
-    class ImageHdr(KaitaiStruct):
-        SEQ_FIELDS = ["entries"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['entries']['start'] = self._io.pos()
-            self.entries = []
-            i = 0
-            while not self._io.is_eof():
-                if not 'arr' in self._debug['entries']:
-                    self._debug['entries']['arr'] = []
-                self._debug['entries']['arr'].append({'start': self._io.pos()})
-                _t_entries = AndroidBootldrHuawei.ImageHdrEntry(self._io, self, self._root)
-                _t_entries._read()
-                self.entries.append(_t_entries)
-                self._debug['entries']['arr'][len(self.entries) - 1]['end'] = self._io.pos()
-                i += 1
-
-            self._debug['entries']['end'] = self._io.pos()
-
-
-    class ImageHdrEntry(KaitaiStruct):
-        SEQ_FIELDS = ["name", "ofs_body", "len_body"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['name']['start'] = self._io.pos()
-            self.name = (KaitaiStream.bytes_terminate(self._io.read_bytes(72), 0, False)).decode(u"ASCII")
-            self._debug['name']['end'] = self._io.pos()
-            self._debug['ofs_body']['start'] = self._io.pos()
-            self.ofs_body = self._io.read_u4le()
-            self._debug['ofs_body']['end'] = self._io.pos()
-            self._debug['len_body']['start'] = self._io.pos()
-            self.len_body = self._io.read_u4le()
-            self._debug['len_body']['end'] = self._io.pos()
-
-        @property
-        def is_used(self):
-            """
-            .. seealso::
-               Source - https://source.codeaurora.org/quic/la/device/qcom/common/tree/meta_image/meta_image.c?h=LA.UM.6.1.1&id=a68d284aee85#n119
-            """
-            if hasattr(self, '_m_is_used'):
-                return self._m_is_used if hasattr(self, '_m_is_used') else None
-
-            self._m_is_used =  ((self.ofs_body != 0) and (self.len_body != 0)) 
-            return self._m_is_used if hasattr(self, '_m_is_used') else None
-
-        @property
-        def body(self):
-            if hasattr(self, '_m_body'):
-                return self._m_body if hasattr(self, '_m_body') else None
-
-            if self.is_used:
-                io = self._root._io
-                _pos = io.pos()
-                io.seek(self.ofs_body)
-                self._debug['_m_body']['start'] = io.pos()
-                self._m_body = io.read_bytes(self.len_body)
-                self._debug['_m_body']['end'] = io.pos()
-                io.seek(_pos)
-
-            return self._m_body if hasattr(self, '_m_body') else None
+        def _fetch_instances(self):
+            pass
 
 
 

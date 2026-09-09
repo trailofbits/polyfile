@@ -1,13 +1,13 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
+# type: ignore
 
-from packaging.version import parse as parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
-    raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
+    raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class VlqBase128Be(KaitaiStruct):
     """A variable-length unsigned integer using base128 encoding. 1-byte groups
@@ -27,78 +27,76 @@ class VlqBase128Be(KaitaiStruct):
     """
     SEQ_FIELDS = ["groups"]
     def __init__(self, _io, _parent=None, _root=None):
-        self._io = _io
+        super(VlqBase128Be, self).__init__(_io)
         self._parent = _parent
-        self._root = _root if _root else self
+        self._root = _root or self
         self._debug = collections.defaultdict(dict)
 
     def _read(self):
         self._debug['groups']['start'] = self._io.pos()
+        self._debug['groups']['arr'] = []
         self.groups = []
         i = 0
         while True:
-            if not 'arr' in self._debug['groups']:
-                self._debug['groups']['arr'] = []
             self._debug['groups']['arr'].append({'start': self._io.pos()})
             _t_groups = VlqBase128Be.Group(self._io, self, self._root)
-            _t_groups._read()
-            _ = _t_groups
-            self.groups.append(_)
+            try:
+                _t_groups._read()
+            finally:
+                _ = _t_groups
+                self.groups.append(_)
             self._debug['groups']['arr'][len(self.groups) - 1]['end'] = self._io.pos()
-            if not (_.has_next):
+            if (not (_.has_next)):
                 break
             i += 1
         self._debug['groups']['end'] = self._io.pos()
 
+
+    def _fetch_instances(self):
+        pass
+        for i in range(len(self.groups)):
+            pass
+            self.groups[i]._fetch_instances()
+
+
     class Group(KaitaiStruct):
         """One byte group, clearly divided into 7-bit "value" chunk and 1-bit "continuation" flag.
         """
-        SEQ_FIELDS = ["b"]
+        SEQ_FIELDS = ["has_next", "value"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(VlqBase128Be.Group, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
-            self._debug['b']['start'] = self._io.pos()
-            self.b = self._io.read_u1()
-            self._debug['b']['end'] = self._io.pos()
+            self._debug['has_next']['start'] = self._io.pos()
+            self.has_next = self._io.read_bits_int_be(1) != 0
+            self._debug['has_next']['end'] = self._io.pos()
+            self._debug['value']['start'] = self._io.pos()
+            self.value = self._io.read_bits_int_be(7)
+            self._debug['value']['end'] = self._io.pos()
 
-        @property
-        def has_next(self):
-            """If true, then we have more bytes to read."""
-            if hasattr(self, '_m_has_next'):
-                return self._m_has_next if hasattr(self, '_m_has_next') else None
 
-            self._m_has_next = (self.b & 128) != 0
-            return self._m_has_next if hasattr(self, '_m_has_next') else None
-
-        @property
-        def value(self):
-            """The 7-bit (base128) numeric value chunk of this group."""
-            if hasattr(self, '_m_value'):
-                return self._m_value if hasattr(self, '_m_value') else None
-
-            self._m_value = (self.b & 127)
-            return self._m_value if hasattr(self, '_m_value') else None
+        def _fetch_instances(self):
+            pass
 
 
     @property
     def last(self):
         if hasattr(self, '_m_last'):
-            return self._m_last if hasattr(self, '_m_last') else None
+            return self._m_last
 
-        self._m_last = (len(self.groups) - 1)
-        return self._m_last if hasattr(self, '_m_last') else None
+        self._m_last = len(self.groups) - 1
+        return getattr(self, '_m_last', None)
 
     @property
     def value(self):
         """Resulting value as normal integer."""
         if hasattr(self, '_m_value'):
-            return self._m_value if hasattr(self, '_m_value') else None
+            return self._m_value
 
-        self._m_value = (((((((self.groups[self.last].value + ((self.groups[(self.last - 1)].value << 7) if self.last >= 1 else 0)) + ((self.groups[(self.last - 2)].value << 14) if self.last >= 2 else 0)) + ((self.groups[(self.last - 3)].value << 21) if self.last >= 3 else 0)) + ((self.groups[(self.last - 4)].value << 28) if self.last >= 4 else 0)) + ((self.groups[(self.last - 5)].value << 35) if self.last >= 5 else 0)) + ((self.groups[(self.last - 6)].value << 42) if self.last >= 6 else 0)) + ((self.groups[(self.last - 7)].value << 49) if self.last >= 7 else 0))
-        return self._m_value if hasattr(self, '_m_value') else None
+        self._m_value = (((((((self.groups[self.last].value + (self.groups[self.last - 1].value << 7 if self.last >= 1 else 0)) + (self.groups[self.last - 2].value << 14 if self.last >= 2 else 0)) + (self.groups[self.last - 3].value << 21 if self.last >= 3 else 0)) + (self.groups[self.last - 4].value << 28 if self.last >= 4 else 0)) + (self.groups[self.last - 5].value << 35 if self.last >= 5 else 0)) + (self.groups[self.last - 6].value << 42 if self.last >= 6 else 0)) + (self.groups[self.last - 7].value << 49 if self.last >= 7 else 0))
+        return getattr(self, '_m_value', None)
 
 

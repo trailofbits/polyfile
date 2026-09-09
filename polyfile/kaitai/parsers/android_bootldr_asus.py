@@ -1,13 +1,13 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
+# type: ignore
 
-from packaging.version import parse as parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
-    raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
+    raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class AndroidBootldrAsus(KaitaiStruct):
     """A bootloader image which only seems to have been used on a few ASUS
@@ -22,9 +22,9 @@ class AndroidBootldrAsus(KaitaiStruct):
     """
     SEQ_FIELDS = ["magic", "revision", "reserved1", "reserved2", "images"]
     def __init__(self, _io, _parent=None, _root=None):
-        self._io = _io
+        super(AndroidBootldrAsus, self).__init__(_io)
         self._parent = _parent
-        self._root = _root if _root else self
+        self._root = _root or self
         self._debug = collections.defaultdict(dict)
 
     def _read(self):
@@ -45,24 +45,33 @@ class AndroidBootldrAsus(KaitaiStruct):
         self.reserved2 = self._io.read_u4le()
         self._debug['reserved2']['end'] = self._io.pos()
         self._debug['images']['start'] = self._io.pos()
-        self.images = [None] * (3)
+        self._debug['images']['arr'] = []
+        self.images = []
         for i in range(3):
-            if not 'arr' in self._debug['images']:
-                self._debug['images']['arr'] = []
             self._debug['images']['arr'].append({'start': self._io.pos()})
             _t_images = AndroidBootldrAsus.Image(self._io, self, self._root)
-            _t_images._read()
-            self.images[i] = _t_images
+            try:
+                _t_images._read()
+            finally:
+                self.images.append(_t_images)
             self._debug['images']['arr'][i]['end'] = self._io.pos()
 
         self._debug['images']['end'] = self._io.pos()
 
+
+    def _fetch_instances(self):
+        pass
+        for i in range(len(self.images)):
+            pass
+            self.images[i]._fetch_instances()
+
+
     class Image(KaitaiStruct):
         SEQ_FIELDS = ["chunk_id", "len_body", "flags", "reserved1", "reserved2", "reserved3", "body"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(AndroidBootldrAsus.Image, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -78,7 +87,7 @@ class AndroidBootldrAsus(KaitaiStruct):
             self.flags = self._io.read_u1()
             self._debug['flags']['end'] = self._io.pos()
             _ = self.flags
-            if not (_ & 1) != 0:
+            if not _ & 1 != 0:
                 raise kaitaistruct.ValidationExprError(self.flags, self._io, u"/types/image/seq/2")
             self._debug['reserved1']['start'] = self._io.pos()
             self.reserved1 = self._io.read_u1()
@@ -93,13 +102,17 @@ class AndroidBootldrAsus(KaitaiStruct):
             self.body = self._io.read_bytes(self.len_body)
             self._debug['body']['end'] = self._io.pos()
 
+
+        def _fetch_instances(self):
+            pass
+
         @property
         def file_name(self):
             if hasattr(self, '_m_file_name'):
-                return self._m_file_name if hasattr(self, '_m_file_name') else None
+                return self._m_file_name
 
             self._m_file_name = (u"ifwi.bin" if self.chunk_id == u"IFWI!!!!" else (u"droidboot.img" if self.chunk_id == u"DROIDBT!" else (u"splashscreen.img" if self.chunk_id == u"SPLASHS!" else u"")))
-            return self._m_file_name if hasattr(self, '_m_file_name') else None
+            return getattr(self, '_m_file_name', None)
 
 
 

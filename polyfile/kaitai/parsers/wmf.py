@@ -1,14 +1,14 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
+# type: ignore
 
-from packaging.version import parse as parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
-from enum import Enum
+from enum import IntEnum
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
-    raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
+    raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class Wmf(KaitaiStruct):
     """WMF (Windows Metafile) is a relatively early vector image format
@@ -23,7 +23,25 @@ class Wmf(KaitaiStruct):
        Source - https://www.loc.gov/preservation/digital/formats/digformatspecs/WindowsMetafileFormat(wmf)Specification.pdf
     """
 
-    class Func(Enum):
+    class BinRasterOp(IntEnum):
+        black = 1
+        notmergepen = 2
+        masknotpen = 3
+        notcopypen = 4
+        maskpennot = 5
+        not = 6
+        xorpen = 7
+        notmaskpen = 8
+        maskpen = 9
+        notxorpen = 10
+        nop = 11
+        mergenotpen = 12
+        copypen = 13
+        mergepennot = 14
+        mergepen = 15
+        white = 16
+
+    class Func(IntEnum):
         eof = 0
         savedc = 30
         realizepalette = 53
@@ -95,36 +113,18 @@ class Wmf(KaitaiStruct):
         setdibtodev = 3379
         stretchdib = 3907
 
-    class BinRasterOp(Enum):
-        black = 1
-        notmergepen = 2
-        masknotpen = 3
-        notcopypen = 4
-        maskpennot = 5
-        not = 6
-        xorpen = 7
-        notmaskpen = 8
-        maskpen = 9
-        notxorpen = 10
-        nop = 11
-        mergenotpen = 12
-        copypen = 13
-        mergepennot = 14
-        mergepen = 15
-        white = 16
-
-    class MixMode(Enum):
+    class MixMode(IntEnum):
         transparent = 1
         opaque = 2
 
-    class PolyFillMode(Enum):
+    class PolyFillMode(IntEnum):
         alternate = 1
         winding = 2
     SEQ_FIELDS = ["special_header", "header", "records"]
     def __init__(self, _io, _parent=None, _root=None):
-        self._io = _io
+        super(Wmf, self).__init__(_io)
         self._parent = _parent
-        self._root = _root if _root else self
+        self._root = _root or self
         self._debug = collections.defaultdict(dict)
 
     def _read(self):
@@ -137,143 +137,74 @@ class Wmf(KaitaiStruct):
         self.header._read()
         self._debug['header']['end'] = self._io.pos()
         self._debug['records']['start'] = self._io.pos()
+        self._debug['records']['arr'] = []
         self.records = []
         i = 0
         while True:
-            if not 'arr' in self._debug['records']:
-                self._debug['records']['arr'] = []
             self._debug['records']['arr'].append({'start': self._io.pos()})
             _t_records = Wmf.Record(self._io, self, self._root)
-            _t_records._read()
-            _ = _t_records
-            self.records.append(_)
+            try:
+                _t_records._read()
+            finally:
+                _ = _t_records
+                self.records.append(_)
             self._debug['records']['arr'][len(self.records) - 1]['end'] = self._io.pos()
             if _.function == Wmf.Func.eof:
                 break
             i += 1
         self._debug['records']['end'] = self._io.pos()
 
-    class ParamsSetwindoworg(KaitaiStruct):
+
+    def _fetch_instances(self):
+        pass
+        self.special_header._fetch_instances()
+        self.header._fetch_instances()
+        for i in range(len(self.records)):
+            pass
+            self.records[i]._fetch_instances()
+
+
+    class ColorRef(KaitaiStruct):
         """
         .. seealso::
-           section 2.3.5.31
+           section 2.2.1.7
         """
-        SEQ_FIELDS = ["y", "x"]
+        SEQ_FIELDS = ["red", "green", "blue", "reserved"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Wmf.ColorRef, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
-            self._debug['y']['start'] = self._io.pos()
-            self.y = self._io.read_s2le()
-            self._debug['y']['end'] = self._io.pos()
-            self._debug['x']['start'] = self._io.pos()
-            self.x = self._io.read_s2le()
-            self._debug['x']['end'] = self._io.pos()
+            self._debug['red']['start'] = self._io.pos()
+            self.red = self._io.read_u1()
+            self._debug['red']['end'] = self._io.pos()
+            self._debug['green']['start'] = self._io.pos()
+            self.green = self._io.read_u1()
+            self._debug['green']['end'] = self._io.pos()
+            self._debug['blue']['start'] = self._io.pos()
+            self.blue = self._io.read_u1()
+            self._debug['blue']['end'] = self._io.pos()
+            self._debug['reserved']['start'] = self._io.pos()
+            self.reserved = self._io.read_u1()
+            self._debug['reserved']['end'] = self._io.pos()
 
 
-    class ParamsSetbkmode(KaitaiStruct):
-        """
-        .. seealso::
-           section 2.3.5.15
-        """
-        SEQ_FIELDS = ["bk_mode"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['bk_mode']['start'] = self._io.pos()
-            self.bk_mode = KaitaiStream.resolve_enum(Wmf.MixMode, self._io.read_u2le())
-            self._debug['bk_mode']['end'] = self._io.pos()
-
-
-    class PointS(KaitaiStruct):
-        """
-        .. seealso::
-           section 2.2.1.12
-        """
-        SEQ_FIELDS = ["x", "y"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['x']['start'] = self._io.pos()
-            self.x = self._io.read_s2le()
-            self._debug['x']['end'] = self._io.pos()
-            self._debug['y']['start'] = self._io.pos()
-            self.y = self._io.read_s2le()
-            self._debug['y']['end'] = self._io.pos()
-
-
-    class ParamsSetwindowext(KaitaiStruct):
-        """
-        .. seealso::
-           section 2.3.5.30
-        """
-        SEQ_FIELDS = ["y", "x"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['y']['start'] = self._io.pos()
-            self.y = self._io.read_s2le()
-            self._debug['y']['end'] = self._io.pos()
-            self._debug['x']['start'] = self._io.pos()
-            self.x = self._io.read_s2le()
-            self._debug['x']['end'] = self._io.pos()
-
-
-    class ParamsPolygon(KaitaiStruct):
-        """
-        .. seealso::
-           section 2.3.3.15 = params_polyline
-        """
-        SEQ_FIELDS = ["num_points", "points"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['num_points']['start'] = self._io.pos()
-            self.num_points = self._io.read_s2le()
-            self._debug['num_points']['end'] = self._io.pos()
-            self._debug['points']['start'] = self._io.pos()
-            self.points = [None] * (self.num_points)
-            for i in range(self.num_points):
-                if not 'arr' in self._debug['points']:
-                    self._debug['points']['arr'] = []
-                self._debug['points']['arr'].append({'start': self._io.pos()})
-                _t_points = Wmf.PointS(self._io, self, self._root)
-                _t_points._read()
-                self.points[i] = _t_points
-                self._debug['points']['arr'][i]['end'] = self._io.pos()
-
-            self._debug['points']['end'] = self._io.pos()
+        def _fetch_instances(self):
+            pass
 
 
     class Header(KaitaiStruct):
 
-        class MetafileType(Enum):
+        class MetafileType(IntEnum):
             memory_metafile = 1
             disk_metafile = 2
         SEQ_FIELDS = ["metafile_type", "header_size", "version", "size", "number_of_objects", "max_record", "number_of_members"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Wmf.Header, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -300,67 +231,47 @@ class Wmf(KaitaiStruct):
             self._debug['number_of_members']['end'] = self._io.pos()
 
 
-    class ColorRef(KaitaiStruct):
+        def _fetch_instances(self):
+            pass
+
+
+    class ParamsPolygon(KaitaiStruct):
         """
         .. seealso::
-           section 2.2.1.7
+           section 2.3.3.15 = params_polyline
         """
-        SEQ_FIELDS = ["red", "green", "blue", "reserved"]
+        SEQ_FIELDS = ["num_points", "points"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Wmf.ParamsPolygon, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
-            self._debug['red']['start'] = self._io.pos()
-            self.red = self._io.read_u1()
-            self._debug['red']['end'] = self._io.pos()
-            self._debug['green']['start'] = self._io.pos()
-            self.green = self._io.read_u1()
-            self._debug['green']['end'] = self._io.pos()
-            self._debug['blue']['start'] = self._io.pos()
-            self.blue = self._io.read_u1()
-            self._debug['blue']['end'] = self._io.pos()
-            self._debug['reserved']['start'] = self._io.pos()
-            self.reserved = self._io.read_u1()
-            self._debug['reserved']['end'] = self._io.pos()
+            self._debug['num_points']['start'] = self._io.pos()
+            self.num_points = self._io.read_s2le()
+            self._debug['num_points']['end'] = self._io.pos()
+            self._debug['points']['start'] = self._io.pos()
+            self._debug['points']['arr'] = []
+            self.points = []
+            for i in range(self.num_points):
+                self._debug['points']['arr'].append({'start': self._io.pos()})
+                _t_points = Wmf.PointS(self._io, self, self._root)
+                try:
+                    _t_points._read()
+                finally:
+                    self.points.append(_t_points)
+                self._debug['points']['arr'][i]['end'] = self._io.pos()
+
+            self._debug['points']['end'] = self._io.pos()
 
 
-    class ParamsSetrop2(KaitaiStruct):
-        """
-        .. seealso::
-           section 2.3.5.22
-        """
-        SEQ_FIELDS = ["draw_mode"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
+        def _fetch_instances(self):
+            pass
+            for i in range(len(self.points)):
+                pass
+                self.points[i]._fetch_instances()
 
-        def _read(self):
-            self._debug['draw_mode']['start'] = self._io.pos()
-            self.draw_mode = KaitaiStream.resolve_enum(Wmf.BinRasterOp, self._io.read_u2le())
-            self._debug['draw_mode']['end'] = self._io.pos()
-
-
-    class ParamsSetpolyfillmode(KaitaiStruct):
-        """
-        .. seealso::
-           section 2.3.5.20
-        """
-        SEQ_FIELDS = ["poly_fill_mode"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['poly_fill_mode']['start'] = self._io.pos()
-            self.poly_fill_mode = KaitaiStream.resolve_enum(Wmf.PolyFillMode, self._io.read_u2le())
-            self._debug['poly_fill_mode']['end'] = self._io.pos()
 
 
     class ParamsPolyline(KaitaiStruct):
@@ -370,9 +281,9 @@ class Wmf(KaitaiStruct):
         """
         SEQ_FIELDS = ["num_points", "points"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Wmf.ParamsPolyline, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -380,25 +291,277 @@ class Wmf(KaitaiStruct):
             self.num_points = self._io.read_s2le()
             self._debug['num_points']['end'] = self._io.pos()
             self._debug['points']['start'] = self._io.pos()
-            self.points = [None] * (self.num_points)
+            self._debug['points']['arr'] = []
+            self.points = []
             for i in range(self.num_points):
-                if not 'arr' in self._debug['points']:
-                    self._debug['points']['arr'] = []
                 self._debug['points']['arr'].append({'start': self._io.pos()})
                 _t_points = Wmf.PointS(self._io, self, self._root)
-                _t_points._read()
-                self.points[i] = _t_points
+                try:
+                    _t_points._read()
+                finally:
+                    self.points.append(_t_points)
                 self._debug['points']['arr'][i]['end'] = self._io.pos()
 
             self._debug['points']['end'] = self._io.pos()
 
 
+        def _fetch_instances(self):
+            pass
+            for i in range(len(self.points)):
+                pass
+                self.points[i]._fetch_instances()
+
+
+
+    class ParamsSetbkmode(KaitaiStruct):
+        """
+        .. seealso::
+           section 2.3.5.15
+        """
+        SEQ_FIELDS = ["bk_mode"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Wmf.ParamsSetbkmode, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['bk_mode']['start'] = self._io.pos()
+            self.bk_mode = KaitaiStream.resolve_enum(Wmf.MixMode, self._io.read_u2le())
+            self._debug['bk_mode']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+
+
+    class ParamsSetpolyfillmode(KaitaiStruct):
+        """
+        .. seealso::
+           section 2.3.5.20
+        """
+        SEQ_FIELDS = ["poly_fill_mode"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Wmf.ParamsSetpolyfillmode, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['poly_fill_mode']['start'] = self._io.pos()
+            self.poly_fill_mode = KaitaiStream.resolve_enum(Wmf.PolyFillMode, self._io.read_u2le())
+            self._debug['poly_fill_mode']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+
+
+    class ParamsSetrop2(KaitaiStruct):
+        """
+        .. seealso::
+           section 2.3.5.22
+        """
+        SEQ_FIELDS = ["draw_mode"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Wmf.ParamsSetrop2, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['draw_mode']['start'] = self._io.pos()
+            self.draw_mode = KaitaiStream.resolve_enum(Wmf.BinRasterOp, self._io.read_u2le())
+            self._debug['draw_mode']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+
+
+    class ParamsSetwindowext(KaitaiStruct):
+        """
+        .. seealso::
+           section 2.3.5.30
+        """
+        SEQ_FIELDS = ["y", "x"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Wmf.ParamsSetwindowext, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['y']['start'] = self._io.pos()
+            self.y = self._io.read_s2le()
+            self._debug['y']['end'] = self._io.pos()
+            self._debug['x']['start'] = self._io.pos()
+            self.x = self._io.read_s2le()
+            self._debug['x']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+
+
+    class ParamsSetwindoworg(KaitaiStruct):
+        """
+        .. seealso::
+           section 2.3.5.31
+        """
+        SEQ_FIELDS = ["y", "x"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Wmf.ParamsSetwindoworg, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['y']['start'] = self._io.pos()
+            self.y = self._io.read_s2le()
+            self._debug['y']['end'] = self._io.pos()
+            self._debug['x']['start'] = self._io.pos()
+            self.x = self._io.read_s2le()
+            self._debug['x']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+
+
+    class PointS(KaitaiStruct):
+        """
+        .. seealso::
+           section 2.2.1.12
+        """
+        SEQ_FIELDS = ["x", "y"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Wmf.PointS, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['x']['start'] = self._io.pos()
+            self.x = self._io.read_s2le()
+            self._debug['x']['end'] = self._io.pos()
+            self._debug['y']['start'] = self._io.pos()
+            self.y = self._io.read_s2le()
+            self._debug['y']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+
+
+    class Record(KaitaiStruct):
+        SEQ_FIELDS = ["size", "function", "params"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Wmf.Record, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['size']['start'] = self._io.pos()
+            self.size = self._io.read_u4le()
+            self._debug['size']['end'] = self._io.pos()
+            self._debug['function']['start'] = self._io.pos()
+            self.function = KaitaiStream.resolve_enum(Wmf.Func, self._io.read_u2le())
+            self._debug['function']['end'] = self._io.pos()
+            self._debug['params']['start'] = self._io.pos()
+            _on = self.function
+            if _on == Wmf.Func.polygon:
+                pass
+                self._raw_params = self._io.read_bytes((self.size - 3) * 2)
+                _io__raw_params = KaitaiStream(BytesIO(self._raw_params))
+                self.params = Wmf.ParamsPolygon(_io__raw_params, self, self._root)
+                self.params._read()
+            elif _on == Wmf.Func.polyline:
+                pass
+                self._raw_params = self._io.read_bytes((self.size - 3) * 2)
+                _io__raw_params = KaitaiStream(BytesIO(self._raw_params))
+                self.params = Wmf.ParamsPolyline(_io__raw_params, self, self._root)
+                self.params._read()
+            elif _on == Wmf.Func.setbkcolor:
+                pass
+                self._raw_params = self._io.read_bytes((self.size - 3) * 2)
+                _io__raw_params = KaitaiStream(BytesIO(self._raw_params))
+                self.params = Wmf.ColorRef(_io__raw_params, self, self._root)
+                self.params._read()
+            elif _on == Wmf.Func.setbkmode:
+                pass
+                self._raw_params = self._io.read_bytes((self.size - 3) * 2)
+                _io__raw_params = KaitaiStream(BytesIO(self._raw_params))
+                self.params = Wmf.ParamsSetbkmode(_io__raw_params, self, self._root)
+                self.params._read()
+            elif _on == Wmf.Func.setpolyfillmode:
+                pass
+                self._raw_params = self._io.read_bytes((self.size - 3) * 2)
+                _io__raw_params = KaitaiStream(BytesIO(self._raw_params))
+                self.params = Wmf.ParamsSetpolyfillmode(_io__raw_params, self, self._root)
+                self.params._read()
+            elif _on == Wmf.Func.setrop2:
+                pass
+                self._raw_params = self._io.read_bytes((self.size - 3) * 2)
+                _io__raw_params = KaitaiStream(BytesIO(self._raw_params))
+                self.params = Wmf.ParamsSetrop2(_io__raw_params, self, self._root)
+                self.params._read()
+            elif _on == Wmf.Func.setwindowext:
+                pass
+                self._raw_params = self._io.read_bytes((self.size - 3) * 2)
+                _io__raw_params = KaitaiStream(BytesIO(self._raw_params))
+                self.params = Wmf.ParamsSetwindowext(_io__raw_params, self, self._root)
+                self.params._read()
+            elif _on == Wmf.Func.setwindoworg:
+                pass
+                self._raw_params = self._io.read_bytes((self.size - 3) * 2)
+                _io__raw_params = KaitaiStream(BytesIO(self._raw_params))
+                self.params = Wmf.ParamsSetwindoworg(_io__raw_params, self, self._root)
+                self.params._read()
+            else:
+                pass
+                self.params = self._io.read_bytes((self.size - 3) * 2)
+            self._debug['params']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            _on = self.function
+            if _on == Wmf.Func.polygon:
+                pass
+                self.params._fetch_instances()
+            elif _on == Wmf.Func.polyline:
+                pass
+                self.params._fetch_instances()
+            elif _on == Wmf.Func.setbkcolor:
+                pass
+                self.params._fetch_instances()
+            elif _on == Wmf.Func.setbkmode:
+                pass
+                self.params._fetch_instances()
+            elif _on == Wmf.Func.setpolyfillmode:
+                pass
+                self.params._fetch_instances()
+            elif _on == Wmf.Func.setrop2:
+                pass
+                self.params._fetch_instances()
+            elif _on == Wmf.Func.setwindowext:
+                pass
+                self.params._fetch_instances()
+            elif _on == Wmf.Func.setwindoworg:
+                pass
+                self.params._fetch_instances()
+            else:
+                pass
+
+
     class SpecialHeader(KaitaiStruct):
         SEQ_FIELDS = ["magic", "handle", "left", "top", "right", "bottom", "inch", "reserved", "checksum"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Wmf.SpecialHeader, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -437,66 +600,8 @@ class Wmf(KaitaiStruct):
             self._debug['checksum']['end'] = self._io.pos()
 
 
-    class Record(KaitaiStruct):
-        SEQ_FIELDS = ["size", "function", "params"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['size']['start'] = self._io.pos()
-            self.size = self._io.read_u4le()
-            self._debug['size']['end'] = self._io.pos()
-            self._debug['function']['start'] = self._io.pos()
-            self.function = KaitaiStream.resolve_enum(Wmf.Func, self._io.read_u2le())
-            self._debug['function']['end'] = self._io.pos()
-            self._debug['params']['start'] = self._io.pos()
-            _on = self.function
-            if _on == Wmf.Func.setbkmode:
-                self._raw_params = self._io.read_bytes(((self.size - 3) * 2))
-                _io__raw_params = KaitaiStream(BytesIO(self._raw_params))
-                self.params = Wmf.ParamsSetbkmode(_io__raw_params, self, self._root)
-                self.params._read()
-            elif _on == Wmf.Func.polygon:
-                self._raw_params = self._io.read_bytes(((self.size - 3) * 2))
-                _io__raw_params = KaitaiStream(BytesIO(self._raw_params))
-                self.params = Wmf.ParamsPolygon(_io__raw_params, self, self._root)
-                self.params._read()
-            elif _on == Wmf.Func.setbkcolor:
-                self._raw_params = self._io.read_bytes(((self.size - 3) * 2))
-                _io__raw_params = KaitaiStream(BytesIO(self._raw_params))
-                self.params = Wmf.ColorRef(_io__raw_params, self, self._root)
-                self.params._read()
-            elif _on == Wmf.Func.setpolyfillmode:
-                self._raw_params = self._io.read_bytes(((self.size - 3) * 2))
-                _io__raw_params = KaitaiStream(BytesIO(self._raw_params))
-                self.params = Wmf.ParamsSetpolyfillmode(_io__raw_params, self, self._root)
-                self.params._read()
-            elif _on == Wmf.Func.setwindoworg:
-                self._raw_params = self._io.read_bytes(((self.size - 3) * 2))
-                _io__raw_params = KaitaiStream(BytesIO(self._raw_params))
-                self.params = Wmf.ParamsSetwindoworg(_io__raw_params, self, self._root)
-                self.params._read()
-            elif _on == Wmf.Func.setrop2:
-                self._raw_params = self._io.read_bytes(((self.size - 3) * 2))
-                _io__raw_params = KaitaiStream(BytesIO(self._raw_params))
-                self.params = Wmf.ParamsSetrop2(_io__raw_params, self, self._root)
-                self.params._read()
-            elif _on == Wmf.Func.setwindowext:
-                self._raw_params = self._io.read_bytes(((self.size - 3) * 2))
-                _io__raw_params = KaitaiStream(BytesIO(self._raw_params))
-                self.params = Wmf.ParamsSetwindowext(_io__raw_params, self, self._root)
-                self.params._read()
-            elif _on == Wmf.Func.polyline:
-                self._raw_params = self._io.read_bytes(((self.size - 3) * 2))
-                _io__raw_params = KaitaiStream(BytesIO(self._raw_params))
-                self.params = Wmf.ParamsPolyline(_io__raw_params, self, self._root)
-                self.params._read()
-            else:
-                self.params = self._io.read_bytes(((self.size - 3) * 2))
-            self._debug['params']['end'] = self._io.pos()
+        def _fetch_instances(self):
+            pass
 
 
 

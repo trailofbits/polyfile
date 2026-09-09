@@ -1,14 +1,14 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
+# type: ignore
 
-from packaging.version import parse as parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
-from enum import Enum
+from enum import IntEnum
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
-    raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
+    raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class MicrosoftPe(KaitaiStruct):
     """
@@ -16,15 +16,15 @@ class MicrosoftPe(KaitaiStruct):
        Source - https://learn.microsoft.com/en-us/windows/win32/debug/pe-format
     """
 
-    class PeFormat(Enum):
+    class PeFormat(IntEnum):
         rom_image = 263
         pe32 = 267
         pe32_plus = 523
     SEQ_FIELDS = ["mz"]
     def __init__(self, _io, _parent=None, _root=None):
-        self._io = _io
+        super(MicrosoftPe, self).__init__(_io)
         self._parent = _parent
-        self._root = _root if _root else self
+        self._root = _root or self
         self._debug = collections.defaultdict(dict)
 
     def _read(self):
@@ -33,26 +33,135 @@ class MicrosoftPe(KaitaiStruct):
         self.mz._read()
         self._debug['mz']['end'] = self._io.pos()
 
+
+    def _fetch_instances(self):
+        pass
+        self.mz._fetch_instances()
+        _ = self.pe
+        if hasattr(self, '_m_pe'):
+            pass
+            self._m_pe._fetch_instances()
+
+
+    class Annoyingstring(KaitaiStruct):
+        SEQ_FIELDS = []
+        def __init__(self, _io, _parent=None, _root=None):
+            super(MicrosoftPe.Annoyingstring, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            pass
+
+
+        def _fetch_instances(self):
+            pass
+            _ = self.name_from_offset
+            if hasattr(self, '_m_name_from_offset'):
+                pass
+
+            _ = self.name_from_short
+            if hasattr(self, '_m_name_from_short'):
+                pass
+
+            _ = self.name_offset
+            if hasattr(self, '_m_name_offset'):
+                pass
+
+            _ = self.name_zeroes
+            if hasattr(self, '_m_name_zeroes'):
+                pass
+
+
+        @property
+        def name(self):
+            if hasattr(self, '_m_name'):
+                return self._m_name
+
+            self._m_name = (self.name_from_offset if self.name_zeroes == 0 else self.name_from_short)
+            return getattr(self, '_m_name', None)
+
+        @property
+        def name_from_offset(self):
+            if hasattr(self, '_m_name_from_offset'):
+                return self._m_name_from_offset
+
+            if self.name_zeroes == 0:
+                pass
+                io = self._root._io
+                _pos = io.pos()
+                io.seek((self._parent._parent.symbol_name_table_offset + self.name_offset if self.name_zeroes == 0 else 0))
+                self._debug['_m_name_from_offset']['start'] = io.pos()
+                self._m_name_from_offset = (io.read_bytes_term(0, False, True, False)).decode(u"ASCII")
+                self._debug['_m_name_from_offset']['end'] = io.pos()
+                io.seek(_pos)
+
+            return getattr(self, '_m_name_from_offset', None)
+
+        @property
+        def name_from_short(self):
+            if hasattr(self, '_m_name_from_short'):
+                return self._m_name_from_short
+
+            if self.name_zeroes != 0:
+                pass
+                _pos = self._io.pos()
+                self._io.seek(0)
+                self._debug['_m_name_from_short']['start'] = self._io.pos()
+                self._m_name_from_short = (self._io.read_bytes_term(0, False, True, False)).decode(u"ASCII")
+                self._debug['_m_name_from_short']['end'] = self._io.pos()
+                self._io.seek(_pos)
+
+            return getattr(self, '_m_name_from_short', None)
+
+        @property
+        def name_offset(self):
+            if hasattr(self, '_m_name_offset'):
+                return self._m_name_offset
+
+            _pos = self._io.pos()
+            self._io.seek(4)
+            self._debug['_m_name_offset']['start'] = self._io.pos()
+            self._m_name_offset = self._io.read_u4le()
+            self._debug['_m_name_offset']['end'] = self._io.pos()
+            self._io.seek(_pos)
+            return getattr(self, '_m_name_offset', None)
+
+        @property
+        def name_zeroes(self):
+            if hasattr(self, '_m_name_zeroes'):
+                return self._m_name_zeroes
+
+            _pos = self._io.pos()
+            self._io.seek(0)
+            self._debug['_m_name_zeroes']['start'] = self._io.pos()
+            self._m_name_zeroes = self._io.read_u4le()
+            self._debug['_m_name_zeroes']['end'] = self._io.pos()
+            self._io.seek(_pos)
+            return getattr(self, '_m_name_zeroes', None)
+
+
     class CertificateEntry(KaitaiStruct):
         """
         .. seealso::
            Source - https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#the-attribute-certificate-table-image-only
         """
 
-        class CertificateRevision(Enum):
+        class CertificateRevision(IntEnum):
             revision_1_0 = 256
             revision_2_0 = 512
 
-        class CertificateTypeEnum(Enum):
+        class CertificateTypeEnum(IntEnum):
             x509 = 1
             pkcs_signed_data = 2
             reserved_1 = 3
             ts_stack_signed = 4
         SEQ_FIELDS = ["length", "revision", "certificate_type", "certificate_bytes"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(MicrosoftPe.CertificateEntry, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -66,139 +175,328 @@ class MicrosoftPe(KaitaiStruct):
             self.certificate_type = KaitaiStream.resolve_enum(MicrosoftPe.CertificateEntry.CertificateTypeEnum, self._io.read_u2le())
             self._debug['certificate_type']['end'] = self._io.pos()
             self._debug['certificate_bytes']['start'] = self._io.pos()
-            self.certificate_bytes = self._io.read_bytes((self.length - 8))
+            self.certificate_bytes = self._io.read_bytes(self.length - 8)
             self._debug['certificate_bytes']['end'] = self._io.pos()
 
 
-    class OptionalHeaderWindows(KaitaiStruct):
+        def _fetch_instances(self):
+            pass
 
-        class SubsystemEnum(Enum):
-            unknown = 0
-            native = 1
-            windows_gui = 2
-            windows_cui = 3
-            posix_cui = 7
-            windows_ce_gui = 9
-            efi_application = 10
-            efi_boot_service_driver = 11
-            efi_runtime_driver = 12
-            efi_rom = 13
-            xbox = 14
-            windows_boot_application = 16
-        SEQ_FIELDS = ["image_base_32", "image_base_64", "section_alignment", "file_alignment", "major_operating_system_version", "minor_operating_system_version", "major_image_version", "minor_image_version", "major_subsystem_version", "minor_subsystem_version", "win32_version_value", "size_of_image", "size_of_headers", "check_sum", "subsystem", "dll_characteristics", "size_of_stack_reserve_32", "size_of_stack_reserve_64", "size_of_stack_commit_32", "size_of_stack_commit_64", "size_of_heap_reserve_32", "size_of_heap_reserve_64", "size_of_heap_commit_32", "size_of_heap_commit_64", "loader_flags", "number_of_rva_and_sizes"]
+
+    class CertificateTable(KaitaiStruct):
+        SEQ_FIELDS = ["items"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(MicrosoftPe.CertificateTable, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
-            if self._parent.std.format == MicrosoftPe.PeFormat.pe32:
-                self._debug['image_base_32']['start'] = self._io.pos()
-                self.image_base_32 = self._io.read_u4le()
-                self._debug['image_base_32']['end'] = self._io.pos()
+            self._debug['items']['start'] = self._io.pos()
+            self._debug['items']['arr'] = []
+            self.items = []
+            i = 0
+            while not self._io.is_eof():
+                self._debug['items']['arr'].append({'start': self._io.pos()})
+                _t_items = MicrosoftPe.CertificateEntry(self._io, self, self._root)
+                try:
+                    _t_items._read()
+                finally:
+                    self.items.append(_t_items)
+                self._debug['items']['arr'][len(self.items) - 1]['end'] = self._io.pos()
+                i += 1
 
-            if self._parent.std.format == MicrosoftPe.PeFormat.pe32_plus:
-                self._debug['image_base_64']['start'] = self._io.pos()
-                self.image_base_64 = self._io.read_u8le()
-                self._debug['image_base_64']['end'] = self._io.pos()
+            self._debug['items']['end'] = self._io.pos()
 
-            self._debug['section_alignment']['start'] = self._io.pos()
-            self.section_alignment = self._io.read_u4le()
-            self._debug['section_alignment']['end'] = self._io.pos()
-            self._debug['file_alignment']['start'] = self._io.pos()
-            self.file_alignment = self._io.read_u4le()
-            self._debug['file_alignment']['end'] = self._io.pos()
-            self._debug['major_operating_system_version']['start'] = self._io.pos()
-            self.major_operating_system_version = self._io.read_u2le()
-            self._debug['major_operating_system_version']['end'] = self._io.pos()
-            self._debug['minor_operating_system_version']['start'] = self._io.pos()
-            self.minor_operating_system_version = self._io.read_u2le()
-            self._debug['minor_operating_system_version']['end'] = self._io.pos()
-            self._debug['major_image_version']['start'] = self._io.pos()
-            self.major_image_version = self._io.read_u2le()
-            self._debug['major_image_version']['end'] = self._io.pos()
-            self._debug['minor_image_version']['start'] = self._io.pos()
-            self.minor_image_version = self._io.read_u2le()
-            self._debug['minor_image_version']['end'] = self._io.pos()
-            self._debug['major_subsystem_version']['start'] = self._io.pos()
-            self.major_subsystem_version = self._io.read_u2le()
-            self._debug['major_subsystem_version']['end'] = self._io.pos()
-            self._debug['minor_subsystem_version']['start'] = self._io.pos()
-            self.minor_subsystem_version = self._io.read_u2le()
-            self._debug['minor_subsystem_version']['end'] = self._io.pos()
-            self._debug['win32_version_value']['start'] = self._io.pos()
-            self.win32_version_value = self._io.read_u4le()
-            self._debug['win32_version_value']['end'] = self._io.pos()
-            self._debug['size_of_image']['start'] = self._io.pos()
-            self.size_of_image = self._io.read_u4le()
-            self._debug['size_of_image']['end'] = self._io.pos()
-            self._debug['size_of_headers']['start'] = self._io.pos()
-            self.size_of_headers = self._io.read_u4le()
-            self._debug['size_of_headers']['end'] = self._io.pos()
-            self._debug['check_sum']['start'] = self._io.pos()
-            self.check_sum = self._io.read_u4le()
-            self._debug['check_sum']['end'] = self._io.pos()
-            self._debug['subsystem']['start'] = self._io.pos()
-            self.subsystem = KaitaiStream.resolve_enum(MicrosoftPe.OptionalHeaderWindows.SubsystemEnum, self._io.read_u2le())
-            self._debug['subsystem']['end'] = self._io.pos()
-            self._debug['dll_characteristics']['start'] = self._io.pos()
-            self.dll_characteristics = self._io.read_u2le()
-            self._debug['dll_characteristics']['end'] = self._io.pos()
-            if self._parent.std.format == MicrosoftPe.PeFormat.pe32:
-                self._debug['size_of_stack_reserve_32']['start'] = self._io.pos()
-                self.size_of_stack_reserve_32 = self._io.read_u4le()
-                self._debug['size_of_stack_reserve_32']['end'] = self._io.pos()
 
-            if self._parent.std.format == MicrosoftPe.PeFormat.pe32_plus:
-                self._debug['size_of_stack_reserve_64']['start'] = self._io.pos()
-                self.size_of_stack_reserve_64 = self._io.read_u8le()
-                self._debug['size_of_stack_reserve_64']['end'] = self._io.pos()
+        def _fetch_instances(self):
+            pass
+            for i in range(len(self.items)):
+                pass
+                self.items[i]._fetch_instances()
 
-            if self._parent.std.format == MicrosoftPe.PeFormat.pe32:
-                self._debug['size_of_stack_commit_32']['start'] = self._io.pos()
-                self.size_of_stack_commit_32 = self._io.read_u4le()
-                self._debug['size_of_stack_commit_32']['end'] = self._io.pos()
 
-            if self._parent.std.format == MicrosoftPe.PeFormat.pe32_plus:
-                self._debug['size_of_stack_commit_64']['start'] = self._io.pos()
-                self.size_of_stack_commit_64 = self._io.read_u8le()
-                self._debug['size_of_stack_commit_64']['end'] = self._io.pos()
 
-            if self._parent.std.format == MicrosoftPe.PeFormat.pe32:
-                self._debug['size_of_heap_reserve_32']['start'] = self._io.pos()
-                self.size_of_heap_reserve_32 = self._io.read_u4le()
-                self._debug['size_of_heap_reserve_32']['end'] = self._io.pos()
+    class CoffHeader(KaitaiStruct):
+        """
+        .. seealso::
+           3.3. COFF File Header (Object and Image)
+        """
 
-            if self._parent.std.format == MicrosoftPe.PeFormat.pe32_plus:
-                self._debug['size_of_heap_reserve_64']['start'] = self._io.pos()
-                self.size_of_heap_reserve_64 = self._io.read_u8le()
-                self._debug['size_of_heap_reserve_64']['end'] = self._io.pos()
+        class MachineType(IntEnum):
+            unknown = 0
+            i386 = 332
+            r4000 = 358
+            wce_mips_v2 = 361
+            alpha = 388
+            sh3 = 418
+            sh3_dsp = 419
+            sh4 = 422
+            sh5 = 424
+            arm = 448
+            thumb = 450
+            arm_nt = 452
+            am33 = 467
+            powerpc = 496
+            powerpc_fp = 497
+            ia64 = 512
+            mips16 = 614
+            alpha64_or_axp64 = 644
+            mips_fpu = 870
+            mips16_fpu = 1126
+            ebc = 3772
+            riscv32 = 20530
+            riscv64 = 20580
+            riscv128 = 20776
+            loongarch32 = 25138
+            loongarch64 = 25188
+            amd64 = 34404
+            m32r = 36929
+            arm64 = 43620
+        SEQ_FIELDS = ["machine", "number_of_sections", "time_date_stamp", "pointer_to_symbol_table", "number_of_symbols", "size_of_optional_header", "characteristics"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(MicrosoftPe.CoffHeader, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
 
-            if self._parent.std.format == MicrosoftPe.PeFormat.pe32:
-                self._debug['size_of_heap_commit_32']['start'] = self._io.pos()
-                self.size_of_heap_commit_32 = self._io.read_u4le()
-                self._debug['size_of_heap_commit_32']['end'] = self._io.pos()
+        def _read(self):
+            self._debug['machine']['start'] = self._io.pos()
+            self.machine = KaitaiStream.resolve_enum(MicrosoftPe.CoffHeader.MachineType, self._io.read_u2le())
+            self._debug['machine']['end'] = self._io.pos()
+            self._debug['number_of_sections']['start'] = self._io.pos()
+            self.number_of_sections = self._io.read_u2le()
+            self._debug['number_of_sections']['end'] = self._io.pos()
+            self._debug['time_date_stamp']['start'] = self._io.pos()
+            self.time_date_stamp = self._io.read_u4le()
+            self._debug['time_date_stamp']['end'] = self._io.pos()
+            self._debug['pointer_to_symbol_table']['start'] = self._io.pos()
+            self.pointer_to_symbol_table = self._io.read_u4le()
+            self._debug['pointer_to_symbol_table']['end'] = self._io.pos()
+            self._debug['number_of_symbols']['start'] = self._io.pos()
+            self.number_of_symbols = self._io.read_u4le()
+            self._debug['number_of_symbols']['end'] = self._io.pos()
+            self._debug['size_of_optional_header']['start'] = self._io.pos()
+            self.size_of_optional_header = self._io.read_u2le()
+            self._debug['size_of_optional_header']['end'] = self._io.pos()
+            self._debug['characteristics']['start'] = self._io.pos()
+            self.characteristics = self._io.read_u2le()
+            self._debug['characteristics']['end'] = self._io.pos()
 
-            if self._parent.std.format == MicrosoftPe.PeFormat.pe32_plus:
-                self._debug['size_of_heap_commit_64']['start'] = self._io.pos()
-                self.size_of_heap_commit_64 = self._io.read_u8le()
-                self._debug['size_of_heap_commit_64']['end'] = self._io.pos()
 
-            self._debug['loader_flags']['start'] = self._io.pos()
-            self.loader_flags = self._io.read_u4le()
-            self._debug['loader_flags']['end'] = self._io.pos()
-            self._debug['number_of_rva_and_sizes']['start'] = self._io.pos()
-            self.number_of_rva_and_sizes = self._io.read_u4le()
-            self._debug['number_of_rva_and_sizes']['end'] = self._io.pos()
+        def _fetch_instances(self):
+            pass
+            _ = self.symbol_name_table_size
+            if hasattr(self, '_m_symbol_name_table_size'):
+                pass
+
+            _ = self.symbol_table
+            if hasattr(self, '_m_symbol_table'):
+                pass
+                for i in range(len(self._m_symbol_table)):
+                    pass
+                    self._m_symbol_table[i]._fetch_instances()
+
+
+
+        @property
+        def symbol_name_table_offset(self):
+            if hasattr(self, '_m_symbol_name_table_offset'):
+                return self._m_symbol_name_table_offset
+
+            self._m_symbol_name_table_offset = self.pointer_to_symbol_table + self.symbol_table_size
+            return getattr(self, '_m_symbol_name_table_offset', None)
+
+        @property
+        def symbol_name_table_size(self):
+            if hasattr(self, '_m_symbol_name_table_size'):
+                return self._m_symbol_name_table_size
+
+            _pos = self._io.pos()
+            self._io.seek(self.symbol_name_table_offset)
+            self._debug['_m_symbol_name_table_size']['start'] = self._io.pos()
+            self._m_symbol_name_table_size = self._io.read_u4le()
+            self._debug['_m_symbol_name_table_size']['end'] = self._io.pos()
+            self._io.seek(_pos)
+            return getattr(self, '_m_symbol_name_table_size', None)
+
+        @property
+        def symbol_table(self):
+            if hasattr(self, '_m_symbol_table'):
+                return self._m_symbol_table
+
+            _pos = self._io.pos()
+            self._io.seek(self.pointer_to_symbol_table)
+            self._debug['_m_symbol_table']['start'] = self._io.pos()
+            self._debug['_m_symbol_table']['arr'] = []
+            self._m_symbol_table = []
+            for i in range(self.number_of_symbols):
+                self._debug['_m_symbol_table']['arr'].append({'start': self._io.pos()})
+                _t__m_symbol_table = MicrosoftPe.CoffSymbol(self._io, self, self._root)
+                try:
+                    _t__m_symbol_table._read()
+                finally:
+                    self._m_symbol_table.append(_t__m_symbol_table)
+                self._debug['_m_symbol_table']['arr'][i]['end'] = self._io.pos()
+
+            self._debug['_m_symbol_table']['end'] = self._io.pos()
+            self._io.seek(_pos)
+            return getattr(self, '_m_symbol_table', None)
+
+        @property
+        def symbol_table_size(self):
+            if hasattr(self, '_m_symbol_table_size'):
+                return self._m_symbol_table_size
+
+            self._m_symbol_table_size = self.number_of_symbols * 18
+            return getattr(self, '_m_symbol_table_size', None)
+
+
+    class CoffSymbol(KaitaiStruct):
+        SEQ_FIELDS = ["name_annoying", "value", "section_number", "type", "storage_class", "number_of_aux_symbols"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(MicrosoftPe.CoffSymbol, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['name_annoying']['start'] = self._io.pos()
+            self._raw_name_annoying = self._io.read_bytes(8)
+            _io__raw_name_annoying = KaitaiStream(BytesIO(self._raw_name_annoying))
+            self.name_annoying = MicrosoftPe.Annoyingstring(_io__raw_name_annoying, self, self._root)
+            self.name_annoying._read()
+            self._debug['name_annoying']['end'] = self._io.pos()
+            self._debug['value']['start'] = self._io.pos()
+            self.value = self._io.read_u4le()
+            self._debug['value']['end'] = self._io.pos()
+            self._debug['section_number']['start'] = self._io.pos()
+            self.section_number = self._io.read_u2le()
+            self._debug['section_number']['end'] = self._io.pos()
+            self._debug['type']['start'] = self._io.pos()
+            self.type = self._io.read_u2le()
+            self._debug['type']['end'] = self._io.pos()
+            self._debug['storage_class']['start'] = self._io.pos()
+            self.storage_class = self._io.read_u1()
+            self._debug['storage_class']['end'] = self._io.pos()
+            self._debug['number_of_aux_symbols']['start'] = self._io.pos()
+            self.number_of_aux_symbols = self._io.read_u1()
+            self._debug['number_of_aux_symbols']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            self.name_annoying._fetch_instances()
+            _ = self.data
+            if hasattr(self, '_m_data'):
+                pass
+
+
+        @property
+        def data(self):
+            if hasattr(self, '_m_data'):
+                return self._m_data
+
+            _pos = self._io.pos()
+            self._io.seek(self.section.pointer_to_raw_data + self.value)
+            self._debug['_m_data']['start'] = self._io.pos()
+            self._m_data = self._io.read_bytes(1)
+            self._debug['_m_data']['end'] = self._io.pos()
+            self._io.seek(_pos)
+            return getattr(self, '_m_data', None)
+
+        @property
+        def section(self):
+            if hasattr(self, '_m_section'):
+                return self._m_section
+
+            self._m_section = self._root.pe.sections[self.section_number - 1]
+            return getattr(self, '_m_section', None)
+
+
+    class DataDir(KaitaiStruct):
+        SEQ_FIELDS = ["virtual_address", "size"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(MicrosoftPe.DataDir, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['virtual_address']['start'] = self._io.pos()
+            self.virtual_address = self._io.read_u4le()
+            self._debug['virtual_address']['end'] = self._io.pos()
+            self._debug['size']['start'] = self._io.pos()
+            self.size = self._io.read_u4le()
+            self._debug['size']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+
+
+    class MzPlaceholder(KaitaiStruct):
+        SEQ_FIELDS = ["magic", "data1", "ofs_pe"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(MicrosoftPe.MzPlaceholder, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['magic']['start'] = self._io.pos()
+            self.magic = self._io.read_bytes(2)
+            self._debug['magic']['end'] = self._io.pos()
+            if not self.magic == b"\x4D\x5A":
+                raise kaitaistruct.ValidationNotEqualError(b"\x4D\x5A", self.magic, self._io, u"/types/mz_placeholder/seq/0")
+            self._debug['data1']['start'] = self._io.pos()
+            self.data1 = self._io.read_bytes(58)
+            self._debug['data1']['end'] = self._io.pos()
+            self._debug['ofs_pe']['start'] = self._io.pos()
+            self.ofs_pe = self._io.read_u4le()
+            self._debug['ofs_pe']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+
+
+    class OptionalHeader(KaitaiStruct):
+        SEQ_FIELDS = ["std", "windows", "data_dirs"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(MicrosoftPe.OptionalHeader, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['std']['start'] = self._io.pos()
+            self.std = MicrosoftPe.OptionalHeaderStd(self._io, self, self._root)
+            self.std._read()
+            self._debug['std']['end'] = self._io.pos()
+            self._debug['windows']['start'] = self._io.pos()
+            self.windows = MicrosoftPe.OptionalHeaderWindows(self._io, self, self._root)
+            self.windows._read()
+            self._debug['windows']['end'] = self._io.pos()
+            self._debug['data_dirs']['start'] = self._io.pos()
+            self.data_dirs = MicrosoftPe.OptionalHeaderDataDirs(self._io, self, self._root)
+            self.data_dirs._read()
+            self._debug['data_dirs']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            self.std._fetch_instances()
+            self.windows._fetch_instances()
+            self.data_dirs._fetch_instances()
 
 
     class OptionalHeaderDataDirs(KaitaiStruct):
         SEQ_FIELDS = ["export_table", "import_table", "resource_table", "exception_table", "certificate_table", "base_relocation_table", "debug", "architecture", "global_ptr", "tls_table", "load_config_table", "bound_import", "iat", "delay_import_descriptor", "clr_runtime_header"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(MicrosoftPe.OptionalHeaderDataDirs, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -264,82 +562,246 @@ class MicrosoftPe(KaitaiStruct):
             self._debug['clr_runtime_header']['end'] = self._io.pos()
 
 
-    class DataDir(KaitaiStruct):
-        SEQ_FIELDS = ["virtual_address", "size"]
+        def _fetch_instances(self):
+            pass
+            self.export_table._fetch_instances()
+            self.import_table._fetch_instances()
+            self.resource_table._fetch_instances()
+            self.exception_table._fetch_instances()
+            self.certificate_table._fetch_instances()
+            self.base_relocation_table._fetch_instances()
+            self.debug._fetch_instances()
+            self.architecture._fetch_instances()
+            self.global_ptr._fetch_instances()
+            self.tls_table._fetch_instances()
+            self.load_config_table._fetch_instances()
+            self.bound_import._fetch_instances()
+            self.iat._fetch_instances()
+            self.delay_import_descriptor._fetch_instances()
+            self.clr_runtime_header._fetch_instances()
+
+
+    class OptionalHeaderStd(KaitaiStruct):
+        SEQ_FIELDS = ["format", "major_linker_version", "minor_linker_version", "size_of_code", "size_of_initialized_data", "size_of_uninitialized_data", "address_of_entry_point", "base_of_code", "base_of_data"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(MicrosoftPe.OptionalHeaderStd, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
-            self._debug['virtual_address']['start'] = self._io.pos()
-            self.virtual_address = self._io.read_u4le()
-            self._debug['virtual_address']['end'] = self._io.pos()
-            self._debug['size']['start'] = self._io.pos()
-            self.size = self._io.read_u4le()
-            self._debug['size']['end'] = self._io.pos()
+            self._debug['format']['start'] = self._io.pos()
+            self.format = KaitaiStream.resolve_enum(MicrosoftPe.PeFormat, self._io.read_u2le())
+            self._debug['format']['end'] = self._io.pos()
+            self._debug['major_linker_version']['start'] = self._io.pos()
+            self.major_linker_version = self._io.read_u1()
+            self._debug['major_linker_version']['end'] = self._io.pos()
+            self._debug['minor_linker_version']['start'] = self._io.pos()
+            self.minor_linker_version = self._io.read_u1()
+            self._debug['minor_linker_version']['end'] = self._io.pos()
+            self._debug['size_of_code']['start'] = self._io.pos()
+            self.size_of_code = self._io.read_u4le()
+            self._debug['size_of_code']['end'] = self._io.pos()
+            self._debug['size_of_initialized_data']['start'] = self._io.pos()
+            self.size_of_initialized_data = self._io.read_u4le()
+            self._debug['size_of_initialized_data']['end'] = self._io.pos()
+            self._debug['size_of_uninitialized_data']['start'] = self._io.pos()
+            self.size_of_uninitialized_data = self._io.read_u4le()
+            self._debug['size_of_uninitialized_data']['end'] = self._io.pos()
+            self._debug['address_of_entry_point']['start'] = self._io.pos()
+            self.address_of_entry_point = self._io.read_u4le()
+            self._debug['address_of_entry_point']['end'] = self._io.pos()
+            self._debug['base_of_code']['start'] = self._io.pos()
+            self.base_of_code = self._io.read_u4le()
+            self._debug['base_of_code']['end'] = self._io.pos()
+            if self.format == MicrosoftPe.PeFormat.pe32:
+                pass
+                self._debug['base_of_data']['start'] = self._io.pos()
+                self.base_of_data = self._io.read_u4le()
+                self._debug['base_of_data']['end'] = self._io.pos()
 
 
-    class CoffSymbol(KaitaiStruct):
-        SEQ_FIELDS = ["name_annoying", "value", "section_number", "type", "storage_class", "number_of_aux_symbols"]
+
+        def _fetch_instances(self):
+            pass
+            if self.format == MicrosoftPe.PeFormat.pe32:
+                pass
+
+
+
+    class OptionalHeaderWindows(KaitaiStruct):
+
+        class SubsystemEnum(IntEnum):
+            unknown = 0
+            native = 1
+            windows_gui = 2
+            windows_cui = 3
+            posix_cui = 7
+            windows_ce_gui = 9
+            efi_application = 10
+            efi_boot_service_driver = 11
+            efi_runtime_driver = 12
+            efi_rom = 13
+            xbox = 14
+            windows_boot_application = 16
+        SEQ_FIELDS = ["image_base_32", "image_base_64", "section_alignment", "file_alignment", "major_operating_system_version", "minor_operating_system_version", "major_image_version", "minor_image_version", "major_subsystem_version", "minor_subsystem_version", "win32_version_value", "size_of_image", "size_of_headers", "check_sum", "subsystem", "dll_characteristics", "size_of_stack_reserve_32", "size_of_stack_reserve_64", "size_of_stack_commit_32", "size_of_stack_commit_64", "size_of_heap_reserve_32", "size_of_heap_reserve_64", "size_of_heap_commit_32", "size_of_heap_commit_64", "loader_flags", "number_of_rva_and_sizes"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(MicrosoftPe.OptionalHeaderWindows, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
-            self._debug['name_annoying']['start'] = self._io.pos()
-            self._raw_name_annoying = self._io.read_bytes(8)
-            _io__raw_name_annoying = KaitaiStream(BytesIO(self._raw_name_annoying))
-            self.name_annoying = MicrosoftPe.Annoyingstring(_io__raw_name_annoying, self, self._root)
-            self.name_annoying._read()
-            self._debug['name_annoying']['end'] = self._io.pos()
-            self._debug['value']['start'] = self._io.pos()
-            self.value = self._io.read_u4le()
-            self._debug['value']['end'] = self._io.pos()
-            self._debug['section_number']['start'] = self._io.pos()
-            self.section_number = self._io.read_u2le()
-            self._debug['section_number']['end'] = self._io.pos()
-            self._debug['type']['start'] = self._io.pos()
-            self.type = self._io.read_u2le()
-            self._debug['type']['end'] = self._io.pos()
-            self._debug['storage_class']['start'] = self._io.pos()
-            self.storage_class = self._io.read_u1()
-            self._debug['storage_class']['end'] = self._io.pos()
-            self._debug['number_of_aux_symbols']['start'] = self._io.pos()
-            self.number_of_aux_symbols = self._io.read_u1()
-            self._debug['number_of_aux_symbols']['end'] = self._io.pos()
+            if self._parent.std.format == MicrosoftPe.PeFormat.pe32:
+                pass
+                self._debug['image_base_32']['start'] = self._io.pos()
+                self.image_base_32 = self._io.read_u4le()
+                self._debug['image_base_32']['end'] = self._io.pos()
 
-        @property
-        def section(self):
-            if hasattr(self, '_m_section'):
-                return self._m_section if hasattr(self, '_m_section') else None
+            if self._parent.std.format == MicrosoftPe.PeFormat.pe32_plus:
+                pass
+                self._debug['image_base_64']['start'] = self._io.pos()
+                self.image_base_64 = self._io.read_u8le()
+                self._debug['image_base_64']['end'] = self._io.pos()
 
-            self._m_section = self._root.pe.sections[(self.section_number - 1)]
-            return self._m_section if hasattr(self, '_m_section') else None
+            self._debug['section_alignment']['start'] = self._io.pos()
+            self.section_alignment = self._io.read_u4le()
+            self._debug['section_alignment']['end'] = self._io.pos()
+            self._debug['file_alignment']['start'] = self._io.pos()
+            self.file_alignment = self._io.read_u4le()
+            self._debug['file_alignment']['end'] = self._io.pos()
+            self._debug['major_operating_system_version']['start'] = self._io.pos()
+            self.major_operating_system_version = self._io.read_u2le()
+            self._debug['major_operating_system_version']['end'] = self._io.pos()
+            self._debug['minor_operating_system_version']['start'] = self._io.pos()
+            self.minor_operating_system_version = self._io.read_u2le()
+            self._debug['minor_operating_system_version']['end'] = self._io.pos()
+            self._debug['major_image_version']['start'] = self._io.pos()
+            self.major_image_version = self._io.read_u2le()
+            self._debug['major_image_version']['end'] = self._io.pos()
+            self._debug['minor_image_version']['start'] = self._io.pos()
+            self.minor_image_version = self._io.read_u2le()
+            self._debug['minor_image_version']['end'] = self._io.pos()
+            self._debug['major_subsystem_version']['start'] = self._io.pos()
+            self.major_subsystem_version = self._io.read_u2le()
+            self._debug['major_subsystem_version']['end'] = self._io.pos()
+            self._debug['minor_subsystem_version']['start'] = self._io.pos()
+            self.minor_subsystem_version = self._io.read_u2le()
+            self._debug['minor_subsystem_version']['end'] = self._io.pos()
+            self._debug['win32_version_value']['start'] = self._io.pos()
+            self.win32_version_value = self._io.read_u4le()
+            self._debug['win32_version_value']['end'] = self._io.pos()
+            self._debug['size_of_image']['start'] = self._io.pos()
+            self.size_of_image = self._io.read_u4le()
+            self._debug['size_of_image']['end'] = self._io.pos()
+            self._debug['size_of_headers']['start'] = self._io.pos()
+            self.size_of_headers = self._io.read_u4le()
+            self._debug['size_of_headers']['end'] = self._io.pos()
+            self._debug['check_sum']['start'] = self._io.pos()
+            self.check_sum = self._io.read_u4le()
+            self._debug['check_sum']['end'] = self._io.pos()
+            self._debug['subsystem']['start'] = self._io.pos()
+            self.subsystem = KaitaiStream.resolve_enum(MicrosoftPe.OptionalHeaderWindows.SubsystemEnum, self._io.read_u2le())
+            self._debug['subsystem']['end'] = self._io.pos()
+            self._debug['dll_characteristics']['start'] = self._io.pos()
+            self.dll_characteristics = self._io.read_u2le()
+            self._debug['dll_characteristics']['end'] = self._io.pos()
+            if self._parent.std.format == MicrosoftPe.PeFormat.pe32:
+                pass
+                self._debug['size_of_stack_reserve_32']['start'] = self._io.pos()
+                self.size_of_stack_reserve_32 = self._io.read_u4le()
+                self._debug['size_of_stack_reserve_32']['end'] = self._io.pos()
 
-        @property
-        def data(self):
-            if hasattr(self, '_m_data'):
-                return self._m_data if hasattr(self, '_m_data') else None
+            if self._parent.std.format == MicrosoftPe.PeFormat.pe32_plus:
+                pass
+                self._debug['size_of_stack_reserve_64']['start'] = self._io.pos()
+                self.size_of_stack_reserve_64 = self._io.read_u8le()
+                self._debug['size_of_stack_reserve_64']['end'] = self._io.pos()
 
-            _pos = self._io.pos()
-            self._io.seek((self.section.pointer_to_raw_data + self.value))
-            self._debug['_m_data']['start'] = self._io.pos()
-            self._m_data = self._io.read_bytes(1)
-            self._debug['_m_data']['end'] = self._io.pos()
-            self._io.seek(_pos)
-            return self._m_data if hasattr(self, '_m_data') else None
+            if self._parent.std.format == MicrosoftPe.PeFormat.pe32:
+                pass
+                self._debug['size_of_stack_commit_32']['start'] = self._io.pos()
+                self.size_of_stack_commit_32 = self._io.read_u4le()
+                self._debug['size_of_stack_commit_32']['end'] = self._io.pos()
+
+            if self._parent.std.format == MicrosoftPe.PeFormat.pe32_plus:
+                pass
+                self._debug['size_of_stack_commit_64']['start'] = self._io.pos()
+                self.size_of_stack_commit_64 = self._io.read_u8le()
+                self._debug['size_of_stack_commit_64']['end'] = self._io.pos()
+
+            if self._parent.std.format == MicrosoftPe.PeFormat.pe32:
+                pass
+                self._debug['size_of_heap_reserve_32']['start'] = self._io.pos()
+                self.size_of_heap_reserve_32 = self._io.read_u4le()
+                self._debug['size_of_heap_reserve_32']['end'] = self._io.pos()
+
+            if self._parent.std.format == MicrosoftPe.PeFormat.pe32_plus:
+                pass
+                self._debug['size_of_heap_reserve_64']['start'] = self._io.pos()
+                self.size_of_heap_reserve_64 = self._io.read_u8le()
+                self._debug['size_of_heap_reserve_64']['end'] = self._io.pos()
+
+            if self._parent.std.format == MicrosoftPe.PeFormat.pe32:
+                pass
+                self._debug['size_of_heap_commit_32']['start'] = self._io.pos()
+                self.size_of_heap_commit_32 = self._io.read_u4le()
+                self._debug['size_of_heap_commit_32']['end'] = self._io.pos()
+
+            if self._parent.std.format == MicrosoftPe.PeFormat.pe32_plus:
+                pass
+                self._debug['size_of_heap_commit_64']['start'] = self._io.pos()
+                self.size_of_heap_commit_64 = self._io.read_u8le()
+                self._debug['size_of_heap_commit_64']['end'] = self._io.pos()
+
+            self._debug['loader_flags']['start'] = self._io.pos()
+            self.loader_flags = self._io.read_u4le()
+            self._debug['loader_flags']['end'] = self._io.pos()
+            self._debug['number_of_rva_and_sizes']['start'] = self._io.pos()
+            self.number_of_rva_and_sizes = self._io.read_u4le()
+            self._debug['number_of_rva_and_sizes']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            if self._parent.std.format == MicrosoftPe.PeFormat.pe32:
+                pass
+
+            if self._parent.std.format == MicrosoftPe.PeFormat.pe32_plus:
+                pass
+
+            if self._parent.std.format == MicrosoftPe.PeFormat.pe32:
+                pass
+
+            if self._parent.std.format == MicrosoftPe.PeFormat.pe32_plus:
+                pass
+
+            if self._parent.std.format == MicrosoftPe.PeFormat.pe32:
+                pass
+
+            if self._parent.std.format == MicrosoftPe.PeFormat.pe32_plus:
+                pass
+
+            if self._parent.std.format == MicrosoftPe.PeFormat.pe32:
+                pass
+
+            if self._parent.std.format == MicrosoftPe.PeFormat.pe32_plus:
+                pass
+
+            if self._parent.std.format == MicrosoftPe.PeFormat.pe32:
+                pass
+
+            if self._parent.std.format == MicrosoftPe.PeFormat.pe32_plus:
+                pass
+
 
 
     class PeHeader(KaitaiStruct):
         SEQ_FIELDS = ["pe_signature", "coff_hdr", "optional_hdr", "sections"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(MicrosoftPe.PeHeader, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -359,24 +821,41 @@ class MicrosoftPe(KaitaiStruct):
             self.optional_hdr._read()
             self._debug['optional_hdr']['end'] = self._io.pos()
             self._debug['sections']['start'] = self._io.pos()
-            self.sections = [None] * (self.coff_hdr.number_of_sections)
+            self._debug['sections']['arr'] = []
+            self.sections = []
             for i in range(self.coff_hdr.number_of_sections):
-                if not 'arr' in self._debug['sections']:
-                    self._debug['sections']['arr'] = []
                 self._debug['sections']['arr'].append({'start': self._io.pos()})
                 _t_sections = MicrosoftPe.Section(self._io, self, self._root)
-                _t_sections._read()
-                self.sections[i] = _t_sections
+                try:
+                    _t_sections._read()
+                finally:
+                    self.sections.append(_t_sections)
                 self._debug['sections']['arr'][i]['end'] = self._io.pos()
 
             self._debug['sections']['end'] = self._io.pos()
 
+
+        def _fetch_instances(self):
+            pass
+            self.coff_hdr._fetch_instances()
+            self.optional_hdr._fetch_instances()
+            for i in range(len(self.sections)):
+                pass
+                self.sections[i]._fetch_instances()
+
+            _ = self.certificate_table
+            if hasattr(self, '_m_certificate_table'):
+                pass
+                self._m_certificate_table._fetch_instances()
+
+
         @property
         def certificate_table(self):
             if hasattr(self, '_m_certificate_table'):
-                return self._m_certificate_table if hasattr(self, '_m_certificate_table') else None
+                return self._m_certificate_table
 
             if self.optional_hdr.data_dirs.certificate_table.virtual_address != 0:
+                pass
                 _pos = self._io.pos()
                 self._io.seek(self.optional_hdr.data_dirs.certificate_table.virtual_address)
                 self._debug['_m_certificate_table']['start'] = self._io.pos()
@@ -387,38 +866,15 @@ class MicrosoftPe(KaitaiStruct):
                 self._debug['_m_certificate_table']['end'] = self._io.pos()
                 self._io.seek(_pos)
 
-            return self._m_certificate_table if hasattr(self, '_m_certificate_table') else None
-
-
-    class OptionalHeader(KaitaiStruct):
-        SEQ_FIELDS = ["std", "windows", "data_dirs"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['std']['start'] = self._io.pos()
-            self.std = MicrosoftPe.OptionalHeaderStd(self._io, self, self._root)
-            self.std._read()
-            self._debug['std']['end'] = self._io.pos()
-            self._debug['windows']['start'] = self._io.pos()
-            self.windows = MicrosoftPe.OptionalHeaderWindows(self._io, self, self._root)
-            self.windows._read()
-            self._debug['windows']['end'] = self._io.pos()
-            self._debug['data_dirs']['start'] = self._io.pos()
-            self.data_dirs = MicrosoftPe.OptionalHeaderDataDirs(self._io, self, self._root)
-            self.data_dirs._read()
-            self._debug['data_dirs']['end'] = self._io.pos()
+            return getattr(self, '_m_certificate_table', None)
 
 
     class Section(KaitaiStruct):
         SEQ_FIELDS = ["name", "virtual_size", "virtual_address", "size_of_raw_data", "pointer_to_raw_data", "pointer_to_relocations", "pointer_to_linenumbers", "number_of_relocations", "number_of_linenumbers", "characteristics"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(MicrosoftPe.Section, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -453,10 +909,18 @@ class MicrosoftPe(KaitaiStruct):
             self.characteristics = self._io.read_u4le()
             self._debug['characteristics']['end'] = self._io.pos()
 
+
+        def _fetch_instances(self):
+            pass
+            _ = self.body
+            if hasattr(self, '_m_body'):
+                pass
+
+
         @property
         def body(self):
             if hasattr(self, '_m_body'):
-                return self._m_body if hasattr(self, '_m_body') else None
+                return self._m_body
 
             _pos = self._io.pos()
             self._io.seek(self.pointer_to_raw_data)
@@ -464,294 +928,13 @@ class MicrosoftPe(KaitaiStruct):
             self._m_body = self._io.read_bytes(self.size_of_raw_data)
             self._debug['_m_body']['end'] = self._io.pos()
             self._io.seek(_pos)
-            return self._m_body if hasattr(self, '_m_body') else None
-
-
-    class CertificateTable(KaitaiStruct):
-        SEQ_FIELDS = ["items"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['items']['start'] = self._io.pos()
-            self.items = []
-            i = 0
-            while not self._io.is_eof():
-                if not 'arr' in self._debug['items']:
-                    self._debug['items']['arr'] = []
-                self._debug['items']['arr'].append({'start': self._io.pos()})
-                _t_items = MicrosoftPe.CertificateEntry(self._io, self, self._root)
-                _t_items._read()
-                self.items.append(_t_items)
-                self._debug['items']['arr'][len(self.items) - 1]['end'] = self._io.pos()
-                i += 1
-
-            self._debug['items']['end'] = self._io.pos()
-
-
-    class MzPlaceholder(KaitaiStruct):
-        SEQ_FIELDS = ["magic", "data1", "ofs_pe"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['magic']['start'] = self._io.pos()
-            self.magic = self._io.read_bytes(2)
-            self._debug['magic']['end'] = self._io.pos()
-            if not self.magic == b"\x4D\x5A":
-                raise kaitaistruct.ValidationNotEqualError(b"\x4D\x5A", self.magic, self._io, u"/types/mz_placeholder/seq/0")
-            self._debug['data1']['start'] = self._io.pos()
-            self.data1 = self._io.read_bytes(58)
-            self._debug['data1']['end'] = self._io.pos()
-            self._debug['ofs_pe']['start'] = self._io.pos()
-            self.ofs_pe = self._io.read_u4le()
-            self._debug['ofs_pe']['end'] = self._io.pos()
-
-
-    class OptionalHeaderStd(KaitaiStruct):
-        SEQ_FIELDS = ["format", "major_linker_version", "minor_linker_version", "size_of_code", "size_of_initialized_data", "size_of_uninitialized_data", "address_of_entry_point", "base_of_code", "base_of_data"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['format']['start'] = self._io.pos()
-            self.format = KaitaiStream.resolve_enum(MicrosoftPe.PeFormat, self._io.read_u2le())
-            self._debug['format']['end'] = self._io.pos()
-            self._debug['major_linker_version']['start'] = self._io.pos()
-            self.major_linker_version = self._io.read_u1()
-            self._debug['major_linker_version']['end'] = self._io.pos()
-            self._debug['minor_linker_version']['start'] = self._io.pos()
-            self.minor_linker_version = self._io.read_u1()
-            self._debug['minor_linker_version']['end'] = self._io.pos()
-            self._debug['size_of_code']['start'] = self._io.pos()
-            self.size_of_code = self._io.read_u4le()
-            self._debug['size_of_code']['end'] = self._io.pos()
-            self._debug['size_of_initialized_data']['start'] = self._io.pos()
-            self.size_of_initialized_data = self._io.read_u4le()
-            self._debug['size_of_initialized_data']['end'] = self._io.pos()
-            self._debug['size_of_uninitialized_data']['start'] = self._io.pos()
-            self.size_of_uninitialized_data = self._io.read_u4le()
-            self._debug['size_of_uninitialized_data']['end'] = self._io.pos()
-            self._debug['address_of_entry_point']['start'] = self._io.pos()
-            self.address_of_entry_point = self._io.read_u4le()
-            self._debug['address_of_entry_point']['end'] = self._io.pos()
-            self._debug['base_of_code']['start'] = self._io.pos()
-            self.base_of_code = self._io.read_u4le()
-            self._debug['base_of_code']['end'] = self._io.pos()
-            if self.format == MicrosoftPe.PeFormat.pe32:
-                self._debug['base_of_data']['start'] = self._io.pos()
-                self.base_of_data = self._io.read_u4le()
-                self._debug['base_of_data']['end'] = self._io.pos()
-
-
-
-    class CoffHeader(KaitaiStruct):
-        """
-        .. seealso::
-           3.3. COFF File Header (Object and Image)
-        """
-
-        class MachineType(Enum):
-            unknown = 0
-            i386 = 332
-            r4000 = 358
-            wcemipsv2 = 361
-            alpha = 388
-            sh3 = 418
-            sh3dsp = 419
-            sh4 = 422
-            sh5 = 424
-            arm = 448
-            thumb = 450
-            armnt = 452
-            am33 = 467
-            powerpc = 496
-            powerpcfp = 497
-            ia64 = 512
-            mips16 = 614
-            mipsfpu = 870
-            mipsfpu16 = 1126
-            ebc = 3772
-            riscv32 = 20530
-            riscv64 = 20580
-            riscv128 = 20776
-            loongarch32 = 25138
-            loongarch64 = 25188
-            amd64 = 34404
-            m32r = 36929
-            arm64 = 43620
-        SEQ_FIELDS = ["machine", "number_of_sections", "time_date_stamp", "pointer_to_symbol_table", "number_of_symbols", "size_of_optional_header", "characteristics"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['machine']['start'] = self._io.pos()
-            self.machine = KaitaiStream.resolve_enum(MicrosoftPe.CoffHeader.MachineType, self._io.read_u2le())
-            self._debug['machine']['end'] = self._io.pos()
-            self._debug['number_of_sections']['start'] = self._io.pos()
-            self.number_of_sections = self._io.read_u2le()
-            self._debug['number_of_sections']['end'] = self._io.pos()
-            self._debug['time_date_stamp']['start'] = self._io.pos()
-            self.time_date_stamp = self._io.read_u4le()
-            self._debug['time_date_stamp']['end'] = self._io.pos()
-            self._debug['pointer_to_symbol_table']['start'] = self._io.pos()
-            self.pointer_to_symbol_table = self._io.read_u4le()
-            self._debug['pointer_to_symbol_table']['end'] = self._io.pos()
-            self._debug['number_of_symbols']['start'] = self._io.pos()
-            self.number_of_symbols = self._io.read_u4le()
-            self._debug['number_of_symbols']['end'] = self._io.pos()
-            self._debug['size_of_optional_header']['start'] = self._io.pos()
-            self.size_of_optional_header = self._io.read_u2le()
-            self._debug['size_of_optional_header']['end'] = self._io.pos()
-            self._debug['characteristics']['start'] = self._io.pos()
-            self.characteristics = self._io.read_u2le()
-            self._debug['characteristics']['end'] = self._io.pos()
-
-        @property
-        def symbol_table_size(self):
-            if hasattr(self, '_m_symbol_table_size'):
-                return self._m_symbol_table_size if hasattr(self, '_m_symbol_table_size') else None
-
-            self._m_symbol_table_size = (self.number_of_symbols * 18)
-            return self._m_symbol_table_size if hasattr(self, '_m_symbol_table_size') else None
-
-        @property
-        def symbol_name_table_offset(self):
-            if hasattr(self, '_m_symbol_name_table_offset'):
-                return self._m_symbol_name_table_offset if hasattr(self, '_m_symbol_name_table_offset') else None
-
-            self._m_symbol_name_table_offset = (self.pointer_to_symbol_table + self.symbol_table_size)
-            return self._m_symbol_name_table_offset if hasattr(self, '_m_symbol_name_table_offset') else None
-
-        @property
-        def symbol_name_table_size(self):
-            if hasattr(self, '_m_symbol_name_table_size'):
-                return self._m_symbol_name_table_size if hasattr(self, '_m_symbol_name_table_size') else None
-
-            _pos = self._io.pos()
-            self._io.seek(self.symbol_name_table_offset)
-            self._debug['_m_symbol_name_table_size']['start'] = self._io.pos()
-            self._m_symbol_name_table_size = self._io.read_u4le()
-            self._debug['_m_symbol_name_table_size']['end'] = self._io.pos()
-            self._io.seek(_pos)
-            return self._m_symbol_name_table_size if hasattr(self, '_m_symbol_name_table_size') else None
-
-        @property
-        def symbol_table(self):
-            if hasattr(self, '_m_symbol_table'):
-                return self._m_symbol_table if hasattr(self, '_m_symbol_table') else None
-
-            _pos = self._io.pos()
-            self._io.seek(self.pointer_to_symbol_table)
-            self._debug['_m_symbol_table']['start'] = self._io.pos()
-            self._m_symbol_table = [None] * (self.number_of_symbols)
-            for i in range(self.number_of_symbols):
-                if not 'arr' in self._debug['_m_symbol_table']:
-                    self._debug['_m_symbol_table']['arr'] = []
-                self._debug['_m_symbol_table']['arr'].append({'start': self._io.pos()})
-                _t__m_symbol_table = MicrosoftPe.CoffSymbol(self._io, self, self._root)
-                _t__m_symbol_table._read()
-                self._m_symbol_table[i] = _t__m_symbol_table
-                self._debug['_m_symbol_table']['arr'][i]['end'] = self._io.pos()
-
-            self._debug['_m_symbol_table']['end'] = self._io.pos()
-            self._io.seek(_pos)
-            return self._m_symbol_table if hasattr(self, '_m_symbol_table') else None
-
-
-    class Annoyingstring(KaitaiStruct):
-        SEQ_FIELDS = []
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            pass
-
-        @property
-        def name_from_offset(self):
-            if hasattr(self, '_m_name_from_offset'):
-                return self._m_name_from_offset if hasattr(self, '_m_name_from_offset') else None
-
-            if self.name_zeroes == 0:
-                io = self._root._io
-                _pos = io.pos()
-                io.seek(((self._parent._parent.symbol_name_table_offset + self.name_offset) if self.name_zeroes == 0 else 0))
-                self._debug['_m_name_from_offset']['start'] = io.pos()
-                self._m_name_from_offset = (io.read_bytes_term(0, False, True, False)).decode(u"ascii")
-                self._debug['_m_name_from_offset']['end'] = io.pos()
-                io.seek(_pos)
-
-            return self._m_name_from_offset if hasattr(self, '_m_name_from_offset') else None
-
-        @property
-        def name_offset(self):
-            if hasattr(self, '_m_name_offset'):
-                return self._m_name_offset if hasattr(self, '_m_name_offset') else None
-
-            _pos = self._io.pos()
-            self._io.seek(4)
-            self._debug['_m_name_offset']['start'] = self._io.pos()
-            self._m_name_offset = self._io.read_u4le()
-            self._debug['_m_name_offset']['end'] = self._io.pos()
-            self._io.seek(_pos)
-            return self._m_name_offset if hasattr(self, '_m_name_offset') else None
-
-        @property
-        def name(self):
-            if hasattr(self, '_m_name'):
-                return self._m_name if hasattr(self, '_m_name') else None
-
-            self._m_name = (self.name_from_offset if self.name_zeroes == 0 else self.name_from_short)
-            return self._m_name if hasattr(self, '_m_name') else None
-
-        @property
-        def name_zeroes(self):
-            if hasattr(self, '_m_name_zeroes'):
-                return self._m_name_zeroes if hasattr(self, '_m_name_zeroes') else None
-
-            _pos = self._io.pos()
-            self._io.seek(0)
-            self._debug['_m_name_zeroes']['start'] = self._io.pos()
-            self._m_name_zeroes = self._io.read_u4le()
-            self._debug['_m_name_zeroes']['end'] = self._io.pos()
-            self._io.seek(_pos)
-            return self._m_name_zeroes if hasattr(self, '_m_name_zeroes') else None
-
-        @property
-        def name_from_short(self):
-            if hasattr(self, '_m_name_from_short'):
-                return self._m_name_from_short if hasattr(self, '_m_name_from_short') else None
-
-            if self.name_zeroes != 0:
-                _pos = self._io.pos()
-                self._io.seek(0)
-                self._debug['_m_name_from_short']['start'] = self._io.pos()
-                self._m_name_from_short = (self._io.read_bytes_term(0, False, True, False)).decode(u"ascii")
-                self._debug['_m_name_from_short']['end'] = self._io.pos()
-                self._io.seek(_pos)
-
-            return self._m_name_from_short if hasattr(self, '_m_name_from_short') else None
+            return getattr(self, '_m_body', None)
 
 
     @property
     def pe(self):
         if hasattr(self, '_m_pe'):
-            return self._m_pe if hasattr(self, '_m_pe') else None
+            return self._m_pe
 
         _pos = self._io.pos()
         self._io.seek(self.mz.ofs_pe)
@@ -760,6 +943,6 @@ class MicrosoftPe(KaitaiStruct):
         self._m_pe._read()
         self._debug['_m_pe']['end'] = self._io.pos()
         self._io.seek(_pos)
-        return self._m_pe if hasattr(self, '_m_pe') else None
+        return getattr(self, '_m_pe', None)
 
 

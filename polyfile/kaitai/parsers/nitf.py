@@ -1,13 +1,13 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
+# type: ignore
 
-from packaging.version import parse as parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
-    raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
+    raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class Nitf(KaitaiStruct):
     """The NITF (National Image Transition Format) format is a file format developed by the U.S. Government for
@@ -26,9 +26,9 @@ class Nitf(KaitaiStruct):
     """
     SEQ_FIELDS = ["header", "image_segments", "graphics_segments", "text_segments", "data_extension_segments", "reserved_extension_segments"]
     def __init__(self, _io, _parent=None, _root=None):
-        self._io = _io
+        super(Nitf, self).__init__(_io)
         self._parent = _parent
-        self._root = _root if _root else self
+        self._root = _root or self
         self._debug = collections.defaultdict(dict)
 
     def _read(self):
@@ -37,144 +37,102 @@ class Nitf(KaitaiStruct):
         self.header._read()
         self._debug['header']['end'] = self._io.pos()
         self._debug['image_segments']['start'] = self._io.pos()
-        self.image_segments = [None] * (int(self.header.num_image_segments))
+        self._debug['image_segments']['arr'] = []
+        self.image_segments = []
         for i in range(int(self.header.num_image_segments)):
-            if not 'arr' in self._debug['image_segments']:
-                self._debug['image_segments']['arr'] = []
             self._debug['image_segments']['arr'].append({'start': self._io.pos()})
             _t_image_segments = Nitf.ImageSegment(i, self._io, self, self._root)
-            _t_image_segments._read()
-            self.image_segments[i] = _t_image_segments
+            try:
+                _t_image_segments._read()
+            finally:
+                self.image_segments.append(_t_image_segments)
             self._debug['image_segments']['arr'][i]['end'] = self._io.pos()
 
         self._debug['image_segments']['end'] = self._io.pos()
         self._debug['graphics_segments']['start'] = self._io.pos()
-        self.graphics_segments = [None] * (int(self.header.num_graphics_segments))
+        self._debug['graphics_segments']['arr'] = []
+        self.graphics_segments = []
         for i in range(int(self.header.num_graphics_segments)):
-            if not 'arr' in self._debug['graphics_segments']:
-                self._debug['graphics_segments']['arr'] = []
             self._debug['graphics_segments']['arr'].append({'start': self._io.pos()})
             _t_graphics_segments = Nitf.GraphicsSegment(i, self._io, self, self._root)
-            _t_graphics_segments._read()
-            self.graphics_segments[i] = _t_graphics_segments
+            try:
+                _t_graphics_segments._read()
+            finally:
+                self.graphics_segments.append(_t_graphics_segments)
             self._debug['graphics_segments']['arr'][i]['end'] = self._io.pos()
 
         self._debug['graphics_segments']['end'] = self._io.pos()
         self._debug['text_segments']['start'] = self._io.pos()
-        self.text_segments = [None] * (int(self.header.num_text_files))
+        self._debug['text_segments']['arr'] = []
+        self.text_segments = []
         for i in range(int(self.header.num_text_files)):
-            if not 'arr' in self._debug['text_segments']:
-                self._debug['text_segments']['arr'] = []
             self._debug['text_segments']['arr'].append({'start': self._io.pos()})
             _t_text_segments = Nitf.TextSegment(i, self._io, self, self._root)
-            _t_text_segments._read()
-            self.text_segments[i] = _t_text_segments
+            try:
+                _t_text_segments._read()
+            finally:
+                self.text_segments.append(_t_text_segments)
             self._debug['text_segments']['arr'][i]['end'] = self._io.pos()
 
         self._debug['text_segments']['end'] = self._io.pos()
         self._debug['data_extension_segments']['start'] = self._io.pos()
-        self.data_extension_segments = [None] * (int(self.header.num_data_extension))
+        self._debug['data_extension_segments']['arr'] = []
+        self.data_extension_segments = []
         for i in range(int(self.header.num_data_extension)):
-            if not 'arr' in self._debug['data_extension_segments']:
-                self._debug['data_extension_segments']['arr'] = []
             self._debug['data_extension_segments']['arr'].append({'start': self._io.pos()})
             _t_data_extension_segments = Nitf.DataExtensionSegment(i, self._io, self, self._root)
-            _t_data_extension_segments._read()
-            self.data_extension_segments[i] = _t_data_extension_segments
+            try:
+                _t_data_extension_segments._read()
+            finally:
+                self.data_extension_segments.append(_t_data_extension_segments)
             self._debug['data_extension_segments']['arr'][i]['end'] = self._io.pos()
 
         self._debug['data_extension_segments']['end'] = self._io.pos()
         self._debug['reserved_extension_segments']['start'] = self._io.pos()
-        self.reserved_extension_segments = [None] * (int(self.header.num_reserved_extension))
+        self._debug['reserved_extension_segments']['arr'] = []
+        self.reserved_extension_segments = []
         for i in range(int(self.header.num_reserved_extension)):
-            if not 'arr' in self._debug['reserved_extension_segments']:
-                self._debug['reserved_extension_segments']['arr'] = []
             self._debug['reserved_extension_segments']['arr'].append({'start': self._io.pos()})
             _t_reserved_extension_segments = Nitf.ReservedExtensionSegment(i, self._io, self, self._root)
-            _t_reserved_extension_segments._read()
-            self.reserved_extension_segments[i] = _t_reserved_extension_segments
+            try:
+                _t_reserved_extension_segments._read()
+            finally:
+                self.reserved_extension_segments.append(_t_reserved_extension_segments)
             self._debug['reserved_extension_segments']['arr'][i]['end'] = self._io.pos()
 
         self._debug['reserved_extension_segments']['end'] = self._io.pos()
 
-    class ReservedExtensionSegment(KaitaiStruct):
-        SEQ_FIELDS = ["reserved_sub_header", "reserved_data_field"]
-        def __init__(self, idx, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self.idx = idx
-            self._debug = collections.defaultdict(dict)
 
-        def _read(self):
-            self._debug['reserved_sub_header']['start'] = self._io.pos()
-            self._raw_reserved_sub_header = self._io.read_bytes(int(self._parent.header.lrnfo[self.idx].length_reserved_extension_subheader))
-            _io__raw_reserved_sub_header = KaitaiStream(BytesIO(self._raw_reserved_sub_header))
-            self.reserved_sub_header = Nitf.ReservedSubHeader(_io__raw_reserved_sub_header, self, self._root)
-            self.reserved_sub_header._read()
-            self._debug['reserved_sub_header']['end'] = self._io.pos()
-            self._debug['reserved_data_field']['start'] = self._io.pos()
-            self.reserved_data_field = self._io.read_bytes(int(self._parent.header.lrnfo[self.idx].length_reserved_extension_segment))
-            self._debug['reserved_data_field']['end'] = self._io.pos()
+    def _fetch_instances(self):
+        pass
+        self.header._fetch_instances()
+        for i in range(len(self.image_segments)):
+            pass
+            self.image_segments[i]._fetch_instances()
 
+        for i in range(len(self.graphics_segments)):
+            pass
+            self.graphics_segments[i]._fetch_instances()
 
-    class ImageComment(KaitaiStruct):
-        SEQ_FIELDS = ["_unnamed0"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
+        for i in range(len(self.text_segments)):
+            pass
+            self.text_segments[i]._fetch_instances()
 
-        def _read(self):
-            self._debug['_unnamed0']['start'] = self._io.pos()
-            self._unnamed0 = (self._io.read_bytes(80)).decode(u"UTF-8")
-            self._debug['_unnamed0']['end'] = self._io.pos()
+        for i in range(len(self.data_extension_segments)):
+            pass
+            self.data_extension_segments[i]._fetch_instances()
 
-
-    class LengthReservedInfo(KaitaiStruct):
-        SEQ_FIELDS = ["length_reserved_extension_subheader", "length_reserved_extension_segment"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['length_reserved_extension_subheader']['start'] = self._io.pos()
-            self.length_reserved_extension_subheader = (self._io.read_bytes(4)).decode(u"UTF-8")
-            self._debug['length_reserved_extension_subheader']['end'] = self._io.pos()
-            self._debug['length_reserved_extension_segment']['start'] = self._io.pos()
-            self.length_reserved_extension_segment = (self._io.read_bytes(7)).decode(u"UTF-8")
-            self._debug['length_reserved_extension_segment']['end'] = self._io.pos()
-
-
-    class Tre(KaitaiStruct):
-        SEQ_FIELDS = ["extension_type_id", "edata_length", "edata"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['extension_type_id']['start'] = self._io.pos()
-            self.extension_type_id = (self._io.read_bytes(6)).decode(u"UTF-8")
-            self._debug['extension_type_id']['end'] = self._io.pos()
-            self._debug['edata_length']['start'] = self._io.pos()
-            self.edata_length = (self._io.read_bytes(5)).decode(u"UTF-8")
-            self._debug['edata_length']['end'] = self._io.pos()
-            self._debug['edata']['start'] = self._io.pos()
-            self.edata = (self._io.read_bytes(int(self.edata_length))).decode(u"UTF-8")
-            self._debug['edata']['end'] = self._io.pos()
+        for i in range(len(self.reserved_extension_segments)):
+            pass
+            self.reserved_extension_segments[i]._fetch_instances()
 
 
     class BandInfo(KaitaiStruct):
         SEQ_FIELDS = ["representation", "subcategory", "img_filter_condition", "img_filter_code", "num_luts", "num_lut_entries", "luts"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Nitf.BandInfo, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -196,81 +154,341 @@ class Nitf(KaitaiStruct):
             self.num_luts = (self._io.read_bytes(1)).decode(u"UTF-8")
             self._debug['num_luts']['end'] = self._io.pos()
             if int(self.num_luts) != 0:
+                pass
                 self._debug['num_lut_entries']['start'] = self._io.pos()
                 self.num_lut_entries = (self._io.read_bytes(5)).decode(u"UTF-8")
                 self._debug['num_lut_entries']['end'] = self._io.pos()
 
             self._debug['luts']['start'] = self._io.pos()
-            self.luts = [None] * (int(self.num_luts))
+            self._debug['luts']['arr'] = []
+            self.luts = []
             for i in range(int(self.num_luts)):
-                if not 'arr' in self._debug['luts']:
-                    self._debug['luts']['arr'] = []
                 self._debug['luts']['arr'].append({'start': self._io.pos()})
-                self.luts[i] = self._io.read_bytes(int(self.num_lut_entries))
+                self.luts.append(self._io.read_bytes(int(self.num_lut_entries)))
                 self._debug['luts']['arr'][i]['end'] = self._io.pos()
 
             self._debug['luts']['end'] = self._io.pos()
 
 
-    class ImageSegment(KaitaiStruct):
-        SEQ_FIELDS = ["image_sub_header", "image_data_mask", "image_data_field"]
-        def __init__(self, idx, _io, _parent=None, _root=None):
-            self._io = _io
+        def _fetch_instances(self):
+            pass
+            if int(self.num_luts) != 0:
+                pass
+
+            for i in range(len(self.luts)):
+                pass
+
+
+
+    class Clasnfo(KaitaiStruct):
+        SEQ_FIELDS = ["security_class", "security_system", "codewords", "control_and_handling", "releaseability", "declass_type", "declass_date", "declass_exemption", "downgrade", "downgrade_date", "class_text", "class_authority_type", "class_authority", "class_reason", "source_date", "control_number"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Nitf.Clasnfo, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['security_class']['start'] = self._io.pos()
+            self.security_class = (self._io.read_bytes(1)).decode(u"UTF-8")
+            self._debug['security_class']['end'] = self._io.pos()
+            self._debug['security_system']['start'] = self._io.pos()
+            self.security_system = (self._io.read_bytes(2)).decode(u"UTF-8")
+            self._debug['security_system']['end'] = self._io.pos()
+            self._debug['codewords']['start'] = self._io.pos()
+            self.codewords = (self._io.read_bytes(11)).decode(u"UTF-8")
+            self._debug['codewords']['end'] = self._io.pos()
+            self._debug['control_and_handling']['start'] = self._io.pos()
+            self.control_and_handling = (self._io.read_bytes(2)).decode(u"UTF-8")
+            self._debug['control_and_handling']['end'] = self._io.pos()
+            self._debug['releaseability']['start'] = self._io.pos()
+            self.releaseability = (self._io.read_bytes(20)).decode(u"UTF-8")
+            self._debug['releaseability']['end'] = self._io.pos()
+            self._debug['declass_type']['start'] = self._io.pos()
+            self.declass_type = (self._io.read_bytes(2)).decode(u"UTF-8")
+            self._debug['declass_type']['end'] = self._io.pos()
+            self._debug['declass_date']['start'] = self._io.pos()
+            self.declass_date = (self._io.read_bytes(8)).decode(u"UTF-8")
+            self._debug['declass_date']['end'] = self._io.pos()
+            self._debug['declass_exemption']['start'] = self._io.pos()
+            self.declass_exemption = (self._io.read_bytes(4)).decode(u"UTF-8")
+            self._debug['declass_exemption']['end'] = self._io.pos()
+            self._debug['downgrade']['start'] = self._io.pos()
+            self.downgrade = (self._io.read_bytes(1)).decode(u"UTF-8")
+            self._debug['downgrade']['end'] = self._io.pos()
+            self._debug['downgrade_date']['start'] = self._io.pos()
+            self.downgrade_date = (self._io.read_bytes(8)).decode(u"UTF-8")
+            self._debug['downgrade_date']['end'] = self._io.pos()
+            self._debug['class_text']['start'] = self._io.pos()
+            self.class_text = (self._io.read_bytes(43)).decode(u"UTF-8")
+            self._debug['class_text']['end'] = self._io.pos()
+            self._debug['class_authority_type']['start'] = self._io.pos()
+            self.class_authority_type = (self._io.read_bytes(1)).decode(u"UTF-8")
+            self._debug['class_authority_type']['end'] = self._io.pos()
+            self._debug['class_authority']['start'] = self._io.pos()
+            self.class_authority = (self._io.read_bytes(40)).decode(u"UTF-8")
+            self._debug['class_authority']['end'] = self._io.pos()
+            self._debug['class_reason']['start'] = self._io.pos()
+            self.class_reason = (self._io.read_bytes(1)).decode(u"UTF-8")
+            self._debug['class_reason']['end'] = self._io.pos()
+            self._debug['source_date']['start'] = self._io.pos()
+            self.source_date = (self._io.read_bytes(8)).decode(u"UTF-8")
+            self._debug['source_date']['end'] = self._io.pos()
+            self._debug['control_number']['start'] = self._io.pos()
+            self.control_number = (self._io.read_bytes(15)).decode(u"UTF-8")
+            self._debug['control_number']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+
+
+    class DataExtensionSegment(KaitaiStruct):
+        SEQ_FIELDS = ["data_sub_header", "data_data_field"]
+        def __init__(self, idx, _io, _parent=None, _root=None):
+            super(Nitf.DataExtensionSegment, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
             self.idx = idx
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
-            self._debug['image_sub_header']['start'] = self._io.pos()
-            self.image_sub_header = Nitf.ImageSubHeader(self._io, self, self._root)
-            self.image_sub_header._read()
-            self._debug['image_sub_header']['end'] = self._io.pos()
-            if self.has_mask:
-                self._debug['image_data_mask']['start'] = self._io.pos()
-                self.image_data_mask = Nitf.ImageDataMask(self._io, self, self._root)
-                self.image_data_mask._read()
-                self._debug['image_data_mask']['end'] = self._io.pos()
+            self._debug['data_sub_header']['start'] = self._io.pos()
+            self._raw_data_sub_header = self._io.read_bytes(int(self._parent.header.ldnfo[self.idx].length_data_extension_subheader))
+            _io__raw_data_sub_header = KaitaiStream(BytesIO(self._raw_data_sub_header))
+            self.data_sub_header = Nitf.DataSubHeader(_io__raw_data_sub_header, self, self._root)
+            self.data_sub_header._read()
+            self._debug['data_sub_header']['end'] = self._io.pos()
+            self._debug['data_data_field']['start'] = self._io.pos()
+            self.data_data_field = self._io.read_bytes(int(self._parent.header.ldnfo[self.idx].length_data_extension_segment))
+            self._debug['data_data_field']['end'] = self._io.pos()
 
-            if self.has_mask:
-                self._debug['image_data_field']['start'] = self._io.pos()
-                self.image_data_field = self._io.read_bytes((int(self._parent.header.linfo[self.idx].length_image_segment) - self.image_data_mask.total_size))
-                self._debug['image_data_field']['end'] = self._io.pos()
+
+        def _fetch_instances(self):
+            pass
+            self.data_sub_header._fetch_instances()
+
+
+    class DataSubHeader(KaitaiStruct):
+        SEQ_FIELDS = ["des_base", "overflowed_header_type", "data_item_overflowed", "des_defined_subheader_fields_len", "desshf", "des_defined_data_field"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Nitf.DataSubHeader, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['des_base']['start'] = self._io.pos()
+            self.des_base = Nitf.DataSubHeaderBase(self._io, self, self._root)
+            self.des_base._read()
+            self._debug['des_base']['end'] = self._io.pos()
+            if self.tre_ofl:
+                pass
+                self._debug['overflowed_header_type']['start'] = self._io.pos()
+                self.overflowed_header_type = (self._io.read_bytes(6)).decode(u"UTF-8")
+                self._debug['overflowed_header_type']['end'] = self._io.pos()
+
+            if self.tre_ofl:
+                pass
+                self._debug['data_item_overflowed']['start'] = self._io.pos()
+                self.data_item_overflowed = (self._io.read_bytes(3)).decode(u"UTF-8")
+                self._debug['data_item_overflowed']['end'] = self._io.pos()
+
+            self._debug['des_defined_subheader_fields_len']['start'] = self._io.pos()
+            self.des_defined_subheader_fields_len = (self._io.read_bytes(4)).decode(u"UTF-8")
+            self._debug['des_defined_subheader_fields_len']['end'] = self._io.pos()
+            self._debug['desshf']['start'] = self._io.pos()
+            self.desshf = (self._io.read_bytes(int(self.des_defined_subheader_fields_len))).decode(u"UTF-8")
+            self._debug['desshf']['end'] = self._io.pos()
+            self._debug['des_defined_data_field']['start'] = self._io.pos()
+            self.des_defined_data_field = (self._io.read_bytes_full()).decode(u"UTF-8")
+            self._debug['des_defined_data_field']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            self.des_base._fetch_instances()
+            if self.tre_ofl:
+                pass
+
+            if self.tre_ofl:
+                pass
 
 
         @property
-        def has_mask(self):
-            if hasattr(self, '_m_has_mask'):
-                return self._m_has_mask if hasattr(self, '_m_has_mask') else None
+        def tre_ofl(self):
+            if hasattr(self, '_m_tre_ofl'):
+                return self._m_tre_ofl
 
-            self._m_has_mask = (self.image_sub_header.img_compression)[0:2] == u"MM"
-            return self._m_has_mask if hasattr(self, '_m_has_mask') else None
+            self._m_tre_ofl = self.des_base.desid == u"TRE_OVERFLOW"
+            return getattr(self, '_m_tre_ofl', None)
 
 
-    class TextSegment(KaitaiStruct):
-        SEQ_FIELDS = ["text_sub_header", "text_data_field"]
-        def __init__(self, idx, _io, _parent=None, _root=None):
-            self._io = _io
+    class DataSubHeaderBase(KaitaiStruct):
+        SEQ_FIELDS = ["file_part_type_de", "desid", "data_definition_version", "declasnfo"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Nitf.DataSubHeaderBase, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
-            self.idx = idx
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
-            self._debug['text_sub_header']['start'] = self._io.pos()
-            self.text_sub_header = self._io.read_bytes(1)
-            self._debug['text_sub_header']['end'] = self._io.pos()
-            self._debug['text_data_field']['start'] = self._io.pos()
-            self.text_data_field = self._io.read_bytes(int(self._parent.header.ltnfo[self.idx].length_text_segment))
-            self._debug['text_data_field']['end'] = self._io.pos()
+            self._debug['file_part_type_de']['start'] = self._io.pos()
+            self.file_part_type_de = self._io.read_bytes(2)
+            self._debug['file_part_type_de']['end'] = self._io.pos()
+            if not self.file_part_type_de == b"\x44\x45":
+                raise kaitaistruct.ValidationNotEqualError(b"\x44\x45", self.file_part_type_de, self._io, u"/types/data_sub_header_base/seq/0")
+            self._debug['desid']['start'] = self._io.pos()
+            self.desid = (self._io.read_bytes(25)).decode(u"UTF-8")
+            self._debug['desid']['end'] = self._io.pos()
+            self._debug['data_definition_version']['start'] = self._io.pos()
+            self.data_definition_version = (self._io.read_bytes(2)).decode(u"UTF-8")
+            self._debug['data_definition_version']['end'] = self._io.pos()
+            self._debug['declasnfo']['start'] = self._io.pos()
+            self.declasnfo = Nitf.Clasnfo(self._io, self, self._root)
+            self.declasnfo._read()
+            self._debug['declasnfo']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            self.declasnfo._fetch_instances()
+
+
+    class DataSubHeaderStreaming(KaitaiStruct):
+        """Streaming file Header Data Extension Segment Subheader."""
+        SEQ_FIELDS = ["des_base", "des_defined_subheader_fields_len", "sfh_l1", "sfh_delim1", "sfh_dr", "sfh_delim2", "sfh_l2"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Nitf.DataSubHeaderStreaming, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['des_base']['start'] = self._io.pos()
+            self.des_base = Nitf.DataSubHeaderBase(self._io, self, self._root)
+            self.des_base._read()
+            self._debug['des_base']['end'] = self._io.pos()
+            self._debug['des_defined_subheader_fields_len']['start'] = self._io.pos()
+            self.des_defined_subheader_fields_len = (self._io.read_bytes(4)).decode(u"UTF-8")
+            self._debug['des_defined_subheader_fields_len']['end'] = self._io.pos()
+            self._debug['sfh_l1']['start'] = self._io.pos()
+            self.sfh_l1 = (self._io.read_bytes(7)).decode(u"UTF-8")
+            self._debug['sfh_l1']['end'] = self._io.pos()
+            self._debug['sfh_delim1']['start'] = self._io.pos()
+            self.sfh_delim1 = self._io.read_u4be()
+            self._debug['sfh_delim1']['end'] = self._io.pos()
+            self._debug['sfh_dr']['start'] = self._io.pos()
+            self._debug['sfh_dr']['arr'] = []
+            self.sfh_dr = []
+            for i in range(int(self.sfh_l1)):
+                self._debug['sfh_dr']['arr'].append({'start': self._io.pos()})
+                self.sfh_dr.append(self._io.read_u1())
+                self._debug['sfh_dr']['arr'][i]['end'] = self._io.pos()
+
+            self._debug['sfh_dr']['end'] = self._io.pos()
+            self._debug['sfh_delim2']['start'] = self._io.pos()
+            self.sfh_delim2 = self._io.read_u4be()
+            self._debug['sfh_delim2']['end'] = self._io.pos()
+            self._debug['sfh_l2']['start'] = self._io.pos()
+            self.sfh_l2 = (self._io.read_bytes(7)).decode(u"UTF-8")
+            self._debug['sfh_l2']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            self.des_base._fetch_instances()
+            for i in range(len(self.sfh_dr)):
+                pass
+
+
+
+    class DataSubHeaderTre(KaitaiStruct):
+        SEQ_FIELDS = ["des_base", "overflowed_header_type", "data_item_overflowed", "des_defined_subheader_fields_len", "des_defined_data_field"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Nitf.DataSubHeaderTre, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['des_base']['start'] = self._io.pos()
+            self.des_base = Nitf.DataSubHeaderBase(self._io, self, self._root)
+            self.des_base._read()
+            self._debug['des_base']['end'] = self._io.pos()
+            if self.des_base.desid == u"TRE_OVERFLOW":
+                pass
+                self._debug['overflowed_header_type']['start'] = self._io.pos()
+                self.overflowed_header_type = (self._io.read_bytes(6)).decode(u"UTF-8")
+                self._debug['overflowed_header_type']['end'] = self._io.pos()
+
+            if self.des_base.desid == u"TRE_OVERFLOW":
+                pass
+                self._debug['data_item_overflowed']['start'] = self._io.pos()
+                self.data_item_overflowed = (self._io.read_bytes(3)).decode(u"UTF-8")
+                self._debug['data_item_overflowed']['end'] = self._io.pos()
+
+            self._debug['des_defined_subheader_fields_len']['start'] = self._io.pos()
+            self.des_defined_subheader_fields_len = (self._io.read_bytes(4)).decode(u"UTF-8")
+            self._debug['des_defined_subheader_fields_len']['end'] = self._io.pos()
+            self._debug['des_defined_data_field']['start'] = self._io.pos()
+            self.des_defined_data_field = (self._io.read_bytes(int(self.des_defined_subheader_fields_len))).decode(u"UTF-8")
+            self._debug['des_defined_data_field']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            self.des_base._fetch_instances()
+            if self.des_base.desid == u"TRE_OVERFLOW":
+                pass
+
+            if self.des_base.desid == u"TRE_OVERFLOW":
+                pass
+
+
+
+    class DateTime(KaitaiStruct):
+        SEQ_FIELDS = ["_unnamed0"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Nitf.DateTime, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['_unnamed0']['start'] = self._io.pos()
+            self._unnamed0 = (self._io.read_bytes(14)).decode(u"UTF-8")
+            self._debug['_unnamed0']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+
+
+    class Encrypt(KaitaiStruct):
+        SEQ_FIELDS = ["_unnamed0"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Nitf.Encrypt, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['_unnamed0']['start'] = self._io.pos()
+            self._unnamed0 = (self._io.read_bytes(1)).decode(u"UTF-8")
+            self._debug['_unnamed0']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
 
 
     class GraphicSubHeader(KaitaiStruct):
         SEQ_FIELDS = ["file_part_type_sy", "graphic_id", "graphic_name", "graphic_classification", "encryption", "graphic_type", "reserved1", "graphic_display_level", "graphic_attachment_level", "graphic_location", "first_graphic_bound_loc", "graphic_color", "second_graphic_bound_loc", "reserved2", "graphics_extended_sub_header"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Nitf.GraphicSubHeader, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -328,208 +546,19 @@ class Nitf(KaitaiStruct):
             self._debug['graphics_extended_sub_header']['end'] = self._io.pos()
 
 
-    class Clasnfo(KaitaiStruct):
-        SEQ_FIELDS = ["security_class", "security_system", "codewords", "control_and_handling", "releaseability", "declass_type", "declass_date", "declass_exemption", "downgrade", "downgrade_date", "class_text", "class_authority_type", "class_authority", "class_reason", "source_date", "control_number"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['security_class']['start'] = self._io.pos()
-            self.security_class = (self._io.read_bytes(1)).decode(u"UTF-8")
-            self._debug['security_class']['end'] = self._io.pos()
-            self._debug['security_system']['start'] = self._io.pos()
-            self.security_system = (self._io.read_bytes(2)).decode(u"UTF-8")
-            self._debug['security_system']['end'] = self._io.pos()
-            self._debug['codewords']['start'] = self._io.pos()
-            self.codewords = (self._io.read_bytes(11)).decode(u"UTF-8")
-            self._debug['codewords']['end'] = self._io.pos()
-            self._debug['control_and_handling']['start'] = self._io.pos()
-            self.control_and_handling = (self._io.read_bytes(2)).decode(u"UTF-8")
-            self._debug['control_and_handling']['end'] = self._io.pos()
-            self._debug['releaseability']['start'] = self._io.pos()
-            self.releaseability = (self._io.read_bytes(20)).decode(u"UTF-8")
-            self._debug['releaseability']['end'] = self._io.pos()
-            self._debug['declass_type']['start'] = self._io.pos()
-            self.declass_type = (self._io.read_bytes(2)).decode(u"UTF-8")
-            self._debug['declass_type']['end'] = self._io.pos()
-            self._debug['declass_date']['start'] = self._io.pos()
-            self.declass_date = (self._io.read_bytes(8)).decode(u"UTF-8")
-            self._debug['declass_date']['end'] = self._io.pos()
-            self._debug['declass_exemption']['start'] = self._io.pos()
-            self.declass_exemption = (self._io.read_bytes(4)).decode(u"UTF-8")
-            self._debug['declass_exemption']['end'] = self._io.pos()
-            self._debug['downgrade']['start'] = self._io.pos()
-            self.downgrade = (self._io.read_bytes(1)).decode(u"UTF-8")
-            self._debug['downgrade']['end'] = self._io.pos()
-            self._debug['downgrade_date']['start'] = self._io.pos()
-            self.downgrade_date = (self._io.read_bytes(8)).decode(u"UTF-8")
-            self._debug['downgrade_date']['end'] = self._io.pos()
-            self._debug['class_text']['start'] = self._io.pos()
-            self.class_text = (self._io.read_bytes(43)).decode(u"UTF-8")
-            self._debug['class_text']['end'] = self._io.pos()
-            self._debug['class_authority_type']['start'] = self._io.pos()
-            self.class_authority_type = (self._io.read_bytes(1)).decode(u"UTF-8")
-            self._debug['class_authority_type']['end'] = self._io.pos()
-            self._debug['class_authority']['start'] = self._io.pos()
-            self.class_authority = (self._io.read_bytes(40)).decode(u"UTF-8")
-            self._debug['class_authority']['end'] = self._io.pos()
-            self._debug['class_reason']['start'] = self._io.pos()
-            self.class_reason = (self._io.read_bytes(1)).decode(u"UTF-8")
-            self._debug['class_reason']['end'] = self._io.pos()
-            self._debug['source_date']['start'] = self._io.pos()
-            self.source_date = (self._io.read_bytes(8)).decode(u"UTF-8")
-            self._debug['source_date']['end'] = self._io.pos()
-            self._debug['control_number']['start'] = self._io.pos()
-            self.control_number = (self._io.read_bytes(15)).decode(u"UTF-8")
-            self._debug['control_number']['end'] = self._io.pos()
-
-
-    class LengthGraphicInfo(KaitaiStruct):
-        SEQ_FIELDS = ["length_graphic_subheader", "length_graphic_segment"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['length_graphic_subheader']['start'] = self._io.pos()
-            self.length_graphic_subheader = (self._io.read_bytes(4)).decode(u"UTF-8")
-            self._debug['length_graphic_subheader']['end'] = self._io.pos()
-            self._debug['length_graphic_segment']['start'] = self._io.pos()
-            self.length_graphic_segment = (self._io.read_bytes(6)).decode(u"UTF-8")
-            self._debug['length_graphic_segment']['end'] = self._io.pos()
-
-
-    class Encrypt(KaitaiStruct):
-        SEQ_FIELDS = ["_unnamed0"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['_unnamed0']['start'] = self._io.pos()
-            self._unnamed0 = (self._io.read_bytes(1)).decode(u"UTF-8")
-            self._debug['_unnamed0']['end'] = self._io.pos()
-
-
-    class ImageDataMask(KaitaiStruct):
-        SEQ_FIELDS = ["blocked_img_data_offset", "bmrlnth", "tmrlnth", "tpxcdlnth", "tpxcd", "bmrbnd", "tmrbnd"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['blocked_img_data_offset']['start'] = self._io.pos()
-            self.blocked_img_data_offset = self._io.read_u4be()
-            self._debug['blocked_img_data_offset']['end'] = self._io.pos()
-            self._debug['bmrlnth']['start'] = self._io.pos()
-            self.bmrlnth = self._io.read_u2be()
-            self._debug['bmrlnth']['end'] = self._io.pos()
-            self._debug['tmrlnth']['start'] = self._io.pos()
-            self.tmrlnth = self._io.read_u2be()
-            self._debug['tmrlnth']['end'] = self._io.pos()
-            self._debug['tpxcdlnth']['start'] = self._io.pos()
-            self.tpxcdlnth = self._io.read_u2be()
-            self._debug['tpxcdlnth']['end'] = self._io.pos()
-            self._debug['tpxcd']['start'] = self._io.pos()
-            self.tpxcd = self._io.read_bytes(self.tpxcd_size)
-            self._debug['tpxcd']['end'] = self._io.pos()
-            if self.has_bmr:
-                self._debug['bmrbnd']['start'] = self._io.pos()
-                self.bmrbnd = [None] * (self.bmrtmr_count)
-                for i in range(self.bmrtmr_count):
-                    if not 'arr' in self._debug['bmrbnd']:
-                        self._debug['bmrbnd']['arr'] = []
-                    self._debug['bmrbnd']['arr'].append({'start': self._io.pos()})
-                    self.bmrbnd[i] = self._io.read_u4be()
-                    self._debug['bmrbnd']['arr'][i]['end'] = self._io.pos()
-
-                self._debug['bmrbnd']['end'] = self._io.pos()
-
-            if self.has_tmr:
-                self._debug['tmrbnd']['start'] = self._io.pos()
-                self.tmrbnd = [None] * (self.bmrtmr_count)
-                for i in range(self.bmrtmr_count):
-                    if not 'arr' in self._debug['tmrbnd']:
-                        self._debug['tmrbnd']['arr'] = []
-                    self._debug['tmrbnd']['arr'].append({'start': self._io.pos()})
-                    self.tmrbnd[i] = self._io.read_u4be()
-                    self._debug['tmrbnd']['arr'][i]['end'] = self._io.pos()
-
-                self._debug['tmrbnd']['end'] = self._io.pos()
-
-
-        @property
-        def has_bmr(self):
-            if hasattr(self, '_m_has_bmr'):
-                return self._m_has_bmr if hasattr(self, '_m_has_bmr') else None
-
-            self._m_has_bmr = self.bmrlnth != 0
-            return self._m_has_bmr if hasattr(self, '_m_has_bmr') else None
-
-        @property
-        def has_tmr(self):
-            if hasattr(self, '_m_has_tmr'):
-                return self._m_has_tmr if hasattr(self, '_m_has_tmr') else None
-
-            self._m_has_tmr = self.tmrlnth != 0
-            return self._m_has_tmr if hasattr(self, '_m_has_tmr') else None
-
-        @property
-        def tmrbnd_size(self):
-            if hasattr(self, '_m_tmrbnd_size'):
-                return self._m_tmrbnd_size if hasattr(self, '_m_tmrbnd_size') else None
-
-            self._m_tmrbnd_size = ((self.bmrtmr_count * 4) if self.has_tmr else 0)
-            return self._m_tmrbnd_size if hasattr(self, '_m_tmrbnd_size') else None
-
-        @property
-        def tpxcd_size(self):
-            if hasattr(self, '_m_tpxcd_size'):
-                return self._m_tpxcd_size if hasattr(self, '_m_tpxcd_size') else None
-
-            self._m_tpxcd_size = (self.tpxcdlnth if (self.tpxcdlnth % 8) == 0 else (self.tpxcdlnth + (8 - (self.tpxcdlnth % 8)))) // 8
-            return self._m_tpxcd_size if hasattr(self, '_m_tpxcd_size') else None
-
-        @property
-        def total_size(self):
-            if hasattr(self, '_m_total_size'):
-                return self._m_total_size if hasattr(self, '_m_total_size') else None
-
-            self._m_total_size = ((((((4 + 2) + 2) + 2) + self.tpxcd_size) + self.bmrbnd_size) + self.tmrbnd_size)
-            return self._m_total_size if hasattr(self, '_m_total_size') else None
-
-        @property
-        def bmrbnd_size(self):
-            if hasattr(self, '_m_bmrbnd_size'):
-                return self._m_bmrbnd_size if hasattr(self, '_m_bmrbnd_size') else None
-
-            self._m_bmrbnd_size = ((self.bmrtmr_count * 4) if self.has_bmr else 0)
-            return self._m_bmrbnd_size if hasattr(self, '_m_bmrbnd_size') else None
-
-        @property
-        def bmrtmr_count(self):
-            if hasattr(self, '_m_bmrtmr_count'):
-                return self._m_bmrtmr_count if hasattr(self, '_m_bmrtmr_count') else None
-
-            self._m_bmrtmr_count = ((int(self._parent.image_sub_header.num_blocks_per_row) * int(self._parent.image_sub_header.num_blocks_per_col)) * (1 if self._parent.image_sub_header.img_mode != u"S" else (int(self._parent.image_sub_header.num_bands) if int(self._parent.image_sub_header.num_bands) != 0 else int(self._parent.image_sub_header.num_multispectral_bands))))
-            return self._m_bmrtmr_count if hasattr(self, '_m_bmrtmr_count') else None
+        def _fetch_instances(self):
+            pass
+            self.graphic_classification._fetch_instances()
+            self.encryption._fetch_instances()
+            self.graphics_extended_sub_header._fetch_instances()
 
 
     class GraphicsSegment(KaitaiStruct):
         SEQ_FIELDS = ["graphic_sub_header", "graphic_data_field"]
         def __init__(self, idx, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Nitf.GraphicsSegment, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self.idx = idx
             self._debug = collections.defaultdict(dict)
 
@@ -543,378 +572,17 @@ class Nitf(KaitaiStruct):
             self._debug['graphic_data_field']['end'] = self._io.pos()
 
 
-    class DataSubHeader(KaitaiStruct):
-        SEQ_FIELDS = ["des_base", "overflowed_header_type", "data_item_overflowed", "des_defined_subheader_fields_len", "desshf", "des_defined_data_field"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['des_base']['start'] = self._io.pos()
-            self.des_base = Nitf.DataSubHeaderBase(self._io, self, self._root)
-            self.des_base._read()
-            self._debug['des_base']['end'] = self._io.pos()
-            if self.tre_ofl:
-                self._debug['overflowed_header_type']['start'] = self._io.pos()
-                self.overflowed_header_type = (self._io.read_bytes(6)).decode(u"UTF-8")
-                self._debug['overflowed_header_type']['end'] = self._io.pos()
-
-            if self.tre_ofl:
-                self._debug['data_item_overflowed']['start'] = self._io.pos()
-                self.data_item_overflowed = (self._io.read_bytes(3)).decode(u"UTF-8")
-                self._debug['data_item_overflowed']['end'] = self._io.pos()
-
-            self._debug['des_defined_subheader_fields_len']['start'] = self._io.pos()
-            self.des_defined_subheader_fields_len = (self._io.read_bytes(4)).decode(u"UTF-8")
-            self._debug['des_defined_subheader_fields_len']['end'] = self._io.pos()
-            self._debug['desshf']['start'] = self._io.pos()
-            self.desshf = (self._io.read_bytes(int(self.des_defined_subheader_fields_len))).decode(u"UTF-8")
-            self._debug['desshf']['end'] = self._io.pos()
-            self._debug['des_defined_data_field']['start'] = self._io.pos()
-            self.des_defined_data_field = (self._io.read_bytes_full()).decode(u"UTF-8")
-            self._debug['des_defined_data_field']['end'] = self._io.pos()
-
-        @property
-        def tre_ofl(self):
-            if hasattr(self, '_m_tre_ofl'):
-                return self._m_tre_ofl if hasattr(self, '_m_tre_ofl') else None
-
-            self._m_tre_ofl = self.des_base.desid == u"TRE_OVERFLOW"
-            return self._m_tre_ofl if hasattr(self, '_m_tre_ofl') else None
-
-
-    class DataExtensionSegment(KaitaiStruct):
-        SEQ_FIELDS = ["data_sub_header", "data_data_field"]
-        def __init__(self, idx, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self.idx = idx
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['data_sub_header']['start'] = self._io.pos()
-            self._raw_data_sub_header = self._io.read_bytes(int(self._parent.header.ldnfo[self.idx].length_data_extension_subheader))
-            _io__raw_data_sub_header = KaitaiStream(BytesIO(self._raw_data_sub_header))
-            self.data_sub_header = Nitf.DataSubHeader(_io__raw_data_sub_header, self, self._root)
-            self.data_sub_header._read()
-            self._debug['data_sub_header']['end'] = self._io.pos()
-            self._debug['data_data_field']['start'] = self._io.pos()
-            self.data_data_field = self._io.read_bytes(int(self._parent.header.ldnfo[self.idx].length_data_extension_segment))
-            self._debug['data_data_field']['end'] = self._io.pos()
-
-
-    class DataSubHeaderTre(KaitaiStruct):
-        SEQ_FIELDS = ["des_base", "overflowed_header_type", "data_item_overflowed", "des_defined_subheader_fields_len", "des_defined_data_field"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['des_base']['start'] = self._io.pos()
-            self.des_base = Nitf.DataSubHeaderBase(self._io, self, self._root)
-            self.des_base._read()
-            self._debug['des_base']['end'] = self._io.pos()
-            if self.des_base.desid == u"TRE_OVERFLOW":
-                self._debug['overflowed_header_type']['start'] = self._io.pos()
-                self.overflowed_header_type = (self._io.read_bytes(6)).decode(u"UTF-8")
-                self._debug['overflowed_header_type']['end'] = self._io.pos()
-
-            if self.des_base.desid == u"TRE_OVERFLOW":
-                self._debug['data_item_overflowed']['start'] = self._io.pos()
-                self.data_item_overflowed = (self._io.read_bytes(3)).decode(u"UTF-8")
-                self._debug['data_item_overflowed']['end'] = self._io.pos()
-
-            self._debug['des_defined_subheader_fields_len']['start'] = self._io.pos()
-            self.des_defined_subheader_fields_len = (self._io.read_bytes(4)).decode(u"UTF-8")
-            self._debug['des_defined_subheader_fields_len']['end'] = self._io.pos()
-            self._debug['des_defined_data_field']['start'] = self._io.pos()
-            self.des_defined_data_field = (self._io.read_bytes(int(self.des_defined_subheader_fields_len))).decode(u"UTF-8")
-            self._debug['des_defined_data_field']['end'] = self._io.pos()
-
-
-    class ImageSubHeader(KaitaiStruct):
-        SEQ_FIELDS = ["file_part_type", "image_id_1", "image_date_time", "target_id", "image_id_2", "image_security_classification", "encryption", "image_source", "num_sig_rows", "num_sig_cols", "pixel_value_type", "image_representation", "image_category", "actual_bits_per_pixel_per_band", "pixel_justification", "image_coordinate_rep", "image_geo_loc", "num_img_comments", "img_comments", "img_compression", "compression_rate_code", "num_bands", "num_multispectral_bands", "bands", "img_sync_code", "img_mode", "num_blocks_per_row", "num_blocks_per_col", "num_pixels_per_block_horz", "num_pixels_per_block_vert", "num_pixels_per_band", "img_display_level", "attachment_level", "img_location", "img_magnification", "user_def_img_data_len", "user_def_overflow", "user_def_img_data", "image_extended_sub_header"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['file_part_type']['start'] = self._io.pos()
-            self.file_part_type = self._io.read_bytes(2)
-            self._debug['file_part_type']['end'] = self._io.pos()
-            if not self.file_part_type == b"\x49\x4D":
-                raise kaitaistruct.ValidationNotEqualError(b"\x49\x4D", self.file_part_type, self._io, u"/types/image_sub_header/seq/0")
-            self._debug['image_id_1']['start'] = self._io.pos()
-            self.image_id_1 = (self._io.read_bytes(10)).decode(u"UTF-8")
-            self._debug['image_id_1']['end'] = self._io.pos()
-            self._debug['image_date_time']['start'] = self._io.pos()
-            self.image_date_time = Nitf.DateTime(self._io, self, self._root)
-            self.image_date_time._read()
-            self._debug['image_date_time']['end'] = self._io.pos()
-            self._debug['target_id']['start'] = self._io.pos()
-            self.target_id = (self._io.read_bytes(17)).decode(u"UTF-8")
-            self._debug['target_id']['end'] = self._io.pos()
-            self._debug['image_id_2']['start'] = self._io.pos()
-            self.image_id_2 = (self._io.read_bytes(80)).decode(u"UTF-8")
-            self._debug['image_id_2']['end'] = self._io.pos()
-            self._debug['image_security_classification']['start'] = self._io.pos()
-            self.image_security_classification = Nitf.Clasnfo(self._io, self, self._root)
-            self.image_security_classification._read()
-            self._debug['image_security_classification']['end'] = self._io.pos()
-            self._debug['encryption']['start'] = self._io.pos()
-            self.encryption = Nitf.Encrypt(self._io, self, self._root)
-            self.encryption._read()
-            self._debug['encryption']['end'] = self._io.pos()
-            self._debug['image_source']['start'] = self._io.pos()
-            self.image_source = (self._io.read_bytes(42)).decode(u"UTF-8")
-            self._debug['image_source']['end'] = self._io.pos()
-            self._debug['num_sig_rows']['start'] = self._io.pos()
-            self.num_sig_rows = (self._io.read_bytes(8)).decode(u"UTF-8")
-            self._debug['num_sig_rows']['end'] = self._io.pos()
-            self._debug['num_sig_cols']['start'] = self._io.pos()
-            self.num_sig_cols = (self._io.read_bytes(8)).decode(u"UTF-8")
-            self._debug['num_sig_cols']['end'] = self._io.pos()
-            self._debug['pixel_value_type']['start'] = self._io.pos()
-            self.pixel_value_type = (self._io.read_bytes(3)).decode(u"UTF-8")
-            self._debug['pixel_value_type']['end'] = self._io.pos()
-            self._debug['image_representation']['start'] = self._io.pos()
-            self.image_representation = (self._io.read_bytes(8)).decode(u"UTF-8")
-            self._debug['image_representation']['end'] = self._io.pos()
-            self._debug['image_category']['start'] = self._io.pos()
-            self.image_category = (self._io.read_bytes(8)).decode(u"UTF-8")
-            self._debug['image_category']['end'] = self._io.pos()
-            self._debug['actual_bits_per_pixel_per_band']['start'] = self._io.pos()
-            self.actual_bits_per_pixel_per_band = (self._io.read_bytes(2)).decode(u"UTF-8")
-            self._debug['actual_bits_per_pixel_per_band']['end'] = self._io.pos()
-            self._debug['pixel_justification']['start'] = self._io.pos()
-            self.pixel_justification = (self._io.read_bytes(1)).decode(u"UTF-8")
-            self._debug['pixel_justification']['end'] = self._io.pos()
-            self._debug['image_coordinate_rep']['start'] = self._io.pos()
-            self.image_coordinate_rep = (self._io.read_bytes(1)).decode(u"UTF-8")
-            self._debug['image_coordinate_rep']['end'] = self._io.pos()
-            self._debug['image_geo_loc']['start'] = self._io.pos()
-            self.image_geo_loc = (self._io.read_bytes(60)).decode(u"UTF-8")
-            self._debug['image_geo_loc']['end'] = self._io.pos()
-            self._debug['num_img_comments']['start'] = self._io.pos()
-            self.num_img_comments = (self._io.read_bytes(1)).decode(u"UTF-8")
-            self._debug['num_img_comments']['end'] = self._io.pos()
-            self._debug['img_comments']['start'] = self._io.pos()
-            self.img_comments = [None] * (int(self.num_img_comments))
-            for i in range(int(self.num_img_comments)):
-                if not 'arr' in self._debug['img_comments']:
-                    self._debug['img_comments']['arr'] = []
-                self._debug['img_comments']['arr'].append({'start': self._io.pos()})
-                _t_img_comments = Nitf.ImageComment(self._io, self, self._root)
-                _t_img_comments._read()
-                self.img_comments[i] = _t_img_comments
-                self._debug['img_comments']['arr'][i]['end'] = self._io.pos()
-
-            self._debug['img_comments']['end'] = self._io.pos()
-            self._debug['img_compression']['start'] = self._io.pos()
-            self.img_compression = (self._io.read_bytes(2)).decode(u"UTF-8")
-            self._debug['img_compression']['end'] = self._io.pos()
-            self._debug['compression_rate_code']['start'] = self._io.pos()
-            self.compression_rate_code = (self._io.read_bytes(4)).decode(u"UTF-8")
-            self._debug['compression_rate_code']['end'] = self._io.pos()
-            self._debug['num_bands']['start'] = self._io.pos()
-            self.num_bands = (self._io.read_bytes(1)).decode(u"UTF-8")
-            self._debug['num_bands']['end'] = self._io.pos()
-            if int(self.num_bands) == 0:
-                self._debug['num_multispectral_bands']['start'] = self._io.pos()
-                self.num_multispectral_bands = (self._io.read_bytes(5)).decode(u"UTF-8")
-                self._debug['num_multispectral_bands']['end'] = self._io.pos()
-
-            self._debug['bands']['start'] = self._io.pos()
-            self.bands = [None] * ((int(self.num_bands) if int(self.num_bands) != 0 else int(self.num_multispectral_bands)))
-            for i in range((int(self.num_bands) if int(self.num_bands) != 0 else int(self.num_multispectral_bands))):
-                if not 'arr' in self._debug['bands']:
-                    self._debug['bands']['arr'] = []
-                self._debug['bands']['arr'].append({'start': self._io.pos()})
-                _t_bands = Nitf.BandInfo(self._io, self, self._root)
-                _t_bands._read()
-                self.bands[i] = _t_bands
-                self._debug['bands']['arr'][i]['end'] = self._io.pos()
-
-            self._debug['bands']['end'] = self._io.pos()
-            self._debug['img_sync_code']['start'] = self._io.pos()
-            self.img_sync_code = (self._io.read_bytes(1)).decode(u"UTF-8")
-            self._debug['img_sync_code']['end'] = self._io.pos()
-            self._debug['img_mode']['start'] = self._io.pos()
-            self.img_mode = (self._io.read_bytes(1)).decode(u"UTF-8")
-            self._debug['img_mode']['end'] = self._io.pos()
-            self._debug['num_blocks_per_row']['start'] = self._io.pos()
-            self.num_blocks_per_row = (self._io.read_bytes(4)).decode(u"UTF-8")
-            self._debug['num_blocks_per_row']['end'] = self._io.pos()
-            self._debug['num_blocks_per_col']['start'] = self._io.pos()
-            self.num_blocks_per_col = (self._io.read_bytes(4)).decode(u"UTF-8")
-            self._debug['num_blocks_per_col']['end'] = self._io.pos()
-            self._debug['num_pixels_per_block_horz']['start'] = self._io.pos()
-            self.num_pixels_per_block_horz = (self._io.read_bytes(4)).decode(u"UTF-8")
-            self._debug['num_pixels_per_block_horz']['end'] = self._io.pos()
-            self._debug['num_pixels_per_block_vert']['start'] = self._io.pos()
-            self.num_pixels_per_block_vert = (self._io.read_bytes(4)).decode(u"UTF-8")
-            self._debug['num_pixels_per_block_vert']['end'] = self._io.pos()
-            self._debug['num_pixels_per_band']['start'] = self._io.pos()
-            self.num_pixels_per_band = (self._io.read_bytes(2)).decode(u"UTF-8")
-            self._debug['num_pixels_per_band']['end'] = self._io.pos()
-            self._debug['img_display_level']['start'] = self._io.pos()
-            self.img_display_level = (self._io.read_bytes(3)).decode(u"UTF-8")
-            self._debug['img_display_level']['end'] = self._io.pos()
-            self._debug['attachment_level']['start'] = self._io.pos()
-            self.attachment_level = (self._io.read_bytes(3)).decode(u"UTF-8")
-            self._debug['attachment_level']['end'] = self._io.pos()
-            self._debug['img_location']['start'] = self._io.pos()
-            self.img_location = (self._io.read_bytes(10)).decode(u"UTF-8")
-            self._debug['img_location']['end'] = self._io.pos()
-            self._debug['img_magnification']['start'] = self._io.pos()
-            self.img_magnification = (self._io.read_bytes(4)).decode(u"UTF-8")
-            self._debug['img_magnification']['end'] = self._io.pos()
-            self._debug['user_def_img_data_len']['start'] = self._io.pos()
-            self.user_def_img_data_len = (self._io.read_bytes(5)).decode(u"UTF-8")
-            self._debug['user_def_img_data_len']['end'] = self._io.pos()
-            if int(self.user_def_img_data_len) != 0:
-                self._debug['user_def_overflow']['start'] = self._io.pos()
-                self.user_def_overflow = (self._io.read_bytes(3)).decode(u"UTF-8")
-                self._debug['user_def_overflow']['end'] = self._io.pos()
-
-            if int(self.user_def_img_data_len) > 2:
-                self._debug['user_def_img_data']['start'] = self._io.pos()
-                self.user_def_img_data = [None] * ((int(self.user_def_img_data_len) - 3))
-                for i in range((int(self.user_def_img_data_len) - 3)):
-                    if not 'arr' in self._debug['user_def_img_data']:
-                        self._debug['user_def_img_data']['arr'] = []
-                    self._debug['user_def_img_data']['arr'].append({'start': self._io.pos()})
-                    self.user_def_img_data[i] = self._io.read_u1()
-                    self._debug['user_def_img_data']['arr'][i]['end'] = self._io.pos()
-
-                self._debug['user_def_img_data']['end'] = self._io.pos()
-
-            self._debug['image_extended_sub_header']['start'] = self._io.pos()
-            self.image_extended_sub_header = Nitf.TreHeader(self._io, self, self._root)
-            self.image_extended_sub_header._read()
-            self._debug['image_extended_sub_header']['end'] = self._io.pos()
-
-
-    class ReservedSubHeader(KaitaiStruct):
-        SEQ_FIELDS = ["file_part_type_re", "res_type_id", "res_version", "reclasnfo", "res_user_defined_subheader_length", "res_user_defined_subheader_fields", "res_user_defined_data"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['file_part_type_re']['start'] = self._io.pos()
-            self.file_part_type_re = self._io.read_bytes(2)
-            self._debug['file_part_type_re']['end'] = self._io.pos()
-            if not self.file_part_type_re == b"\x52\x45":
-                raise kaitaistruct.ValidationNotEqualError(b"\x52\x45", self.file_part_type_re, self._io, u"/types/reserved_sub_header/seq/0")
-            self._debug['res_type_id']['start'] = self._io.pos()
-            self.res_type_id = (self._io.read_bytes(25)).decode(u"UTF-8")
-            self._debug['res_type_id']['end'] = self._io.pos()
-            self._debug['res_version']['start'] = self._io.pos()
-            self.res_version = (self._io.read_bytes(2)).decode(u"UTF-8")
-            self._debug['res_version']['end'] = self._io.pos()
-            self._debug['reclasnfo']['start'] = self._io.pos()
-            self.reclasnfo = Nitf.Clasnfo(self._io, self, self._root)
-            self.reclasnfo._read()
-            self._debug['reclasnfo']['end'] = self._io.pos()
-            self._debug['res_user_defined_subheader_length']['start'] = self._io.pos()
-            self.res_user_defined_subheader_length = (self._io.read_bytes(4)).decode(u"UTF-8")
-            self._debug['res_user_defined_subheader_length']['end'] = self._io.pos()
-            self._debug['res_user_defined_subheader_fields']['start'] = self._io.pos()
-            self.res_user_defined_subheader_fields = (self._io.read_bytes(int(self.res_user_defined_subheader_length))).decode(u"UTF-8")
-            self._debug['res_user_defined_subheader_fields']['end'] = self._io.pos()
-            self._debug['res_user_defined_data']['start'] = self._io.pos()
-            self.res_user_defined_data = (self._io.read_bytes_full()).decode(u"UTF-8")
-            self._debug['res_user_defined_data']['end'] = self._io.pos()
-
-
-    class DataSubHeaderBase(KaitaiStruct):
-        SEQ_FIELDS = ["file_part_type_de", "desid", "data_definition_version", "declasnfo"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['file_part_type_de']['start'] = self._io.pos()
-            self.file_part_type_de = self._io.read_bytes(2)
-            self._debug['file_part_type_de']['end'] = self._io.pos()
-            if not self.file_part_type_de == b"\x44\x45":
-                raise kaitaistruct.ValidationNotEqualError(b"\x44\x45", self.file_part_type_de, self._io, u"/types/data_sub_header_base/seq/0")
-            self._debug['desid']['start'] = self._io.pos()
-            self.desid = (self._io.read_bytes(25)).decode(u"UTF-8")
-            self._debug['desid']['end'] = self._io.pos()
-            self._debug['data_definition_version']['start'] = self._io.pos()
-            self.data_definition_version = (self._io.read_bytes(2)).decode(u"UTF-8")
-            self._debug['data_definition_version']['end'] = self._io.pos()
-            self._debug['declasnfo']['start'] = self._io.pos()
-            self.declasnfo = Nitf.Clasnfo(self._io, self, self._root)
-            self.declasnfo._read()
-            self._debug['declasnfo']['end'] = self._io.pos()
-
-
-    class TextSubHeader(KaitaiStruct):
-        SEQ_FIELDS = ["text_date_time", "text_title", "text_security_class", "encryp", "text_format", "text_extended_sub_header"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['text_date_time']['start'] = self._io.pos()
-            self.text_date_time = (self._io.read_bytes(14)).decode(u"UTF-8")
-            self._debug['text_date_time']['end'] = self._io.pos()
-            self._debug['text_title']['start'] = self._io.pos()
-            self.text_title = (self._io.read_bytes(80)).decode(u"UTF-8")
-            self._debug['text_title']['end'] = self._io.pos()
-            self._debug['text_security_class']['start'] = self._io.pos()
-            self.text_security_class = Nitf.Clasnfo(self._io, self, self._root)
-            self.text_security_class._read()
-            self._debug['text_security_class']['end'] = self._io.pos()
-            self._debug['encryp']['start'] = self._io.pos()
-            self.encryp = Nitf.Encrypt(self._io, self, self._root)
-            self.encryp._read()
-            self._debug['encryp']['end'] = self._io.pos()
-            self._debug['text_format']['start'] = self._io.pos()
-            self.text_format = (self._io.read_bytes(3)).decode(u"UTF-8")
-            self._debug['text_format']['end'] = self._io.pos()
-            self._debug['text_extended_sub_header']['start'] = self._io.pos()
-            self.text_extended_sub_header = Nitf.TreHeader(self._io, self, self._root)
-            self.text_extended_sub_header._read()
-            self._debug['text_extended_sub_header']['end'] = self._io.pos()
-
-
-    class DateTime(KaitaiStruct):
-        SEQ_FIELDS = ["_unnamed0"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['_unnamed0']['start'] = self._io.pos()
-            self._unnamed0 = (self._io.read_bytes(14)).decode(u"UTF-8")
-            self._debug['_unnamed0']['end'] = self._io.pos()
+        def _fetch_instances(self):
+            pass
+            self.graphic_sub_header._fetch_instances()
 
 
     class Header(KaitaiStruct):
         SEQ_FIELDS = ["file_profile_name", "file_version", "complexity_level", "standard_type", "originating_station_id", "file_date_time", "file_title", "file_security", "file_copy_number", "file_num_of_copys", "encryption", "file_bg_color", "originator_name", "originator_phone", "file_length", "file_header_length", "num_image_segments", "linfo", "num_graphics_segments", "lnnfo", "reserved_numx", "num_text_files", "ltnfo", "num_data_extension", "ldnfo", "num_reserved_extension", "lrnfo", "user_defined_header", "extended_header"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Nitf.Header, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -979,14 +647,15 @@ class Nitf(KaitaiStruct):
             self.num_image_segments = (self._io.read_bytes(3)).decode(u"UTF-8")
             self._debug['num_image_segments']['end'] = self._io.pos()
             self._debug['linfo']['start'] = self._io.pos()
-            self.linfo = [None] * (int(self.num_image_segments))
+            self._debug['linfo']['arr'] = []
+            self.linfo = []
             for i in range(int(self.num_image_segments)):
-                if not 'arr' in self._debug['linfo']:
-                    self._debug['linfo']['arr'] = []
                 self._debug['linfo']['arr'].append({'start': self._io.pos()})
                 _t_linfo = Nitf.LengthImageInfo(self._io, self, self._root)
-                _t_linfo._read()
-                self.linfo[i] = _t_linfo
+                try:
+                    _t_linfo._read()
+                finally:
+                    self.linfo.append(_t_linfo)
                 self._debug['linfo']['arr'][i]['end'] = self._io.pos()
 
             self._debug['linfo']['end'] = self._io.pos()
@@ -994,14 +663,15 @@ class Nitf(KaitaiStruct):
             self.num_graphics_segments = (self._io.read_bytes(3)).decode(u"UTF-8")
             self._debug['num_graphics_segments']['end'] = self._io.pos()
             self._debug['lnnfo']['start'] = self._io.pos()
-            self.lnnfo = [None] * (int(self.num_graphics_segments))
+            self._debug['lnnfo']['arr'] = []
+            self.lnnfo = []
             for i in range(int(self.num_graphics_segments)):
-                if not 'arr' in self._debug['lnnfo']:
-                    self._debug['lnnfo']['arr'] = []
                 self._debug['lnnfo']['arr'].append({'start': self._io.pos()})
                 _t_lnnfo = Nitf.LengthGraphicInfo(self._io, self, self._root)
-                _t_lnnfo._read()
-                self.lnnfo[i] = _t_lnnfo
+                try:
+                    _t_lnnfo._read()
+                finally:
+                    self.lnnfo.append(_t_lnnfo)
                 self._debug['lnnfo']['arr'][i]['end'] = self._io.pos()
 
             self._debug['lnnfo']['end'] = self._io.pos()
@@ -1012,14 +682,15 @@ class Nitf(KaitaiStruct):
             self.num_text_files = (self._io.read_bytes(3)).decode(u"UTF-8")
             self._debug['num_text_files']['end'] = self._io.pos()
             self._debug['ltnfo']['start'] = self._io.pos()
-            self.ltnfo = [None] * (int(self.num_text_files))
+            self._debug['ltnfo']['arr'] = []
+            self.ltnfo = []
             for i in range(int(self.num_text_files)):
-                if not 'arr' in self._debug['ltnfo']:
-                    self._debug['ltnfo']['arr'] = []
                 self._debug['ltnfo']['arr'].append({'start': self._io.pos()})
                 _t_ltnfo = Nitf.LengthTextInfo(self._io, self, self._root)
-                _t_ltnfo._read()
-                self.ltnfo[i] = _t_ltnfo
+                try:
+                    _t_ltnfo._read()
+                finally:
+                    self.ltnfo.append(_t_ltnfo)
                 self._debug['ltnfo']['arr'][i]['end'] = self._io.pos()
 
             self._debug['ltnfo']['end'] = self._io.pos()
@@ -1027,14 +698,15 @@ class Nitf(KaitaiStruct):
             self.num_data_extension = (self._io.read_bytes(3)).decode(u"UTF-8")
             self._debug['num_data_extension']['end'] = self._io.pos()
             self._debug['ldnfo']['start'] = self._io.pos()
-            self.ldnfo = [None] * (int(self.num_data_extension))
+            self._debug['ldnfo']['arr'] = []
+            self.ldnfo = []
             for i in range(int(self.num_data_extension)):
-                if not 'arr' in self._debug['ldnfo']:
-                    self._debug['ldnfo']['arr'] = []
                 self._debug['ldnfo']['arr'].append({'start': self._io.pos()})
                 _t_ldnfo = Nitf.LengthDataInfo(self._io, self, self._root)
-                _t_ldnfo._read()
-                self.ldnfo[i] = _t_ldnfo
+                try:
+                    _t_ldnfo._read()
+                finally:
+                    self.ldnfo.append(_t_ldnfo)
                 self._debug['ldnfo']['arr'][i]['end'] = self._io.pos()
 
             self._debug['ldnfo']['end'] = self._io.pos()
@@ -1042,14 +714,15 @@ class Nitf(KaitaiStruct):
             self.num_reserved_extension = (self._io.read_bytes(3)).decode(u"UTF-8")
             self._debug['num_reserved_extension']['end'] = self._io.pos()
             self._debug['lrnfo']['start'] = self._io.pos()
-            self.lrnfo = [None] * (int(self.num_reserved_extension))
+            self._debug['lrnfo']['arr'] = []
+            self.lrnfo = []
             for i in range(int(self.num_reserved_extension)):
-                if not 'arr' in self._debug['lrnfo']:
-                    self._debug['lrnfo']['arr'] = []
                 self._debug['lrnfo']['arr'].append({'start': self._io.pos()})
                 _t_lrnfo = Nitf.LengthReservedInfo(self._io, self, self._root)
-                _t_lrnfo._read()
-                self.lrnfo[i] = _t_lrnfo
+                try:
+                    _t_lrnfo._read()
+                finally:
+                    self.lrnfo.append(_t_lrnfo)
                 self._debug['lrnfo']['arr'][i]['end'] = self._io.pos()
 
             self._debug['lrnfo']['end'] = self._io.pos()
@@ -1063,101 +736,427 @@ class Nitf(KaitaiStruct):
             self._debug['extended_header']['end'] = self._io.pos()
 
 
-    class DataSubHeaderStreaming(KaitaiStruct):
-        """Streaming file Header Data Extension Segment Subheader."""
-        SEQ_FIELDS = ["des_base", "des_defined_subheader_fields_len", "sfh_l1", "sfh_delim1", "sfh_dr", "sfh_delim2", "sfh_l2"]
+        def _fetch_instances(self):
+            pass
+            self.file_date_time._fetch_instances()
+            self.file_security._fetch_instances()
+            self.encryption._fetch_instances()
+            for i in range(len(self.linfo)):
+                pass
+                self.linfo[i]._fetch_instances()
+
+            for i in range(len(self.lnnfo)):
+                pass
+                self.lnnfo[i]._fetch_instances()
+
+            for i in range(len(self.ltnfo)):
+                pass
+                self.ltnfo[i]._fetch_instances()
+
+            for i in range(len(self.ldnfo)):
+                pass
+                self.ldnfo[i]._fetch_instances()
+
+            for i in range(len(self.lrnfo)):
+                pass
+                self.lrnfo[i]._fetch_instances()
+
+            self.user_defined_header._fetch_instances()
+            self.extended_header._fetch_instances()
+
+
+    class ImageComment(KaitaiStruct):
+        SEQ_FIELDS = ["_unnamed0"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Nitf.ImageComment, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
-            self._debug['des_base']['start'] = self._io.pos()
-            self.des_base = Nitf.DataSubHeaderBase(self._io, self, self._root)
-            self.des_base._read()
-            self._debug['des_base']['end'] = self._io.pos()
-            self._debug['des_defined_subheader_fields_len']['start'] = self._io.pos()
-            self.des_defined_subheader_fields_len = (self._io.read_bytes(4)).decode(u"UTF-8")
-            self._debug['des_defined_subheader_fields_len']['end'] = self._io.pos()
-            self._debug['sfh_l1']['start'] = self._io.pos()
-            self.sfh_l1 = (self._io.read_bytes(7)).decode(u"UTF-8")
-            self._debug['sfh_l1']['end'] = self._io.pos()
-            self._debug['sfh_delim1']['start'] = self._io.pos()
-            self.sfh_delim1 = self._io.read_u4be()
-            self._debug['sfh_delim1']['end'] = self._io.pos()
-            self._debug['sfh_dr']['start'] = self._io.pos()
-            self.sfh_dr = [None] * (int(self.sfh_l1))
-            for i in range(int(self.sfh_l1)):
-                if not 'arr' in self._debug['sfh_dr']:
-                    self._debug['sfh_dr']['arr'] = []
-                self._debug['sfh_dr']['arr'].append({'start': self._io.pos()})
-                self.sfh_dr[i] = self._io.read_u1()
-                self._debug['sfh_dr']['arr'][i]['end'] = self._io.pos()
-
-            self._debug['sfh_dr']['end'] = self._io.pos()
-            self._debug['sfh_delim2']['start'] = self._io.pos()
-            self.sfh_delim2 = self._io.read_u4be()
-            self._debug['sfh_delim2']['end'] = self._io.pos()
-            self._debug['sfh_l2']['start'] = self._io.pos()
-            self.sfh_l2 = (self._io.read_bytes(7)).decode(u"UTF-8")
-            self._debug['sfh_l2']['end'] = self._io.pos()
+            self._debug['_unnamed0']['start'] = self._io.pos()
+            self._unnamed0 = (self._io.read_bytes(80)).decode(u"UTF-8")
+            self._debug['_unnamed0']['end'] = self._io.pos()
 
 
-    class TreHeader(KaitaiStruct):
-        SEQ_FIELDS = ["header_data_length", "header_overflow", "header_data"]
+        def _fetch_instances(self):
+            pass
+
+
+    class ImageDataMask(KaitaiStruct):
+        SEQ_FIELDS = ["blocked_img_data_offset", "bmrlnth", "tmrlnth", "tpxcdlnth", "tpxcd", "bmrbnd", "tmrbnd"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Nitf.ImageDataMask, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
-            self._debug['header_data_length']['start'] = self._io.pos()
-            self.header_data_length = (self._io.read_bytes(5)).decode(u"UTF-8")
-            self._debug['header_data_length']['end'] = self._io.pos()
-            if int(self.header_data_length) != 0:
-                self._debug['header_overflow']['start'] = self._io.pos()
-                self.header_overflow = (self._io.read_bytes(3)).decode(u"UTF-8")
-                self._debug['header_overflow']['end'] = self._io.pos()
+            self._debug['blocked_img_data_offset']['start'] = self._io.pos()
+            self.blocked_img_data_offset = self._io.read_u4be()
+            self._debug['blocked_img_data_offset']['end'] = self._io.pos()
+            self._debug['bmrlnth']['start'] = self._io.pos()
+            self.bmrlnth = self._io.read_u2be()
+            self._debug['bmrlnth']['end'] = self._io.pos()
+            self._debug['tmrlnth']['start'] = self._io.pos()
+            self.tmrlnth = self._io.read_u2be()
+            self._debug['tmrlnth']['end'] = self._io.pos()
+            self._debug['tpxcdlnth']['start'] = self._io.pos()
+            self.tpxcdlnth = self._io.read_u2be()
+            self._debug['tpxcdlnth']['end'] = self._io.pos()
+            self._debug['tpxcd']['start'] = self._io.pos()
+            self.tpxcd = self._io.read_bytes(self.tpxcd_size)
+            self._debug['tpxcd']['end'] = self._io.pos()
+            if self.has_bmr:
+                pass
+                self._debug['bmrbnd']['start'] = self._io.pos()
+                self._debug['bmrbnd']['arr'] = []
+                self.bmrbnd = []
+                for i in range(self.bmrtmr_count):
+                    self._debug['bmrbnd']['arr'].append({'start': self._io.pos()})
+                    self.bmrbnd.append(self._io.read_u4be())
+                    self._debug['bmrbnd']['arr'][i]['end'] = self._io.pos()
 
-            if int(self.header_data_length) > 2:
-                self._debug['header_data']['start'] = self._io.pos()
-                self.header_data = [None] * ((int(self.header_data_length) - 3))
-                for i in range((int(self.header_data_length) - 3)):
-                    if not 'arr' in self._debug['header_data']:
-                        self._debug['header_data']['arr'] = []
-                    self._debug['header_data']['arr'].append({'start': self._io.pos()})
-                    self.header_data[i] = self._io.read_u1()
-                    self._debug['header_data']['arr'][i]['end'] = self._io.pos()
+                self._debug['bmrbnd']['end'] = self._io.pos()
 
-                self._debug['header_data']['end'] = self._io.pos()
+            if self.has_tmr:
+                pass
+                self._debug['tmrbnd']['start'] = self._io.pos()
+                self._debug['tmrbnd']['arr'] = []
+                self.tmrbnd = []
+                for i in range(self.bmrtmr_count):
+                    self._debug['tmrbnd']['arr'].append({'start': self._io.pos()})
+                    self.tmrbnd.append(self._io.read_u4be())
+                    self._debug['tmrbnd']['arr'][i]['end'] = self._io.pos()
+
+                self._debug['tmrbnd']['end'] = self._io.pos()
 
 
 
-    class LengthImageInfo(KaitaiStruct):
-        SEQ_FIELDS = ["length_image_subheader", "length_image_segment"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+        def _fetch_instances(self):
+            pass
+            if self.has_bmr:
+                pass
+                for i in range(len(self.bmrbnd)):
+                    pass
+
+
+            if self.has_tmr:
+                pass
+                for i in range(len(self.tmrbnd)):
+                    pass
+
+
+
+        @property
+        def bmrbnd_size(self):
+            if hasattr(self, '_m_bmrbnd_size'):
+                return self._m_bmrbnd_size
+
+            self._m_bmrbnd_size = (self.bmrtmr_count * 4 if self.has_bmr else 0)
+            return getattr(self, '_m_bmrbnd_size', None)
+
+        @property
+        def bmrtmr_count(self):
+            if hasattr(self, '_m_bmrtmr_count'):
+                return self._m_bmrtmr_count
+
+            self._m_bmrtmr_count = (int(self._parent.image_sub_header.num_blocks_per_row) * int(self._parent.image_sub_header.num_blocks_per_col)) * (1 if self._parent.image_sub_header.img_mode != u"S" else (int(self._parent.image_sub_header.num_bands) if int(self._parent.image_sub_header.num_bands) != 0 else int(self._parent.image_sub_header.num_multispectral_bands)))
+            return getattr(self, '_m_bmrtmr_count', None)
+
+        @property
+        def has_bmr(self):
+            if hasattr(self, '_m_has_bmr'):
+                return self._m_has_bmr
+
+            self._m_has_bmr = self.bmrlnth != 0
+            return getattr(self, '_m_has_bmr', None)
+
+        @property
+        def has_tmr(self):
+            if hasattr(self, '_m_has_tmr'):
+                return self._m_has_tmr
+
+            self._m_has_tmr = self.tmrlnth != 0
+            return getattr(self, '_m_has_tmr', None)
+
+        @property
+        def tmrbnd_size(self):
+            if hasattr(self, '_m_tmrbnd_size'):
+                return self._m_tmrbnd_size
+
+            self._m_tmrbnd_size = (self.bmrtmr_count * 4 if self.has_tmr else 0)
+            return getattr(self, '_m_tmrbnd_size', None)
+
+        @property
+        def total_size(self):
+            if hasattr(self, '_m_total_size'):
+                return self._m_total_size
+
+            self._m_total_size = (((((4 + 2) + 2) + 2) + self.tpxcd_size) + self.bmrbnd_size) + self.tmrbnd_size
+            return getattr(self, '_m_total_size', None)
+
+        @property
+        def tpxcd_size(self):
+            if hasattr(self, '_m_tpxcd_size'):
+                return self._m_tpxcd_size
+
+            self._m_tpxcd_size = (self.tpxcdlnth if self.tpxcdlnth % 8 == 0 else self.tpxcdlnth + (8 - self.tpxcdlnth % 8)) // 8
+            return getattr(self, '_m_tpxcd_size', None)
+
+
+    class ImageSegment(KaitaiStruct):
+        SEQ_FIELDS = ["image_sub_header", "image_data_mask", "image_data_field"]
+        def __init__(self, idx, _io, _parent=None, _root=None):
+            super(Nitf.ImageSegment, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
+            self.idx = idx
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
-            self._debug['length_image_subheader']['start'] = self._io.pos()
-            self.length_image_subheader = (self._io.read_bytes(6)).decode(u"UTF-8")
-            self._debug['length_image_subheader']['end'] = self._io.pos()
-            self._debug['length_image_segment']['start'] = self._io.pos()
-            self.length_image_segment = (self._io.read_bytes(10)).decode(u"UTF-8")
-            self._debug['length_image_segment']['end'] = self._io.pos()
+            self._debug['image_sub_header']['start'] = self._io.pos()
+            self.image_sub_header = Nitf.ImageSubHeader(self._io, self, self._root)
+            self.image_sub_header._read()
+            self._debug['image_sub_header']['end'] = self._io.pos()
+            if self.has_mask:
+                pass
+                self._debug['image_data_mask']['start'] = self._io.pos()
+                self.image_data_mask = Nitf.ImageDataMask(self._io, self, self._root)
+                self.image_data_mask._read()
+                self._debug['image_data_mask']['end'] = self._io.pos()
+
+            if self.has_mask:
+                pass
+                self._debug['image_data_field']['start'] = self._io.pos()
+                self.image_data_field = self._io.read_bytes(int(self._parent.header.linfo[self.idx].length_image_segment) - self.image_data_mask.total_size)
+                self._debug['image_data_field']['end'] = self._io.pos()
+
+
+
+        def _fetch_instances(self):
+            pass
+            self.image_sub_header._fetch_instances()
+            if self.has_mask:
+                pass
+                self.image_data_mask._fetch_instances()
+
+            if self.has_mask:
+                pass
+
+
+        @property
+        def has_mask(self):
+            if hasattr(self, '_m_has_mask'):
+                return self._m_has_mask
+
+            self._m_has_mask = self.image_sub_header.img_compression[0:2] == u"MM"
+            return getattr(self, '_m_has_mask', None)
+
+
+    class ImageSubHeader(KaitaiStruct):
+        SEQ_FIELDS = ["file_part_type", "image_id_1", "image_date_time", "target_id", "image_id_2", "image_security_classification", "encryption", "image_source", "num_sig_rows", "num_sig_cols", "pixel_value_type", "image_representation", "image_category", "actual_bits_per_pixel_per_band", "pixel_justification", "image_coordinate_rep", "image_geo_loc", "num_img_comments", "img_comments", "img_compression", "compression_rate_code", "num_bands", "num_multispectral_bands", "bands", "img_sync_code", "img_mode", "num_blocks_per_row", "num_blocks_per_col", "num_pixels_per_block_horz", "num_pixels_per_block_vert", "num_pixels_per_band", "img_display_level", "attachment_level", "img_location", "img_magnification", "user_def_img_data_len", "user_def_overflow", "user_def_img_data", "image_extended_sub_header"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Nitf.ImageSubHeader, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['file_part_type']['start'] = self._io.pos()
+            self.file_part_type = self._io.read_bytes(2)
+            self._debug['file_part_type']['end'] = self._io.pos()
+            if not self.file_part_type == b"\x49\x4D":
+                raise kaitaistruct.ValidationNotEqualError(b"\x49\x4D", self.file_part_type, self._io, u"/types/image_sub_header/seq/0")
+            self._debug['image_id_1']['start'] = self._io.pos()
+            self.image_id_1 = (self._io.read_bytes(10)).decode(u"UTF-8")
+            self._debug['image_id_1']['end'] = self._io.pos()
+            self._debug['image_date_time']['start'] = self._io.pos()
+            self.image_date_time = Nitf.DateTime(self._io, self, self._root)
+            self.image_date_time._read()
+            self._debug['image_date_time']['end'] = self._io.pos()
+            self._debug['target_id']['start'] = self._io.pos()
+            self.target_id = (self._io.read_bytes(17)).decode(u"UTF-8")
+            self._debug['target_id']['end'] = self._io.pos()
+            self._debug['image_id_2']['start'] = self._io.pos()
+            self.image_id_2 = (self._io.read_bytes(80)).decode(u"UTF-8")
+            self._debug['image_id_2']['end'] = self._io.pos()
+            self._debug['image_security_classification']['start'] = self._io.pos()
+            self.image_security_classification = Nitf.Clasnfo(self._io, self, self._root)
+            self.image_security_classification._read()
+            self._debug['image_security_classification']['end'] = self._io.pos()
+            self._debug['encryption']['start'] = self._io.pos()
+            self.encryption = Nitf.Encrypt(self._io, self, self._root)
+            self.encryption._read()
+            self._debug['encryption']['end'] = self._io.pos()
+            self._debug['image_source']['start'] = self._io.pos()
+            self.image_source = (self._io.read_bytes(42)).decode(u"UTF-8")
+            self._debug['image_source']['end'] = self._io.pos()
+            self._debug['num_sig_rows']['start'] = self._io.pos()
+            self.num_sig_rows = (self._io.read_bytes(8)).decode(u"UTF-8")
+            self._debug['num_sig_rows']['end'] = self._io.pos()
+            self._debug['num_sig_cols']['start'] = self._io.pos()
+            self.num_sig_cols = (self._io.read_bytes(8)).decode(u"UTF-8")
+            self._debug['num_sig_cols']['end'] = self._io.pos()
+            self._debug['pixel_value_type']['start'] = self._io.pos()
+            self.pixel_value_type = (self._io.read_bytes(3)).decode(u"UTF-8")
+            self._debug['pixel_value_type']['end'] = self._io.pos()
+            self._debug['image_representation']['start'] = self._io.pos()
+            self.image_representation = (self._io.read_bytes(8)).decode(u"UTF-8")
+            self._debug['image_representation']['end'] = self._io.pos()
+            self._debug['image_category']['start'] = self._io.pos()
+            self.image_category = (self._io.read_bytes(8)).decode(u"UTF-8")
+            self._debug['image_category']['end'] = self._io.pos()
+            self._debug['actual_bits_per_pixel_per_band']['start'] = self._io.pos()
+            self.actual_bits_per_pixel_per_band = (self._io.read_bytes(2)).decode(u"UTF-8")
+            self._debug['actual_bits_per_pixel_per_band']['end'] = self._io.pos()
+            self._debug['pixel_justification']['start'] = self._io.pos()
+            self.pixel_justification = (self._io.read_bytes(1)).decode(u"UTF-8")
+            self._debug['pixel_justification']['end'] = self._io.pos()
+            self._debug['image_coordinate_rep']['start'] = self._io.pos()
+            self.image_coordinate_rep = (self._io.read_bytes(1)).decode(u"UTF-8")
+            self._debug['image_coordinate_rep']['end'] = self._io.pos()
+            self._debug['image_geo_loc']['start'] = self._io.pos()
+            self.image_geo_loc = (self._io.read_bytes(60)).decode(u"UTF-8")
+            self._debug['image_geo_loc']['end'] = self._io.pos()
+            self._debug['num_img_comments']['start'] = self._io.pos()
+            self.num_img_comments = (self._io.read_bytes(1)).decode(u"UTF-8")
+            self._debug['num_img_comments']['end'] = self._io.pos()
+            self._debug['img_comments']['start'] = self._io.pos()
+            self._debug['img_comments']['arr'] = []
+            self.img_comments = []
+            for i in range(int(self.num_img_comments)):
+                self._debug['img_comments']['arr'].append({'start': self._io.pos()})
+                _t_img_comments = Nitf.ImageComment(self._io, self, self._root)
+                try:
+                    _t_img_comments._read()
+                finally:
+                    self.img_comments.append(_t_img_comments)
+                self._debug['img_comments']['arr'][i]['end'] = self._io.pos()
+
+            self._debug['img_comments']['end'] = self._io.pos()
+            self._debug['img_compression']['start'] = self._io.pos()
+            self.img_compression = (self._io.read_bytes(2)).decode(u"UTF-8")
+            self._debug['img_compression']['end'] = self._io.pos()
+            self._debug['compression_rate_code']['start'] = self._io.pos()
+            self.compression_rate_code = (self._io.read_bytes(4)).decode(u"UTF-8")
+            self._debug['compression_rate_code']['end'] = self._io.pos()
+            self._debug['num_bands']['start'] = self._io.pos()
+            self.num_bands = (self._io.read_bytes(1)).decode(u"UTF-8")
+            self._debug['num_bands']['end'] = self._io.pos()
+            if int(self.num_bands) == 0:
+                pass
+                self._debug['num_multispectral_bands']['start'] = self._io.pos()
+                self.num_multispectral_bands = (self._io.read_bytes(5)).decode(u"UTF-8")
+                self._debug['num_multispectral_bands']['end'] = self._io.pos()
+
+            self._debug['bands']['start'] = self._io.pos()
+            self._debug['bands']['arr'] = []
+            self.bands = []
+            for i in range((int(self.num_bands) if int(self.num_bands) != 0 else int(self.num_multispectral_bands))):
+                self._debug['bands']['arr'].append({'start': self._io.pos()})
+                _t_bands = Nitf.BandInfo(self._io, self, self._root)
+                try:
+                    _t_bands._read()
+                finally:
+                    self.bands.append(_t_bands)
+                self._debug['bands']['arr'][i]['end'] = self._io.pos()
+
+            self._debug['bands']['end'] = self._io.pos()
+            self._debug['img_sync_code']['start'] = self._io.pos()
+            self.img_sync_code = (self._io.read_bytes(1)).decode(u"UTF-8")
+            self._debug['img_sync_code']['end'] = self._io.pos()
+            self._debug['img_mode']['start'] = self._io.pos()
+            self.img_mode = (self._io.read_bytes(1)).decode(u"UTF-8")
+            self._debug['img_mode']['end'] = self._io.pos()
+            self._debug['num_blocks_per_row']['start'] = self._io.pos()
+            self.num_blocks_per_row = (self._io.read_bytes(4)).decode(u"UTF-8")
+            self._debug['num_blocks_per_row']['end'] = self._io.pos()
+            self._debug['num_blocks_per_col']['start'] = self._io.pos()
+            self.num_blocks_per_col = (self._io.read_bytes(4)).decode(u"UTF-8")
+            self._debug['num_blocks_per_col']['end'] = self._io.pos()
+            self._debug['num_pixels_per_block_horz']['start'] = self._io.pos()
+            self.num_pixels_per_block_horz = (self._io.read_bytes(4)).decode(u"UTF-8")
+            self._debug['num_pixels_per_block_horz']['end'] = self._io.pos()
+            self._debug['num_pixels_per_block_vert']['start'] = self._io.pos()
+            self.num_pixels_per_block_vert = (self._io.read_bytes(4)).decode(u"UTF-8")
+            self._debug['num_pixels_per_block_vert']['end'] = self._io.pos()
+            self._debug['num_pixels_per_band']['start'] = self._io.pos()
+            self.num_pixels_per_band = (self._io.read_bytes(2)).decode(u"UTF-8")
+            self._debug['num_pixels_per_band']['end'] = self._io.pos()
+            self._debug['img_display_level']['start'] = self._io.pos()
+            self.img_display_level = (self._io.read_bytes(3)).decode(u"UTF-8")
+            self._debug['img_display_level']['end'] = self._io.pos()
+            self._debug['attachment_level']['start'] = self._io.pos()
+            self.attachment_level = (self._io.read_bytes(3)).decode(u"UTF-8")
+            self._debug['attachment_level']['end'] = self._io.pos()
+            self._debug['img_location']['start'] = self._io.pos()
+            self.img_location = (self._io.read_bytes(10)).decode(u"UTF-8")
+            self._debug['img_location']['end'] = self._io.pos()
+            self._debug['img_magnification']['start'] = self._io.pos()
+            self.img_magnification = (self._io.read_bytes(4)).decode(u"UTF-8")
+            self._debug['img_magnification']['end'] = self._io.pos()
+            self._debug['user_def_img_data_len']['start'] = self._io.pos()
+            self.user_def_img_data_len = (self._io.read_bytes(5)).decode(u"UTF-8")
+            self._debug['user_def_img_data_len']['end'] = self._io.pos()
+            if int(self.user_def_img_data_len) != 0:
+                pass
+                self._debug['user_def_overflow']['start'] = self._io.pos()
+                self.user_def_overflow = (self._io.read_bytes(3)).decode(u"UTF-8")
+                self._debug['user_def_overflow']['end'] = self._io.pos()
+
+            if int(self.user_def_img_data_len) > 2:
+                pass
+                self._debug['user_def_img_data']['start'] = self._io.pos()
+                self._debug['user_def_img_data']['arr'] = []
+                self.user_def_img_data = []
+                for i in range(int(self.user_def_img_data_len) - 3):
+                    self._debug['user_def_img_data']['arr'].append({'start': self._io.pos()})
+                    self.user_def_img_data.append(self._io.read_u1())
+                    self._debug['user_def_img_data']['arr'][i]['end'] = self._io.pos()
+
+                self._debug['user_def_img_data']['end'] = self._io.pos()
+
+            self._debug['image_extended_sub_header']['start'] = self._io.pos()
+            self.image_extended_sub_header = Nitf.TreHeader(self._io, self, self._root)
+            self.image_extended_sub_header._read()
+            self._debug['image_extended_sub_header']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            self.image_date_time._fetch_instances()
+            self.image_security_classification._fetch_instances()
+            self.encryption._fetch_instances()
+            for i in range(len(self.img_comments)):
+                pass
+                self.img_comments[i]._fetch_instances()
+
+            if int(self.num_bands) == 0:
+                pass
+
+            for i in range(len(self.bands)):
+                pass
+                self.bands[i]._fetch_instances()
+
+            if int(self.user_def_img_data_len) != 0:
+                pass
+
+            if int(self.user_def_img_data_len) > 2:
+                pass
+                for i in range(len(self.user_def_img_data)):
+                    pass
+
+
+            self.image_extended_sub_header._fetch_instances()
 
 
     class LengthDataInfo(KaitaiStruct):
         SEQ_FIELDS = ["length_data_extension_subheader", "length_data_extension_segment"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Nitf.LengthDataInfo, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -1169,12 +1168,79 @@ class Nitf(KaitaiStruct):
             self._debug['length_data_extension_segment']['end'] = self._io.pos()
 
 
+        def _fetch_instances(self):
+            pass
+
+
+    class LengthGraphicInfo(KaitaiStruct):
+        SEQ_FIELDS = ["length_graphic_subheader", "length_graphic_segment"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Nitf.LengthGraphicInfo, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['length_graphic_subheader']['start'] = self._io.pos()
+            self.length_graphic_subheader = (self._io.read_bytes(4)).decode(u"UTF-8")
+            self._debug['length_graphic_subheader']['end'] = self._io.pos()
+            self._debug['length_graphic_segment']['start'] = self._io.pos()
+            self.length_graphic_segment = (self._io.read_bytes(6)).decode(u"UTF-8")
+            self._debug['length_graphic_segment']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+
+
+    class LengthImageInfo(KaitaiStruct):
+        SEQ_FIELDS = ["length_image_subheader", "length_image_segment"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Nitf.LengthImageInfo, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['length_image_subheader']['start'] = self._io.pos()
+            self.length_image_subheader = (self._io.read_bytes(6)).decode(u"UTF-8")
+            self._debug['length_image_subheader']['end'] = self._io.pos()
+            self._debug['length_image_segment']['start'] = self._io.pos()
+            self.length_image_segment = (self._io.read_bytes(10)).decode(u"UTF-8")
+            self._debug['length_image_segment']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+
+
+    class LengthReservedInfo(KaitaiStruct):
+        SEQ_FIELDS = ["length_reserved_extension_subheader", "length_reserved_extension_segment"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Nitf.LengthReservedInfo, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['length_reserved_extension_subheader']['start'] = self._io.pos()
+            self.length_reserved_extension_subheader = (self._io.read_bytes(4)).decode(u"UTF-8")
+            self._debug['length_reserved_extension_subheader']['end'] = self._io.pos()
+            self._debug['length_reserved_extension_segment']['start'] = self._io.pos()
+            self.length_reserved_extension_segment = (self._io.read_bytes(7)).decode(u"UTF-8")
+            self._debug['length_reserved_extension_segment']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+
+
     class LengthTextInfo(KaitaiStruct):
         SEQ_FIELDS = ["length_text_subheader", "length_text_segment"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Nitf.LengthTextInfo, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -1184,6 +1250,206 @@ class Nitf(KaitaiStruct):
             self._debug['length_text_segment']['start'] = self._io.pos()
             self.length_text_segment = (self._io.read_bytes(5)).decode(u"UTF-8")
             self._debug['length_text_segment']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+
+
+    class ReservedExtensionSegment(KaitaiStruct):
+        SEQ_FIELDS = ["reserved_sub_header", "reserved_data_field"]
+        def __init__(self, idx, _io, _parent=None, _root=None):
+            super(Nitf.ReservedExtensionSegment, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self.idx = idx
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['reserved_sub_header']['start'] = self._io.pos()
+            self._raw_reserved_sub_header = self._io.read_bytes(int(self._parent.header.lrnfo[self.idx].length_reserved_extension_subheader))
+            _io__raw_reserved_sub_header = KaitaiStream(BytesIO(self._raw_reserved_sub_header))
+            self.reserved_sub_header = Nitf.ReservedSubHeader(_io__raw_reserved_sub_header, self, self._root)
+            self.reserved_sub_header._read()
+            self._debug['reserved_sub_header']['end'] = self._io.pos()
+            self._debug['reserved_data_field']['start'] = self._io.pos()
+            self.reserved_data_field = self._io.read_bytes(int(self._parent.header.lrnfo[self.idx].length_reserved_extension_segment))
+            self._debug['reserved_data_field']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            self.reserved_sub_header._fetch_instances()
+
+
+    class ReservedSubHeader(KaitaiStruct):
+        SEQ_FIELDS = ["file_part_type_re", "res_type_id", "res_version", "reclasnfo", "res_user_defined_subheader_length", "res_user_defined_subheader_fields", "res_user_defined_data"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Nitf.ReservedSubHeader, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['file_part_type_re']['start'] = self._io.pos()
+            self.file_part_type_re = self._io.read_bytes(2)
+            self._debug['file_part_type_re']['end'] = self._io.pos()
+            if not self.file_part_type_re == b"\x52\x45":
+                raise kaitaistruct.ValidationNotEqualError(b"\x52\x45", self.file_part_type_re, self._io, u"/types/reserved_sub_header/seq/0")
+            self._debug['res_type_id']['start'] = self._io.pos()
+            self.res_type_id = (self._io.read_bytes(25)).decode(u"UTF-8")
+            self._debug['res_type_id']['end'] = self._io.pos()
+            self._debug['res_version']['start'] = self._io.pos()
+            self.res_version = (self._io.read_bytes(2)).decode(u"UTF-8")
+            self._debug['res_version']['end'] = self._io.pos()
+            self._debug['reclasnfo']['start'] = self._io.pos()
+            self.reclasnfo = Nitf.Clasnfo(self._io, self, self._root)
+            self.reclasnfo._read()
+            self._debug['reclasnfo']['end'] = self._io.pos()
+            self._debug['res_user_defined_subheader_length']['start'] = self._io.pos()
+            self.res_user_defined_subheader_length = (self._io.read_bytes(4)).decode(u"UTF-8")
+            self._debug['res_user_defined_subheader_length']['end'] = self._io.pos()
+            self._debug['res_user_defined_subheader_fields']['start'] = self._io.pos()
+            self.res_user_defined_subheader_fields = (self._io.read_bytes(int(self.res_user_defined_subheader_length))).decode(u"UTF-8")
+            self._debug['res_user_defined_subheader_fields']['end'] = self._io.pos()
+            self._debug['res_user_defined_data']['start'] = self._io.pos()
+            self.res_user_defined_data = (self._io.read_bytes_full()).decode(u"UTF-8")
+            self._debug['res_user_defined_data']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            self.reclasnfo._fetch_instances()
+
+
+    class TextSegment(KaitaiStruct):
+        SEQ_FIELDS = ["text_sub_header", "text_data_field"]
+        def __init__(self, idx, _io, _parent=None, _root=None):
+            super(Nitf.TextSegment, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self.idx = idx
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['text_sub_header']['start'] = self._io.pos()
+            self.text_sub_header = self._io.read_bytes(1)
+            self._debug['text_sub_header']['end'] = self._io.pos()
+            self._debug['text_data_field']['start'] = self._io.pos()
+            self.text_data_field = self._io.read_bytes(int(self._parent.header.ltnfo[self.idx].length_text_segment))
+            self._debug['text_data_field']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+
+
+    class TextSubHeader(KaitaiStruct):
+        SEQ_FIELDS = ["text_date_time", "text_title", "text_security_class", "encryp", "text_format", "text_extended_sub_header"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Nitf.TextSubHeader, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['text_date_time']['start'] = self._io.pos()
+            self.text_date_time = (self._io.read_bytes(14)).decode(u"UTF-8")
+            self._debug['text_date_time']['end'] = self._io.pos()
+            self._debug['text_title']['start'] = self._io.pos()
+            self.text_title = (self._io.read_bytes(80)).decode(u"UTF-8")
+            self._debug['text_title']['end'] = self._io.pos()
+            self._debug['text_security_class']['start'] = self._io.pos()
+            self.text_security_class = Nitf.Clasnfo(self._io, self, self._root)
+            self.text_security_class._read()
+            self._debug['text_security_class']['end'] = self._io.pos()
+            self._debug['encryp']['start'] = self._io.pos()
+            self.encryp = Nitf.Encrypt(self._io, self, self._root)
+            self.encryp._read()
+            self._debug['encryp']['end'] = self._io.pos()
+            self._debug['text_format']['start'] = self._io.pos()
+            self.text_format = (self._io.read_bytes(3)).decode(u"UTF-8")
+            self._debug['text_format']['end'] = self._io.pos()
+            self._debug['text_extended_sub_header']['start'] = self._io.pos()
+            self.text_extended_sub_header = Nitf.TreHeader(self._io, self, self._root)
+            self.text_extended_sub_header._read()
+            self._debug['text_extended_sub_header']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            self.text_security_class._fetch_instances()
+            self.encryp._fetch_instances()
+            self.text_extended_sub_header._fetch_instances()
+
+
+    class Tre(KaitaiStruct):
+        SEQ_FIELDS = ["extension_type_id", "edata_length", "edata"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Nitf.Tre, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['extension_type_id']['start'] = self._io.pos()
+            self.extension_type_id = (self._io.read_bytes(6)).decode(u"UTF-8")
+            self._debug['extension_type_id']['end'] = self._io.pos()
+            self._debug['edata_length']['start'] = self._io.pos()
+            self.edata_length = (self._io.read_bytes(5)).decode(u"UTF-8")
+            self._debug['edata_length']['end'] = self._io.pos()
+            self._debug['edata']['start'] = self._io.pos()
+            self.edata = (self._io.read_bytes(int(self.edata_length))).decode(u"UTF-8")
+            self._debug['edata']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+
+
+    class TreHeader(KaitaiStruct):
+        SEQ_FIELDS = ["header_data_length", "header_overflow", "header_data"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Nitf.TreHeader, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['header_data_length']['start'] = self._io.pos()
+            self.header_data_length = (self._io.read_bytes(5)).decode(u"UTF-8")
+            self._debug['header_data_length']['end'] = self._io.pos()
+            if int(self.header_data_length) != 0:
+                pass
+                self._debug['header_overflow']['start'] = self._io.pos()
+                self.header_overflow = (self._io.read_bytes(3)).decode(u"UTF-8")
+                self._debug['header_overflow']['end'] = self._io.pos()
+
+            if int(self.header_data_length) > 2:
+                pass
+                self._debug['header_data']['start'] = self._io.pos()
+                self._debug['header_data']['arr'] = []
+                self.header_data = []
+                for i in range(int(self.header_data_length) - 3):
+                    self._debug['header_data']['arr'].append({'start': self._io.pos()})
+                    self.header_data.append(self._io.read_u1())
+                    self._debug['header_data']['arr'][i]['end'] = self._io.pos()
+
+                self._debug['header_data']['end'] = self._io.pos()
+
+
+
+        def _fetch_instances(self):
+            pass
+            if int(self.header_data_length) != 0:
+                pass
+
+            if int(self.header_data_length) > 2:
+                pass
+                for i in range(len(self.header_data)):
+                    pass
+
+
 
 
 

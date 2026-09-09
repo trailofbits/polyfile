@@ -1,21 +1,21 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
+# type: ignore
 
-from packaging.version import parse as parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
-    raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
+    raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class NtMdtPal(KaitaiStruct):
     """It is a color scheme for visualising SPM scans."""
     SEQ_FIELDS = ["signature", "count", "meta", "something2", "tables"]
     def __init__(self, _io, _parent=None, _root=None):
-        self._io = _io
+        super(NtMdtPal, self).__init__(_io)
         self._parent = _parent
-        self._root = _root if _root else self
+        self._root = _root or self
         self._debug = collections.defaultdict(dict)
 
     def _read(self):
@@ -28,14 +28,15 @@ class NtMdtPal(KaitaiStruct):
         self.count = self._io.read_u4be()
         self._debug['count']['end'] = self._io.pos()
         self._debug['meta']['start'] = self._io.pos()
-        self.meta = [None] * (self.count)
+        self._debug['meta']['arr'] = []
+        self.meta = []
         for i in range(self.count):
-            if not 'arr' in self._debug['meta']:
-                self._debug['meta']['arr'] = []
             self._debug['meta']['arr'].append({'start': self._io.pos()})
             _t_meta = NtMdtPal.Meta(self._io, self, self._root)
-            _t_meta._read()
-            self.meta[i] = _t_meta
+            try:
+                _t_meta._read()
+            finally:
+                self.meta.append(_t_meta)
             self._debug['meta']['arr'][i]['end'] = self._io.pos()
 
         self._debug['meta']['end'] = self._io.pos()
@@ -43,24 +44,109 @@ class NtMdtPal(KaitaiStruct):
         self.something2 = self._io.read_bytes(1)
         self._debug['something2']['end'] = self._io.pos()
         self._debug['tables']['start'] = self._io.pos()
-        self.tables = [None] * (self.count)
+        self._debug['tables']['arr'] = []
+        self.tables = []
         for i in range(self.count):
-            if not 'arr' in self._debug['tables']:
-                self._debug['tables']['arr'] = []
             self._debug['tables']['arr'].append({'start': self._io.pos()})
             _t_tables = NtMdtPal.ColTable(i, self._io, self, self._root)
-            _t_tables._read()
-            self.tables[i] = _t_tables
+            try:
+                _t_tables._read()
+            finally:
+                self.tables.append(_t_tables)
             self._debug['tables']['arr'][i]['end'] = self._io.pos()
 
         self._debug['tables']['end'] = self._io.pos()
 
+
+    def _fetch_instances(self):
+        pass
+        for i in range(len(self.meta)):
+            pass
+            self.meta[i]._fetch_instances()
+
+        for i in range(len(self.tables)):
+            pass
+            self.tables[i]._fetch_instances()
+
+
+    class ColTable(KaitaiStruct):
+        SEQ_FIELDS = ["size1", "unkn", "title", "unkn1", "colors"]
+        def __init__(self, index, _io, _parent=None, _root=None):
+            super(NtMdtPal.ColTable, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self.index = index
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['size1']['start'] = self._io.pos()
+            self.size1 = self._io.read_u1()
+            self._debug['size1']['end'] = self._io.pos()
+            self._debug['unkn']['start'] = self._io.pos()
+            self.unkn = self._io.read_u1()
+            self._debug['unkn']['end'] = self._io.pos()
+            self._debug['title']['start'] = self._io.pos()
+            self.title = (self._io.read_bytes(self._root.meta[self.index].name_size)).decode(u"UTF-16LE")
+            self._debug['title']['end'] = self._io.pos()
+            self._debug['unkn1']['start'] = self._io.pos()
+            self.unkn1 = self._io.read_u2be()
+            self._debug['unkn1']['end'] = self._io.pos()
+            self._debug['colors']['start'] = self._io.pos()
+            self._debug['colors']['arr'] = []
+            self.colors = []
+            for i in range(self._root.meta[self.index].colors_count - 1):
+                self._debug['colors']['arr'].append({'start': self._io.pos()})
+                _t_colors = NtMdtPal.Color(self._io, self, self._root)
+                try:
+                    _t_colors._read()
+                finally:
+                    self.colors.append(_t_colors)
+                self._debug['colors']['arr'][i]['end'] = self._io.pos()
+
+            self._debug['colors']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            for i in range(len(self.colors)):
+                pass
+                self.colors[i]._fetch_instances()
+
+
+
+    class Color(KaitaiStruct):
+        SEQ_FIELDS = ["red", "unkn", "blue", "green"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(NtMdtPal.Color, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['red']['start'] = self._io.pos()
+            self.red = self._io.read_u1()
+            self._debug['red']['end'] = self._io.pos()
+            self._debug['unkn']['start'] = self._io.pos()
+            self.unkn = self._io.read_u1()
+            self._debug['unkn']['end'] = self._io.pos()
+            self._debug['blue']['start'] = self._io.pos()
+            self.blue = self._io.read_u1()
+            self._debug['blue']['end'] = self._io.pos()
+            self._debug['green']['start'] = self._io.pos()
+            self.green = self._io.read_u1()
+            self._debug['green']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+
+
     class Meta(KaitaiStruct):
         SEQ_FIELDS = ["unkn00", "unkn01", "unkn02", "unkn03", "colors_count", "unkn10", "unkn11", "unkn12", "name_size"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(NtMdtPal.Meta, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -93,63 +179,8 @@ class NtMdtPal(KaitaiStruct):
             self._debug['name_size']['end'] = self._io.pos()
 
 
-    class Color(KaitaiStruct):
-        SEQ_FIELDS = ["red", "unkn", "blue", "green"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['red']['start'] = self._io.pos()
-            self.red = self._io.read_u1()
-            self._debug['red']['end'] = self._io.pos()
-            self._debug['unkn']['start'] = self._io.pos()
-            self.unkn = self._io.read_u1()
-            self._debug['unkn']['end'] = self._io.pos()
-            self._debug['blue']['start'] = self._io.pos()
-            self.blue = self._io.read_u1()
-            self._debug['blue']['end'] = self._io.pos()
-            self._debug['green']['start'] = self._io.pos()
-            self.green = self._io.read_u1()
-            self._debug['green']['end'] = self._io.pos()
-
-
-    class ColTable(KaitaiStruct):
-        SEQ_FIELDS = ["size1", "unkn", "title", "unkn1", "colors"]
-        def __init__(self, index, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self.index = index
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['size1']['start'] = self._io.pos()
-            self.size1 = self._io.read_u1()
-            self._debug['size1']['end'] = self._io.pos()
-            self._debug['unkn']['start'] = self._io.pos()
-            self.unkn = self._io.read_u1()
-            self._debug['unkn']['end'] = self._io.pos()
-            self._debug['title']['start'] = self._io.pos()
-            self.title = (self._io.read_bytes(self._root.meta[self.index].name_size)).decode(u"UTF-16LE")
-            self._debug['title']['end'] = self._io.pos()
-            self._debug['unkn1']['start'] = self._io.pos()
-            self.unkn1 = self._io.read_u2be()
-            self._debug['unkn1']['end'] = self._io.pos()
-            self._debug['colors']['start'] = self._io.pos()
-            self.colors = [None] * ((self._root.meta[self.index].colors_count - 1))
-            for i in range((self._root.meta[self.index].colors_count - 1)):
-                if not 'arr' in self._debug['colors']:
-                    self._debug['colors']['arr'] = []
-                self._debug['colors']['arr'].append({'start': self._io.pos()})
-                _t_colors = NtMdtPal.Color(self._io, self, self._root)
-                _t_colors._read()
-                self.colors[i] = _t_colors
-                self._debug['colors']['arr'][i]['end'] = self._io.pos()
-
-            self._debug['colors']['end'] = self._io.pos()
+        def _fetch_instances(self):
+            pass
 
 
 

@@ -1,15 +1,15 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
+# type: ignore
 
-from packaging.version import parse as parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
+from polyfile.kaitai.parsers import rtp_packet
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
-    raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
+    raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
-from polyfile.kaitai.parsers import rtp_packet
 class Rtpdump(KaitaiStruct):
     """rtpdump is a format used by rtptools to record and replay
     rtp data from network capture.
@@ -19,9 +19,9 @@ class Rtpdump(KaitaiStruct):
     """
     SEQ_FIELDS = ["file_header", "packets"]
     def __init__(self, _io, _parent=None, _root=None):
-        self._io = _io
+        super(Rtpdump, self).__init__(_io)
         self._parent = _parent
-        self._root = _root if _root else self
+        self._root = _root or self
         self._debug = collections.defaultdict(dict)
 
     def _read(self):
@@ -30,26 +30,36 @@ class Rtpdump(KaitaiStruct):
         self.file_header._read()
         self._debug['file_header']['end'] = self._io.pos()
         self._debug['packets']['start'] = self._io.pos()
+        self._debug['packets']['arr'] = []
         self.packets = []
         i = 0
         while not self._io.is_eof():
-            if not 'arr' in self._debug['packets']:
-                self._debug['packets']['arr'] = []
             self._debug['packets']['arr'].append({'start': self._io.pos()})
             _t_packets = Rtpdump.PacketT(self._io, self, self._root)
-            _t_packets._read()
-            self.packets.append(_t_packets)
+            try:
+                _t_packets._read()
+            finally:
+                self.packets.append(_t_packets)
             self._debug['packets']['arr'][len(self.packets) - 1]['end'] = self._io.pos()
             i += 1
 
         self._debug['packets']['end'] = self._io.pos()
 
+
+    def _fetch_instances(self):
+        pass
+        self.file_header._fetch_instances()
+        for i in range(len(self.packets)):
+            pass
+            self.packets[i]._fetch_instances()
+
+
     class HeaderT(KaitaiStruct):
         SEQ_FIELDS = ["shebang", "space", "ip", "port", "start_sec", "start_usec", "ip2", "port2", "padding"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Rtpdump.HeaderT, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -64,10 +74,10 @@ class Rtpdump(KaitaiStruct):
             if not self.space == b"\x20":
                 raise kaitaistruct.ValidationNotEqualError(b"\x20", self.space, self._io, u"/types/header_t/seq/1")
             self._debug['ip']['start'] = self._io.pos()
-            self.ip = (self._io.read_bytes_term(47, False, True, True)).decode(u"ascii")
+            self.ip = (self._io.read_bytes_term(47, False, True, True)).decode(u"ASCII")
             self._debug['ip']['end'] = self._io.pos()
             self._debug['port']['start'] = self._io.pos()
-            self.port = (self._io.read_bytes_term(10, False, True, True)).decode(u"ascii")
+            self.port = (self._io.read_bytes_term(10, False, True, True)).decode(u"ASCII")
             self._debug['port']['end'] = self._io.pos()
             self._debug['start_sec']['start'] = self._io.pos()
             self.start_sec = self._io.read_u4be()
@@ -86,12 +96,16 @@ class Rtpdump(KaitaiStruct):
             self._debug['padding']['end'] = self._io.pos()
 
 
+        def _fetch_instances(self):
+            pass
+
+
     class PacketT(KaitaiStruct):
         SEQ_FIELDS = ["length", "len_body", "packet_usec", "body"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Rtpdump.PacketT, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -110,6 +124,11 @@ class Rtpdump(KaitaiStruct):
             self.body = rtp_packet.RtpPacket(_io__raw_body)
             self.body._read()
             self._debug['body']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            self.body._fetch_instances()
 
 
 

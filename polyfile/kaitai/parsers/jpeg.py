@@ -1,16 +1,16 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
+# type: ignore
 
-from packaging.version import parse as parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
-from enum import Enum
+from polyfile.kaitai.parsers import exif
+from enum import IntEnum
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
-    raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
+    raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
-from polyfile.kaitai.parsers import exif
 class Jpeg(KaitaiStruct):
     """JPEG File Interchange Format, or JFIF, or, more colloquially known
     as just "JPEG" or "JPG", is a popular 2D bitmap image file format,
@@ -19,7 +19,7 @@ class Jpeg(KaitaiStruct):
     
     Format is organized as a container format, serving multiple
     "segments", each starting with a magic and a marker. JFIF standard
-    dictates order and mandatory apperance of segments:
+    dictates order and mandatory appearance of segments:
     
     * SOI
     * APP0 (with JFIF magic)
@@ -30,7 +30,7 @@ class Jpeg(KaitaiStruct):
     * EOI
     """
 
-    class ComponentId(Enum):
+    class ComponentId(IntEnum):
         y = 1
         cb = 2
         cr = 3
@@ -38,30 +38,66 @@ class Jpeg(KaitaiStruct):
         q = 5
     SEQ_FIELDS = ["segments"]
     def __init__(self, _io, _parent=None, _root=None):
-        self._io = _io
+        super(Jpeg, self).__init__(_io)
         self._parent = _parent
-        self._root = _root if _root else self
+        self._root = _root or self
         self._debug = collections.defaultdict(dict)
 
     def _read(self):
         self._debug['segments']['start'] = self._io.pos()
+        self._debug['segments']['arr'] = []
         self.segments = []
         i = 0
         while not self._io.is_eof():
-            if not 'arr' in self._debug['segments']:
-                self._debug['segments']['arr'] = []
             self._debug['segments']['arr'].append({'start': self._io.pos()})
             _t_segments = Jpeg.Segment(self._io, self, self._root)
-            _t_segments._read()
-            self.segments.append(_t_segments)
+            try:
+                _t_segments._read()
+            finally:
+                self.segments.append(_t_segments)
             self._debug['segments']['arr'][len(self.segments) - 1]['end'] = self._io.pos()
             i += 1
 
         self._debug['segments']['end'] = self._io.pos()
 
+
+    def _fetch_instances(self):
+        pass
+        for i in range(len(self.segments)):
+            pass
+            self.segments[i]._fetch_instances()
+
+
+    class ExifInJpeg(KaitaiStruct):
+        SEQ_FIELDS = ["extra_zero", "data"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Jpeg.ExifInJpeg, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['extra_zero']['start'] = self._io.pos()
+            self.extra_zero = self._io.read_bytes(1)
+            self._debug['extra_zero']['end'] = self._io.pos()
+            if not self.extra_zero == b"\x00":
+                raise kaitaistruct.ValidationNotEqualError(b"\x00", self.extra_zero, self._io, u"/types/exif_in_jpeg/seq/0")
+            self._debug['data']['start'] = self._io.pos()
+            self._raw_data = self._io.read_bytes_full()
+            _io__raw_data = KaitaiStream(BytesIO(self._raw_data))
+            self.data = exif.Exif(_io__raw_data)
+            self.data._read()
+            self._debug['data']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            self.data._fetch_instances()
+
+
     class Segment(KaitaiStruct):
 
-        class MarkerEnum(Enum):
+        class MarkerEnum(IntEnum):
             tem = 1
             sof0 = 192
             sof1 = 193
@@ -97,9 +133,9 @@ class Jpeg(KaitaiStruct):
             com = 254
         SEQ_FIELDS = ["magic", "marker", "length", "data", "image_data"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Jpeg.Segment, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -112,220 +148,91 @@ class Jpeg(KaitaiStruct):
             self.marker = KaitaiStream.resolve_enum(Jpeg.Segment.MarkerEnum, self._io.read_u1())
             self._debug['marker']['end'] = self._io.pos()
             if  ((self.marker != Jpeg.Segment.MarkerEnum.soi) and (self.marker != Jpeg.Segment.MarkerEnum.eoi)) :
+                pass
                 self._debug['length']['start'] = self._io.pos()
                 self.length = self._io.read_u2be()
                 self._debug['length']['end'] = self._io.pos()
 
             if  ((self.marker != Jpeg.Segment.MarkerEnum.soi) and (self.marker != Jpeg.Segment.MarkerEnum.eoi)) :
+                pass
                 self._debug['data']['start'] = self._io.pos()
                 _on = self.marker
-                if _on == Jpeg.Segment.MarkerEnum.app1:
-                    self._raw_data = self._io.read_bytes((self.length - 2))
-                    _io__raw_data = KaitaiStream(BytesIO(self._raw_data))
-                    self.data = Jpeg.SegmentApp1(_io__raw_data, self, self._root)
-                    self.data._read()
-                elif _on == Jpeg.Segment.MarkerEnum.app0:
-                    self._raw_data = self._io.read_bytes((self.length - 2))
+                if _on == Jpeg.Segment.MarkerEnum.app0:
+                    pass
+                    self._raw_data = self._io.read_bytes(self.length - 2)
                     _io__raw_data = KaitaiStream(BytesIO(self._raw_data))
                     self.data = Jpeg.SegmentApp0(_io__raw_data, self, self._root)
                     self.data._read()
+                elif _on == Jpeg.Segment.MarkerEnum.app1:
+                    pass
+                    self._raw_data = self._io.read_bytes(self.length - 2)
+                    _io__raw_data = KaitaiStream(BytesIO(self._raw_data))
+                    self.data = Jpeg.SegmentApp1(_io__raw_data, self, self._root)
+                    self.data._read()
                 elif _on == Jpeg.Segment.MarkerEnum.sof0:
-                    self._raw_data = self._io.read_bytes((self.length - 2))
+                    pass
+                    self._raw_data = self._io.read_bytes(self.length - 2)
                     _io__raw_data = KaitaiStream(BytesIO(self._raw_data))
                     self.data = Jpeg.SegmentSof0(_io__raw_data, self, self._root)
                     self.data._read()
                 elif _on == Jpeg.Segment.MarkerEnum.sos:
-                    self._raw_data = self._io.read_bytes((self.length - 2))
+                    pass
+                    self._raw_data = self._io.read_bytes(self.length - 2)
                     _io__raw_data = KaitaiStream(BytesIO(self._raw_data))
                     self.data = Jpeg.SegmentSos(_io__raw_data, self, self._root)
                     self.data._read()
                 else:
-                    self.data = self._io.read_bytes((self.length - 2))
+                    pass
+                    self.data = self._io.read_bytes(self.length - 2)
                 self._debug['data']['end'] = self._io.pos()
 
             if self.marker == Jpeg.Segment.MarkerEnum.sos:
+                pass
                 self._debug['image_data']['start'] = self._io.pos()
                 self.image_data = self._io.read_bytes_full()
                 self._debug['image_data']['end'] = self._io.pos()
 
 
 
-    class SegmentSos(KaitaiStruct):
-        SEQ_FIELDS = ["num_components", "components", "start_spectral_selection", "end_spectral", "appr_bit_pos"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
+        def _fetch_instances(self):
+            pass
+            if  ((self.marker != Jpeg.Segment.MarkerEnum.soi) and (self.marker != Jpeg.Segment.MarkerEnum.eoi)) :
+                pass
 
-        def _read(self):
-            self._debug['num_components']['start'] = self._io.pos()
-            self.num_components = self._io.read_u1()
-            self._debug['num_components']['end'] = self._io.pos()
-            self._debug['components']['start'] = self._io.pos()
-            self.components = [None] * (self.num_components)
-            for i in range(self.num_components):
-                if not 'arr' in self._debug['components']:
-                    self._debug['components']['arr'] = []
-                self._debug['components']['arr'].append({'start': self._io.pos()})
-                _t_components = Jpeg.SegmentSos.Component(self._io, self, self._root)
-                _t_components._read()
-                self.components[i] = _t_components
-                self._debug['components']['arr'][i]['end'] = self._io.pos()
+            if  ((self.marker != Jpeg.Segment.MarkerEnum.soi) and (self.marker != Jpeg.Segment.MarkerEnum.eoi)) :
+                pass
+                _on = self.marker
+                if _on == Jpeg.Segment.MarkerEnum.app0:
+                    pass
+                    self.data._fetch_instances()
+                elif _on == Jpeg.Segment.MarkerEnum.app1:
+                    pass
+                    self.data._fetch_instances()
+                elif _on == Jpeg.Segment.MarkerEnum.sof0:
+                    pass
+                    self.data._fetch_instances()
+                elif _on == Jpeg.Segment.MarkerEnum.sos:
+                    pass
+                    self.data._fetch_instances()
+                else:
+                    pass
 
-            self._debug['components']['end'] = self._io.pos()
-            self._debug['start_spectral_selection']['start'] = self._io.pos()
-            self.start_spectral_selection = self._io.read_u1()
-            self._debug['start_spectral_selection']['end'] = self._io.pos()
-            self._debug['end_spectral']['start'] = self._io.pos()
-            self.end_spectral = self._io.read_u1()
-            self._debug['end_spectral']['end'] = self._io.pos()
-            self._debug['appr_bit_pos']['start'] = self._io.pos()
-            self.appr_bit_pos = self._io.read_u1()
-            self._debug['appr_bit_pos']['end'] = self._io.pos()
+            if self.marker == Jpeg.Segment.MarkerEnum.sos:
+                pass
 
-        class Component(KaitaiStruct):
-            SEQ_FIELDS = ["id", "huffman_table"]
-            def __init__(self, _io, _parent=None, _root=None):
-                self._io = _io
-                self._parent = _parent
-                self._root = _root if _root else self
-                self._debug = collections.defaultdict(dict)
-
-            def _read(self):
-                self._debug['id']['start'] = self._io.pos()
-                self.id = KaitaiStream.resolve_enum(Jpeg.ComponentId, self._io.read_u1())
-                self._debug['id']['end'] = self._io.pos()
-                self._debug['huffman_table']['start'] = self._io.pos()
-                self.huffman_table = self._io.read_u1()
-                self._debug['huffman_table']['end'] = self._io.pos()
-
-
-
-    class SegmentApp1(KaitaiStruct):
-        SEQ_FIELDS = ["magic", "body"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['magic']['start'] = self._io.pos()
-            self.magic = (self._io.read_bytes_term(0, False, True, True)).decode(u"ASCII")
-            self._debug['magic']['end'] = self._io.pos()
-            self._debug['body']['start'] = self._io.pos()
-            _on = self.magic
-            if _on == u"Exif":
-                self.body = Jpeg.ExifInJpeg(self._io, self, self._root)
-                self.body._read()
-            self._debug['body']['end'] = self._io.pos()
-
-
-    class SegmentSof0(KaitaiStruct):
-        SEQ_FIELDS = ["bits_per_sample", "image_height", "image_width", "num_components", "components"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['bits_per_sample']['start'] = self._io.pos()
-            self.bits_per_sample = self._io.read_u1()
-            self._debug['bits_per_sample']['end'] = self._io.pos()
-            self._debug['image_height']['start'] = self._io.pos()
-            self.image_height = self._io.read_u2be()
-            self._debug['image_height']['end'] = self._io.pos()
-            self._debug['image_width']['start'] = self._io.pos()
-            self.image_width = self._io.read_u2be()
-            self._debug['image_width']['end'] = self._io.pos()
-            self._debug['num_components']['start'] = self._io.pos()
-            self.num_components = self._io.read_u1()
-            self._debug['num_components']['end'] = self._io.pos()
-            self._debug['components']['start'] = self._io.pos()
-            self.components = [None] * (self.num_components)
-            for i in range(self.num_components):
-                if not 'arr' in self._debug['components']:
-                    self._debug['components']['arr'] = []
-                self._debug['components']['arr'].append({'start': self._io.pos()})
-                _t_components = Jpeg.SegmentSof0.Component(self._io, self, self._root)
-                _t_components._read()
-                self.components[i] = _t_components
-                self._debug['components']['arr'][i]['end'] = self._io.pos()
-
-            self._debug['components']['end'] = self._io.pos()
-
-        class Component(KaitaiStruct):
-            SEQ_FIELDS = ["id", "sampling_factors", "quantization_table_id"]
-            def __init__(self, _io, _parent=None, _root=None):
-                self._io = _io
-                self._parent = _parent
-                self._root = _root if _root else self
-                self._debug = collections.defaultdict(dict)
-
-            def _read(self):
-                self._debug['id']['start'] = self._io.pos()
-                self.id = KaitaiStream.resolve_enum(Jpeg.ComponentId, self._io.read_u1())
-                self._debug['id']['end'] = self._io.pos()
-                self._debug['sampling_factors']['start'] = self._io.pos()
-                self.sampling_factors = self._io.read_u1()
-                self._debug['sampling_factors']['end'] = self._io.pos()
-                self._debug['quantization_table_id']['start'] = self._io.pos()
-                self.quantization_table_id = self._io.read_u1()
-                self._debug['quantization_table_id']['end'] = self._io.pos()
-
-            @property
-            def sampling_x(self):
-                if hasattr(self, '_m_sampling_x'):
-                    return self._m_sampling_x if hasattr(self, '_m_sampling_x') else None
-
-                self._m_sampling_x = ((self.sampling_factors & 240) >> 4)
-                return self._m_sampling_x if hasattr(self, '_m_sampling_x') else None
-
-            @property
-            def sampling_y(self):
-                if hasattr(self, '_m_sampling_y'):
-                    return self._m_sampling_y if hasattr(self, '_m_sampling_y') else None
-
-                self._m_sampling_y = (self.sampling_factors & 15)
-                return self._m_sampling_y if hasattr(self, '_m_sampling_y') else None
-
-
-
-    class ExifInJpeg(KaitaiStruct):
-        SEQ_FIELDS = ["extra_zero", "data"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['extra_zero']['start'] = self._io.pos()
-            self.extra_zero = self._io.read_bytes(1)
-            self._debug['extra_zero']['end'] = self._io.pos()
-            if not self.extra_zero == b"\x00":
-                raise kaitaistruct.ValidationNotEqualError(b"\x00", self.extra_zero, self._io, u"/types/exif_in_jpeg/seq/0")
-            self._debug['data']['start'] = self._io.pos()
-            self._raw_data = self._io.read_bytes_full()
-            _io__raw_data = KaitaiStream(BytesIO(self._raw_data))
-            self.data = exif.Exif(_io__raw_data)
-            self.data._read()
-            self._debug['data']['end'] = self._io.pos()
 
 
     class SegmentApp0(KaitaiStruct):
 
-        class DensityUnit(Enum):
+        class DensityUnit(IntEnum):
             no_units = 0
             pixels_per_inch = 1
             pixels_per_cm = 2
         SEQ_FIELDS = ["magic", "version_major", "version_minor", "density_units", "density_x", "density_y", "thumbnail_x", "thumbnail_y", "thumbnail"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Jpeg.SegmentApp0, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -354,8 +261,190 @@ class Jpeg(KaitaiStruct):
             self.thumbnail_y = self._io.read_u1()
             self._debug['thumbnail_y']['end'] = self._io.pos()
             self._debug['thumbnail']['start'] = self._io.pos()
-            self.thumbnail = self._io.read_bytes(((self.thumbnail_x * self.thumbnail_y) * 3))
+            self.thumbnail = self._io.read_bytes((self.thumbnail_x * self.thumbnail_y) * 3)
             self._debug['thumbnail']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+
+
+    class SegmentApp1(KaitaiStruct):
+        SEQ_FIELDS = ["magic", "body"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Jpeg.SegmentApp1, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['magic']['start'] = self._io.pos()
+            self.magic = (self._io.read_bytes_term(0, False, True, True)).decode(u"ASCII")
+            self._debug['magic']['end'] = self._io.pos()
+            self._debug['body']['start'] = self._io.pos()
+            _on = self.magic
+            if _on == u"Exif":
+                pass
+                self.body = Jpeg.ExifInJpeg(self._io, self, self._root)
+                self.body._read()
+            self._debug['body']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            _on = self.magic
+            if _on == u"Exif":
+                pass
+                self.body._fetch_instances()
+
+
+    class SegmentSof0(KaitaiStruct):
+        SEQ_FIELDS = ["bits_per_sample", "image_height", "image_width", "num_components", "components"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Jpeg.SegmentSof0, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['bits_per_sample']['start'] = self._io.pos()
+            self.bits_per_sample = self._io.read_u1()
+            self._debug['bits_per_sample']['end'] = self._io.pos()
+            self._debug['image_height']['start'] = self._io.pos()
+            self.image_height = self._io.read_u2be()
+            self._debug['image_height']['end'] = self._io.pos()
+            self._debug['image_width']['start'] = self._io.pos()
+            self.image_width = self._io.read_u2be()
+            self._debug['image_width']['end'] = self._io.pos()
+            self._debug['num_components']['start'] = self._io.pos()
+            self.num_components = self._io.read_u1()
+            self._debug['num_components']['end'] = self._io.pos()
+            self._debug['components']['start'] = self._io.pos()
+            self._debug['components']['arr'] = []
+            self.components = []
+            for i in range(self.num_components):
+                self._debug['components']['arr'].append({'start': self._io.pos()})
+                _t_components = Jpeg.SegmentSof0.Component(self._io, self, self._root)
+                try:
+                    _t_components._read()
+                finally:
+                    self.components.append(_t_components)
+                self._debug['components']['arr'][i]['end'] = self._io.pos()
+
+            self._debug['components']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            for i in range(len(self.components)):
+                pass
+                self.components[i]._fetch_instances()
+
+
+        class Component(KaitaiStruct):
+            SEQ_FIELDS = ["id", "sampling_factors", "quantization_table_id"]
+            def __init__(self, _io, _parent=None, _root=None):
+                super(Jpeg.SegmentSof0.Component, self).__init__(_io)
+                self._parent = _parent
+                self._root = _root
+                self._debug = collections.defaultdict(dict)
+
+            def _read(self):
+                self._debug['id']['start'] = self._io.pos()
+                self.id = KaitaiStream.resolve_enum(Jpeg.ComponentId, self._io.read_u1())
+                self._debug['id']['end'] = self._io.pos()
+                self._debug['sampling_factors']['start'] = self._io.pos()
+                self.sampling_factors = self._io.read_u1()
+                self._debug['sampling_factors']['end'] = self._io.pos()
+                self._debug['quantization_table_id']['start'] = self._io.pos()
+                self.quantization_table_id = self._io.read_u1()
+                self._debug['quantization_table_id']['end'] = self._io.pos()
+
+
+            def _fetch_instances(self):
+                pass
+
+            @property
+            def sampling_x(self):
+                if hasattr(self, '_m_sampling_x'):
+                    return self._m_sampling_x
+
+                self._m_sampling_x = (self.sampling_factors & 240) >> 4
+                return getattr(self, '_m_sampling_x', None)
+
+            @property
+            def sampling_y(self):
+                if hasattr(self, '_m_sampling_y'):
+                    return self._m_sampling_y
+
+                self._m_sampling_y = self.sampling_factors & 15
+                return getattr(self, '_m_sampling_y', None)
+
+
+
+    class SegmentSos(KaitaiStruct):
+        SEQ_FIELDS = ["num_components", "components", "start_spectral_selection", "end_spectral", "appr_bit_pos"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Jpeg.SegmentSos, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['num_components']['start'] = self._io.pos()
+            self.num_components = self._io.read_u1()
+            self._debug['num_components']['end'] = self._io.pos()
+            self._debug['components']['start'] = self._io.pos()
+            self._debug['components']['arr'] = []
+            self.components = []
+            for i in range(self.num_components):
+                self._debug['components']['arr'].append({'start': self._io.pos()})
+                _t_components = Jpeg.SegmentSos.Component(self._io, self, self._root)
+                try:
+                    _t_components._read()
+                finally:
+                    self.components.append(_t_components)
+                self._debug['components']['arr'][i]['end'] = self._io.pos()
+
+            self._debug['components']['end'] = self._io.pos()
+            self._debug['start_spectral_selection']['start'] = self._io.pos()
+            self.start_spectral_selection = self._io.read_u1()
+            self._debug['start_spectral_selection']['end'] = self._io.pos()
+            self._debug['end_spectral']['start'] = self._io.pos()
+            self.end_spectral = self._io.read_u1()
+            self._debug['end_spectral']['end'] = self._io.pos()
+            self._debug['appr_bit_pos']['start'] = self._io.pos()
+            self.appr_bit_pos = self._io.read_u1()
+            self._debug['appr_bit_pos']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            for i in range(len(self.components)):
+                pass
+                self.components[i]._fetch_instances()
+
+
+        class Component(KaitaiStruct):
+            SEQ_FIELDS = ["id", "huffman_table"]
+            def __init__(self, _io, _parent=None, _root=None):
+                super(Jpeg.SegmentSos.Component, self).__init__(_io)
+                self._parent = _parent
+                self._root = _root
+                self._debug = collections.defaultdict(dict)
+
+            def _read(self):
+                self._debug['id']['start'] = self._io.pos()
+                self.id = KaitaiStream.resolve_enum(Jpeg.ComponentId, self._io.read_u1())
+                self._debug['id']['end'] = self._io.pos()
+                self._debug['huffman_table']['start'] = self._io.pos()
+                self.huffman_table = self._io.read_u1()
+                self._debug['huffman_table']['end'] = self._io.pos()
+
+
+            def _fetch_instances(self):
+                pass
+
 
 
 

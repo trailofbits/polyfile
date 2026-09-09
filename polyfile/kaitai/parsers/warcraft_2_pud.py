@@ -1,14 +1,14 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
+# type: ignore
 
-from packaging.version import parse as parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
-from enum import Enum
+from enum import IntEnum
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
-    raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
+    raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class Warcraft2Pud(KaitaiStruct):
     """Warcraft II game engine uses this format for map files. External
@@ -27,7 +27,7 @@ class Warcraft2Pud(KaitaiStruct):
        Source - http://cade.datamax.bg/war2x/pudspec.html
     """
 
-    class Controller(Enum):
+    class Controller(IntEnum):
         computer1 = 1
         passive_computer = 2
         nobody = 3
@@ -36,13 +36,13 @@ class Warcraft2Pud(KaitaiStruct):
         rescue_passive = 6
         rescue_active = 7
 
-    class TerrainType(Enum):
+    class TerrainType(IntEnum):
         forest = 0
         winter = 1
         wasteland = 2
         swamp = 3
 
-    class UnitType(Enum):
+    class UnitType(IntEnum):
         infantry = 0
         grunt = 1
         peasant = 2
@@ -145,86 +145,162 @@ class Warcraft2Pud(KaitaiStruct):
         orc_wall = 104
     SEQ_FIELDS = ["sections"]
     def __init__(self, _io, _parent=None, _root=None):
-        self._io = _io
+        super(Warcraft2Pud, self).__init__(_io)
         self._parent = _parent
-        self._root = _root if _root else self
+        self._root = _root or self
         self._debug = collections.defaultdict(dict)
 
     def _read(self):
         self._debug['sections']['start'] = self._io.pos()
+        self._debug['sections']['arr'] = []
         self.sections = []
         i = 0
         while not self._io.is_eof():
-            if not 'arr' in self._debug['sections']:
-                self._debug['sections']['arr'] = []
             self._debug['sections']['arr'].append({'start': self._io.pos()})
             _t_sections = Warcraft2Pud.Section(self._io, self, self._root)
-            _t_sections._read()
-            self.sections.append(_t_sections)
+            try:
+                _t_sections._read()
+            finally:
+                self.sections.append(_t_sections)
             self._debug['sections']['arr'][len(self.sections) - 1]['end'] = self._io.pos()
             i += 1
 
         self._debug['sections']['end'] = self._io.pos()
 
-    class SectionStartingResource(KaitaiStruct):
-        SEQ_FIELDS = ["resources_by_player"]
+
+    def _fetch_instances(self):
+        pass
+        for i in range(len(self.sections)):
+            pass
+            self.sections[i]._fetch_instances()
+
+
+    class Section(KaitaiStruct):
+        SEQ_FIELDS = ["name", "size", "body"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Warcraft2Pud.Section, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
-            self._debug['resources_by_player']['start'] = self._io.pos()
-            self.resources_by_player = []
-            i = 0
-            while not self._io.is_eof():
-                if not 'arr' in self._debug['resources_by_player']:
-                    self._debug['resources_by_player']['arr'] = []
-                self._debug['resources_by_player']['arr'].append({'start': self._io.pos()})
-                self.resources_by_player.append(self._io.read_u2le())
-                self._debug['resources_by_player']['arr'][len(self.resources_by_player) - 1]['end'] = self._io.pos()
-                i += 1
+            self._debug['name']['start'] = self._io.pos()
+            self.name = (self._io.read_bytes(4)).decode(u"ASCII")
+            self._debug['name']['end'] = self._io.pos()
+            self._debug['size']['start'] = self._io.pos()
+            self.size = self._io.read_u4le()
+            self._debug['size']['end'] = self._io.pos()
+            self._debug['body']['start'] = self._io.pos()
+            _on = self.name
+            if _on == u"DIM ":
+                pass
+                self._raw_body = self._io.read_bytes(self.size)
+                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
+                self.body = Warcraft2Pud.SectionDim(_io__raw_body, self, self._root)
+                self.body._read()
+            elif _on == u"ERA ":
+                pass
+                self._raw_body = self._io.read_bytes(self.size)
+                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
+                self.body = Warcraft2Pud.SectionEra(_io__raw_body, self, self._root)
+                self.body._read()
+            elif _on == u"ERAX":
+                pass
+                self._raw_body = self._io.read_bytes(self.size)
+                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
+                self.body = Warcraft2Pud.SectionEra(_io__raw_body, self, self._root)
+                self.body._read()
+            elif _on == u"OWNR":
+                pass
+                self._raw_body = self._io.read_bytes(self.size)
+                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
+                self.body = Warcraft2Pud.SectionOwnr(_io__raw_body, self, self._root)
+                self.body._read()
+            elif _on == u"SGLD":
+                pass
+                self._raw_body = self._io.read_bytes(self.size)
+                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
+                self.body = Warcraft2Pud.SectionStartingResource(_io__raw_body, self, self._root)
+                self.body._read()
+            elif _on == u"SLBR":
+                pass
+                self._raw_body = self._io.read_bytes(self.size)
+                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
+                self.body = Warcraft2Pud.SectionStartingResource(_io__raw_body, self, self._root)
+                self.body._read()
+            elif _on == u"SOIL":
+                pass
+                self._raw_body = self._io.read_bytes(self.size)
+                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
+                self.body = Warcraft2Pud.SectionStartingResource(_io__raw_body, self, self._root)
+                self.body._read()
+            elif _on == u"TYPE":
+                pass
+                self._raw_body = self._io.read_bytes(self.size)
+                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
+                self.body = Warcraft2Pud.SectionType(_io__raw_body, self, self._root)
+                self.body._read()
+            elif _on == u"UNIT":
+                pass
+                self._raw_body = self._io.read_bytes(self.size)
+                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
+                self.body = Warcraft2Pud.SectionUnit(_io__raw_body, self, self._root)
+                self.body._read()
+            elif _on == u"VER ":
+                pass
+                self._raw_body = self._io.read_bytes(self.size)
+                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
+                self.body = Warcraft2Pud.SectionVer(_io__raw_body, self, self._root)
+                self.body._read()
+            else:
+                pass
+                self.body = self._io.read_bytes(self.size)
+            self._debug['body']['end'] = self._io.pos()
 
-            self._debug['resources_by_player']['end'] = self._io.pos()
 
-
-    class SectionEra(KaitaiStruct):
-        """Section that specifies terrain type for this map."""
-        SEQ_FIELDS = ["terrain"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['terrain']['start'] = self._io.pos()
-            self.terrain = KaitaiStream.resolve_enum(Warcraft2Pud.TerrainType, self._io.read_u2le())
-            self._debug['terrain']['end'] = self._io.pos()
-
-
-    class SectionVer(KaitaiStruct):
-        """Section that specifies format version."""
-        SEQ_FIELDS = ["version"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['version']['start'] = self._io.pos()
-            self.version = self._io.read_u2le()
-            self._debug['version']['end'] = self._io.pos()
+        def _fetch_instances(self):
+            pass
+            _on = self.name
+            if _on == u"DIM ":
+                pass
+                self.body._fetch_instances()
+            elif _on == u"ERA ":
+                pass
+                self.body._fetch_instances()
+            elif _on == u"ERAX":
+                pass
+                self.body._fetch_instances()
+            elif _on == u"OWNR":
+                pass
+                self.body._fetch_instances()
+            elif _on == u"SGLD":
+                pass
+                self.body._fetch_instances()
+            elif _on == u"SLBR":
+                pass
+                self.body._fetch_instances()
+            elif _on == u"SOIL":
+                pass
+                self.body._fetch_instances()
+            elif _on == u"TYPE":
+                pass
+                self.body._fetch_instances()
+            elif _on == u"UNIT":
+                pass
+                self.body._fetch_instances()
+            elif _on == u"VER ":
+                pass
+                self.body._fetch_instances()
+            else:
+                pass
 
 
     class SectionDim(KaitaiStruct):
         SEQ_FIELDS = ["x", "y"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Warcraft2Pud.SectionDim, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -236,6 +312,88 @@ class Warcraft2Pud(KaitaiStruct):
             self._debug['y']['end'] = self._io.pos()
 
 
+        def _fetch_instances(self):
+            pass
+
+
+    class SectionEra(KaitaiStruct):
+        """Section that specifies terrain type for this map."""
+        SEQ_FIELDS = ["terrain"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Warcraft2Pud.SectionEra, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['terrain']['start'] = self._io.pos()
+            self.terrain = KaitaiStream.resolve_enum(Warcraft2Pud.TerrainType, self._io.read_u2le())
+            self._debug['terrain']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+
+
+    class SectionOwnr(KaitaiStruct):
+        """Section that specifies who controls each player."""
+        SEQ_FIELDS = ["controller_by_player"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Warcraft2Pud.SectionOwnr, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['controller_by_player']['start'] = self._io.pos()
+            self._debug['controller_by_player']['arr'] = []
+            self.controller_by_player = []
+            i = 0
+            while not self._io.is_eof():
+                self._debug['controller_by_player']['arr'].append({'start': self._io.pos()})
+                self.controller_by_player.append(KaitaiStream.resolve_enum(Warcraft2Pud.Controller, self._io.read_u1()))
+                self._debug['controller_by_player']['arr'][len(self.controller_by_player) - 1]['end'] = self._io.pos()
+                i += 1
+
+            self._debug['controller_by_player']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            for i in range(len(self.controller_by_player)):
+                pass
+
+
+
+    class SectionStartingResource(KaitaiStruct):
+        SEQ_FIELDS = ["resources_by_player"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Warcraft2Pud.SectionStartingResource, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['resources_by_player']['start'] = self._io.pos()
+            self._debug['resources_by_player']['arr'] = []
+            self.resources_by_player = []
+            i = 0
+            while not self._io.is_eof():
+                self._debug['resources_by_player']['arr'].append({'start': self._io.pos()})
+                self.resources_by_player.append(self._io.read_u2le())
+                self._debug['resources_by_player']['arr'][len(self.resources_by_player) - 1]['end'] = self._io.pos()
+                i += 1
+
+            self._debug['resources_by_player']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            for i in range(len(self.resources_by_player)):
+                pass
+
+
+
     class SectionType(KaitaiStruct):
         """Section that confirms that this file is a "map file" by certain
         magic string and supplies a tag that could be used in
@@ -244,9 +402,9 @@ class Warcraft2Pud(KaitaiStruct):
         """
         SEQ_FIELDS = ["magic", "unused", "id_tag"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Warcraft2Pud.SectionType, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -263,133 +421,69 @@ class Warcraft2Pud(KaitaiStruct):
             self._debug['id_tag']['end'] = self._io.pos()
 
 
+        def _fetch_instances(self):
+            pass
+
+
     class SectionUnit(KaitaiStruct):
         SEQ_FIELDS = ["units"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Warcraft2Pud.SectionUnit, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
             self._debug['units']['start'] = self._io.pos()
+            self._debug['units']['arr'] = []
             self.units = []
             i = 0
             while not self._io.is_eof():
-                if not 'arr' in self._debug['units']:
-                    self._debug['units']['arr'] = []
                 self._debug['units']['arr'].append({'start': self._io.pos()})
                 _t_units = Warcraft2Pud.Unit(self._io, self, self._root)
-                _t_units._read()
-                self.units.append(_t_units)
+                try:
+                    _t_units._read()
+                finally:
+                    self.units.append(_t_units)
                 self._debug['units']['arr'][len(self.units) - 1]['end'] = self._io.pos()
                 i += 1
 
             self._debug['units']['end'] = self._io.pos()
 
 
-    class Section(KaitaiStruct):
-        SEQ_FIELDS = ["name", "size", "body"]
+        def _fetch_instances(self):
+            pass
+            for i in range(len(self.units)):
+                pass
+                self.units[i]._fetch_instances()
+
+
+
+    class SectionVer(KaitaiStruct):
+        """Section that specifies format version."""
+        SEQ_FIELDS = ["version"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Warcraft2Pud.SectionVer, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
-            self._debug['name']['start'] = self._io.pos()
-            self.name = (self._io.read_bytes(4)).decode(u"ASCII")
-            self._debug['name']['end'] = self._io.pos()
-            self._debug['size']['start'] = self._io.pos()
-            self.size = self._io.read_u4le()
-            self._debug['size']['end'] = self._io.pos()
-            self._debug['body']['start'] = self._io.pos()
-            _on = self.name
-            if _on == u"SLBR":
-                self._raw_body = self._io.read_bytes(self.size)
-                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
-                self.body = Warcraft2Pud.SectionStartingResource(_io__raw_body, self, self._root)
-                self.body._read()
-            elif _on == u"ERAX":
-                self._raw_body = self._io.read_bytes(self.size)
-                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
-                self.body = Warcraft2Pud.SectionEra(_io__raw_body, self, self._root)
-                self.body._read()
-            elif _on == u"OWNR":
-                self._raw_body = self._io.read_bytes(self.size)
-                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
-                self.body = Warcraft2Pud.SectionOwnr(_io__raw_body, self, self._root)
-                self.body._read()
-            elif _on == u"ERA ":
-                self._raw_body = self._io.read_bytes(self.size)
-                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
-                self.body = Warcraft2Pud.SectionEra(_io__raw_body, self, self._root)
-                self.body._read()
-            elif _on == u"SGLD":
-                self._raw_body = self._io.read_bytes(self.size)
-                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
-                self.body = Warcraft2Pud.SectionStartingResource(_io__raw_body, self, self._root)
-                self.body._read()
-            elif _on == u"VER ":
-                self._raw_body = self._io.read_bytes(self.size)
-                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
-                self.body = Warcraft2Pud.SectionVer(_io__raw_body, self, self._root)
-                self.body._read()
-            elif _on == u"SOIL":
-                self._raw_body = self._io.read_bytes(self.size)
-                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
-                self.body = Warcraft2Pud.SectionStartingResource(_io__raw_body, self, self._root)
-                self.body._read()
-            elif _on == u"UNIT":
-                self._raw_body = self._io.read_bytes(self.size)
-                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
-                self.body = Warcraft2Pud.SectionUnit(_io__raw_body, self, self._root)
-                self.body._read()
-            elif _on == u"DIM ":
-                self._raw_body = self._io.read_bytes(self.size)
-                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
-                self.body = Warcraft2Pud.SectionDim(_io__raw_body, self, self._root)
-                self.body._read()
-            elif _on == u"TYPE":
-                self._raw_body = self._io.read_bytes(self.size)
-                _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
-                self.body = Warcraft2Pud.SectionType(_io__raw_body, self, self._root)
-                self.body._read()
-            else:
-                self.body = self._io.read_bytes(self.size)
-            self._debug['body']['end'] = self._io.pos()
+            self._debug['version']['start'] = self._io.pos()
+            self.version = self._io.read_u2le()
+            self._debug['version']['end'] = self._io.pos()
 
 
-    class SectionOwnr(KaitaiStruct):
-        """Section that specifies who controls each player."""
-        SEQ_FIELDS = ["controller_by_player"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['controller_by_player']['start'] = self._io.pos()
-            self.controller_by_player = []
-            i = 0
-            while not self._io.is_eof():
-                if not 'arr' in self._debug['controller_by_player']:
-                    self._debug['controller_by_player']['arr'] = []
-                self._debug['controller_by_player']['arr'].append({'start': self._io.pos()})
-                self.controller_by_player.append(KaitaiStream.resolve_enum(Warcraft2Pud.Controller, self._io.read_u1()))
-                self._debug['controller_by_player']['arr'][len(self.controller_by_player) - 1]['end'] = self._io.pos()
-                i += 1
-
-            self._debug['controller_by_player']['end'] = self._io.pos()
+        def _fetch_instances(self):
+            pass
 
 
     class Unit(KaitaiStruct):
         SEQ_FIELDS = ["x", "y", "u_type", "owner", "options"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Warcraft2Pud.Unit, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -409,15 +503,20 @@ class Warcraft2Pud(KaitaiStruct):
             self.options = self._io.read_u2le()
             self._debug['options']['end'] = self._io.pos()
 
+
+        def _fetch_instances(self):
+            pass
+
         @property
         def resource(self):
             if hasattr(self, '_m_resource'):
-                return self._m_resource if hasattr(self, '_m_resource') else None
+                return self._m_resource
 
             if  ((self.u_type == Warcraft2Pud.UnitType.gold_mine) or (self.u_type == Warcraft2Pud.UnitType.human_oil_well) or (self.u_type == Warcraft2Pud.UnitType.orc_oil_well) or (self.u_type == Warcraft2Pud.UnitType.oil_patch)) :
-                self._m_resource = (self.options * 2500)
+                pass
+                self._m_resource = self.options * 2500
 
-            return self._m_resource if hasattr(self, '_m_resource') else None
+            return getattr(self, '_m_resource', None)
 
 
 

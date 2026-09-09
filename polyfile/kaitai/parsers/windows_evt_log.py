@@ -1,14 +1,14 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
+# type: ignore
 
-from packaging.version import parse as parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
-from enum import Enum
+from enum import IntEnum
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
-    raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
+    raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class WindowsEvtLog(KaitaiStruct):
     """EVT files are Windows Event Log files written by older Windows
@@ -38,9 +38,9 @@ class WindowsEvtLog(KaitaiStruct):
     """
     SEQ_FIELDS = ["header", "records"]
     def __init__(self, _io, _parent=None, _root=None):
-        self._io = _io
+        super(WindowsEvtLog, self).__init__(_io)
         self._parent = _parent
-        self._root = _root if _root else self
+        self._root = _root or self
         self._debug = collections.defaultdict(dict)
 
     def _read(self):
@@ -49,19 +49,65 @@ class WindowsEvtLog(KaitaiStruct):
         self.header._read()
         self._debug['header']['end'] = self._io.pos()
         self._debug['records']['start'] = self._io.pos()
+        self._debug['records']['arr'] = []
         self.records = []
         i = 0
         while not self._io.is_eof():
-            if not 'arr' in self._debug['records']:
-                self._debug['records']['arr'] = []
             self._debug['records']['arr'].append({'start': self._io.pos()})
             _t_records = WindowsEvtLog.Record(self._io, self, self._root)
-            _t_records._read()
-            self.records.append(_t_records)
+            try:
+                _t_records._read()
+            finally:
+                self.records.append(_t_records)
             self._debug['records']['arr'][len(self.records) - 1]['end'] = self._io.pos()
             i += 1
 
         self._debug['records']['end'] = self._io.pos()
+
+
+    def _fetch_instances(self):
+        pass
+        self.header._fetch_instances()
+        for i in range(len(self.records)):
+            pass
+            self.records[i]._fetch_instances()
+
+
+    class CursorRecordBody(KaitaiStruct):
+        """
+        .. seealso::
+           Source - https://forensics.wiki/windows_event_log_(evt)/#cursor-record
+        """
+        SEQ_FIELDS = ["magic", "ofs_first_record", "ofs_next_record", "idx_next_record", "idx_first_record"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(WindowsEvtLog.CursorRecordBody, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['magic']['start'] = self._io.pos()
+            self.magic = self._io.read_bytes(12)
+            self._debug['magic']['end'] = self._io.pos()
+            if not self.magic == b"\x22\x22\x22\x22\x33\x33\x33\x33\x44\x44\x44\x44":
+                raise kaitaistruct.ValidationNotEqualError(b"\x22\x22\x22\x22\x33\x33\x33\x33\x44\x44\x44\x44", self.magic, self._io, u"/types/cursor_record_body/seq/0")
+            self._debug['ofs_first_record']['start'] = self._io.pos()
+            self.ofs_first_record = self._io.read_u4le()
+            self._debug['ofs_first_record']['end'] = self._io.pos()
+            self._debug['ofs_next_record']['start'] = self._io.pos()
+            self.ofs_next_record = self._io.read_u4le()
+            self._debug['ofs_next_record']['end'] = self._io.pos()
+            self._debug['idx_next_record']['start'] = self._io.pos()
+            self.idx_next_record = self._io.read_u4le()
+            self._debug['idx_next_record']['end'] = self._io.pos()
+            self._debug['idx_first_record']['start'] = self._io.pos()
+            self.idx_first_record = self._io.read_u4le()
+            self._debug['idx_first_record']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+
 
     class Header(KaitaiStruct):
         """
@@ -70,9 +116,9 @@ class WindowsEvtLog(KaitaiStruct):
         """
         SEQ_FIELDS = ["len_header", "magic", "version_major", "version_minor", "ofs_start", "ofs_end", "cur_rec_idx", "oldest_rec_idx", "len_file_max", "flags", "retention", "len_header_2"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(WindowsEvtLog.Header, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -116,12 +162,17 @@ class WindowsEvtLog(KaitaiStruct):
             self.len_header_2 = self._io.read_u4le()
             self._debug['len_header_2']['end'] = self._io.pos()
 
+
+        def _fetch_instances(self):
+            pass
+            self.flags._fetch_instances()
+
         class Flags(KaitaiStruct):
             SEQ_FIELDS = ["reserved", "archive", "log_full", "wrap", "dirty"]
             def __init__(self, _io, _parent=None, _root=None):
-                self._io = _io
+                super(WindowsEvtLog.Header.Flags, self).__init__(_io)
                 self._parent = _parent
-                self._root = _root if _root else self
+                self._root = _root
                 self._debug = collections.defaultdict(dict)
 
             def _read(self):
@@ -142,6 +193,10 @@ class WindowsEvtLog(KaitaiStruct):
                 self._debug['dirty']['end'] = self._io.pos()
 
 
+            def _fetch_instances(self):
+                pass
+
+
 
     class Record(KaitaiStruct):
         """
@@ -150,9 +205,9 @@ class WindowsEvtLog(KaitaiStruct):
         """
         SEQ_FIELDS = ["len_record", "type", "body", "len_record2"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(WindowsEvtLog.Record, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -165,21 +220,37 @@ class WindowsEvtLog(KaitaiStruct):
             self._debug['body']['start'] = self._io.pos()
             _on = self.type
             if _on == 1699505740:
-                self._raw_body = self._io.read_bytes((self.len_record - 12))
+                pass
+                self._raw_body = self._io.read_bytes(self.len_record - 12)
                 _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
                 self.body = WindowsEvtLog.RecordBody(_io__raw_body, self, self._root)
                 self.body._read()
             elif _on == 286331153:
-                self._raw_body = self._io.read_bytes((self.len_record - 12))
+                pass
+                self._raw_body = self._io.read_bytes(self.len_record - 12)
                 _io__raw_body = KaitaiStream(BytesIO(self._raw_body))
                 self.body = WindowsEvtLog.CursorRecordBody(_io__raw_body, self, self._root)
                 self.body._read()
             else:
-                self.body = self._io.read_bytes((self.len_record - 12))
+                pass
+                self.body = self._io.read_bytes(self.len_record - 12)
             self._debug['body']['end'] = self._io.pos()
             self._debug['len_record2']['start'] = self._io.pos()
             self.len_record2 = self._io.read_u4le()
             self._debug['len_record2']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            _on = self.type
+            if _on == 1699505740:
+                pass
+                self.body._fetch_instances()
+            elif _on == 286331153:
+                pass
+                self.body._fetch_instances()
+            else:
+                pass
 
 
     class RecordBody(KaitaiStruct):
@@ -188,7 +259,7 @@ class WindowsEvtLog(KaitaiStruct):
            Source - https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-eventlogrecord
         """
 
-        class EventTypes(Enum):
+        class EventTypes(IntEnum):
             error = 1
             audit_failure = 2
             audit_success = 3
@@ -196,9 +267,9 @@ class WindowsEvtLog(KaitaiStruct):
             warning = 5
         SEQ_FIELDS = ["idx", "time_generated", "time_written", "event_id", "event_type", "num_strings", "event_category", "reserved", "ofs_strings", "len_user_sid", "ofs_user_sid", "len_data", "ofs_data"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(WindowsEvtLog.RecordBody, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -242,63 +313,43 @@ class WindowsEvtLog(KaitaiStruct):
             self.ofs_data = self._io.read_u4le()
             self._debug['ofs_data']['end'] = self._io.pos()
 
-        @property
-        def user_sid(self):
-            if hasattr(self, '_m_user_sid'):
-                return self._m_user_sid if hasattr(self, '_m_user_sid') else None
 
-            _pos = self._io.pos()
-            self._io.seek((self.ofs_user_sid - 8))
-            self._debug['_m_user_sid']['start'] = self._io.pos()
-            self._m_user_sid = self._io.read_bytes(self.len_user_sid)
-            self._debug['_m_user_sid']['end'] = self._io.pos()
-            self._io.seek(_pos)
-            return self._m_user_sid if hasattr(self, '_m_user_sid') else None
+        def _fetch_instances(self):
+            pass
+            _ = self.data
+            if hasattr(self, '_m_data'):
+                pass
+
+            _ = self.user_sid
+            if hasattr(self, '_m_user_sid'):
+                pass
+
 
         @property
         def data(self):
             if hasattr(self, '_m_data'):
-                return self._m_data if hasattr(self, '_m_data') else None
+                return self._m_data
 
             _pos = self._io.pos()
-            self._io.seek((self.ofs_data - 8))
+            self._io.seek(self.ofs_data - 8)
             self._debug['_m_data']['start'] = self._io.pos()
             self._m_data = self._io.read_bytes(self.len_data)
             self._debug['_m_data']['end'] = self._io.pos()
             self._io.seek(_pos)
-            return self._m_data if hasattr(self, '_m_data') else None
+            return getattr(self, '_m_data', None)
 
+        @property
+        def user_sid(self):
+            if hasattr(self, '_m_user_sid'):
+                return self._m_user_sid
 
-    class CursorRecordBody(KaitaiStruct):
-        """
-        .. seealso::
-           Source - https://forensics.wiki/windows_event_log_(evt)/#cursor-record
-        """
-        SEQ_FIELDS = ["magic", "ofs_first_record", "ofs_next_record", "idx_next_record", "idx_first_record"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['magic']['start'] = self._io.pos()
-            self.magic = self._io.read_bytes(12)
-            self._debug['magic']['end'] = self._io.pos()
-            if not self.magic == b"\x22\x22\x22\x22\x33\x33\x33\x33\x44\x44\x44\x44":
-                raise kaitaistruct.ValidationNotEqualError(b"\x22\x22\x22\x22\x33\x33\x33\x33\x44\x44\x44\x44", self.magic, self._io, u"/types/cursor_record_body/seq/0")
-            self._debug['ofs_first_record']['start'] = self._io.pos()
-            self.ofs_first_record = self._io.read_u4le()
-            self._debug['ofs_first_record']['end'] = self._io.pos()
-            self._debug['ofs_next_record']['start'] = self._io.pos()
-            self.ofs_next_record = self._io.read_u4le()
-            self._debug['ofs_next_record']['end'] = self._io.pos()
-            self._debug['idx_next_record']['start'] = self._io.pos()
-            self.idx_next_record = self._io.read_u4le()
-            self._debug['idx_next_record']['end'] = self._io.pos()
-            self._debug['idx_first_record']['start'] = self._io.pos()
-            self.idx_first_record = self._io.read_u4le()
-            self._debug['idx_first_record']['end'] = self._io.pos()
+            _pos = self._io.pos()
+            self._io.seek(self.ofs_user_sid - 8)
+            self._debug['_m_user_sid']['start'] = self._io.pos()
+            self._m_user_sid = self._io.read_bytes(self.len_user_sid)
+            self._debug['_m_user_sid']['end'] = self._io.pos()
+            self._io.seek(_pos)
+            return getattr(self, '_m_user_sid', None)
 
 
 

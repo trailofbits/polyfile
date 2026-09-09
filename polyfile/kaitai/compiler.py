@@ -27,7 +27,8 @@ else:
     KAITAI_COMPILER_NAME = "kaitai-struct-compiler"
 
 
-COMPILER_DIR = Path(__file__).absolute().parent / "kaitai-struct-compiler-0.9"
+KAITAI_COMPILER_VERSION = "0.11"
+COMPILER_DIR = Path(__file__).absolute().parent / f"kaitai-struct-compiler-{KAITAI_COMPILER_VERSION}"
 COMPILER_BIN_DIR = COMPILER_DIR / "bin"
 COMPILER_BIN = COMPILER_BIN_DIR / KAITAI_COMPILER_NAME
 
@@ -45,21 +46,6 @@ class CompilationError(KaitaiError):
         return f"{self.ksy_file}: {super().__str__()}"
 
 
-def _fix_pkg_resources_import(python_path: Path) -> None:
-    """Replace deprecated pkg_resources import with packaging.version.
-
-    Kaitai Struct Compiler v0.9 generates code that imports parse_version from
-    pkg_resources, which is deprecated and unavailable on Python 3.12+.
-    """
-    content = python_path.read_text()
-    if "from pkg_resources import parse_version" in content:
-        content = content.replace(
-            "from pkg_resources import parse_version",
-            "from packaging.version import parse as parse_version"
-        )
-        python_path.write_text(content)
-
-
 class CompiledKSY:
     def __init__(self, class_name: str, python_path: Union[str, Path], dependencies: Iterable["CompiledKSY"] = ()):
         self.class_name: str = class_name
@@ -74,8 +60,8 @@ class CompiledKSY:
 
 
 def install_compiler():
-    resp = urlopen("https://github.com/kaitai-io/kaitai_struct_compiler/releases/download/0.9/"
-                   "kaitai-struct-compiler-0.9.zip")
+    resp = urlopen(f"https://github.com/kaitai-io/kaitai_struct_compiler/releases/download/"
+                   f"{KAITAI_COMPILER_VERSION}/kaitai-struct-compiler-{KAITAI_COMPILER_VERSION}.zip")
     zipfile = ZipFile(BytesIO(resp.read()))
     COMPILER_DIR.mkdir(exist_ok=True)
     zipfile.extractall(COMPILER_DIR.parent)
@@ -142,11 +128,6 @@ def compile(ksy_path: Union[str, Path], output_directory: Union[str, Path], auto
         for spec_name, compiled in result[ksy_path]["output"]["python"].items()
         if spec_name != first_spec_name
     ]
-
-    # Fix deprecated pkg_resources import in all generated files
-    _fix_pkg_resources_import(main_python_path)
-    for dep in dependencies:
-        _fix_pkg_resources_import(dep.python_path)
 
     return CompiledKSY(
         class_name=first_spec["topLevelName"],

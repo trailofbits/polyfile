@@ -1,14 +1,14 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
+# type: ignore
 
-from packaging.version import parse as parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
-from enum import Enum
+from enum import IntEnum
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
-    raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
+    raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class PsxTim(KaitaiStruct):
     """
@@ -24,16 +24,16 @@ class PsxTim(KaitaiStruct):
        Source - https://www.romhacking.net/documents/31/
     """
 
-    class BppType(Enum):
+    class BppType(IntEnum):
         bpp_4 = 0
         bpp_8 = 1
         bpp_16 = 2
         bpp_24 = 3
     SEQ_FIELDS = ["magic", "flags", "clut", "img"]
     def __init__(self, _io, _parent=None, _root=None):
-        self._io = _io
+        super(PsxTim, self).__init__(_io)
         self._parent = _parent
-        self._root = _root if _root else self
+        self._root = _root or self
         self._debug = collections.defaultdict(dict)
 
     def _read(self):
@@ -46,6 +46,7 @@ class PsxTim(KaitaiStruct):
         self.flags = self._io.read_u4le()
         self._debug['flags']['end'] = self._io.pos()
         if self.has_clut:
+            pass
             self._debug['clut']['start'] = self._io.pos()
             self.clut = PsxTim.Bitmap(self._io, self, self._root)
             self.clut._read()
@@ -56,12 +57,21 @@ class PsxTim(KaitaiStruct):
         self.img._read()
         self._debug['img']['end'] = self._io.pos()
 
+
+    def _fetch_instances(self):
+        pass
+        if self.has_clut:
+            pass
+            self.clut._fetch_instances()
+
+        self.img._fetch_instances()
+
     class Bitmap(KaitaiStruct):
         SEQ_FIELDS = ["len", "origin_x", "origin_y", "width", "height", "body"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(PsxTim.Bitmap, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -81,24 +91,28 @@ class PsxTim(KaitaiStruct):
             self.height = self._io.read_u2le()
             self._debug['height']['end'] = self._io.pos()
             self._debug['body']['start'] = self._io.pos()
-            self.body = self._io.read_bytes((self.len - 12))
+            self.body = self._io.read_bytes(self.len - 12)
             self._debug['body']['end'] = self._io.pos()
 
 
-    @property
-    def has_clut(self):
-        if hasattr(self, '_m_has_clut'):
-            return self._m_has_clut if hasattr(self, '_m_has_clut') else None
+        def _fetch_instances(self):
+            pass
 
-        self._m_has_clut = (self.flags & 8) != 0
-        return self._m_has_clut if hasattr(self, '_m_has_clut') else None
 
     @property
     def bpp(self):
         if hasattr(self, '_m_bpp'):
-            return self._m_bpp if hasattr(self, '_m_bpp') else None
+            return self._m_bpp
 
-        self._m_bpp = (self.flags & 3)
-        return self._m_bpp if hasattr(self, '_m_bpp') else None
+        self._m_bpp = self.flags & 3
+        return getattr(self, '_m_bpp', None)
+
+    @property
+    def has_clut(self):
+        if hasattr(self, '_m_has_clut'):
+            return self._m_has_clut
+
+        self._m_has_clut = self.flags & 8 != 0
+        return getattr(self, '_m_has_clut', None)
 
 

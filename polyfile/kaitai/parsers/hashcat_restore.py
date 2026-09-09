@@ -1,13 +1,13 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
+# type: ignore
 
-from packaging.version import parse as parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
-    raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
+    raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class HashcatRestore(KaitaiStruct):
     """
@@ -16,9 +16,9 @@ class HashcatRestore(KaitaiStruct):
     """
     SEQ_FIELDS = ["version", "cwd", "dicts_pos", "masks_pos", "padding", "current_restore_point", "argc", "padding2", "argv"]
     def __init__(self, _io, _parent=None, _root=None):
-        self._io = _io
+        super(HashcatRestore, self).__init__(_io)
         self._parent = _parent
-        self._root = _root if _root else self
+        self._root = _root or self
         self._debug = collections.defaultdict(dict)
 
     def _read(self):
@@ -47,14 +47,20 @@ class HashcatRestore(KaitaiStruct):
         self.padding2 = self._io.read_bytes(12)
         self._debug['padding2']['end'] = self._io.pos()
         self._debug['argv']['start'] = self._io.pos()
-        self.argv = [None] * (self.argc)
+        self._debug['argv']['arr'] = []
+        self.argv = []
         for i in range(self.argc):
-            if not 'arr' in self._debug['argv']:
-                self._debug['argv']['arr'] = []
             self._debug['argv']['arr'].append({'start': self._io.pos()})
-            self.argv[i] = (self._io.read_bytes_term(10, False, True, True)).decode(u"UTF-8")
+            self.argv.append((self._io.read_bytes_term(10, False, True, True)).decode(u"UTF-8"))
             self._debug['argv']['arr'][i]['end'] = self._io.pos()
 
         self._debug['argv']['end'] = self._io.pos()
+
+
+    def _fetch_instances(self):
+        pass
+        for i in range(len(self.argv)):
+            pass
+
 
 

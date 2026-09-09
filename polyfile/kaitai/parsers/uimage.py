@@ -1,14 +1,14 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
+# type: ignore
 
-from packaging.version import parse as parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
-from enum import Enum
+from enum import IntEnum
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
-    raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
+    raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class Uimage(KaitaiStruct):
     """The new uImage format allows more flexibility in handling images of various
@@ -19,7 +19,45 @@ class Uimage(KaitaiStruct):
        Source - https://source.denx.de/u-boot/u-boot/-/raw/e4dba4ba6f/include/image.h
     """
 
-    class UimageOs(Enum):
+    class UimageArch(IntEnum):
+        invalid = 0
+        alpha = 1
+        arm = 2
+        i386 = 3
+        ia64 = 4
+        mips = 5
+        mips64 = 6
+        ppc = 7
+        s390 = 8
+        sh = 9
+        sparc = 10
+        sparc64 = 11
+        m68k = 12
+        nios = 13
+        microblaze = 14
+        nios2 = 15
+        blackfin = 16
+        avr32 = 17
+        st200 = 18
+        sandbox = 19
+        nds32 = 20
+        openrisc = 21
+        arm64 = 22
+        arc = 23
+        x86_64 = 24
+        xtensa = 25
+        riscv = 26
+
+    class UimageComp(IntEnum):
+        none = 0
+        gzip = 1
+        bzip2 = 2
+        lzma = 3
+        lzo = 4
+        lz4 = 5
+        zstd = 6
+
+    class UimageOs(IntEnum):
         invalid = 0
         openbsd = 1
         netbsd = 2
@@ -50,45 +88,7 @@ class Uimage(KaitaiStruct):
         opensbi = 27
         efi = 28
 
-    class UimageArch(Enum):
-        invalid = 0
-        alpha = 1
-        arm = 2
-        i386 = 3
-        ia64 = 4
-        mips = 5
-        mips64 = 6
-        ppc = 7
-        s390 = 8
-        sh = 9
-        sparc = 10
-        sparc64 = 11
-        m68k = 12
-        nios = 13
-        microblaze = 14
-        nios2 = 15
-        blackfin = 16
-        avr32 = 17
-        st200 = 18
-        sandbox = 19
-        nds32 = 20
-        openrisc = 21
-        arm64 = 22
-        arc = 23
-        x86_64 = 24
-        xtensa = 25
-        riscv = 26
-
-    class UimageComp(Enum):
-        none = 0
-        gzip = 1
-        bzip2 = 2
-        lzma = 3
-        lzo = 4
-        lz4 = 5
-        zstd = 6
-
-    class UimageType(Enum):
+    class UimageType(IntEnum):
         invalid = 0
         standalone = 1
         kernel = 2
@@ -132,9 +132,9 @@ class Uimage(KaitaiStruct):
         sunxi_egon = 40
     SEQ_FIELDS = ["header", "data"]
     def __init__(self, _io, _parent=None, _root=None):
-        self._io = _io
+        super(Uimage, self).__init__(_io)
         self._parent = _parent
-        self._root = _root if _root else self
+        self._root = _root or self
         self._debug = collections.defaultdict(dict)
 
     def _read(self):
@@ -146,12 +146,17 @@ class Uimage(KaitaiStruct):
         self.data = self._io.read_bytes(self.header.len_image)
         self._debug['data']['end'] = self._io.pos()
 
+
+    def _fetch_instances(self):
+        pass
+        self.header._fetch_instances()
+
     class Uheader(KaitaiStruct):
         SEQ_FIELDS = ["magic", "header_crc", "timestamp", "len_image", "load_address", "entry_address", "data_crc", "os_type", "architecture", "image_type", "compression_type", "name"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Uimage.Uheader, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -193,6 +198,10 @@ class Uimage(KaitaiStruct):
             self._debug['name']['start'] = self._io.pos()
             self.name = (KaitaiStream.bytes_terminate(self._io.read_bytes(32), 0, False)).decode(u"UTF-8")
             self._debug['name']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
 
 
 

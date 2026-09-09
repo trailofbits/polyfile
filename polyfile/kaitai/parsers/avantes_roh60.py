@@ -1,13 +1,13 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
+# type: ignore
 
-from packaging.version import parse as parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
-    raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
+    raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class AvantesRoh60(KaitaiStruct):
     """Avantes USB spectrometers are supplied with a Windows binary which
@@ -39,9 +39,9 @@ class AvantesRoh60(KaitaiStruct):
     """
     SEQ_FIELDS = ["unknown1", "wlintercept", "wlx1", "wlx2", "wlx3", "wlx4", "unknown2", "ipixfirst", "ipixlast", "unknown3", "spectrum", "integration_ms", "averaging", "pixel_smoothing"]
     def __init__(self, _io, _parent=None, _root=None):
-        self._io = _io
+        super(AvantesRoh60, self).__init__(_io)
         self._parent = _parent
-        self._root = _root if _root else self
+        self._root = _root or self
         self._debug = collections.defaultdict(dict)
 
     def _read(self):
@@ -64,12 +64,11 @@ class AvantesRoh60(KaitaiStruct):
         self.wlx4 = self._io.read_f4le()
         self._debug['wlx4']['end'] = self._io.pos()
         self._debug['unknown2']['start'] = self._io.pos()
-        self.unknown2 = [None] * (9)
+        self._debug['unknown2']['arr'] = []
+        self.unknown2 = []
         for i in range(9):
-            if not 'arr' in self._debug['unknown2']:
-                self._debug['unknown2']['arr'] = []
             self._debug['unknown2']['arr'].append({'start': self._io.pos()})
-            self.unknown2[i] = self._io.read_f4le()
+            self.unknown2.append(self._io.read_f4le())
             self._debug['unknown2']['arr'][i]['end'] = self._io.pos()
 
         self._debug['unknown2']['end'] = self._io.pos()
@@ -80,22 +79,20 @@ class AvantesRoh60(KaitaiStruct):
         self.ipixlast = self._io.read_f4le()
         self._debug['ipixlast']['end'] = self._io.pos()
         self._debug['unknown3']['start'] = self._io.pos()
-        self.unknown3 = [None] * (4)
+        self._debug['unknown3']['arr'] = []
+        self.unknown3 = []
         for i in range(4):
-            if not 'arr' in self._debug['unknown3']:
-                self._debug['unknown3']['arr'] = []
             self._debug['unknown3']['arr'].append({'start': self._io.pos()})
-            self.unknown3[i] = self._io.read_f4le()
+            self.unknown3.append(self._io.read_f4le())
             self._debug['unknown3']['arr'][i]['end'] = self._io.pos()
 
         self._debug['unknown3']['end'] = self._io.pos()
         self._debug['spectrum']['start'] = self._io.pos()
-        self.spectrum = [None] * (((int(self.ipixlast) - int(self.ipixfirst)) - 1))
-        for i in range(((int(self.ipixlast) - int(self.ipixfirst)) - 1)):
-            if not 'arr' in self._debug['spectrum']:
-                self._debug['spectrum']['arr'] = []
+        self._debug['spectrum']['arr'] = []
+        self.spectrum = []
+        for i in range((int(self.ipixlast) - int(self.ipixfirst)) - 1):
             self._debug['spectrum']['arr'].append({'start': self._io.pos()})
-            self.spectrum[i] = self._io.read_f4le()
+            self.spectrum.append(self._io.read_f4le())
             self._debug['spectrum']['arr'][i]['end'] = self._io.pos()
 
         self._debug['spectrum']['end'] = self._io.pos()
@@ -108,5 +105,18 @@ class AvantesRoh60(KaitaiStruct):
         self._debug['pixel_smoothing']['start'] = self._io.pos()
         self.pixel_smoothing = self._io.read_f4le()
         self._debug['pixel_smoothing']['end'] = self._io.pos()
+
+
+    def _fetch_instances(self):
+        pass
+        for i in range(len(self.unknown2)):
+            pass
+
+        for i in range(len(self.unknown3)):
+            pass
+
+        for i in range(len(self.spectrum)):
+            pass
+
 
 

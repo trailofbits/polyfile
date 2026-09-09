@@ -1,13 +1,13 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
+# type: ignore
 
-from packaging.version import parse as parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
-    raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
+    raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class Id3v23(KaitaiStruct):
     """
@@ -16,9 +16,9 @@ class Id3v23(KaitaiStruct):
     """
     SEQ_FIELDS = ["tag"]
     def __init__(self, _io, _parent=None, _root=None):
-        self._io = _io
+        super(Id3v23, self).__init__(_io)
         self._parent = _parent
-        self._root = _root if _root else self
+        self._root = _root or self
         self._debug = collections.defaultdict(dict)
 
     def _read(self):
@@ -27,122 +27,10 @@ class Id3v23(KaitaiStruct):
         self.tag._read()
         self._debug['tag']['end'] = self._io.pos()
 
-    class U1beSynchsafe(KaitaiStruct):
-        SEQ_FIELDS = ["padding", "value"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
 
-        def _read(self):
-            self._debug['padding']['start'] = self._io.pos()
-            self.padding = self._io.read_bits_int_be(1) != 0
-            self._debug['padding']['end'] = self._io.pos()
-            self._debug['value']['start'] = self._io.pos()
-            self.value = self._io.read_bits_int_be(7)
-            self._debug['value']['end'] = self._io.pos()
-
-
-    class U2beSynchsafe(KaitaiStruct):
-        SEQ_FIELDS = ["byte0", "byte1"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['byte0']['start'] = self._io.pos()
-            self.byte0 = Id3v23.U1beSynchsafe(self._io, self, self._root)
-            self.byte0._read()
-            self._debug['byte0']['end'] = self._io.pos()
-            self._debug['byte1']['start'] = self._io.pos()
-            self.byte1 = Id3v23.U1beSynchsafe(self._io, self, self._root)
-            self.byte1._read()
-            self._debug['byte1']['end'] = self._io.pos()
-
-        @property
-        def value(self):
-            if hasattr(self, '_m_value'):
-                return self._m_value if hasattr(self, '_m_value') else None
-
-            self._m_value = ((self.byte0.value << 7) | self.byte1.value)
-            return self._m_value if hasattr(self, '_m_value') else None
-
-
-    class Tag(KaitaiStruct):
-        """
-        .. seealso::
-           Section 3. ID3v2 overview
-        """
-        SEQ_FIELDS = ["header", "header_ex", "frames", "padding"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['header']['start'] = self._io.pos()
-            self.header = Id3v23.Header(self._io, self, self._root)
-            self.header._read()
-            self._debug['header']['end'] = self._io.pos()
-            if self.header.flags.flag_headerex:
-                self._debug['header_ex']['start'] = self._io.pos()
-                self.header_ex = Id3v23.HeaderEx(self._io, self, self._root)
-                self.header_ex._read()
-                self._debug['header_ex']['end'] = self._io.pos()
-
-            self._debug['frames']['start'] = self._io.pos()
-            self.frames = []
-            i = 0
-            while True:
-                if not 'arr' in self._debug['frames']:
-                    self._debug['frames']['arr'] = []
-                self._debug['frames']['arr'].append({'start': self._io.pos()})
-                _t_frames = Id3v23.Frame(self._io, self, self._root)
-                _t_frames._read()
-                _ = _t_frames
-                self.frames.append(_)
-                self._debug['frames']['arr'][len(self.frames) - 1]['end'] = self._io.pos()
-                if  (((self._io.pos() + _.size) > self.header.size.value) or (_.is_invalid)) :
-                    break
-                i += 1
-            self._debug['frames']['end'] = self._io.pos()
-            if self.header.flags.flag_headerex:
-                self._debug['padding']['start'] = self._io.pos()
-                self.padding = self._io.read_bytes((self.header_ex.padding_size - self._io.pos()))
-                self._debug['padding']['end'] = self._io.pos()
-
-
-
-    class U4beSynchsafe(KaitaiStruct):
-        SEQ_FIELDS = ["short0", "short1"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['short0']['start'] = self._io.pos()
-            self.short0 = Id3v23.U2beSynchsafe(self._io, self, self._root)
-            self.short0._read()
-            self._debug['short0']['end'] = self._io.pos()
-            self._debug['short1']['start'] = self._io.pos()
-            self.short1 = Id3v23.U2beSynchsafe(self._io, self, self._root)
-            self.short1._read()
-            self._debug['short1']['end'] = self._io.pos()
-
-        @property
-        def value(self):
-            if hasattr(self, '_m_value'):
-                return self._m_value if hasattr(self, '_m_value') else None
-
-            self._m_value = ((self.short0.value << 14) | self.short1.value)
-            return self._m_value if hasattr(self, '_m_value') else None
-
+    def _fetch_instances(self):
+        pass
+        self.tag._fetch_instances()
 
     class Frame(KaitaiStruct):
         """
@@ -151,9 +39,9 @@ class Id3v23(KaitaiStruct):
         """
         SEQ_FIELDS = ["id", "size", "flags", "data"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Id3v23.Frame, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -171,12 +59,17 @@ class Id3v23(KaitaiStruct):
             self.data = self._io.read_bytes(self.size)
             self._debug['data']['end'] = self._io.pos()
 
+
+        def _fetch_instances(self):
+            pass
+            self.flags._fetch_instances()
+
         class Flags(KaitaiStruct):
             SEQ_FIELDS = ["flag_discard_alter_tag", "flag_discard_alter_file", "flag_read_only", "reserved1", "flag_compressed", "flag_encrypted", "flag_grouping", "reserved2"]
             def __init__(self, _io, _parent=None, _root=None):
-                self._io = _io
+                super(Id3v23.Frame.Flags, self).__init__(_io)
                 self._parent = _parent
-                self._root = _root if _root else self
+                self._root = _root
                 self._debug = collections.defaultdict(dict)
 
             def _read(self):
@@ -206,61 +99,17 @@ class Id3v23(KaitaiStruct):
                 self._debug['reserved2']['end'] = self._io.pos()
 
 
+            def _fetch_instances(self):
+                pass
+
+
         @property
         def is_invalid(self):
             if hasattr(self, '_m_is_invalid'):
-                return self._m_is_invalid if hasattr(self, '_m_is_invalid') else None
+                return self._m_is_invalid
 
             self._m_is_invalid = self.id == u"\000\000\000\000"
-            return self._m_is_invalid if hasattr(self, '_m_is_invalid') else None
-
-
-    class HeaderEx(KaitaiStruct):
-        """ID3v2 extended header.
-        
-        .. seealso::
-           Section 3.2. ID3v2 extended header
-        """
-        SEQ_FIELDS = ["size", "flags_ex", "padding_size", "crc"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['size']['start'] = self._io.pos()
-            self.size = self._io.read_u4be()
-            self._debug['size']['end'] = self._io.pos()
-            self._debug['flags_ex']['start'] = self._io.pos()
-            self.flags_ex = Id3v23.HeaderEx.FlagsEx(self._io, self, self._root)
-            self.flags_ex._read()
-            self._debug['flags_ex']['end'] = self._io.pos()
-            self._debug['padding_size']['start'] = self._io.pos()
-            self.padding_size = self._io.read_u4be()
-            self._debug['padding_size']['end'] = self._io.pos()
-            if self.flags_ex.flag_crc:
-                self._debug['crc']['start'] = self._io.pos()
-                self.crc = self._io.read_u4be()
-                self._debug['crc']['end'] = self._io.pos()
-
-
-        class FlagsEx(KaitaiStruct):
-            SEQ_FIELDS = ["flag_crc", "reserved"]
-            def __init__(self, _io, _parent=None, _root=None):
-                self._io = _io
-                self._parent = _parent
-                self._root = _root if _root else self
-                self._debug = collections.defaultdict(dict)
-
-            def _read(self):
-                self._debug['flag_crc']['start'] = self._io.pos()
-                self.flag_crc = self._io.read_bits_int_be(1) != 0
-                self._debug['flag_crc']['end'] = self._io.pos()
-                self._debug['reserved']['start'] = self._io.pos()
-                self.reserved = self._io.read_bits_int_be(15)
-                self._debug['reserved']['end'] = self._io.pos()
-
+            return getattr(self, '_m_is_invalid', None)
 
 
     class Header(KaitaiStruct):
@@ -271,9 +120,9 @@ class Id3v23(KaitaiStruct):
         """
         SEQ_FIELDS = ["magic", "version_major", "version_revision", "flags", "size"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Id3v23.Header, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -297,12 +146,18 @@ class Id3v23(KaitaiStruct):
             self.size._read()
             self._debug['size']['end'] = self._io.pos()
 
+
+        def _fetch_instances(self):
+            pass
+            self.flags._fetch_instances()
+            self.size._fetch_instances()
+
         class Flags(KaitaiStruct):
             SEQ_FIELDS = ["flag_unsynchronization", "flag_headerex", "flag_experimental", "reserved"]
             def __init__(self, _io, _parent=None, _root=None):
-                self._io = _io
+                super(Id3v23.Header.Flags, self).__init__(_io)
                 self._parent = _parent
-                self._root = _root if _root else self
+                self._root = _root
                 self._debug = collections.defaultdict(dict)
 
             def _read(self):
@@ -319,6 +174,223 @@ class Id3v23(KaitaiStruct):
                 self.reserved = self._io.read_bits_int_be(5)
                 self._debug['reserved']['end'] = self._io.pos()
 
+
+            def _fetch_instances(self):
+                pass
+
+
+
+    class HeaderEx(KaitaiStruct):
+        """ID3v2 extended header.
+        
+        .. seealso::
+           Section 3.2. ID3v2 extended header
+        """
+        SEQ_FIELDS = ["size", "flags_ex", "padding_size", "crc"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Id3v23.HeaderEx, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['size']['start'] = self._io.pos()
+            self.size = self._io.read_u4be()
+            self._debug['size']['end'] = self._io.pos()
+            self._debug['flags_ex']['start'] = self._io.pos()
+            self.flags_ex = Id3v23.HeaderEx.FlagsEx(self._io, self, self._root)
+            self.flags_ex._read()
+            self._debug['flags_ex']['end'] = self._io.pos()
+            self._debug['padding_size']['start'] = self._io.pos()
+            self.padding_size = self._io.read_u4be()
+            self._debug['padding_size']['end'] = self._io.pos()
+            if self.flags_ex.flag_crc:
+                pass
+                self._debug['crc']['start'] = self._io.pos()
+                self.crc = self._io.read_u4be()
+                self._debug['crc']['end'] = self._io.pos()
+
+
+
+        def _fetch_instances(self):
+            pass
+            self.flags_ex._fetch_instances()
+            if self.flags_ex.flag_crc:
+                pass
+
+
+        class FlagsEx(KaitaiStruct):
+            SEQ_FIELDS = ["flag_crc", "reserved"]
+            def __init__(self, _io, _parent=None, _root=None):
+                super(Id3v23.HeaderEx.FlagsEx, self).__init__(_io)
+                self._parent = _parent
+                self._root = _root
+                self._debug = collections.defaultdict(dict)
+
+            def _read(self):
+                self._debug['flag_crc']['start'] = self._io.pos()
+                self.flag_crc = self._io.read_bits_int_be(1) != 0
+                self._debug['flag_crc']['end'] = self._io.pos()
+                self._debug['reserved']['start'] = self._io.pos()
+                self.reserved = self._io.read_bits_int_be(15)
+                self._debug['reserved']['end'] = self._io.pos()
+
+
+            def _fetch_instances(self):
+                pass
+
+
+
+    class Tag(KaitaiStruct):
+        """
+        .. seealso::
+           Section 3. ID3v2 overview
+        """
+        SEQ_FIELDS = ["header", "header_ex", "frames", "padding"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Id3v23.Tag, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['header']['start'] = self._io.pos()
+            self.header = Id3v23.Header(self._io, self, self._root)
+            self.header._read()
+            self._debug['header']['end'] = self._io.pos()
+            if self.header.flags.flag_headerex:
+                pass
+                self._debug['header_ex']['start'] = self._io.pos()
+                self.header_ex = Id3v23.HeaderEx(self._io, self, self._root)
+                self.header_ex._read()
+                self._debug['header_ex']['end'] = self._io.pos()
+
+            self._debug['frames']['start'] = self._io.pos()
+            self._debug['frames']['arr'] = []
+            self.frames = []
+            i = 0
+            while True:
+                self._debug['frames']['arr'].append({'start': self._io.pos()})
+                _t_frames = Id3v23.Frame(self._io, self, self._root)
+                try:
+                    _t_frames._read()
+                finally:
+                    _ = _t_frames
+                    self.frames.append(_)
+                self._debug['frames']['arr'][len(self.frames) - 1]['end'] = self._io.pos()
+                if  ((self._io.pos() + _.size > self.header.size.value) or (_.is_invalid)) :
+                    break
+                i += 1
+            self._debug['frames']['end'] = self._io.pos()
+            if self.header.flags.flag_headerex:
+                pass
+                self._debug['padding']['start'] = self._io.pos()
+                self.padding = self._io.read_bytes(self.header_ex.padding_size - self._io.pos())
+                self._debug['padding']['end'] = self._io.pos()
+
+
+
+        def _fetch_instances(self):
+            pass
+            self.header._fetch_instances()
+            if self.header.flags.flag_headerex:
+                pass
+                self.header_ex._fetch_instances()
+
+            for i in range(len(self.frames)):
+                pass
+                self.frames[i]._fetch_instances()
+
+            if self.header.flags.flag_headerex:
+                pass
+
+
+
+    class U1beSynchsafe(KaitaiStruct):
+        SEQ_FIELDS = ["padding", "value"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Id3v23.U1beSynchsafe, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['padding']['start'] = self._io.pos()
+            self.padding = self._io.read_bits_int_be(1) != 0
+            self._debug['padding']['end'] = self._io.pos()
+            self._debug['value']['start'] = self._io.pos()
+            self.value = self._io.read_bits_int_be(7)
+            self._debug['value']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+
+
+    class U2beSynchsafe(KaitaiStruct):
+        SEQ_FIELDS = ["byte0", "byte1"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Id3v23.U2beSynchsafe, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['byte0']['start'] = self._io.pos()
+            self.byte0 = Id3v23.U1beSynchsafe(self._io, self, self._root)
+            self.byte0._read()
+            self._debug['byte0']['end'] = self._io.pos()
+            self._debug['byte1']['start'] = self._io.pos()
+            self.byte1 = Id3v23.U1beSynchsafe(self._io, self, self._root)
+            self.byte1._read()
+            self._debug['byte1']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            self.byte0._fetch_instances()
+            self.byte1._fetch_instances()
+
+        @property
+        def value(self):
+            if hasattr(self, '_m_value'):
+                return self._m_value
+
+            self._m_value = self.byte0.value << 7 | self.byte1.value
+            return getattr(self, '_m_value', None)
+
+
+    class U4beSynchsafe(KaitaiStruct):
+        SEQ_FIELDS = ["short0", "short1"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(Id3v23.U4beSynchsafe, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['short0']['start'] = self._io.pos()
+            self.short0 = Id3v23.U2beSynchsafe(self._io, self, self._root)
+            self.short0._read()
+            self._debug['short0']['end'] = self._io.pos()
+            self._debug['short1']['start'] = self._io.pos()
+            self.short1 = Id3v23.U2beSynchsafe(self._io, self, self._root)
+            self.short1._read()
+            self._debug['short1']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            self.short0._fetch_instances()
+            self.short1._fetch_instances()
+
+        @property
+        def value(self):
+            if hasattr(self, '_m_value'):
+                return self._m_value
+
+            self._m_value = self.short0.value << 14 | self.short1.value
+            return getattr(self, '_m_value', None)
 
 
 

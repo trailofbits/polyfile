@@ -1,18 +1,18 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
+# type: ignore
 
-from packaging.version import parse as parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
-from enum import Enum
+from enum import IntEnum
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
-    raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
+    raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class GlibcUtmp(KaitaiStruct):
 
-    class EntryType(Enum):
+    class EntryType(IntEnum):
         empty = 0
         run_lvl = 1
         boot_time = 2
@@ -25,36 +25,45 @@ class GlibcUtmp(KaitaiStruct):
         accounting = 9
     SEQ_FIELDS = ["records"]
     def __init__(self, _io, _parent=None, _root=None):
-        self._io = _io
+        super(GlibcUtmp, self).__init__(_io)
         self._parent = _parent
-        self._root = _root if _root else self
+        self._root = _root or self
         self._debug = collections.defaultdict(dict)
 
     def _read(self):
         self._debug['records']['start'] = self._io.pos()
+        self._debug['records']['arr'] = []
         self._raw_records = []
         self.records = []
         i = 0
         while not self._io.is_eof():
-            if not 'arr' in self._debug['records']:
-                self._debug['records']['arr'] = []
             self._debug['records']['arr'].append({'start': self._io.pos()})
             self._raw_records.append(self._io.read_bytes(384))
             _io__raw_records = KaitaiStream(BytesIO(self._raw_records[-1]))
             _t_records = GlibcUtmp.Record(_io__raw_records, self, self._root)
-            _t_records._read()
-            self.records.append(_t_records)
+            try:
+                _t_records._read()
+            finally:
+                self.records.append(_t_records)
             self._debug['records']['arr'][len(self.records) - 1]['end'] = self._io.pos()
             i += 1
 
         self._debug['records']['end'] = self._io.pos()
 
+
+    def _fetch_instances(self):
+        pass
+        for i in range(len(self.records)):
+            pass
+            self.records[i]._fetch_instances()
+
+
     class Record(KaitaiStruct):
         SEQ_FIELDS = ["ut_type", "pid", "line", "id", "user", "host", "exit", "session", "tv", "addr_v6", "reserved"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(GlibcUtmp.Record, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -62,7 +71,7 @@ class GlibcUtmp(KaitaiStruct):
             self.ut_type = KaitaiStream.resolve_enum(GlibcUtmp.EntryType, self._io.read_s4le())
             self._debug['ut_type']['end'] = self._io.pos()
             self._debug['pid']['start'] = self._io.pos()
-            self.pid = self._io.read_u4le()
+            self.pid = self._io.read_s4le()
             self._debug['pid']['end'] = self._io.pos()
             self._debug['line']['start'] = self._io.pos()
             self.line = (self._io.read_bytes(32)).decode(u"UTF-8")
@@ -94,21 +103,30 @@ class GlibcUtmp(KaitaiStruct):
             self._debug['reserved']['end'] = self._io.pos()
 
 
+        def _fetch_instances(self):
+            pass
+            self.tv._fetch_instances()
+
+
     class Timeval(KaitaiStruct):
         SEQ_FIELDS = ["sec", "usec"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(GlibcUtmp.Timeval, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
             self._debug['sec']['start'] = self._io.pos()
-            self.sec = self._io.read_s4le()
+            self.sec = self._io.read_u4le()
             self._debug['sec']['end'] = self._io.pos()
             self._debug['usec']['start'] = self._io.pos()
             self.usec = self._io.read_s4le()
             self._debug['usec']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
 
 
 

@@ -1,14 +1,14 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
+# type: ignore
 
-from packaging.version import parse as parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
-from enum import Enum
+from enum import IntEnum
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
-    raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
+    raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class PythonPyc27(KaitaiStruct):
     """Python interpreter runs .py files in 2 step process: first, it
@@ -20,7 +20,7 @@ class PythonPyc27(KaitaiStruct):
     a simple header prepended.
     """
 
-    class Version(Enum):
+    class Version(IntEnum):
         v15 = 20121
         v16 = 50428
         v20 = 50823
@@ -48,9 +48,9 @@ class PythonPyc27(KaitaiStruct):
         v27_a0e = 62211
     SEQ_FIELDS = ["version_magic", "crlf", "modification_timestamp", "body"]
     def __init__(self, _io, _parent=None, _root=None):
-        self._io = _io
+        super(PythonPyc27, self).__init__(_io)
         self._parent = _parent
-        self._root = _root if _root else self
+        self._root = _root or self
         self._debug = collections.defaultdict(dict)
 
     def _read(self):
@@ -68,17 +68,52 @@ class PythonPyc27(KaitaiStruct):
         self.body._read()
         self._debug['body']['end'] = self._io.pos()
 
+
+    def _fetch_instances(self):
+        pass
+        self.body._fetch_instances()
+
+    class Assembly(KaitaiStruct):
+        SEQ_FIELDS = ["string_magic", "length", "items"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(PythonPyc27.Assembly, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['string_magic']['start'] = self._io.pos()
+            self.string_magic = self._io.read_bytes(1)
+            self._debug['string_magic']['end'] = self._io.pos()
+            if not self.string_magic == b"\x73":
+                raise kaitaistruct.ValidationNotEqualError(b"\x73", self.string_magic, self._io, u"/types/assembly/seq/0")
+            self._debug['length']['start'] = self._io.pos()
+            self.length = self._io.read_u4le()
+            self._debug['length']['end'] = self._io.pos()
+            self._debug['items']['start'] = self._io.pos()
+            self._raw_items = self._io.read_bytes(self.length)
+            _io__raw_items = KaitaiStream(BytesIO(self._raw_items))
+            self.items = PythonPyc27.OpArgs(_io__raw_items, self, self._root)
+            self.items._read()
+            self._debug['items']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            self.items._fetch_instances()
+
+
     class CodeObject(KaitaiStruct):
 
-        class FlagsEnum(Enum):
+        class FlagsEnum(IntEnum):
             has_args = 4
             has_kwargs = 8
             generator = 32
         SEQ_FIELDS = ["arg_count", "local_count", "stack_size", "flags", "code", "consts", "names", "var_names", "free_vars", "cell_vars", "filename", "name", "first_line_no", "lnotab"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(PythonPyc27.CodeObject, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -135,34 +170,22 @@ class PythonPyc27(KaitaiStruct):
             self._debug['lnotab']['end'] = self._io.pos()
 
 
-    class Assembly(KaitaiStruct):
-        SEQ_FIELDS = ["string_magic", "length", "items"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
-
-        def _read(self):
-            self._debug['string_magic']['start'] = self._io.pos()
-            self.string_magic = self._io.read_bytes(1)
-            self._debug['string_magic']['end'] = self._io.pos()
-            if not self.string_magic == b"\x73":
-                raise kaitaistruct.ValidationNotEqualError(b"\x73", self.string_magic, self._io, u"/types/assembly/seq/0")
-            self._debug['length']['start'] = self._io.pos()
-            self.length = self._io.read_u4le()
-            self._debug['length']['end'] = self._io.pos()
-            self._debug['items']['start'] = self._io.pos()
-            self._raw_items = self._io.read_bytes(self.length)
-            _io__raw_items = KaitaiStream(BytesIO(self._raw_items))
-            self.items = PythonPyc27.OpArgs(_io__raw_items, self, self._root)
-            self.items._read()
-            self._debug['items']['end'] = self._io.pos()
+        def _fetch_instances(self):
+            pass
+            self.code._fetch_instances()
+            self.consts._fetch_instances()
+            self.names._fetch_instances()
+            self.var_names._fetch_instances()
+            self.free_vars._fetch_instances()
+            self.cell_vars._fetch_instances()
+            self.filename._fetch_instances()
+            self.name._fetch_instances()
+            self.lnotab._fetch_instances()
 
 
     class OpArg(KaitaiStruct):
 
-        class OpCodeEnum(Enum):
+        class OpCodeEnum(IntEnum):
             stop_code = 0
             pop_top = 1
             rot_two = 2
@@ -284,25 +307,67 @@ class PythonPyc27(KaitaiStruct):
             map_add = 147
         SEQ_FIELDS = ["op_code", "arg"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(PythonPyc27.OpArg, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
             self._debug['op_code']['start'] = self._io.pos()
             self.op_code = KaitaiStream.resolve_enum(PythonPyc27.OpArg.OpCodeEnum, self._io.read_u1())
             self._debug['op_code']['end'] = self._io.pos()
-            if self.op_code.value >= PythonPyc27.OpArg.OpCodeEnum.store_name.value:
+            if int(self.op_code) >= int(PythonPyc27.OpArg.OpCodeEnum.store_name):
+                pass
                 self._debug['arg']['start'] = self._io.pos()
                 self.arg = self._io.read_u2le()
                 self._debug['arg']['end'] = self._io.pos()
 
 
 
+        def _fetch_instances(self):
+            pass
+            if int(self.op_code) >= int(PythonPyc27.OpArg.OpCodeEnum.store_name):
+                pass
+
+
+
+    class OpArgs(KaitaiStruct):
+        SEQ_FIELDS = ["items"]
+        def __init__(self, _io, _parent=None, _root=None):
+            super(PythonPyc27.OpArgs, self).__init__(_io)
+            self._parent = _parent
+            self._root = _root
+            self._debug = collections.defaultdict(dict)
+
+        def _read(self):
+            self._debug['items']['start'] = self._io.pos()
+            self._debug['items']['arr'] = []
+            self.items = []
+            i = 0
+            while not self._io.is_eof():
+                self._debug['items']['arr'].append({'start': self._io.pos()})
+                _t_items = PythonPyc27.OpArg(self._io, self, self._root)
+                try:
+                    _t_items._read()
+                finally:
+                    self.items.append(_t_items)
+                self._debug['items']['arr'][len(self.items) - 1]['end'] = self._io.pos()
+                i += 1
+
+            self._debug['items']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            for i in range(len(self.items)):
+                pass
+                self.items[i]._fetch_instances()
+
+
+
     class PyObject(KaitaiStruct):
 
-        class ObjectType(Enum):
+        class ObjectType(IntEnum):
             tuple = 40
             py_false = 70
             none = 78
@@ -315,9 +380,9 @@ class PythonPyc27(KaitaiStruct):
             unicode_string = 117
         SEQ_FIELDS = ["type", "value"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(PythonPyc27.PyObject, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -326,150 +391,133 @@ class PythonPyc27(KaitaiStruct):
             self._debug['type']['end'] = self._io.pos()
             self._debug['value']['start'] = self._io.pos()
             _on = self.type
-            if _on == PythonPyc27.PyObject.ObjectType.string:
-                self.value = PythonPyc27.PyObject.PyString(self._io, self, self._root)
-                self.value._read()
-            elif _on == PythonPyc27.PyObject.ObjectType.tuple:
-                self.value = PythonPyc27.PyObject.Tuple(self._io, self, self._root)
-                self.value._read()
-            elif _on == PythonPyc27.PyObject.ObjectType.int:
-                self.value = self._io.read_u4le()
-            elif _on == PythonPyc27.PyObject.ObjectType.py_true:
-                self.value = PythonPyc27.PyObject.PyTrue(self._io, self, self._root)
-                self.value._read()
-            elif _on == PythonPyc27.PyObject.ObjectType.py_false:
-                self.value = PythonPyc27.PyObject.PyFalse(self._io, self, self._root)
-                self.value._read()
-            elif _on == PythonPyc27.PyObject.ObjectType.none:
-                self.value = PythonPyc27.PyObject.PyNone(self._io, self, self._root)
-                self.value._read()
-            elif _on == PythonPyc27.PyObject.ObjectType.string_ref:
-                self.value = PythonPyc27.PyObject.StringRef(self._io, self, self._root)
-                self.value._read()
-            elif _on == PythonPyc27.PyObject.ObjectType.code_object:
+            if _on == PythonPyc27.PyObject.ObjectType.code_object:
+                pass
                 self.value = PythonPyc27.CodeObject(self._io, self, self._root)
                 self.value._read()
+            elif _on == PythonPyc27.PyObject.ObjectType.int:
+                pass
+                self.value = self._io.read_u4le()
             elif _on == PythonPyc27.PyObject.ObjectType.interned:
+                pass
                 self.value = PythonPyc27.PyObject.InternedString(self._io, self, self._root)
+                self.value._read()
+            elif _on == PythonPyc27.PyObject.ObjectType.none:
+                pass
+                self.value = PythonPyc27.PyObject.PyNone(self._io, self, self._root)
+                self.value._read()
+            elif _on == PythonPyc27.PyObject.ObjectType.py_false:
+                pass
+                self.value = PythonPyc27.PyObject.PyFalse(self._io, self, self._root)
+                self.value._read()
+            elif _on == PythonPyc27.PyObject.ObjectType.py_true:
+                pass
+                self.value = PythonPyc27.PyObject.PyTrue(self._io, self, self._root)
+                self.value._read()
+            elif _on == PythonPyc27.PyObject.ObjectType.string:
+                pass
+                self.value = PythonPyc27.PyObject.PyString(self._io, self, self._root)
+                self.value._read()
+            elif _on == PythonPyc27.PyObject.ObjectType.string_ref:
+                pass
+                self.value = PythonPyc27.PyObject.StringRef(self._io, self, self._root)
+                self.value._read()
+            elif _on == PythonPyc27.PyObject.ObjectType.tuple:
+                pass
+                self.value = PythonPyc27.PyObject.Tuple(self._io, self, self._root)
                 self.value._read()
             self._debug['value']['end'] = self._io.pos()
 
-        class PyNone(KaitaiStruct):
-            SEQ_FIELDS = []
+
+        def _fetch_instances(self):
+            pass
+            _on = self.type
+            if _on == PythonPyc27.PyObject.ObjectType.code_object:
+                pass
+                self.value._fetch_instances()
+            elif _on == PythonPyc27.PyObject.ObjectType.int:
+                pass
+            elif _on == PythonPyc27.PyObject.ObjectType.interned:
+                pass
+                self.value._fetch_instances()
+            elif _on == PythonPyc27.PyObject.ObjectType.none:
+                pass
+                self.value._fetch_instances()
+            elif _on == PythonPyc27.PyObject.ObjectType.py_false:
+                pass
+                self.value._fetch_instances()
+            elif _on == PythonPyc27.PyObject.ObjectType.py_true:
+                pass
+                self.value._fetch_instances()
+            elif _on == PythonPyc27.PyObject.ObjectType.string:
+                pass
+                self.value._fetch_instances()
+            elif _on == PythonPyc27.PyObject.ObjectType.string_ref:
+                pass
+                self.value._fetch_instances()
+            elif _on == PythonPyc27.PyObject.ObjectType.tuple:
+                pass
+                self.value._fetch_instances()
+
+        class InternedString(KaitaiStruct):
+            SEQ_FIELDS = ["length", "data"]
             def __init__(self, _io, _parent=None, _root=None):
-                self._io = _io
+                super(PythonPyc27.PyObject.InternedString, self).__init__(_io)
                 self._parent = _parent
-                self._root = _root if _root else self
+                self._root = _root
                 self._debug = collections.defaultdict(dict)
 
             def _read(self):
+                self._debug['length']['start'] = self._io.pos()
+                self.length = self._io.read_u4le()
+                self._debug['length']['end'] = self._io.pos()
+                self._debug['data']['start'] = self._io.pos()
+                self.data = (self._io.read_bytes(self.length)).decode(u"UTF-8")
+                self._debug['data']['end'] = self._io.pos()
+
+
+            def _fetch_instances(self):
                 pass
 
 
         class PyFalse(KaitaiStruct):
             SEQ_FIELDS = []
             def __init__(self, _io, _parent=None, _root=None):
-                self._io = _io
+                super(PythonPyc27.PyObject.PyFalse, self).__init__(_io)
                 self._parent = _parent
-                self._root = _root if _root else self
+                self._root = _root
                 self._debug = collections.defaultdict(dict)
 
             def _read(self):
                 pass
 
 
-        class StringRef(KaitaiStruct):
-            SEQ_FIELDS = ["interned_list_index"]
-            def __init__(self, _io, _parent=None, _root=None):
-                self._io = _io
-                self._parent = _parent
-                self._root = _root if _root else self
-                self._debug = collections.defaultdict(dict)
-
-            def _read(self):
-                self._debug['interned_list_index']['start'] = self._io.pos()
-                self.interned_list_index = self._io.read_u4le()
-                self._debug['interned_list_index']['end'] = self._io.pos()
+            def _fetch_instances(self):
+                pass
 
 
-        class PyTrue(KaitaiStruct):
+        class PyNone(KaitaiStruct):
             SEQ_FIELDS = []
             def __init__(self, _io, _parent=None, _root=None):
-                self._io = _io
+                super(PythonPyc27.PyObject.PyNone, self).__init__(_io)
                 self._parent = _parent
-                self._root = _root if _root else self
+                self._root = _root
                 self._debug = collections.defaultdict(dict)
 
             def _read(self):
                 pass
 
 
-        class Tuple(KaitaiStruct):
-            SEQ_FIELDS = ["count", "items"]
-            def __init__(self, _io, _parent=None, _root=None):
-                self._io = _io
-                self._parent = _parent
-                self._root = _root if _root else self
-                self._debug = collections.defaultdict(dict)
-
-            def _read(self):
-                self._debug['count']['start'] = self._io.pos()
-                self.count = self._io.read_u4le()
-                self._debug['count']['end'] = self._io.pos()
-                self._debug['items']['start'] = self._io.pos()
-                self.items = [None] * (self.count)
-                for i in range(self.count):
-                    if not 'arr' in self._debug['items']:
-                        self._debug['items']['arr'] = []
-                    self._debug['items']['arr'].append({'start': self._io.pos()})
-                    _t_items = PythonPyc27.PyObject(self._io, self, self._root)
-                    _t_items._read()
-                    self.items[i] = _t_items
-                    self._debug['items']['arr'][i]['end'] = self._io.pos()
-
-                self._debug['items']['end'] = self._io.pos()
-
-
-        class UnicodeString(KaitaiStruct):
-            SEQ_FIELDS = ["length", "data"]
-            def __init__(self, _io, _parent=None, _root=None):
-                self._io = _io
-                self._parent = _parent
-                self._root = _root if _root else self
-                self._debug = collections.defaultdict(dict)
-
-            def _read(self):
-                self._debug['length']['start'] = self._io.pos()
-                self.length = self._io.read_u4le()
-                self._debug['length']['end'] = self._io.pos()
-                self._debug['data']['start'] = self._io.pos()
-                self.data = (self._io.read_bytes(self.length)).decode(u"utf-8")
-                self._debug['data']['end'] = self._io.pos()
-
-
-        class InternedString(KaitaiStruct):
-            SEQ_FIELDS = ["length", "data"]
-            def __init__(self, _io, _parent=None, _root=None):
-                self._io = _io
-                self._parent = _parent
-                self._root = _root if _root else self
-                self._debug = collections.defaultdict(dict)
-
-            def _read(self):
-                self._debug['length']['start'] = self._io.pos()
-                self.length = self._io.read_u4le()
-                self._debug['length']['end'] = self._io.pos()
-                self._debug['data']['start'] = self._io.pos()
-                self.data = (self._io.read_bytes(self.length)).decode(u"utf-8")
-                self._debug['data']['end'] = self._io.pos()
+            def _fetch_instances(self):
+                pass
 
 
         class PyString(KaitaiStruct):
             SEQ_FIELDS = ["length", "data"]
             def __init__(self, _io, _parent=None, _root=None):
-                self._io = _io
+                super(PythonPyc27.PyObject.PyString, self).__init__(_io)
                 self._parent = _parent
-                self._root = _root if _root else self
+                self._root = _root
                 self._debug = collections.defaultdict(dict)
 
             def _read(self):
@@ -481,30 +529,99 @@ class PythonPyc27(KaitaiStruct):
                 self._debug['data']['end'] = self._io.pos()
 
 
+            def _fetch_instances(self):
+                pass
 
-    class OpArgs(KaitaiStruct):
-        SEQ_FIELDS = ["items"]
-        def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
-            self._parent = _parent
-            self._root = _root if _root else self
-            self._debug = collections.defaultdict(dict)
 
-        def _read(self):
-            self._debug['items']['start'] = self._io.pos()
-            self.items = []
-            i = 0
-            while not self._io.is_eof():
-                if not 'arr' in self._debug['items']:
-                    self._debug['items']['arr'] = []
-                self._debug['items']['arr'].append({'start': self._io.pos()})
-                _t_items = PythonPyc27.OpArg(self._io, self, self._root)
-                _t_items._read()
-                self.items.append(_t_items)
-                self._debug['items']['arr'][len(self.items) - 1]['end'] = self._io.pos()
-                i += 1
+        class PyTrue(KaitaiStruct):
+            SEQ_FIELDS = []
+            def __init__(self, _io, _parent=None, _root=None):
+                super(PythonPyc27.PyObject.PyTrue, self).__init__(_io)
+                self._parent = _parent
+                self._root = _root
+                self._debug = collections.defaultdict(dict)
 
-            self._debug['items']['end'] = self._io.pos()
+            def _read(self):
+                pass
+
+
+            def _fetch_instances(self):
+                pass
+
+
+        class StringRef(KaitaiStruct):
+            SEQ_FIELDS = ["interned_list_index"]
+            def __init__(self, _io, _parent=None, _root=None):
+                super(PythonPyc27.PyObject.StringRef, self).__init__(_io)
+                self._parent = _parent
+                self._root = _root
+                self._debug = collections.defaultdict(dict)
+
+            def _read(self):
+                self._debug['interned_list_index']['start'] = self._io.pos()
+                self.interned_list_index = self._io.read_u4le()
+                self._debug['interned_list_index']['end'] = self._io.pos()
+
+
+            def _fetch_instances(self):
+                pass
+
+
+        class Tuple(KaitaiStruct):
+            SEQ_FIELDS = ["count", "items"]
+            def __init__(self, _io, _parent=None, _root=None):
+                super(PythonPyc27.PyObject.Tuple, self).__init__(_io)
+                self._parent = _parent
+                self._root = _root
+                self._debug = collections.defaultdict(dict)
+
+            def _read(self):
+                self._debug['count']['start'] = self._io.pos()
+                self.count = self._io.read_u4le()
+                self._debug['count']['end'] = self._io.pos()
+                self._debug['items']['start'] = self._io.pos()
+                self._debug['items']['arr'] = []
+                self.items = []
+                for i in range(self.count):
+                    self._debug['items']['arr'].append({'start': self._io.pos()})
+                    _t_items = PythonPyc27.PyObject(self._io, self, self._root)
+                    try:
+                        _t_items._read()
+                    finally:
+                        self.items.append(_t_items)
+                    self._debug['items']['arr'][i]['end'] = self._io.pos()
+
+                self._debug['items']['end'] = self._io.pos()
+
+
+            def _fetch_instances(self):
+                pass
+                for i in range(len(self.items)):
+                    pass
+                    self.items[i]._fetch_instances()
+
+
+
+        class UnicodeString(KaitaiStruct):
+            SEQ_FIELDS = ["length", "data"]
+            def __init__(self, _io, _parent=None, _root=None):
+                super(PythonPyc27.PyObject.UnicodeString, self).__init__(_io)
+                self._parent = _parent
+                self._root = _root
+                self._debug = collections.defaultdict(dict)
+
+            def _read(self):
+                self._debug['length']['start'] = self._io.pos()
+                self.length = self._io.read_u4le()
+                self._debug['length']['end'] = self._io.pos()
+                self._debug['data']['start'] = self._io.pos()
+                self.data = (self._io.read_bytes(self.length)).decode(u"UTF-8")
+                self._debug['data']['end'] = self._io.pos()
+
+
+            def _fetch_instances(self):
+                pass
+
 
 
 

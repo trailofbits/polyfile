@@ -1,14 +1,14 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
+# type: ignore
 
-from packaging.version import parse as parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
-from enum import Enum
+from enum import IntEnum
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
-    raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
+    raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class Au(KaitaiStruct):
     """The NeXT/Sun audio file format.
@@ -47,7 +47,7 @@ class Au(KaitaiStruct):
        Source - https://github.com/mpruett/audiofile/blob/b62c902/libaudiofile/NeXT.cpp#L65-L96
     """
 
-    class Encodings(Enum):
+    class Encodings(IntEnum):
         mulaw_8 = 1
         linear_8 = 2
         linear_16 = 3
@@ -78,9 +78,9 @@ class Au(KaitaiStruct):
         delta_mulaw_8 = 29
     SEQ_FIELDS = ["magic", "ofs_data", "header"]
     def __init__(self, _io, _parent=None, _root=None):
-        self._io = _io
+        super(Au, self).__init__(_io)
         self._parent = _parent
-        self._root = _root if _root else self
+        self._root = _root or self
         self._debug = collections.defaultdict(dict)
 
     def _read(self):
@@ -93,18 +93,23 @@ class Au(KaitaiStruct):
         self.ofs_data = self._io.read_u4be()
         self._debug['ofs_data']['end'] = self._io.pos()
         self._debug['header']['start'] = self._io.pos()
-        self._raw_header = self._io.read_bytes(((self.ofs_data - 4) - 4))
+        self._raw_header = self._io.read_bytes((self.ofs_data - 4) - 4)
         _io__raw_header = KaitaiStream(BytesIO(self._raw_header))
         self.header = Au.Header(_io__raw_header, self, self._root)
         self.header._read()
         self._debug['header']['end'] = self._io.pos()
 
+
+    def _fetch_instances(self):
+        pass
+        self.header._fetch_instances()
+
     class Header(KaitaiStruct):
         SEQ_FIELDS = ["data_size", "encoding", "sample_rate", "num_channels", "comment"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Au.Header, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -127,12 +132,16 @@ class Au(KaitaiStruct):
             self._debug['comment']['end'] = self._io.pos()
 
 
+        def _fetch_instances(self):
+            pass
+
+
     @property
     def len_data(self):
         if hasattr(self, '_m_len_data'):
-            return self._m_len_data if hasattr(self, '_m_len_data') else None
+            return self._m_len_data
 
-        self._m_len_data = ((self._io.size() - self.ofs_data) if self.header.data_size == 4294967295 else self.header.data_size)
-        return self._m_len_data if hasattr(self, '_m_len_data') else None
+        self._m_len_data = (self._io.size() - self.ofs_data if self.header.data_size == 4294967295 else self.header.data_size)
+        return getattr(self, '_m_len_data', None)
 
 

@@ -1,13 +1,13 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
+# type: ignore
 
-from packaging.version import parse as parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
-    raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
+    raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class Ogg(KaitaiStruct):
     """Ogg is a popular media container format, which provides basic
@@ -22,26 +22,35 @@ class Ogg(KaitaiStruct):
     """
     SEQ_FIELDS = ["pages"]
     def __init__(self, _io, _parent=None, _root=None):
-        self._io = _io
+        super(Ogg, self).__init__(_io)
         self._parent = _parent
-        self._root = _root if _root else self
+        self._root = _root or self
         self._debug = collections.defaultdict(dict)
 
     def _read(self):
         self._debug['pages']['start'] = self._io.pos()
+        self._debug['pages']['arr'] = []
         self.pages = []
         i = 0
         while not self._io.is_eof():
-            if not 'arr' in self._debug['pages']:
-                self._debug['pages']['arr'] = []
             self._debug['pages']['arr'].append({'start': self._io.pos()})
             _t_pages = Ogg.Page(self._io, self, self._root)
-            _t_pages._read()
-            self.pages.append(_t_pages)
+            try:
+                _t_pages._read()
+            finally:
+                self.pages.append(_t_pages)
             self._debug['pages']['arr'][len(self.pages) - 1]['end'] = self._io.pos()
             i += 1
 
         self._debug['pages']['end'] = self._io.pos()
+
+
+    def _fetch_instances(self):
+        pass
+        for i in range(len(self.pages)):
+            pass
+            self.pages[i]._fetch_instances()
+
 
     class Page(KaitaiStruct):
         """Ogg page is a basic unit of data in an Ogg bitstream, usually
@@ -49,9 +58,9 @@ class Ogg(KaitaiStruct):
         """
         SEQ_FIELDS = ["sync_code", "version", "reserved1", "is_end_of_stream", "is_beginning_of_stream", "is_continuation", "granule_pos", "bitstream_serial", "page_seq_num", "crc32", "num_segments", "len_segments", "segments"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(Ogg.Page, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -77,7 +86,6 @@ class Ogg(KaitaiStruct):
             self._debug['is_continuation']['start'] = self._io.pos()
             self.is_continuation = self._io.read_bits_int_be(1) != 0
             self._debug['is_continuation']['end'] = self._io.pos()
-            self._io.align_to_byte()
             self._debug['granule_pos']['start'] = self._io.pos()
             self.granule_pos = self._io.read_u8le()
             self._debug['granule_pos']['end'] = self._io.pos()
@@ -94,25 +102,33 @@ class Ogg(KaitaiStruct):
             self.num_segments = self._io.read_u1()
             self._debug['num_segments']['end'] = self._io.pos()
             self._debug['len_segments']['start'] = self._io.pos()
-            self.len_segments = [None] * (self.num_segments)
+            self._debug['len_segments']['arr'] = []
+            self.len_segments = []
             for i in range(self.num_segments):
-                if not 'arr' in self._debug['len_segments']:
-                    self._debug['len_segments']['arr'] = []
                 self._debug['len_segments']['arr'].append({'start': self._io.pos()})
-                self.len_segments[i] = self._io.read_u1()
+                self.len_segments.append(self._io.read_u1())
                 self._debug['len_segments']['arr'][i]['end'] = self._io.pos()
 
             self._debug['len_segments']['end'] = self._io.pos()
             self._debug['segments']['start'] = self._io.pos()
-            self.segments = [None] * (self.num_segments)
+            self._debug['segments']['arr'] = []
+            self.segments = []
             for i in range(self.num_segments):
-                if not 'arr' in self._debug['segments']:
-                    self._debug['segments']['arr'] = []
                 self._debug['segments']['arr'].append({'start': self._io.pos()})
-                self.segments[i] = self._io.read_bytes(self.len_segments[i])
+                self.segments.append(self._io.read_bytes(self.len_segments[i]))
                 self._debug['segments']['arr'][i]['end'] = self._io.pos()
 
             self._debug['segments']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
+            for i in range(len(self.len_segments)):
+                pass
+
+            for i in range(len(self.segments)):
+                pass
+
 
 
 

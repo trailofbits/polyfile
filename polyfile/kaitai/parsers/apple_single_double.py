@@ -1,14 +1,14 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
+# type: ignore
 
-from packaging.version import parse as parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
-from enum import Enum
+from enum import IntEnum
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
-    raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
+    raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class AppleSingleDouble(KaitaiStruct):
     """AppleSingle and AppleDouble files are used by certain Mac
@@ -35,14 +35,14 @@ class AppleSingleDouble(KaitaiStruct):
        Source - http://kaiser-edv.de/documents/AppleSingle_AppleDouble.pdf
     """
 
-    class FileType(Enum):
+    class FileType(IntEnum):
         apple_single = 333312
         apple_double = 333319
     SEQ_FIELDS = ["magic", "version", "reserved", "num_entries", "entries"]
     def __init__(self, _io, _parent=None, _root=None):
-        self._io = _io
+        super(AppleSingleDouble, self).__init__(_io)
         self._parent = _parent
-        self._root = _root if _root else self
+        self._root = _root or self
         self._debug = collections.defaultdict(dict)
 
     def _read(self):
@@ -59,21 +59,30 @@ class AppleSingleDouble(KaitaiStruct):
         self.num_entries = self._io.read_u2be()
         self._debug['num_entries']['end'] = self._io.pos()
         self._debug['entries']['start'] = self._io.pos()
-        self.entries = [None] * (self.num_entries)
+        self._debug['entries']['arr'] = []
+        self.entries = []
         for i in range(self.num_entries):
-            if not 'arr' in self._debug['entries']:
-                self._debug['entries']['arr'] = []
             self._debug['entries']['arr'].append({'start': self._io.pos()})
             _t_entries = AppleSingleDouble.Entry(self._io, self, self._root)
-            _t_entries._read()
-            self.entries[i] = _t_entries
+            try:
+                _t_entries._read()
+            finally:
+                self.entries.append(_t_entries)
             self._debug['entries']['arr'][i]['end'] = self._io.pos()
 
         self._debug['entries']['end'] = self._io.pos()
 
+
+    def _fetch_instances(self):
+        pass
+        for i in range(len(self.entries)):
+            pass
+            self.entries[i]._fetch_instances()
+
+
     class Entry(KaitaiStruct):
 
-        class Types(Enum):
+        class Types(IntEnum):
             data_fork = 1
             resource_fork = 2
             real_name = 3
@@ -90,9 +99,9 @@ class AppleSingleDouble(KaitaiStruct):
             afp_directory_id = 15
         SEQ_FIELDS = ["type", "ofs_body", "len_body"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(AppleSingleDouble.Entry, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -106,25 +115,41 @@ class AppleSingleDouble(KaitaiStruct):
             self.len_body = self._io.read_u4be()
             self._debug['len_body']['end'] = self._io.pos()
 
+
+        def _fetch_instances(self):
+            pass
+            _ = self.body
+            if hasattr(self, '_m_body'):
+                pass
+                _on = self.type
+                if _on == AppleSingleDouble.Entry.Types.finder_info:
+                    pass
+                    self._m_body._fetch_instances()
+                else:
+                    pass
+
+
         @property
         def body(self):
             if hasattr(self, '_m_body'):
-                return self._m_body if hasattr(self, '_m_body') else None
+                return self._m_body
 
             _pos = self._io.pos()
             self._io.seek(self.ofs_body)
             self._debug['_m_body']['start'] = self._io.pos()
             _on = self.type
             if _on == AppleSingleDouble.Entry.Types.finder_info:
+                pass
                 self._raw__m_body = self._io.read_bytes(self.len_body)
                 _io__raw__m_body = KaitaiStream(BytesIO(self._raw__m_body))
                 self._m_body = AppleSingleDouble.FinderInfo(_io__raw__m_body, self, self._root)
                 self._m_body._read()
             else:
+                pass
                 self._m_body = self._io.read_bytes(self.len_body)
             self._debug['_m_body']['end'] = self._io.pos()
             self._io.seek(_pos)
-            return self._m_body if hasattr(self, '_m_body') else None
+            return getattr(self, '_m_body', None)
 
 
     class FinderInfo(KaitaiStruct):
@@ -135,9 +160,9 @@ class AppleSingleDouble(KaitaiStruct):
         """
         SEQ_FIELDS = ["file_type", "file_creator", "flags", "location", "folder_id"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(AppleSingleDouble.FinderInfo, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -159,13 +184,18 @@ class AppleSingleDouble(KaitaiStruct):
             self._debug['folder_id']['end'] = self._io.pos()
 
 
+        def _fetch_instances(self):
+            pass
+            self.location._fetch_instances()
+
+
     class Point(KaitaiStruct):
         """Specifies 2D coordinate in QuickDraw grid."""
         SEQ_FIELDS = ["x", "y"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(AppleSingleDouble.Point, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -175,6 +205,10 @@ class AppleSingleDouble(KaitaiStruct):
             self._debug['y']['start'] = self._io.pos()
             self.y = self._io.read_u2be()
             self._debug['y']['end'] = self._io.pos()
+
+
+        def _fetch_instances(self):
+            pass
 
 
 

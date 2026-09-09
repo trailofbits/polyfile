@@ -1,13 +1,13 @@
 # This is a generated file! Please edit source .ksy file and use kaitai-struct-compiler to rebuild
+# type: ignore
 
-from packaging.version import parse as parse_version
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import collections
 
 
-if parse_version(kaitaistruct.__version__) < parse_version('0.9'):
-    raise Exception("Incompatible Kaitai Struct Python API: 0.9 or later is required, but you have %s" % (kaitaistruct.__version__))
+if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
+    raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class HeroesOfMightAndMagicAgg(KaitaiStruct):
     """
@@ -16,9 +16,9 @@ class HeroesOfMightAndMagicAgg(KaitaiStruct):
     """
     SEQ_FIELDS = ["num_files", "entries"]
     def __init__(self, _io, _parent=None, _root=None):
-        self._io = _io
+        super(HeroesOfMightAndMagicAgg, self).__init__(_io)
         self._parent = _parent
-        self._root = _root if _root else self
+        self._root = _root or self
         self._debug = collections.defaultdict(dict)
 
     def _read(self):
@@ -26,24 +26,41 @@ class HeroesOfMightAndMagicAgg(KaitaiStruct):
         self.num_files = self._io.read_u2le()
         self._debug['num_files']['end'] = self._io.pos()
         self._debug['entries']['start'] = self._io.pos()
-        self.entries = [None] * (self.num_files)
+        self._debug['entries']['arr'] = []
+        self.entries = []
         for i in range(self.num_files):
-            if not 'arr' in self._debug['entries']:
-                self._debug['entries']['arr'] = []
             self._debug['entries']['arr'].append({'start': self._io.pos()})
             _t_entries = HeroesOfMightAndMagicAgg.Entry(self._io, self, self._root)
-            _t_entries._read()
-            self.entries[i] = _t_entries
+            try:
+                _t_entries._read()
+            finally:
+                self.entries.append(_t_entries)
             self._debug['entries']['arr'][i]['end'] = self._io.pos()
 
         self._debug['entries']['end'] = self._io.pos()
 
+
+    def _fetch_instances(self):
+        pass
+        for i in range(len(self.entries)):
+            pass
+            self.entries[i]._fetch_instances()
+
+        _ = self.filenames
+        if hasattr(self, '_m_filenames'):
+            pass
+            for i in range(len(self._m_filenames)):
+                pass
+                self._m_filenames[i]._fetch_instances()
+
+
+
     class Entry(KaitaiStruct):
         SEQ_FIELDS = ["hash", "offset", "size", "size2"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(HeroesOfMightAndMagicAgg.Entry, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -60,10 +77,18 @@ class HeroesOfMightAndMagicAgg(KaitaiStruct):
             self.size2 = self._io.read_u4le()
             self._debug['size2']['end'] = self._io.pos()
 
+
+        def _fetch_instances(self):
+            pass
+            _ = self.body
+            if hasattr(self, '_m_body'):
+                pass
+
+
         @property
         def body(self):
             if hasattr(self, '_m_body'):
-                return self._m_body if hasattr(self, '_m_body') else None
+                return self._m_body
 
             _pos = self._io.pos()
             self._io.seek(self.offset)
@@ -71,15 +96,15 @@ class HeroesOfMightAndMagicAgg(KaitaiStruct):
             self._m_body = self._io.read_bytes(self.size)
             self._debug['_m_body']['end'] = self._io.pos()
             self._io.seek(_pos)
-            return self._m_body if hasattr(self, '_m_body') else None
+            return getattr(self, '_m_body', None)
 
 
     class Filename(KaitaiStruct):
         SEQ_FIELDS = ["str"]
         def __init__(self, _io, _parent=None, _root=None):
-            self._io = _io
+            super(HeroesOfMightAndMagicAgg.Filename, self).__init__(_io)
             self._parent = _parent
-            self._root = _root if _root else self
+            self._root = _root
             self._debug = collections.defaultdict(dict)
 
         def _read(self):
@@ -88,29 +113,34 @@ class HeroesOfMightAndMagicAgg(KaitaiStruct):
             self._debug['str']['end'] = self._io.pos()
 
 
+        def _fetch_instances(self):
+            pass
+
+
     @property
     def filenames(self):
         if hasattr(self, '_m_filenames'):
-            return self._m_filenames if hasattr(self, '_m_filenames') else None
+            return self._m_filenames
 
         _pos = self._io.pos()
-        self._io.seek((self.entries[-1].offset + self.entries[-1].size))
+        self._io.seek(self.entries[-1].offset + self.entries[-1].size)
         self._debug['_m_filenames']['start'] = self._io.pos()
-        self._raw__m_filenames = [None] * (self.num_files)
-        self._m_filenames = [None] * (self.num_files)
+        self._debug['_m_filenames']['arr'] = []
+        self._raw__m_filenames = []
+        self._m_filenames = []
         for i in range(self.num_files):
-            if not 'arr' in self._debug['_m_filenames']:
-                self._debug['_m_filenames']['arr'] = []
             self._debug['_m_filenames']['arr'].append({'start': self._io.pos()})
-            self._raw__m_filenames[i] = self._io.read_bytes(15)
+            self._raw__m_filenames.append(self._io.read_bytes(15))
             _io__raw__m_filenames = KaitaiStream(BytesIO(self._raw__m_filenames[i]))
             _t__m_filenames = HeroesOfMightAndMagicAgg.Filename(_io__raw__m_filenames, self, self._root)
-            _t__m_filenames._read()
-            self._m_filenames[i] = _t__m_filenames
+            try:
+                _t__m_filenames._read()
+            finally:
+                self._m_filenames.append(_t__m_filenames)
             self._debug['_m_filenames']['arr'][i]['end'] = self._io.pos()
 
         self._debug['_m_filenames']['end'] = self._io.pos()
         self._io.seek(_pos)
-        return self._m_filenames if hasattr(self, '_m_filenames') else None
+        return getattr(self, '_m_filenames', None)
 
 
