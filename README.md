@@ -123,3 +123,10 @@ Bits](https://www.trailofbits.com/) with funding from the Defense
 Advanced Research Projects Agency (DARPA) under the SafeDocs program
 as a subcontractor to [Galois](https://galois.com). It is licensed under the [Apache 2.0 license](LICENSE).
 © 2019, Trail of Bits.
+
+PolyFile generates most of its parsers from the [Kaitai Struct format gallery](https://formats.kaitai.io/),
+where each format specification carries its own license. A generated parser is a derivative work of
+its specification, so PolyFile builds parsers only from specifications under a permissive license.
+The distributed package therefore contains no copyleft code, and the specifications PolyFile cannot
+redistribute are excluded from the source distribution. For the details, see
+[Licensing of generated parsers](docs/extending_polyfile.md#licensing-of-generated-parsers).

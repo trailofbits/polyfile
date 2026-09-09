@@ -156,6 +156,42 @@ KAITAI_MIME_MAPPING: Dict[str, str] = {
 }
 ```
 
+#### Licensing of generated parsers
+
+A parser produced by the Kaitai Struct compiler is a derivative work of the `.ksy` specification it
+was generated from. PolyFile is distributed under the Apache 2.0 license, so it can only ship
+parsers generated from specifications under a compatible permissive license.
+
+Each specification in the format gallery carries its own license, chosen by whoever contributed it,
+and a few are copyleft. To keep the distributed package Apache 2.0 throughout,
+[`compile_kaitai_parsers.py`](../compile_kaitai_parsers.py) compiles a specification only when its
+`license` key appears in `PERMISSIVE_LICENSES`. Everything else is skipped, and
+[`MANIFEST.in`](../MANIFEST.in) keeps those specifications out of the source distribution as well.
+
+The rule is an allowlist rather than a list of licenses to reject, for two reasons. A rejection list
+has to name every copyleft family, and it matches by substring, so `GPL` does not catch
+`GFDL-1.3-or-later`. An allowlist also excludes specifications that declare no license at all, which
+grant no redistribution rights whatsoever.
+
+To see what is excluded and why:
+
+```console
+$ python compile_kaitai_parsers.py --audit
+Excluding 6 format specification(s) without a permissive license:
+  GFDL-1.3-or-later        filesystem/lvm2.ksy
+  GPL-3.0-or-later         filesystem/vdi.ksy
+  GPL-2.0-or-later         firmware/broadcom_trx.ksy
+  no license               game/renderware_binary_stream.ksy
+  LGPL-2.1                 image/pif.ksy
+  GPL-3.0-or-later         scientific/nt_mdt/nt_mdt.ksy
+```
+
+After you update the `kaitai_struct_formats` submodule, run the audit again. If a specification
+appears that you believe is permissively licensed, confirm the license is compatible with Apache
+2.0, then add it to `PERMISSIVE_LICENSES` and to the exclusion list in `MANIFEST.in`.
+`tests/test_licensing.py` fails if those two lists disagree, or if a parser generated from an
+excluded specification reaches the package.
+
 ## Struct Parsing
 
 PolyFile has a convenience utility defined in [`structs.py`](../polyfile/structs.py) for defining and loading binary structures:
