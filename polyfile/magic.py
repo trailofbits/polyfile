@@ -1305,7 +1305,12 @@ class StringWildcard(StringTest):
         return False
 
     def search(self, data: bytes) -> DataTypeMatch:
-        return self.matches(data)
+        # `num_bytes` bounds the start offsets a search tries, not the extent of the value it
+        # yields, so a search always reads up to the first null byte
+        first_null = data.find(b"\0")
+        if first_null >= 0:
+            return self.post_process(data[:first_null])
+        return self.post_process(data)
 
     def __str__(self):
         return "null-terminated string"
@@ -1484,9 +1489,13 @@ class StringMatch(StringTest):
         return DataTypeMatch.INVALID
 
     def search(self, data: bytes) -> DataTypeMatch:
-        if self.num_bytes is not None:
-            data = data[:self.num_bytes]
-        m = self.pattern.search(data)
+        if self.num_bytes is None:
+            end_pos = len(data)
+        else:
+            # libmagic tries `num_bytes` successive start offsets, so the window it reads is that
+            # many bytes plus the length of the string it is looking for
+            end_pos = min(len(data), self.num_bytes + len(self.string))
+        m = self.pattern.search(data, 0, end_pos)
         if m:
             return self.post_process(bytes(m.group(0)), initial_offset=m.start())
         return DataTypeMatch.INVALID
@@ -1600,7 +1609,7 @@ class SearchType(StringType):
             full_word_match=full_word_match,
             trim=trim
         )
-        self.repetitions: Optional[int] = repetitions
+        self.num_bytes = repetitions
         if repetitions is None:
             rep_str = ""
         else:
@@ -1613,6 +1622,16 @@ class SearchType(StringType):
                 self.name = f"search{rep_str}/s"
             else:
                 self.name = f"{self.name}s"
+
+    @property
+    def repetitions(self) -> Optional[int]:
+        """The number of start offsets libmagic tries, from the ``search/N`` declaration.
+
+        Returns:
+            The value of ``N``, or ``None`` if the declaration omitted it, in which case the
+            whole buffer is searched.
+        """
+        return self.num_bytes
 
     def is_text(self, value: StringTest) -> bool:
         return value.is_always_text()

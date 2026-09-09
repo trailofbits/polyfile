@@ -8,7 +8,7 @@ from unittest import TestCase
 
 # from polyfile import logger
 import polyfile.magic
-from polyfile.magic import MagicMatcher, MAGIC_DEFS, Match, MatchContext, TestResult
+from polyfile.magic import MagicMatcher, MAGIC_DEFS, Match, MatchContext, SearchType, TestResult
 
 
 # logger.setLevel(logger.TRACE)
@@ -328,3 +328,12 @@ class MagicMatchingRegressionTest(TestCase):
         match, produced = self.counting_match(result, 8)
         self.assertTrue(match)
         self.assertEqual(1, len(produced))
+
+    def test_search_honors_its_repetition_limit(self):
+        """libmagic's `search/N` tries `N` start offsets; PolyFile used to scan the whole buffer."""
+        search = SearchType.parse("search/8192")
+        self.assertEqual(8192, search.repetitions)
+        expected = search.parse_expected("needle")
+        self.assertEqual(8192, expected.num_bytes)
+        self.assertTrue(search.match(b"." * 8000 + b"needle", expected))
+        self.assertFalse(search.match(b"." * 9000 + b"needle", expected))
