@@ -98,9 +98,23 @@ class CentralDirectory(PolyFileStruct):
     extra_field: ByteField["extra_field_length"]
     file_comment: ByteField["file_comment_length"]
 
+    archive_offset: int = 0
+    """Byte offset at which the containing archive starts within the file."""
+
     def local_file_header(self, stream: FileStream) -> LocalFileHeader:
+        """Reads the local file header that this central directory record points to.
+
+        The record stores the header offset relative to the start of the archive, so
+        :attr:`archive_offset` is added to locate the header inside ``stream``.
+
+        Args:
+            stream: The stream containing the whole file, not only the archive.
+
+        Returns:
+            The local file header for this record.
+        """
         with stream.save_pos():
-            stream.seek(self.file_header_offset)
+            stream.seek(self.archive_offset + self.file_header_offset)
             return LocalFileHeader.read(stream)
 
 
@@ -117,14 +131,41 @@ class EndOfCentralDirectory(PolyFileStruct):
     comment_length: UInt16
     comment: ByteField["comment_length"]
 
+    @property
+    def archive_offset(self) -> int:
+        """Byte offset at which the archive starts within the file.
+
+        ZIP records store offsets relative to the start of the archive, but an archive can
+        be appended to other data, as in a polyglot or a self-extracting executable. The
+        end of central directory record sits immediately after the central directory, so
+        subtracting the central directory size and its recorded offset from the position of
+        the record itself yields the length of whatever precedes the archive.
+
+        Returns:
+            The number of bytes that precede the archive, or 0 if the record is malformed.
+        """
+        offset = self.start_offset - self.central_directory_bytes - self.central_directory_offset
+        return max(offset, 0)
+
     def central_directories(self, file_stream: FileStream) -> Iterator[CentralDirectory]:
+        """Iterates over the central directory records of this archive.
+
+        Args:
+            file_stream: The stream containing the whole file, not only the archive.
+
+        Yields:
+            Each central directory record, with :attr:`CentralDirectory.archive_offset` set
+            so that its local file header can be located.
+        """
+        archive_offset = self.archive_offset
         with file_stream.save_pos() as f:
-            cdo = self.central_directory_offset
+            cdo = archive_offset + self.central_directory_offset
             while cdo < self.start_offset:
                 f.seek(cdo)
                 cd = CentralDirectory.read(f)
                 if cd is None:
                     break
+                cd.archive_offset = archive_offset
                 yield cd
                 cdo += cd.num_bytes
 
