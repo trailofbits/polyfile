@@ -1,5 +1,9 @@
+import subprocess
+import sys
+import time
 from pathlib import Path
-from typing import Callable, Optional
+from tempfile import TemporaryDirectory
+from typing import Callable, Optional, Set
 from unittest import TestCase
 
 # from polyfile import logger
@@ -191,3 +195,96 @@ class MagicTest(TestCase):
                                 self.assertTrue(any(m.endswith(expected) for m in matches))
                             else:
                                 self.assertIn(expected, matches)
+
+
+MATCH_TIMEOUT_SECONDS: int = 60
+
+MATCH_SCRIPT: str = """
+import sys
+from polyfile.magic import MagicMatcher
+with open(sys.argv[1], "rb") as f:
+    data = f.read()
+for match in MagicMatcher.DEFAULT_INSTANCE.match(data):
+    _ = set(match.mimetypes)
+"""
+
+
+class MagicMatchingRegressionTest(TestCase):
+    """Regression tests for the matching hang reported in issue #3411."""
+
+    # This header uses CRLF line endings, so the `}` that closes the class is never the last
+    # character on a line and the `c-lang` C++ class test can never succeed. Reduced from the
+    # file attached to issue #3411.
+    CRLF_CPP_HEADER: bytes = b"\r\n".join((
+        b"#ifndef MEMBLOCK_HDR",
+        b"#define MEMBLOCK_HDR",
+        b"",
+        b"class MemBlock",
+        b"{",
+        b"public :",
+        b"\tint len;",
+        b"\tconst char *data;",
+        b"\tMemBlock() : len(0), data(0) {}",
+        b"\tchar operator[](int i) const { return data[i]; }",
+        b"};",
+        b"",
+        b"#endif",
+        b"",
+    ))
+
+    @staticmethod
+    def mimetypes(matcher: MagicMatcher, data: bytes) -> Set[str]:
+        """Collects every MIME type that `matcher` reports for `data`.
+
+        Args:
+            matcher: The matcher to run.
+            data: The bytes to classify.
+
+        Returns:
+            The union of the MIME types of every match.
+        """
+        found: Set[str] = set()
+        for match in matcher.match(data):
+            found |= set(match.mimetypes)
+        return found
+
+    def match_in_subprocess(self, data: bytes, timeout: int = MATCH_TIMEOUT_SECONDS) -> float:
+        """Matches `data` in a subprocess, so that a hang fails the test instead of stalling CI.
+
+        Args:
+            data: The bytes to hand to the default matcher.
+            timeout: The number of seconds to wait before failing the test.
+
+        Returns:
+            The wall-clock seconds the subprocess took.
+        """
+        with TemporaryDirectory() as tmp_dir:
+            input_path = Path(tmp_dir) / "input"
+            input_path.write_bytes(data)
+            command = [sys.executable, "-c", MATCH_SCRIPT, str(input_path)]
+            started = time.monotonic()
+            try:
+                subprocess.run(command, capture_output=True, check=True, timeout=timeout)
+            except subprocess.TimeoutExpired:
+                self.fail(f"Matching {len(data)} bytes took longer than {timeout} seconds")
+            except subprocess.CalledProcessError as e:
+                error = e.stderr.decode("utf-8", "replace")
+                self.fail(f"Matching {len(data)} bytes failed: {error}")
+            return time.monotonic() - started
+
+    def test_cpp_class_test_terminates(self):
+        """Matching a C++ header used to backtrack exponentially in the `c-lang` class test."""
+        elapsed = self.match_in_subprocess(self.CRLF_CPP_HEADER)
+        print(f"Matched {len(self.CRLF_CPP_HEADER)} bytes in {elapsed:.3f} seconds")
+
+    def test_cpp_class_test_semantics(self):
+        """The rewritten `c-lang` class test accepts and rejects the same sources as before."""
+        for magic_def in MAGIC_DEFS:
+            if magic_def.name == "c-lang":
+                break
+        else:
+            self.fail("Could not find the c-lang definitions")
+        matcher = MagicMatcher.parse(magic_def)
+        source = b"class Foo {\n\tint x;\n};\n"
+        self.assertIn("text/x-c++", self.mimetypes(matcher, source))
+        self.assertNotIn("text/x-c++", self.mimetypes(matcher, source.replace(b"\n", b"\r\n")))

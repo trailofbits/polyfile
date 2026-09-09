@@ -75,7 +75,7 @@
 !:mime	text/x-c++
 # But class alone is reduced to avoid beating php (Jens Schleusener)
 0	search/8192	class
->0	regex	\^[[:space:]]*class[[:space:]]+[[:digit:][:alpha:]:_]+[[:space:]]*\\{(.*[\n]*)*\\}(;)?$		C++ source text
+>0	regex	\^[[:space:]]*class[[:space:]]+[[:digit:][:alpha:]:_]+[[:space:]]*\\{(.|[\n])*\\}(;)?$		C++ source text
 !:strength + 13
 !:mime	text/x-c++
 0	search/8192	public
