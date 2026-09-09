@@ -2616,7 +2616,7 @@ class ClearTest(MagicTest):
 
 
 class DERTest(MagicTest):
-    """Matches one Distinguished Encoding Rules object against a :class:`polyfile.der.DERSpecification`."""
+    """Matches one Distinguished Encoding Rules object against a :class:`DERSpecification`."""
 
     def __init__(
             self,
@@ -2628,8 +2628,8 @@ class DERTest(MagicTest):
             parent: Optional["MagicTest"] = None,
             comments: Iterable[Comment] = ()
     ):
-        super().__init__(offset=offset, mime=mime, extensions=extensions, message=message, parent=parent,
-                         comments=comments)
+        super().__init__(offset=offset, mime=mime, extensions=extensions, message=message,
+                         parent=parent, comments=comments)
         self.specification: DERSpecification = specification
 
     def subtest_type(self) -> TestType:
@@ -3260,8 +3260,8 @@ class MagicMatcher:
                     late_binding=late_binding
                 )
             elif data_type == "der":
-                test = DERTest(offset=offset, specification=DERSpecification(test_str), message=message,
-                               parent=parent)
+                test = DERTest(offset=offset, specification=DERSpecification(test_str),
+                               message=message, parent=parent)
             else:
                 try:
                     data_type = DataType.parse(data_type)

@@ -1,7 +1,8 @@
 from unittest import TestCase
 
 from polyfile.der import (
-    DERHeader, DERMismatch, DERSpecification, InvalidDER, format_value, read_length, read_tag, tag_name
+    DERHeader, DERMismatch, DERSpecification, InvalidDER, format_value, read_length, read_tag,
+    tag_name
 )
 
 
@@ -23,9 +24,9 @@ class ReadTagTest(TestCase):
         self.assertEqual("eoc", tag_name(tag))
 
     def test_high_tag_number(self):
-        # `gettag` in der.c accumulates only the octets that have their most significant bit set, and
-        # leaves the final octet of the tag for `getlength` to read. PolyFile keeps that behavior so
-        # that it reports what `file` reports.
+        # `gettag` in der.c accumulates only the octets that have their most significant bit
+        # set, and leaves the last octet of the tag for `getlength` to read. PolyFile keeps
+        # that behavior so that it reports what `file` reports.
         self.assertEqual((31 * 128 + 1, 2), read_tag(b"\x1f\x81\x00\x00\x00", 0))
 
     def test_empty_data(self):

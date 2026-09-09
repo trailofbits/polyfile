@@ -33,7 +33,7 @@ HIGH_TAG_NUMBER: int = 0x1F
 UINT32_MAX: int = 0xFFFFFFFF
 
 MAX_FORMATTED_CHARS: int = 127
-"""``der_data`` formats into a 128 byte buffer, so a printable value is truncated to 127 characters."""
+"""``der_data`` formats into a 128 byte buffer, so text is truncated to 127 characters."""
 
 MAX_FORMATTED_HEX_BYTES: int = 63
 """``der_data`` stops writing hex digits once it reaches the end of its 128 byte buffer."""
@@ -66,8 +66,8 @@ def read_tag(data: bytes, offset: int) -> Tuple[int, int]:
     offset += 1
     if tag != HIGH_TAG_NUMBER:
         return tag, offset
-    # A high tag number continues over every subsequent octet that has its most significant bit set.
-    # This mirrors `gettag` in der.c, which leaves the final octet of the tag for `getlength` to read.
+    # A high tag number continues over every octet that has its most significant bit set. This
+    # mirrors `gettag` in der.c, which leaves the last octet of the tag for `getlength` to read.
     while True:
         if offset >= len(data):
             raise InvalidDER(f"the high tag number at offset {offset} is past the end of the data")
@@ -96,18 +96,18 @@ def read_length(data: bytes, offset: int) -> Tuple[int, int]:
     offset += 1
     num_octets = first_octet & 0x7F
     if offset + num_octets >= len(data):
-        raise InvalidDER(f"a {num_octets} octet length at offset {offset} is past the end of the data")
+        raise InvalidDER(f"a {num_octets} octet length at offset {offset} runs past the data")
     elif first_octet & 0x80 == 0:
         return num_octets, offset
     length = int.from_bytes(data[offset:offset + num_octets], "big")
     offset += num_octets
     if length > UINT32_MAX - offset or offset + length > len(data):
-        raise InvalidDER(f"a value of {length} bytes at offset {offset} is past the end of the data")
+        raise InvalidDER(f"a value of {length} bytes at offset {offset} runs past the data")
     return length, offset
 
 
 def tag_name(tag: int) -> str:
-    """Returns the libmagic name of a tag number, or its hexadecimal representation if it has none."""
+    """Returns the libmagic name of a tag number, or its hexadecimal form if it has none."""
     if tag < len(TAG_NAMES):
         return TAG_NAMES[tag]
     return f"{tag:#x}"
@@ -195,12 +195,14 @@ class DERSpecification:
         """
         name = header.name
         if not self.specification.startswith(name):
-            raise DERMismatch(f"expected {self.specification!r} but the tag at offset {header.start} is {name!r}")
+            raise DERMismatch(f"expected {self.specification!r} but the tag at offset "
+                              f"{header.start} is {name!r}")
         remainder = self.specification[len(name):]
         digits = _leading_digits(remainder)
         if digits:
             if header.length != int(digits):
-                raise DERMismatch(f"expected a {name!r} of {int(digits)} bytes but it is {header.length} bytes")
+                raise DERMismatch(f"expected a {name!r} of {int(digits)} bytes but it is "
+                                  f"{header.length} bytes")
             remainder = remainder[len(digits):]
         if not remainder:
             return None

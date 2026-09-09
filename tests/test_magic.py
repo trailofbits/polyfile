@@ -221,26 +221,30 @@ class MagicTest(TestCase):
             match for match in MagicMatcher.DEFAULT_INSTANCE.match(certificate)
             if str(match) == "Certificate, Version=3"
         ]
-        self.assertEqual(1, len(matches), f"expected an X.509 certificate, but got "
-                                          f"{self.messages(MagicMatcher.DEFAULT_INSTANCE, certificate)!r}")
-        # polyfile/magic_defs/der has no `!:mime` line, so `file` reports application/octet-stream for
-        # a certificate and PolyFile reports no MIME type at all.
+        self.assertEqual(
+            1, len(matches),
+            f"expected an X.509 certificate, but got "
+            f"{self.messages(MagicMatcher.DEFAULT_INSTANCE, certificate)!r}"
+        )
+        # polyfile/magic_defs/der has no `!:mime` line, so `file` reports
+        # application/octet-stream for a certificate and PolyFile reports no MIME type at all.
         self.assertEqual([], list(matches[0].mimetypes))
 
     def test_der_walks_sibling_objects(self):
-        # The "DER Encoded Key Pair" tests are three sibling `der` tests that each read the object
-        # after the one their predecessor matched. A trailing byte is needed because libmagic rejects
-        # a short form length whose value ends on the final byte of the input.
+        # The "DER Encoded Key Pair" tests are three sibling `der` tests that each read the
+        # object after the one their predecessor matched. A trailing byte is needed because
+        # libmagic rejects a short form length whose value ends on the final byte of the input.
         key_pair = tag_length_value(0x30, b"".join((
             tag_length_value(0x02, b"\x00"),
             tag_length_value(0x02, b"\x00" + b"\xab" * 64),
             tag_length_value(0x02, bytes.fromhex("010001")),
         ))) + b"\x00"
-        self.assertIn("DER Encoded Key Pair, 512 bits", self.messages(MagicMatcher.DEFAULT_INSTANCE, key_pair))
+        messages = self.messages(MagicMatcher.DEFAULT_INSTANCE, key_pair)
+        self.assertIn("DER Encoded Key Pair, 512 bits", messages)
 
     def test_der_does_not_break_other_matches(self):
-        # Regression test for issue #3374: the der tests used to raise NotImplementedError out of
-        # match(), which aborted the search before it could report the PDF.
+        # Regression test for issue #3374: the der tests used to raise NotImplementedError
+        # out of match(), which aborted the search before it could report the PDF.
         for matcher in (MagicMatcher.DEFAULT_INSTANCE, MagicMatcher.parse(*MAGIC_DEFS)):
             data = zlib.decompress(ISSUE_3374_PDF)
             types = [next(iter(match.mimetypes)) for match in matcher.match(data)]
