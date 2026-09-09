@@ -2725,7 +2725,7 @@ class Match:
         return len(self._results)
 
     def __getitem__(self, index: int) -> TestResult:
-        while self._result_iter is not None and index <= len(self._results):
+        while self._result_iter is not None and index >= len(self._results):
             # we have not yet finished collecting the results
             try:
                 result = next(self._result_iter)

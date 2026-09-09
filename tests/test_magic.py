@@ -3,12 +3,12 @@ import sys
 import time
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Callable, Optional, Set
+from typing import Callable, Iterator, List, Optional, Set, Tuple
 from unittest import TestCase
 
 # from polyfile import logger
 import polyfile.magic
-from polyfile.magic import MagicMatcher, MAGIC_DEFS
+from polyfile.magic import MagicMatcher, MAGIC_DEFS, Match, MatchContext, TestResult
 
 
 # logger.setLevel(logger.TRACE)
@@ -248,6 +248,26 @@ class MagicMatchingRegressionTest(TestCase):
             found |= set(match.mimetypes)
         return found
 
+    @staticmethod
+    def counting_match(result: TestResult, count: int) -> Tuple[Match, List[TestResult]]:
+        """Builds a `Match` that records each result its iterator yields.
+
+        Args:
+            result: The test result to yield repeatedly.
+            count: The number of results the iterator yields before it is exhausted.
+
+        Returns:
+            The match, and the list that grows by one entry per result the match consumes.
+        """
+        produced: List[TestResult] = []
+
+        def results() -> Iterator[TestResult]:
+            for _ in range(count):
+                produced.append(result)
+                yield result
+
+        return Match(MagicMatcher.DEFAULT_INSTANCE, MatchContext(b""), results()), produced
+
     def match_in_subprocess(self, data: bytes, timeout: int = MATCH_TIMEOUT_SECONDS) -> float:
         """Matches `data` in a subprocess, so that a hang fails the test instead of stalling CI.
 
@@ -288,3 +308,23 @@ class MagicMatchingRegressionTest(TestCase):
         source = b"class Foo {\n\tint x;\n};\n"
         self.assertIn("text/x-c++", self.mimetypes(matcher, source))
         self.assertNotIn("text/x-c++", self.mimetypes(matcher, source.replace(b"\n", b"\r\n")))
+
+    def test_match_results_are_lazy(self):
+        """Reading one result used to drain the whole result iterator."""
+        data = b"#!/bin/sh\nexec cat \"$@\"\n"
+        result = next(iter(MagicMatcher.DEFAULT_INSTANCE.match(data)))[0]
+        match, produced = self.counting_match(result, 8)
+        self.assertIs(result, match[0])
+        self.assertEqual(1, len(produced))
+        self.assertIs(result, match[3])
+        self.assertEqual(4, len(produced))
+        self.assertEqual(8, len(match))
+        self.assertEqual(8, len(produced))
+
+    def test_match_truthiness_is_lazy(self):
+        """`bool(match)` used to match the whole subtree before it could answer."""
+        data = b"#!/bin/sh\nexec cat \"$@\"\n"
+        result = next(iter(MagicMatcher.DEFAULT_INSTANCE.match(data)))[0]
+        match, produced = self.counting_match(result, 8)
+        self.assertTrue(match)
+        self.assertEqual(1, len(produced))
