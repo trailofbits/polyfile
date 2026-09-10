@@ -9,6 +9,7 @@ details about the file.
 
 """
 from abc import ABC, abstractmethod
+import codecs
 from collections import defaultdict
 import csv
 import functools
@@ -28,8 +29,6 @@ from typing import (
     Optional, Set, Tuple, Type, TypeVar, Union
 )
 from uuid import UUID
-
-from chardet.universaldetector import UniversalDetector
 
 from .arithmetic import CStyleInt, make_c_style_int
 from .der import DERHeader, DERSpecification, InvalidDER, mime_type_for_message
@@ -870,6 +869,24 @@ class MagicTest(ABC):
                             self._type = TestType.UNKNOWN
             delattr(self, "__calculating_test_type")
         return self._type
+
+    @property
+    def appends_text_encoding(self) -> bool:
+        """Whether libmagic appends its text-encoding description to this test's message.
+
+        The description comes from ``file_ascmagic``, which ``file_buffer`` reaches only after its
+        binary soft magic pass printed nothing, so it lands on whatever the ``TEXTTEST`` soft magic
+        pass printed (``src/funcs.c`` and ``src/ascmagic.c``). ``set_test_type`` in
+        ``src/apprentice.c`` decides which pass a definition runs in from the type and flags of its
+        level 0 test alone, and that is what `subtest_type` reports. `test_type`, which chooses the
+        pass PolyFile itself runs the test in, cannot answer this: it reports a group with any
+        binary subtest as binary, which is why libmagic describes the encoding of
+        ``file/tests/pnm1.testfile`` while PolyFile matches it in its binary pass.
+
+        Returns:
+            True if libmagic would append the description to this test's message.
+        """
+        return bool(self.subtest_type() & TestType.TEXT)
 
     @test_type.setter
     def test_type(self, value: TestType):
@@ -3116,6 +3133,19 @@ class JSONTest(MagicTest):
     def subtest_type(self) -> TestType:
         return TestType.TEXT
 
+    @property
+    def appends_text_encoding(self) -> bool:
+        """libmagic never appends its text-encoding description to a JSON verdict.
+
+        ``file_is_json`` runs ahead of soft magic in ``file_buffer`` and its match ends the run, so
+        ``file_ascmagic`` never sees it: `file` reports ``JSON text data``, not
+        ``JSON text data, ASCII text``.
+
+        Returns:
+            False.
+        """
+        return False
+
     def test_flip_endianness(
             self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]
     ) -> TestResult:
@@ -3165,6 +3195,18 @@ class CSVTest(MagicTest):
 
     def subtest_type(self) -> TestType:
         return TestType.TEXT
+
+    @property
+    def appends_text_encoding(self) -> bool:
+        """libmagic never appends its text-encoding description to a CSV verdict.
+
+        ``file_is_csv`` runs ahead of soft magic in ``file_buffer``, names the encoding itself, and
+        its match ends the run, so ``file_ascmagic`` never sees it.
+
+        Returns:
+            False.
+        """
+        return False
 
     def test_flip_endianness(
             self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]
@@ -3368,7 +3410,198 @@ def detect_text_encoding(data: bytes) -> Optional[str]:
     return _eight_bit_encoding(data)
 
 
+LIBMAGIC_ENCODING_NAMES: Dict[str, str] = {
+    "ascii": "ASCII",
+    "utf-8": "Unicode text, UTF-8",
+    "utf-16le": "Unicode text, UTF-16, little-endian",
+    "utf-16be": "Unicode text, UTF-16, big-endian",
+    "utf-32le": "Unicode text, UTF-32, little-endian",
+    "utf-32be": "Unicode text, UTF-32, big-endian",
+    "iso-8859-1": "ISO-8859",
+    "unknown-8bit": "Non-ISO extended-ASCII",
+}
+"""libmagic's name for each encoding `detect_text_encoding` reports, from ``src/encoding.c``."""
+
+MAX_LINE_LENGTH: int = 300
+"""libmagic's ``MAXLINELEN``: the longest line it considers sane (``src/ascmagic.c``)."""
+
+TEXT_ENCODING_MAX_BYTES: int = 64 * 1024
+"""libmagic's ``FILE_ENCODING_MAX``: how many bytes it decodes to describe text (``src/file.h``)."""
+
+_EIGHT_BIT_ENCODINGS: FrozenSet[str] = frozenset({"ascii", "iso-8859-1", "unknown-8bit"})
+
+_UCS_BOM_LENGTHS: Dict[str, int] = {
+    encoding: len(bom) for bom, encoding, _ in _UCS_BYTE_ORDER_MARKS
+}
+
+_LINE_TERMINATOR_PATTERN: Pattern[str] = re.compile("[\n\r\x85]")
+
+
+def _decode_text(data: bytes, encoding: str) -> str:
+    """Decodes the prefix of `data` that libmagic examines when it describes text.
+
+    libmagic decodes at most ``FILE_ENCODING_MAX`` bytes into the buffer that
+    ``file_ascmagic_with_encoding`` scans, so a line that only grows long past that point does not
+    count as a long line. Each eight bit encoding it names copies a byte's value straight into that
+    buffer, which is what decoding as Latin-1 does.
+
+    Args:
+        data: the bytes to decode.
+        encoding: the encoding `detect_text_encoding` named for `data`.
+
+    Returns:
+        The decoded characters, dropping any character the byte limit cut in half.
+    """
+    prefix = data[:TEXT_ENCODING_MAX_BYTES]
+    if encoding in _EIGHT_BIT_ENCODINGS:
+        return prefix.decode("latin-1")
+    prefix = prefix[_UCS_BOM_LENGTHS.get(encoding, 0):]
+    return codecs.getincrementaldecoder(encoding)().decode(prefix, final=False)
+
+
+def _longest_line(text: str) -> int:
+    """Measures the longest line of `text`, as libmagic's ``has_long_lines`` counter does.
+
+    Args:
+        text: the decoded characters to measure.
+
+    Returns:
+        The length of the longest line, or 0 when every line is at most `MAX_LINE_LENGTH`
+        characters long.
+    """
+    longest = 0
+    line_start = -1
+    for terminator in _LINE_TERMINATOR_PATTERN.finditer(text):
+        longest = max(longest, terminator.start() - 1 - line_start)
+        line_start = terminator.start()
+    longest = max(longest, len(text) - 1 - line_start)
+    if longest > MAX_LINE_LENGTH:
+        return longest
+    return 0
+
+
+class TextEncodingDescription:
+    """How libmagic describes a text file: its character encoding and the shape of its lines.
+
+    ``file_ascmagic_with_encoding`` in libmagic's ``src/ascmagic.c`` rewrites the tail of whatever
+    soft magic printed, appends the name of the character encoding, and then reports the file's
+    longest line, the line terminators it uses, and whether it holds escape or backspace
+    characters. `describe` applies that rewrite to one match's message.
+    """
+
+    def __init__(self, code: str, text: str):
+        """
+        Args:
+            code: libmagic's name for the encoding, such as ``ASCII``.
+            text: the decoded characters libmagic would scan.
+        """
+        self.code: str = code
+        self.crlf: int = text.count("\r\n")
+        self.lf: int = text.count("\n") - self.crlf
+        # libmagic counts a CR when it reads the character after it, so a CR that ends the buffer
+        # only counts if it is the only line terminator there is
+        ends_with_cr = text.endswith("\r")
+        self.cr: int = text.count("\r") - self.crlf - int(ends_with_cr)
+        if ends_with_cr and self.cr == 0 and self.crlf == 0:
+            self.cr = 1
+        self.nel: int = text.count("\x85")
+        self.longest_line: int = _longest_line(text)
+        self.has_escapes: bool = "\x1b" in text
+        self.has_overstriking: bool = "\b" in text
+
+    @classmethod
+    def detect(cls, data: bytes) -> Optional["TextEncodingDescription"]:
+        """Classifies `data` and measures the line shape libmagic would report for it.
+
+        Args:
+            data: the bytes to classify.
+
+        Returns:
+            The description, or None if `data` is not text.
+
+        Raises:
+            ValueError: if `detect_text_encoding` named an encoding that
+                `LIBMAGIC_ENCODING_NAMES` does not describe.
+        """
+        encoding = detect_text_encoding(data)
+        if encoding is None:
+            return None
+        if encoding not in LIBMAGIC_ENCODING_NAMES:
+            raise ValueError(f"there is no libmagic description for the text encoding "
+                             f"{encoding!r}; add one to LIBMAGIC_ENCODING_NAMES")
+        return cls(LIBMAGIC_ENCODING_NAMES[encoding], _decode_text(data, encoding))
+
+    def _splice(self, message: str) -> Tuple[str, bool]:
+        """Replaces a soft magic message's trailing ``text`` with the separator libmagic uses.
+
+        libmagic rewrites the tail of its output buffer with ``file_replace(ms, " text$", ", ")``,
+        falling back to ``" text executable$"`` and then to appending ``", "``, so
+        ``POSIX shell script text executable`` becomes ``POSIX shell script, `` and keeps its
+        ``executable`` to print after the encoding.
+
+        Args:
+            message: the message soft magic produced, which is empty if nothing matched.
+
+        Returns:
+            The rewritten message, and whether it named an executable.
+        """
+        if not message:
+            return "", False
+        elif message.endswith(" text"):
+            return f"{message[:-len(' text')]}, ", False
+        elif message.endswith(" text executable"):
+            return f"{message[:-len(' text executable')]}, ", True
+        return f"{message}, ", False
+
+    def _line_terminators(self) -> str:
+        """Names the line terminators the text uses.
+
+        libmagic reports terminators only when it finds one that is not LF, or when it finds none
+        at all, so a file with Unix line endings gets no clause.
+
+        Returns:
+            The clause to append, or the empty string when there is nothing to report.
+        """
+        present = [name for count, name in
+                   ((self.crlf, "CRLF"), (self.cr, "CR"), (self.lf, "LF"), (self.nel, "NEL"))
+                   if count]
+        if not present:
+            return ", with no line terminators"
+        elif present == ["LF"]:
+            return ""
+        return f", with {', '.join(present)} line terminators"
+
+    def describe(self, message: str) -> str:
+        """Appends this description to the message a match's soft magic tests produced.
+
+        Args:
+            message: the message soft magic produced, which is empty if nothing matched.
+
+        Returns:
+            The description libmagic reports for the file.
+        """
+        head, executable = self._splice(message)
+        description = f"{head}{self.code} text"
+        if executable:
+            description = f"{description} executable"
+        if self.longest_line:
+            description = f"{description}, with very long lines ({self.longest_line})"
+        description = f"{description}{self._line_terminators()}"
+        if self.has_escapes:
+            description = f"{description}, with escape sequences"
+        if self.has_overstriking:
+            description = f"{description}, with overstriking"
+        return description
+
+
 class PlainTextTest(MagicTest):
+    """Matches any buffer that libmagic would classify as text.
+
+    The test carries no message of its own. libmagic names the encoding in the description that
+    `TextEncodingDescription.describe` builds, which `MagicMatcher.match` attaches to the match
+    instead, so this test holds no per-match state and is safe to share across matches.
+    """
+
     AUTO_REGISTER_TEST = False
 
     def __init__(
@@ -3377,53 +3610,23 @@ class PlainTextTest(MagicTest):
             mime: Union[str, TernaryExecutableMessage] = "text/plain",
             extensions: Iterable[str] = ("txt",),
             parent: Optional["MagicTest"] = None,
-            comments: Iterable[Comment] = (),
-            minimum_encoding_confidence: float = 0.5
+            comments: Iterable[Comment] = ()
     ):
         super().__init__(offset, mime, extensions, "", parent, comments)
-        self.minimum_encoding_confidence: float = minimum_encoding_confidence
 
     def subtest_type(self) -> TestType:
         return TestType.TEXT
 
-    def encoding_name(self, data: bytes, fallback: str) -> str:
-        """Names the encoding of `data` for the human-readable match message.
-
-        Args:
-            data: the text whose encoding to name.
-            fallback: the name to use when chardet is not confident enough to name one itself.
-
-        Returns:
-            The chardet encoding name if its confidence reaches `minimum_encoding_confidence`,
-            and `fallback` otherwise.
-        """
-        detector = UniversalDetector()
-        offset = 0
-        while not detector.done and offset < min(len(data), 5000000):
-            # feed 1kB at a time until we have high confidence in the classification
-            # up to a maximum of 5MiB
-            detector.feed(data[offset:offset+1024])
-            offset += 1024
-        detector.close()
-        if detector.result["encoding"] is None \
-                or detector.result["confidence"] < self.minimum_encoding_confidence:
-            return fallback
-        return detector.result["encoding"]
-
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
-        if not isinstance(self.message, ConstantMessage) or self.message.message:
-            raise ValueError(f"A new PlainTextTest must be constructed for each call to .test")
         content = data[absolute_offset:]
-        character_class = detect_text_encoding(content)
-        if character_class is None:
+        encoding = detect_text_encoding(content)
+        if encoding is None:
             return FailedTest(self, offset=absolute_offset, parent=parent_match, message="the data do not appear to "
                                                                                          "be encoded in a text format")
-        encoding = self.encoding_name(content, character_class)
         try:
             value: Union[str, bytes] = content.decode(encoding)
         except (UnicodeDecodeError, LookupError):
             value = content
-        self.message = ConstantMessage(f"{encoding} text")
         return MatchedTest(self, offset=absolute_offset, length=len(content), parent=parent_match,
                            value=value)
 
@@ -3490,11 +3693,26 @@ def _split_with_escapes(text: str) -> Tuple[str, str]:
 
 
 class Match:
+    """One level 0 test's verdict on a buffer, and the results of the subtests it reached."""
+
     def __init__(
-            self, matcher: "MagicMatcher", context: MatchContext, results: Iterable[TestResult]
+            self,
+            matcher: "MagicMatcher",
+            context: MatchContext,
+            results: Iterable[TestResult],
+            text_encoding: Optional[TextEncodingDescription] = None
     ):
+        """
+        Args:
+            matcher: the matcher that produced this match.
+            context: the buffer the tests ran against.
+            results: the result of every test that matched.
+            text_encoding: the text description libmagic appends to this match's message, or None
+                when libmagic would leave the message alone.
+        """
         self.matcher: MagicMatcher = matcher
         self.context: MatchContext = context
+        self.text_encoding: Optional[TextEncodingDescription] = text_encoding
         self._result_iter: Optional[Iterator[TestResult]] = iter(results)
         self._results: List[TestResult] = []
 
@@ -3563,7 +3781,12 @@ class Match:
                 break
             i += 1
 
-    def message(self) -> str:
+    def _soft_magic_message(self) -> str:
+        """Concatenates the message of every test that matched.
+
+        Returns:
+            The description soft magic alone produces, which is empty when nothing printed.
+        """
         msg = ""
         for result in self:
             m = result.test.message.resolve(self.context).lstrip()
@@ -3588,6 +3811,18 @@ class Match:
             result_str = result_str.replace("%%", "%")
             msg = f"{msg}{result_str}"
         return msg
+
+    def message(self) -> str:
+        """Describes this match the way `file` describes it.
+
+        Returns:
+            What soft magic printed, followed by the text description libmagic appends to a text
+            file's description when it applies.
+        """
+        msg = self._soft_magic_message()
+        if self.text_encoding is None:
+            return msg
+        return self.text_encoding.describe(msg)
 
     __str__ = message
 
@@ -3741,27 +3976,53 @@ class MagicMatcher:
         """Returns the set of extensions this matcher is capable of matching"""
         return self.tests_by_ext.keys()
 
+    def _run_tests(
+            self,
+            tests: Iterable[MagicTest],
+            context: MatchContext,
+            text_encoding: Optional[TextEncodingDescription],
+            description: str
+    ) -> Iterator[Match]:
+        """Yields a match for each of `tests` that matches `context`.
+
+        Args:
+            tests: the level 0 tests to run.
+            context: the buffer to run them against.
+            text_encoding: the description of `context`'s text encoding, or None if it is not text.
+            description: the label for the progress log.
+
+        Yields:
+            One match per test that matched, carrying `text_encoding` if libmagic would append it
+            to that test's message.
+        """
+        for test in log.range(tests, desc=description, unit=" tests", delay=1.0):
+            m = Match(matcher=self, context=context, results=test.match(context))
+            # the description is how a match is rendered, so it must not make an empty message
+            # look like a match
+            if m and (not context.only_match_mime or any(t is not None for t in m.mimetypes)):
+                if test.appends_text_encoding:
+                    m.text_encoding = text_encoding
+                yield m
+
     def match(self, to_match: Union[bytes, BinaryIO, str, Path, MatchContext]) -> Iterator[Match]:
         if isinstance(to_match, bytes):
             to_match = MatchContext(to_match)
         elif not isinstance(to_match, MatchContext):
             to_match = MatchContext.load(to_match)
+        text_encoding = TextEncodingDescription.detect(to_match.data)
         yielded = False
-        for test in log.range(self.non_text_tests, desc="binary matching", unit=" tests", delay=1.0):
-            m = Match(matcher=self, context=to_match, results=test.match(to_match))
-            if m and (not to_match.only_match_mime or any(t is not None for t in m.mimetypes)):
-                yield m
-                yielded = True
+        for m in self._run_tests(self.non_text_tests, to_match, text_encoding, "binary matching"):
+            yield m
+            yielded = True
         # is this a plain text file?
         text_matcher = Match(matcher=self, context=to_match, results=PlainTextTest().match(to_match))
         is_text = text_matcher and (not to_match.only_match_mime or any(t is not None for t in text_matcher.mimetypes))
         if is_text:
+            text_matcher.text_encoding = text_encoding
             # this is a text file, so try all of the textual tests:
-            for test in log.range(self.text_tests, desc="text matching", unit=" tests", delay=1.0):
-                m = Match(matcher=self, context=to_match, results=test.match(to_match))
-                if m and (not to_match.only_match_mime or any(t is not None for t in m.mimetypes)):
-                    yield m
-                    yielded = True
+            for m in self._run_tests(self.text_tests, to_match, text_encoding, "text matching"):
+                yield m
+                yielded = True
         if not yielded:
             if is_text:
                 yield text_matcher
