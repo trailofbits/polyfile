@@ -1008,3 +1008,222 @@ class UseTestSemanticsTest(TestCase):
         for match in MagicMatcher.DEFAULT_INSTANCE.match(testfile.read_bytes()):
             self.assertNotIn("EFI variable", str(match))
             self.assertNotIn("total size", str(match))
+
+
+class TestStrengthTest(TestCase):
+    """Regression tests for the strength computation reported in issue #3477.
+
+    `MagicTest.base_strength` used to return a constant 20, so 96% of the shipped tests tied and
+    the sort that orders them by specificity had almost no key to work with. Each test here pins
+    one term of libmagic's `apprentice_magic_strength_1` and `file_magic_strength`
+    (`file/src/apprentice.c:925-1120`), checked against what `file -l` prints.
+    """
+
+    @staticmethod
+    def only_test(definition: str) -> polyfile.magic.MagicTest:
+        """Parses `definition` and returns its single level-0 test.
+
+        Args:
+            definition: The text of a magic definition file, with tab-separated columns.
+
+        Returns:
+            The one test the definition declares at level 0.
+        """
+        with TemporaryDirectory() as tmp_dir:
+            magic_file = Path(tmp_dir) / "test.magic"
+            magic_file.write_text(definition)
+            matcher = MagicMatcher.parse(magic_file)
+            tests = matcher.text_tests | matcher.non_text_tests
+        assert len(tests) == 1, f"expected one test, got {len(tests)}"
+        return next(iter(tests))
+
+    def strength(self, definition: str) -> int:
+        """The strength of the single level-0 test that `definition` declares."""
+        return self.only_test(definition).compute_strength()
+
+    def test_numeric_types_score_by_their_width(self):
+        """Every test scored 20, so a `bequad` sorted level with a `byte`.
+
+        libmagic adds `typesize(type) * MULT` for a numeric, date, or GUID type
+        (`file/src/apprentice.c:975-996`), on top of the 20 baseline and the 10 an `=` earns. The
+        expected values are what `file -l` reports for these definitions.
+        """
+        for data_type, expected in (
+                ("byte", 40), ("leshort", 50), ("lelong", 70), ("lequad", 110),
+                ("float", 70), ("double", 110), ("date", 70), ("qdate", 110),
+                ("msdosdate", 50), ("msdostime", 50),
+        ):
+            self.assertEqual(expected, self.strength(f"0\t{data_type}\t1\tdesc\n"), data_type)
+
+    def test_guid_scores_as_sixteen_bytes(self):
+        """A `guid` is the widest type libmagic sizes, at 16 bytes."""
+        self.assertEqual(
+            190, self.strength("0\tguid\t00000000-0000-0000-0000-000000000000\tdesc\n"))
+
+    def test_der_scores_one_flat_unit(self):
+        """`der` adds a single unit whatever its specification (`file/src/apprentice.c:1024`)."""
+        self.assertEqual(40, self.strength("0\tder\tseq\tdesc\n"))
+
+    def test_string_scores_one_unit_per_byte(self):
+        """A constant 20 made a one-byte `string` as strong as an eight-byte one.
+
+        libmagic adds `vallen * MULT`, counting the value after unescaping
+        (`file/src/apprentice.c:998-1000`), which is the dominant term for most definitions.
+        """
+        self.assertEqual(40, self.strength("0\tstring\tA\tdesc\n"))
+        self.assertEqual(110, self.strength("0\tstring\tbplist00\tdesc\n"))
+        self.assertEqual(70, self.strength("0\tstring\t\\x02\\x01\\x13\\x13\tdesc\n"))
+
+    def test_pstring_counts_its_length_prefix(self):
+        """`getstr` folds the prefix width into `vallen` (`file/src/apprentice.c:3181-3188`)."""
+        self.assertEqual(80, self.strength("0\tpstring\tabcd\tdesc\n"))
+        self.assertEqual(90, self.strength("0\tpstring/H\tabcd\tdesc\n"))
+        self.assertEqual(110, self.strength("0\tpstring/l\tabcd\tdesc\n"))
+
+    def test_string16_scores_half_of_a_string(self):
+        """libmagic halves the term for a sixteen-bit string (`file/src/apprentice.c:1003`)."""
+        self.assertEqual(50, self.strength("0\tlestring16\tabcd\tdesc\n"))
+
+    def test_search_credits_at_most_one_unit_per_value(self):
+        """A `search` roams the buffer, so libmagic caps its credit.
+
+        `vallen * MAX(MULT / vallen, 1)` (`file/src/apprentice.c:1008-1012`) is a full unit for a
+        one-byte value and then flattens to one point per byte, which is why an eight-byte
+        `search` scores 38 where the same `string` scores 110.
+        """
+        self.assertEqual(40, self.strength("0\tsearch/8192\tA\tdesc\n"))
+        self.assertEqual(40, self.strength("0\tsearch/8192\tAB\tdesc\n"))
+        self.assertEqual(38, self.strength("0\tsearch/8192\t#include\tdesc\n"))
+        self.assertEqual(43, self.strength("0\tsearch/512\t@opaque(lang=\tdesc\n"))
+
+    def test_search_range_does_not_change_its_strength(self):
+        """The `search/N` range is not part of the term, contrary to a plausible reading of it."""
+        for repetitions in ("1", "100", "8192"):
+            self.assertEqual(38, self.strength(f"0\tsearch/{repetitions}\t#include\tdesc\n"))
+
+    def test_regex_counts_only_its_literal_characters(self):
+        """A regular expression earns nothing for its metacharacters.
+
+        `nonmagic` (`file/src/apprentice.c:813-849`) counts escapes and literals but not `?*.+^$`,
+        counts a bracketed class as the one closing bracket, and a braced repetition as nothing.
+        The term is then capped the way a `search`'s is.
+        """
+        self.assertEqual(39, self.strength("0\tregex\tabc.*\tdesc\n"))
+        self.assertEqual(38, self.strength("0\tregex\tabcd\\ efg\tdesc\n"))
+        self.assertEqual(40, self.strength("0\tregex\t\\^[a-z]+\tdesc\n"))
+
+    def test_regex_literals_are_counted_before_the_posix_rewrite(self):
+        """PolyFile rewrites POSIX classes to Python ones, which used to lose a literal each.
+
+        libmagic scans `[[:space:]]` and stops its bracket scan at the inner `:]`, so the trailing
+        `]` counts as a second literal; the rewritten `[ \\t\\n\\r\\f\\v]` offers only one. Thirteen
+        shipped definitions differed by up to four points before the count moved ahead of the
+        rewrite. `file -l` reports 36 for the `clojure` entry below.
+        """
+        self.assertEqual(36, self.strength(
+            "0\tregex\t\\^\\\\\\(ns[[:space:]]+[a-z]\tClojure module source text\n"))
+        self.assertEqual(41, self.strength(
+            "0\tregex/4006\t\\^PROC[[:space:]][a-zA-Z0-9_[:space:]]*[[:space:]]=\tdesc\n"))
+
+    def test_regex_literal_count_ends_at_an_escaped_null(self):
+        """`nonmagic` walks a C string, so a `\\000` in the value ends the count.
+
+        `magic_defs/cad:317` is the shipped case: everything after its `\\000` is invisible to
+        libmagic's count, which is why `file -l` reports 40 rather than 39.
+        """
+        self.assertEqual(40, self.strength("0\tregex\t\\^[\\ \\t]*0\\r?\\000$\n"))
+        self.assertEqual(self.strength("0\tregex\tab\\000cdefgh\tdesc\n"),
+                         self.strength("0\tregex\tab\tdesc\n"))
+
+    def test_regex_escaped_dot_counts_nothing(self):
+        """libmagic unescapes before counting, so `\\.` arrives as a bare `.` and scores zero.
+
+        This is what its "escaped dot found, use \\\\. instead" warning is about.
+        """
+        self.assertEqual(self.strength("0\tregex\tab.\tdesc\n"),
+                         self.strength("0\tregex\tab\\.\tdesc\n"))
+
+    def test_relational_operators_adjust_the_strength(self):
+        """Every relation scored the same 20, so a wildcard tied with an exact match.
+
+        libmagic prefers an exact match by a unit, penalizes an inequality by two, penalizes a bit
+        mask by one, and zeroes anything matching (almost) everything
+        (`file/src/apprentice.c:1034-1051`). A zero is then clamped up to one.
+        """
+        self.assertEqual(50, self.strength("0\tleshort\t=1\tdesc\n"))
+        self.assertEqual(20, self.strength("0\tleshort\t>1\tdesc\n"))
+        self.assertEqual(20, self.strength("0\tleshort\t<1\tdesc\n"))
+        self.assertEqual(30, self.strength("0\tleshort\t&1\tdesc\n"))
+        self.assertEqual(30, self.strength("0\tleshort\t^1\tdesc\n"))
+        self.assertEqual(1, self.strength("0\tleshort\t!1\tdesc\n"))
+        self.assertEqual(1, self.strength("0\tleshort\tx\tdesc\n"))
+
+    def test_string_relations_adjust_the_strength(self):
+        """The string family carries its relation in the parsed value, not in a numeric operator."""
+        self.assertEqual(70, self.strength("0\tstring\t=abcd\tdesc\n"))
+        self.assertEqual(40, self.strength("0\tstring\t>abcd\tdesc\n"))
+        self.assertEqual(40, self.strength("0\tstring\t<abcd\tdesc\n"))
+        self.assertEqual(1, self.strength("0\tstring\t!abcd\tdesc\n"))
+        self.assertEqual(1, self.strength("0\tstring\tx\tdesc\n"))
+
+    def test_undescribed_test_gains_a_point(self):
+        """A test with no description depends on its children to print, so libmagic favors it.
+
+        See `file/src/apprentice.c:1111-1117`. A description of nothing but blanks counts as
+        absent, because libmagic skips them before copying what remains.
+        """
+        self.assertEqual(70, self.strength("0\tstring\tabcd\tdesc\n"))
+        self.assertEqual(71, self.strength("0\tstring\tabcd\n"))
+        self.assertEqual(71, self.strength("0\tstring\tabcd\t\t\n"))
+
+    def test_strength_modifier_applies_on_top_of_the_computed_value(self):
+        """`!:strength` used to be the only thing that moved a strength off 20.
+
+        libmagic applies the factor after the type and relation terms
+        (`file/src/apprentice.c:1085-1105`), and clamps the result to at least one.
+        """
+        self.assertEqual(70, self.strength("0\tstring\tabcd\tdesc\n"))
+        self.assertEqual(85, self.strength("0\tstring\tabcd\tdesc\n!:strength + 15\n"))
+        self.assertEqual(60, self.strength("0\tstring\tabcd\tdesc\n!:strength -10\n"))
+        self.assertEqual(140, self.strength("0\tstring\tabcd\tdesc\n!:strength *2\n"))
+        self.assertEqual(23, self.strength("0\tstring\tabcd\tdesc\n!:strength / 3\n"))
+        self.assertEqual(1, self.strength("0\tstring\tabcd\tdesc\n!:strength -200\n"))
+
+    def test_strength_modifier_applies_to_the_entry_not_the_last_test(self):
+        """A `!:strength` under a continuation line used to score the continuation instead.
+
+        libmagic always assigns the factor to `me->mp[0]`, the level-0 test of the entry, whatever
+        depth the directive appears at (`file/src/apprentice.c:2470-2478`). 55 shipped entries put
+        the directive after at least one continuation, `varied.script:8` among them, where `file
+        -l` reports 20 for a term that would otherwise be 60.
+        """
+        definition = "0\tstring/wt\t#!\\ \ta\n>&-1\tstring/T\tx\t%s script text executable\n!:strength / 3\n"
+        self.assertEqual(20, self.strength(definition))
+
+    def test_multiple_magic_sidecars_match_libmagic(self):
+        """`file/tests/multiple.testfile` needs its four matches in descending strength order.
+
+        `file -l` reports 40, 40, 38, 38 for these four `search` tests. The stem stays in
+        `KNOWN_FAILURES` for unrelated reasons, so this pins the strengths on their own.
+        """
+        strengths = []
+        for sidecar in ("multiple-A.magic", "multiple-B.magic"):
+            path = FILE_TEST_DIR / sidecar
+            self.assertTrue(path.exists(), "Make sure to run `git submodule init && git submodule update`")
+            matcher = MagicMatcher.parse(path)
+            tests = matcher.text_tests | matcher.non_text_tests
+            strengths.extend(sorted((t.compute_strength() for t in tests), reverse=True))
+        self.assertEqual([40, 40, 38, 38], strengths)
+
+    def test_shipped_definitions_span_libmagic_s_range_of_strengths(self):
+        """96.5% of the shipped tests used to score exactly 20, over just 29 distinct values.
+
+        `file -l` reports 133 distinct strengths over the same definitions, from 2 to 670. This
+        asserts the distribution stays in that neighborhood, so a regression to a near-constant
+        key is caught even if every individual term still looks right.
+        """
+        tests = MagicMatcher.DEFAULT_INSTANCE.text_tests | MagicMatcher.DEFAULT_INSTANCE.non_text_tests
+        strengths = [test.compute_strength() for test in tests]
+        self.assertGreater(len(set(strengths)), 120)
+        self.assertGreater(max(strengths), 600)
+        self.assertLess(sum(1 for s in strengths if s == 20) / len(strengths), 0.05)
