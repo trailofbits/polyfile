@@ -113,8 +113,8 @@ class MagicTest(TestCase):
             'images:2657', 'inform:9', 'java:19', 'java:49', 'java:51', 'javascript:10',
             'javascript:12', 'javascript:14', 'javascript:16', 'javascript:30', 'javascript:34',
             'javascript:38', 'javascript:42', 'javascript:46', 'javascript:50', 'javascript:54',
-            'javascript:6', 'javascript:60', 'javascript:8', 'json:6', 'k9:28', 'kde:10', 'kde:6',
-            'kde:8', 'lex:10', 'lex:12', 'linux:366', 'linux:369', 'linux:370', 'linux:54',
+            'javascript:6', 'javascript:60', 'javascript:8', 'json:12', 'json:6', 'k9:28', 'kde:10',
+            'kde:6', 'kde:8', 'lex:10', 'lex:12', 'linux:366', 'linux:369', 'linux:370', 'linux:54',
             'linux:938', 'lisp:16', 'lisp:18', 'lisp:20', 'lisp:22', 'lisp:24', 'lisp:26',
             'lisp:77', 'lua:11', 'lua:13', 'lua:15', 'lua:17', 'lua:9', 'm4:5', 'm4:8', 'magic:8',
             'mail.news:11', 'mail.news:13', 'mail.news:15', 'mail.news:17', 'mail.news:19',
@@ -345,7 +345,7 @@ class MagicTest(TestCase):
                         matches.add(actual)
                         print(f"\tActual:   {actual!r}")
                     if testfile.stem not in (
-                            "JW07022A.mp3", "gedcom", "cmd1", "cmd2", "cmd3", "cmd4", "jpeg-text", "jsonlines1",
+                            "JW07022A.mp3", "gedcom", "cmd1", "cmd2", "cmd3", "cmd4", "jpeg-text",
                             "multiple", "osm", "pnm1", "pnm2", "pnm3", "utf16xmlsvg"
                     ):
                         # The files we skip fail because there is a bug in our implementation that we have not yet fixed
