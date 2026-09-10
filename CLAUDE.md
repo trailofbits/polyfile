@@ -5,7 +5,7 @@
 PolyFile is a file analysis utility that identifies and maps the semantic and syntactic structure of files—including polyglots, chimeras, and "schizophrenic" files that are validly multiple types simultaneously.
 
 **Key capabilities:**
-- Pure-Python libmagic implementation (263+ MIME types)
+- Pure-Python libmagic implementation (895 MIME types, from libmagic 5.48)
 - Recursive embedded file detection (like binwalk)
 - Parsers for PDF, ZIP, JPEG, iNES, and 183 Kaitai Struct formats
 - Interactive HTML hex viewer with structure mapping
@@ -180,6 +180,14 @@ class MyParser(Parser):
             value=file_stream.read(8)
         )
 ```
+
+### Updating the libmagic Definitions
+
+`polyfile/magic_defs/` is a hand-maintained copy of `file/magic/Magdir/` from the `file` submodule.
+Nothing automates the copy, and one bundled definition carries a PolyFile-specific patch.
+
+See `docs/updating_libmagic_defs.md` for the procedure, including how to find local patches before
+you overwrite them.
 
 ### Adding Kaitai Struct Format
 1. Add the `.ksy` file to the `kaitai_struct_formats/` submodule (upstream, or a local commit)
