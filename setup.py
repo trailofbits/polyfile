@@ -25,7 +25,6 @@ setup(
     python_requires='>=3.10',
     install_requires=[
         "abnf~=2.2.0",
-        "chardet>=5.0.0",
         "cint>=1.0.0",
         "fickling>=0.0.8",
         "filelock>=3.20.3",
