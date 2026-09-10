@@ -2044,3 +2044,131 @@ class UCSTextBufferTest(TestCase):
             {str(match) for match in
              MagicMatcher.DEFAULT_INSTANCE.match(self.encode(document, "utf-16le"))}
         )
+
+
+class DefaultTestSemanticsTest(TestCase):
+    """Regression tests for when a `default` test fires, reported in issue #3517.
+
+    libmagic keeps one `got_match` flag per continuation level and zeroes it whenever it descends
+    into a level (`file/src/funcs.c:640-660`, called from `file/src/softmagic.c:346` and `:487`).
+    A `default` fires only while that flag is unset, a `clear` unsets it, and every other test that
+    passes `magiccheck` sets it (`file/src/softmagic.c:418-428`).
+
+    Every string these tests expect is what `file -b -k` reports for the same definitions and
+    input, checked against libmagic 5.48 built from the `file` submodule.
+    """
+
+    @staticmethod
+    def messages(definitions: str, data: bytes) -> Set[str]:
+        """Matches `data` against ad-hoc definitions and collects the resulting messages.
+
+        Args:
+            definitions: The contents of a libmagic definition file, with tab separated columns.
+            data: The bytes to classify.
+
+        Returns:
+            The message of every match the definitions produce.
+        """
+        with TemporaryDirectory() as tmp_dir:
+            path = Path(tmp_dir) / "default_semantics"
+            path.write_text(definitions)
+            matcher = MagicMatcher.parse(path)
+            return {str(match) for match in matcher.match(data)}
+
+    def fired(self, definitions: str, data: bytes = b"HEADB") -> bool:
+        """Reports whether the `fallback` message of a `default` test appears in the output.
+
+        Args:
+            definitions: The contents of a libmagic definition file.
+            data: The bytes to classify, defaulting to one whose fifth byte is `B`.
+
+        Returns:
+            True if some match carries the `fallback` message.
+        """
+        return any("fallback" in message for message in self.messages(definitions, data))
+
+    HEAD: str = "0\tstring\tHEAD\thead\n"
+    """A level 0 test that matches the first four bytes of this class's test data."""
+
+    NAMED_LIST: str = "0\tname\tnlist\n>0\tstring\tB\tnamed list matched\n\n"
+    """A named list that prints a message when the byte it is invoked at is `B`."""
+
+    def test_a_default_fires_when_no_earlier_test_at_its_level_matched(self):
+        """A `default` is the fallback for its level, so a failed sibling must not stop it."""
+        self.assertTrue(self.fired(
+            self.HEAD + ">4\tstring\tZ\tsibling\n>4\tdefault\tx\tfallback\n"
+        ))
+
+    def test_a_default_does_not_fire_when_an_earlier_test_at_its_level_matched(self):
+        """A matched sibling sets `got_match` for the level, which suppresses the `default`."""
+        self.assertFalse(self.fired(
+            self.HEAD + ">4\tstring\tB\tsibling\n>4\tdefault\tx\tfallback\n"
+        ))
+
+    def test_an_undescribed_sibling_suppresses_a_default(self):
+        """An earlier sibling counts even with no description, which #3517 predicted otherwise.
+
+        libmagic gates `found_match` and printing on a non-empty description
+        (`file/src/softmagic.c:432-440`) but sets `got_match` for any test that passes
+        `magiccheck` (`file/src/softmagic.c:424-428`), so the two are not the same condition.
+        `file -b -k` reports only `head` for these definitions.
+        """
+        self.assertFalse(self.fired(
+            self.HEAD + ">4\tstring\tB\n>4\tdefault\tx\tfallback\n"
+        ))
+
+    def test_a_use_that_matched_suppresses_a_default(self):
+        """A `use` whose named list printed something sets `got_match` for its level."""
+        self.assertFalse(self.fired(
+            self.NAMED_LIST + self.HEAD + ">4\tuse\tnlist\n>4\tdefault\tx\tfallback\n"
+        ))
+
+    def test_a_use_that_printed_nothing_does_not_suppress_a_default(self):
+        """A `use` used to suppress a following `default` whenever its named list matched at all.
+
+        `FILE_USE`'s `magiccheck` is the number of entries in the named list that printed
+        (`file/src/softmagic.c:2429-2430`), so a list whose only entry is undescribed leaves the
+        `use` failing and the level's `got_match` unset. `file -b -k` reports `head fallback` for
+        these definitions.
+        """
+        self.assertTrue(self.fired(
+            "0\tname\tnlist\n>0\tstring\tB\n\n" + self.HEAD
+            + ">4\tuse\tnlist\n>4\tdefault\tx\tfallback\n"
+        ))
+
+    def test_a_named_list_does_not_suppress_a_default_under_its_use(self):
+        """What a named list matches used to leak into the level of the `use`'s own children.
+
+        libmagic saves the whole level array before running a named list and restores it afterwards
+        (`file/src/softmagic.c:2013` and `:2033`), so the list cannot touch the `got_match` of any
+        level outside itself. `file -b -k` reports `head named list matched fallback` here.
+        """
+        self.assertTrue(self.fired(
+            self.NAMED_LIST + self.HEAD + ">4\tuse\tnlist\n>>4\tstring\tZ\tsibling\n"
+            ">>4\tdefault\tx\tfallback\n"
+        ))
+
+    def test_clear_lets_a_later_default_fire_again(self):
+        """A `clear` used to set the condition it is supposed to reset.
+
+        `ClearTest.test` unset the parent's flag and then built a `MatchedTest` against that same
+        parent, which raised the flag straight back. libmagic's `FILE_CLEAR` arm zeroes
+        `got_match` instead of taking the arm that raises it (`file/src/softmagic.c:422-424`).
+        `file -b -k` reports `head sibling` and `fallback` for these definitions.
+        """
+        self.assertTrue(self.fired(
+            self.HEAD + ">4\tstring\tB\tsibling\n>4\tclear\tx\n>4\tdefault\tx\tfallback\n"
+        ))
+
+    def test_a_plain_png_is_reported_as_a_png(self):
+        """The broken `clear` cost every non-animated PNG its match.
+
+        `polyfile/magic_defs/images:524` clears the level so that the `>8 default x` at `:533` can
+        supply the standard PNG branch once the animated branch above it has failed. With the flag
+        stuck set, that `default` never fired and `MagicMatcher.match` fell through to
+        `OctetStreamTest`, reporting `data` for an ordinary PNG file.
+        """
+        ihdr = b"\x00\x00\x00\x0DIHDR" + (8).to_bytes(4, "big") * 2 + bytes((8, 6, 0, 0, 0))
+        png = b"\x89PNG\r\n\x1a\n" + ihdr
+        self.assertIn("PNG image data, 8 x 8, 8-bit/color RGBA, non-interlaced",
+                      {str(match) for match in MagicMatcher.DEFAULT_INSTANCE.match(png)})
