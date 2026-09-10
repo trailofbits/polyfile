@@ -76,7 +76,7 @@ def undescribed_regions(matches, length):
 def generate(file_path, sbud):
     global TEMPLATE, jinja2
     if jinja2 is None:
-        # Dynamically load jinja2 at runtime so it is not an installation dependency for setup.py
+        # Load jinja2 lazily so that importing this module does not require it
         import jinja2 as j2
         jinja2 = j2
 

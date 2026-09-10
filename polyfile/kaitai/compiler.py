@@ -3,9 +3,10 @@
 """
 This module automates compilation of Kaitai Struct definitions into Python code.
 
-This script is called from PolyFile's setup.py to compile the entire Kaitai Struct format library at build time.
-Therefore, this script should always be self-contained and not require any dependencies other than the Python standard
-library.
+This script is called from PolyFile's PEP 517 build backend, by way of compile_kaitai_parsers.py, to compile the
+entire Kaitai Struct format library at build time. Builds run in an isolated environment that contains nothing but the
+`[build-system] requires` of pyproject.toml, so this script must always be self-contained and must not require any
+dependencies other than the Python standard library.
 
 """
 from io import BytesIO

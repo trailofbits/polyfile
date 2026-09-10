@@ -7,3 +7,8 @@ polyfile/trie_partial.gz
 .vscode/
 .vscode/*
 polyfile/kaitai/kaitai-struct-compiler-*/
+
+# Build artifacts
+/build/
+/dist/
+/*.egg-info/

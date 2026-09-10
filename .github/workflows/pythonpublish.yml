@@ -20,19 +20,21 @@ jobs:
           submodules: recursive
           persist-credentials: false
 
-      - name: Set up Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      - name: Install uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
-          python-version: '3.x'
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install setuptools wheel
+          # A poisoned cache entry must not be able to reach the artifacts that this
+          # workflow publishes to PyPI.
+          enable-cache: false
 
       - name: Build distributions
-        run: |
-          python setup.py sdist bdist_wheel
+        # Builds the source distribution, then builds the wheel from that source
+        # distribution, which also proves the source distribution is self-sufficient.
+        # build_backend.py reuses the parsers the distribution already carries.
+        run: uv build
+
+      - name: Check distribution metadata
+        run: uvx twine check dist/*
 
       - name: Upload distributions
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

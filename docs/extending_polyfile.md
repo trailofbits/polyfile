@@ -144,7 +144,7 @@ def parse_example(file_stream, match):
 
 ### Kaitai Struct Parsers
 
-The majority of PolyFile’s parsers are automatically generated from the [Kaitai Struct format gallery](https://formats.kaitai.io/). They are compiled at build-time (in [`setup.py`](../setup.py)) to produce the pure-Python parsers in [`polyfile/kaitai/parsers/*.py`](../polyfile/kaitai/parsers/). These parsers should not be edited since they are automatically generated and will be overwritten the next time PolyFile is rebuilt.
+The majority of PolyFile’s parsers are automatically generated from the [Kaitai Struct format gallery](https://formats.kaitai.io/). They are compiled at build time by PolyFile's in-tree build backend, [`build_backend.py`](../build_backend.py), which calls [`compile_kaitai_parsers.py`](../compile_kaitai_parsers.py) to produce the pure-Python parsers in [`polyfile/kaitai/parsers/*.py`](../polyfile/kaitai/parsers/). These parsers should not be edited since they are automatically generated and will be overwritten the next time PolyFile is rebuilt. Building from a source distribution reuses the parsers that the distribution already carries, so it needs neither Java nor the compiler download.
 
 Unfortunately, the Kaitai Struct parsers are not currently tagged based upon the MIME type of the files they parse. Therefore, PolyFile maintains a manual mapping from MIME types to Kaitai parsers. This mapping lives in [`polyfile.kaitaimatcher.KAITAI_MIME_MAPPING`](../polyfile/kaitaimatcher.py):
 ```python

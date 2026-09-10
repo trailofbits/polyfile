@@ -1,6 +1,10 @@
 include compile_kaitai_parsers.py
+include build_backend.py
 include CODEOWNERS
 graft kaitai_struct_formats
+# The format gallery's CI directory carries a nested submodule, including the .git pointer
+# file that `git submodule update --recursive` leaves behind. None of it builds PolyFile.
+prune kaitai_struct_formats/.github
 # PolyFile redistributes only the format specifications it is licensed to redistribute. Keep
 # this list in sync with compile_kaitai_parsers.excluded_specs(); tests/test_licensing.py
 # enforces that they agree.
@@ -11,6 +15,22 @@ exclude kaitai_struct_formats/game/renderware_binary_stream.ksy
 exclude kaitai_struct_formats/image/pif.ksy
 exclude kaitai_struct_formats/scientific/nt_mdt/nt_mdt.ksy
 graft file
+# `graft` walks the filesystem, so a local autotools build of the `file` submodule -- which
+# both `pytest tests` and docs/updating_libmagic_defs.md perform -- would otherwise ship its
+# object files, shared libraries and generated makefiles. Every pattern below matches only
+# build output; none of them matches a file tracked in the submodule.
+prune file/autom4te.cache
+prune file/src/.deps
+prune file/src/.libs
+prune file/tests/.deps
+recursive-exclude file *.o *.lo *.la *.lai *.so *.dylib *.mgc *.log *.status *.pc *~
+recursive-exclude file Makefile Makefile.in config.h config.h.in config.guess config.sub
+recursive-exclude file configure aclocal.m4 compile depcomp install-sh libtool ltmain.sh
+recursive-exclude file missing stamp-h1 magic.h file file.1 libmagic.3 magic.4
+recursive-exclude file libtool.m4 lt~obsolete.m4 ltoptions.m4 ltsugar.m4 ltversion.m4
 graft docs
 graft logo
 graft hooks
+
+# Each submodule leaves a .git pointer file behind. Nothing legitimate is named `.git`.
+global-exclude .git
