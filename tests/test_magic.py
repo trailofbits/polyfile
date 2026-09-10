@@ -26,14 +26,11 @@ from polyfile.magic import (
 FILE_TEST_DIR: Path = Path(__file__).parent.parent / "file" / "tests"
 
 KNOWN_FAILURES: Dict[str, int] = {
-    # `test_file_corpus` asserts that each of these stems still fails, so fixing one of these bugs
-    # includes deleting its stems from this map in the same change. Each value is the issue that
-    # has to be fixed first, and the trailing comment names what blocks the stem after that.
-    # Issue #3480 tracks the whole set.
-    #
-    # Text tests run against the raw bytes, so the SVG test never matches a UTF-16 file and
-    # PolyFile reports only the text-encoding description.
-    "utf16xmlsvg": 3489,
+    # Empty, and worth keeping that way: every stem of the libmagic corpus now matches what
+    # libmagic reports. `test_file_corpus` asserts that a stem listed here still FAILS, so an entry
+    # is a deliberate record of a filed bug rather than a way to quiet the suite. Add one only
+    # alongside the issue that explains it, mapped to that issue number, and delete it in the
+    # change that fixes it. Issue #3480 tracks how the previous fourteen were retired.
 }
 """Corpus stems that cannot pass yet, each mapped to the issue that has to be fixed first."""
 
@@ -1854,3 +1851,196 @@ class MatchJoinTest(TestCase):
         self.assertEqual("Marked , code \x02",
                          self.join(self.CONTROL_CHARACTER_TEST, b"MARK\x02\x00\x00\x00rest",
                                    raw=True))
+
+
+class UCSTextBufferTest(TestCase):
+    """Regression tests for the buffer the text tests read, reported in issue #3489.
+
+    libmagic decodes its input into a UCS-4 buffer, drops the byte order mark, re-encodes that
+    buffer as UTF-8, and runs its text tests against the result rather than against the file's
+    bytes (`file_ascmagic_with_encoding` in `file/src/ascmagic.c`, `looks_ucs16` and `looks_ucs32`
+    in `file/src/encoding.c`). PolyFile ran its text tests against the raw bytes, so no text
+    definition could match a UTF-16 or UTF-32 file.
+
+    Every string these tests expect is what `file -b -k` prints for the same input, checked against
+    libmagic 5.48 built from the `file` submodule. libmagic joins its `-k` output into one string
+    and appends a single text-encoding description to the end of the join, which is issue #3491, so
+    these tests read the description off each match instead.
+    """
+
+    SVG: str = ('<?xml version="1.0"?>\n'
+                '<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"/>\n')
+    """A document `polyfile/magic_defs/sgml` reports as SVG, XML 1.0 and XML."""
+
+    ENCODINGS: Tuple[Tuple[str, str, bytes], ...] = (
+        ("utf-16le", "UTF-16, little-endian", b"\xff\xfe"),
+        ("utf-16be", "UTF-16, big-endian", b"\xfe\xff"),
+        ("utf-32le", "UTF-32, little-endian", b"\xff\xfe\x00\x00"),
+        ("utf-32be", "UTF-32, big-endian", b"\x00\x00\xfe\xff"),
+    )
+    """Each UCS encoding libmagic names, with the name it gives it and its byte order mark."""
+
+    @staticmethod
+    def encode(text: str, encoding: str) -> bytes:
+        """Encodes `text` the way a file in `encoding` holds it, byte order mark included.
+
+        Args:
+            text: The characters to encode.
+            encoding: One of the encoding names in `ENCODINGS`.
+
+        Returns:
+            The encoded bytes.
+        """
+        bom = next(mark for name, _, mark in UCSTextBufferTest.ENCODINGS if name == encoding)
+        return bom + text.encode(encoding)
+
+    @staticmethod
+    def text_buffer(data: bytes) -> Optional[bytes]:
+        """Returns the buffer `MagicMatcher.match` would hand the text tests for `data`.
+
+        Args:
+            data: The bytes to classify.
+
+        Returns:
+            The buffer, or None if `data` is not text.
+        """
+        encoding = polyfile.magic.detect_text_encoding(data)
+        if encoding is None:
+            return None
+        return MatchContext(data).text_test_context(encoding).data
+
+    def test_a_utf16_document_matches_the_text_tests(self):
+        """Tests that the SVG and XML definitions match a UTF-16 document of either endianness.
+
+        `polyfile/magic_defs/sgml:6` anchors `\\<?xml\\ version=` at offset 0, which no UTF-16 file
+        can satisfy in its own bytes: `file/tests/utf16xmlsvg.testfile` begins
+        `ff fe 3c 00 3f 00 78 00`.
+        """
+        for encoding, name, _ in self.ENCODINGS[:2]:
+            with self.subTest(encoding=encoding):
+                data = self.encode(self.SVG, encoding)
+                self.assertEqual(
+                    {f"SVG Scalable Vector Graphics image, Unicode text, {name} text",
+                     f"XML 1.0 document, Unicode text, {name} text",
+                     f"XML document, Unicode text, {name} text"},
+                    {str(match) for match in MagicMatcher.DEFAULT_INSTANCE.match(data)}
+                )
+
+    def test_a_utf32_document_matches_the_text_tests(self):
+        """Tests that a UTF-32 document matches the same text tests, plus its byte order mark.
+
+        `looks_ucs32` runs ahead of `looks_ucs16` in `file_encoding`, and `polyfile/magic_defs/
+        unicode:13` matches the UTF-32 mark in the binary pass, which is why `file -b` stops at
+        `Unicode text, UTF-32, little-endian` and only `file -b -k` shows the text matches.
+        """
+        for encoding, name, _ in self.ENCODINGS[2:]:
+            with self.subTest(encoding=encoding):
+                data = self.encode(self.SVG, encoding)
+                self.assertEqual(
+                    {f"Unicode text, {name}",
+                     f"SVG Scalable Vector Graphics image, Unicode text, {name} text",
+                     f"XML 1.0 document, Unicode text, {name} text",
+                     f"XML document, Unicode text, {name} text"},
+                    {str(match) for match in MagicMatcher.DEFAULT_INSTANCE.match(data)}
+                )
+
+    def test_the_byte_order_mark_is_not_in_the_text_buffer(self):
+        """Tests that the decoded buffer starts at the first character, not at the mark.
+
+        `looks_ucs16` starts its loop at `i = 2` and `looks_ucs32` at `i = 4`
+        (`file/src/encoding.c`), so the mark never reaches the buffer the text tests read. Keeping
+        it as U+FEFF pushes every offset forward by the length of its UTF-8 form and costs the SVG
+        match, whose first test is anchored at offset 0.
+        """
+        for encoding, _, _ in self.ENCODINGS:
+            with self.subTest(encoding=encoding):
+                buffer = self.text_buffer(self.encode(self.SVG, encoding))
+                self.assertEqual(self.SVG.encode("utf-8"), buffer)
+
+    def test_an_eight_bit_input_is_not_decoded(self):
+        """Tests that only a UCS input gets a second buffer, so every other offset stays honest.
+
+        A buffer that differs from the file's bytes costs the offsets its tests report, and
+        decoding costs time on every input, so an encoding whose characters libmagic copies
+        straight into its UCS-4 buffer keeps the context it already had.
+        """
+        inputs = ((b"plain ascii text\n", "ascii"),
+                  ("café naïve\n".encode("utf-8"), "utf-8"),
+                  ("café naïve\n".encode("latin-1"), "iso-8859-1"),
+                  (b"caf\x85 na\x8bve\n", "unknown-8bit"))
+        for data, expected_encoding in inputs:
+            with self.subTest(encoding=expected_encoding):
+                self.assertEqual(expected_encoding, polyfile.magic.detect_text_encoding(data))
+                context = MatchContext(data)
+                self.assertIs(context, context.text_test_context(expected_encoding))
+                self.assertIsNone(context.decoded_from)
+
+    def test_the_decoded_buffer_stops_at_the_encoding_byte_limit(self):
+        """Tests that decoding reads at most `FILE_ENCODING_MAX` bytes of the file.
+
+        `file_encoding` clamps its input to `ms->encoding_max`, which `apprentice.c` sets to
+        `FILE_ENCODING_MAX`, 64 kibibytes (`file/src/file.h:525`). Without the clamp a UTF-16 file
+        of any size gets decoded in full on every call to `MagicMatcher.match`.
+        """
+        limit = polyfile.magic.TEXT_ENCODING_MAX_BYTES
+        data = self.encode("a" * (limit // 2), "utf-16le")
+        self.assertGreater(len(data), limit)
+        self.assertEqual(b"a" * (limit // 2 - 1), self.text_buffer(data))
+
+    def test_a_decoded_match_reports_offsets_into_the_buffer_it_read(self):
+        """Tests that a match against a decoded buffer says so rather than claiming file offsets.
+
+        There is no map from an offset in the decoded buffer back to the byte in the file that
+        produced it, so a match on a UCS file carries the encoding it was decoded from and
+        `Match.explain` explains it against the buffer its tests read. This is the limitation the
+        transcoding introduces, pinned so it cannot start reporting decoded offsets as file
+        offsets.
+        """
+        data = self.encode(self.SVG, "utf-16le")
+        matches = {str(match): match for match in MagicMatcher.DEFAULT_INSTANCE.match(data)}
+        match = matches["XML document, Unicode text, UTF-16, little-endian text"]
+        self.assertEqual("utf-16le", match.context.decoded_from)
+        result = match[0]
+        self.assertEqual(b"<?xml", match.context.data[result.offset:result.offset + result.length])
+        self.assertEqual(b"\xff\xfe<\x00?", data[result.offset:result.offset + result.length])
+        explanation = match.explain(file=data, ansi_color=False)
+        self.assertIn("decoded from this file as utf-16le, not into the file itself", explanation)
+
+    def test_a_match_on_the_files_own_bytes_claims_no_decoding(self):
+        """Tests that an ASCII match keeps reporting file offsets, with no note in `explain`.
+
+        The note and the switch to the decoded buffer belong to `MatchContext.decoded_from`, so a
+        match that read the file's bytes has to be explained exactly as it was before.
+        """
+        data = self.SVG.encode("utf-8")
+        matches = {str(match): match for match in MagicMatcher.DEFAULT_INSTANCE.match(data)}
+        match = matches["XML document, ASCII text"]
+        self.assertIsNone(match.context.decoded_from)
+        result = match[0]
+        self.assertEqual(b"<?xml", data[result.offset:result.offset + result.length])
+        self.assertNotIn("decoded from this file", match.explain(file=data, ansi_color=False))
+
+    def test_the_json_and_csv_checks_read_the_files_own_bytes(self):
+        """Tests that the checks `file_buffer` runs before soft magic never see decoded text.
+
+        `file_buffer` runs `file_is_json` and `file_is_csv` against the buffer it was handed
+        (`file/src/funcs.c:412-429`), so `file -b -k` reports only `Unicode text, UTF-16,
+        little-endian text` for a UTF-16 JSON document. PolyFile models both as text soft magic
+        tests, so decoding the text buffer would have handed them the decoded text and reported a
+        CSV match libmagic does not report.
+
+        The `JSON text data` this expects for the UTF-16 document is a separate divergence that
+        predates the decoding: `JSONTest` reads the bytes through `json.loads`, which sniffs a
+        UTF-16 byte order mark, and `file_is_json` does not. It stands in for the encoding
+        description because `MagicMatcher.match` reports the plain text match only when no other
+        test matched.
+        """
+        document = '{"a": 1, "b": 2}\n'
+        self.assertIn("CSV text (excel dialect)", {
+            str(match) for match in MagicMatcher.DEFAULT_INSTANCE.match(document.encode("utf-8"))
+        })
+        self.assertEqual(
+            {"JSON text data"},
+            {str(match) for match in
+             MagicMatcher.DEFAULT_INSTANCE.match(self.encode(document, "utf-16le"))}
+        )
