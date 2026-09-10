@@ -639,8 +639,8 @@ class IndirectOffset(Offset):
 
 
 class SourceInfo:
-    def __init__(self, path: Path, line: int, original_line: Optional[str] = None):
-        self.path: Path = path
+    def __init__(self, path: Union[str, Path], line: int, original_line: Optional[str] = None):
+        self.path: Path = Path(path)
         self.line: int = line
         self.original_line: Optional[str] = original_line
 
