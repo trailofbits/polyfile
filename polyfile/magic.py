@@ -2329,9 +2329,9 @@ class SearchType(StringType):
         r"((/(?P<repetitions1>(0[xX][\dA-Fa-f]+|\d+)))(/(?P<flags1>[BbCctTWwsf]*)?)?|"
         r"/((?P<flags2>[BbCctTWwsf]*)/?)?(?P<repetitions2>(0[xX][\dA-Fa-f]+|\d+)))$"
     )
-    # NOTE: some specification files like `ber` use `search/b64`, which is undocumented. We treat that equivalent to
-    #       the compliant `search/b/64`.
-    # TODO: Figure out if this is correct.
+    # NOTE: `ber` writes `search/b64`, which the documentation does not describe. libmagic reads the
+    #       digits of a string declaration as the repetition count and every letter as a flag
+    #       (`file/src/apprentice.c:1940-1956`), so that is `search/64` with `b` set.
 
     @classmethod
     def parse(cls, format_str: str) -> "SearchType":
@@ -2349,10 +2349,8 @@ class SearchType(StringType):
             flags = m.group("flags2")
         else:
             raise ValueError(f"Invalid search type declaration: {format_str!r}")
-        if flags is None:
-            options: Iterable[str] = ()
-        else:
-            options = flags
+        options = flags or ""
+        reject_pascal_string_flags(cls.DECLARATION, format_str, options)
         return SearchType(
             repetitions=repetitions,
             case_insensitive_lower="c" in options,
@@ -2362,6 +2360,7 @@ class SearchType(StringType):
             full_word_match="f" in options,
             trim="T" in options,
             match_to_start="s" in options,
+            force_text="t" in options,
             force_binary="b" in options
         )
 

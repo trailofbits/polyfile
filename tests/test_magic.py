@@ -2061,7 +2061,7 @@ class DataTypeNameTest(TestCase):
         A missing letter is what makes two declarations collide, so this asserts the property the
         collision violated rather than the pairs that happened to collide.
         """
-        for declaration, flags in (("string", "WwCcTftb"), ("search/8", "WwCcTfbs"),
+        for declaration, flags in (("string", "WwCcTftb"), ("search/8", "WwCcTftbs"),
                                    ("regex/8", "cslTtb")):
             for flag in flags:
                 spec = f"{declaration}/{flag}"
@@ -2070,7 +2070,7 @@ class DataTypeNameTest(TestCase):
 
     def test_declarations_that_differ_by_one_flag_are_distinct(self):
         """Tests that adding a flag to a declaration yields a different interned type."""
-        for declaration, flags in (("string", "WwCcTftb"), ("search/8", "WwCcTfbs"),
+        for declaration, flags in (("string", "WwCcTftb"), ("search/8", "WwCcTftbs"),
                                    ("regex/8", "cslTtb")):
             plain = DataType.parse(declaration)
             for flag in flags:
@@ -2113,3 +2113,60 @@ class DataTypeNameTest(TestCase):
         expected = whole_word.parse_expected("if")
         self.assertTrue(whole_word.match(b"if x then", expected))
         self.assertFalse(whole_word.match(b"iffy", expected))
+
+
+class SearchFlagTableTest(TestCase):
+    """Regression tests for the `search` flag table reported in issue #3478.
+
+    libmagic reads the string flags of a `search` in one loop shared with `string`, `pstring` and
+    `regex` (`file/src/apprentice.c:1940-2028`), and the letters are defined in
+    `file/src/file.h:415-431`. `SearchType.parse` read `B` as compact whitespace, read `b` as
+    optional blanks, and dropped `t` altogether.
+    """
+
+    FLAGS: Tuple[Tuple[str, str], ...] = (
+        ("W", "compact_whitespace"),
+        ("w", "optional_blanks"),
+        ("c", "case_insensitive_lower"),
+        ("C", "case_insensitive_upper"),
+        ("T", "trim"),
+        ("f", "full_word_match"),
+        ("s", "match_to_start"),
+        ("t", "force_text"),
+        ("b", "force_binary"),
+    )
+    """Each flag a `search` accepts, paired with the behavior libmagic gives it."""
+
+    def test_each_flag_sets_only_its_own_behavior(self):
+        """Tests that every letter maps to the one behavior libmagic gives it.
+
+        `b` set `optional_blanks`, which made a `search` tolerate whitespace libmagic requires to
+        match exactly, so PolyFile reported matches libmagic does not.
+        """
+        for letter, attribute in self.FLAGS:
+            with self.subTest(flag=letter):
+                flagged = SearchType.parse(f"search/8/{letter}")
+                for _, other in self.FLAGS:
+                    self.assertEqual(other == attribute, getattr(flagged, other), other)
+
+    def test_the_pascal_string_length_flag_is_rejected(self):
+        """Tests that `B` raises rather than passing for compact whitespace.
+
+        `B` is `CHAR_PSTRING_1_BE`, and libmagic's flag loop jumps to its error label for any type
+        but `pstring` (`file/src/apprentice.c:1983-1986`). Reading it as `W` would have let a
+        `search/B` silently compact the whitespace of its value.
+        """
+        for declaration in ("search/8/B", "string/B"):
+            with self.subTest(declaration=declaration):
+                with self.assertRaises(ValueError):
+                    DataType.parse(declaration)
+        self.assertEqual(1, DataType.parse("pstring/B").byte_length)
+
+    def test_flags_may_precede_an_undocumented_repetition_count(self):
+        """Tests that `ber`'s `search/b64` is `search/64` with the binary flag set.
+
+        libmagic reads the digits of a string declaration as the repetition count and each letter
+        as a flag, in one loop, so the two orders mean the same thing.
+        """
+        self.assertIs(DataType.parse("search/b64"), DataType.parse("search/64/b"))
+        self.assertEqual(64, DataType.parse("search/b64").repetitions)
