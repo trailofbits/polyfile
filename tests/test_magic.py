@@ -1003,6 +1003,41 @@ class SearchTextClassificationTest(TestCase):
         self.assertIn(("python", 256), text_tests)
         self.assertIn(("diff", 13), text_tests)
 
+    def test_a_binary_flagged_search_is_not_text(self):
+        r"""Tests that an explicit `b` flag outranks a value that looks like text.
+
+        `set_test_type` sets `BINTEST` from the declared string flags and breaks out of the case
+        before it reaches `file_looks_utf8` (`file/src/apprentice.c:1258-1283`), so `gimp:67`,
+        whose value is the text-looking `\040ncells:`, is listed under `Binary patterns` by
+        `file -l`. Honoring the value alone moved it into the text pass, where it never ran for
+        the binary files it exists to identify.
+        """
+        self.assertFalse(self.runs_in_text_pass("0\tsearch/21/b\t\\040ncells:\tbrush\n"))
+        self.assertTrue(self.runs_in_text_pass("0\tsearch/21\t\\040ncells:\tbrush\n"))
+
+    def test_the_binary_flag_is_part_of_a_search_type_s_name(self):
+        """Tests that a `b`-flagged search does not share a cached type with a plain one.
+
+        `DataType.parse` keys `TYPES_BY_NAME` on the type's name, so a flag missing from the name
+        makes whichever declaration is parsed second reuse the first one's instance and silently
+        adopt its flags.
+        """
+        flagged = DataType.parse("search/21/b")
+        self.assertTrue(flagged.force_binary)
+        self.assertFalse(DataType.parse("search/21").force_binary)
+        self.assertIs(flagged, DataType.parse("search/b/21"))
+
+    def test_a_gimp_animated_brush_is_still_detected(self):
+        """Tests that a `.gih`-shaped buffer keeps its match once the value rule changed.
+
+        A GIMP animated brush is a name line and a parameter line followed by binary brush data,
+        so the buffer is not text and PolyFile's text pass never runs for it. With `gimp:67` in
+        the text pass the format went undetected. `file -b` reports the string asserted here.
+        """
+        brush = b"confetti\n ncells:4 rank0:4\n" + bytes(range(256)) * 4
+        messages = {str(match) for match in MagicMatcher.DEFAULT_INSTANCE.match(brush)}
+        self.assertIn("GIMP animated brush data", messages)
+
     def test_an_env_python_script_is_described(self):
         """Tests that a `#!/usr/bin/env python` script gains libmagic's encoding description.
 
