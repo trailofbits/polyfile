@@ -1841,7 +1841,7 @@ class StringType(DataType[StringTest]):
             num_bytes: Optional[int] = None
     ):
         if not any((num_bytes is not None, case_insensitive_lower, case_insensitive_upper, compact_whitespace,
-                    optional_blanks, trim, force_text)):
+                    optional_blanks, full_word_match, trim, force_text)):
             name = "string"
         else:
             if num_bytes is not None:
@@ -2256,7 +2256,8 @@ class RegexType(DataType[MagicRegex]):
             case_insensitive: bool = False,
             match_to_start: bool = False,
             limit_lines: bool = False,
-            trim: bool = False
+            trim: bool = False,
+            force_text: bool = False
     ):
         if length is None:
             if limit_lines:
@@ -2268,12 +2269,15 @@ class RegexType(DataType[MagicRegex]):
         self.case_insensitive: bool = case_insensitive
         self.match_to_start: bool = match_to_start
         self.trim: bool = trim
+        self.force_text: bool = force_text
         super().__init__(f"regex/{self.length}{['', 'c'][case_insensitive]}{['', 's'][match_to_start]}"
-                         f"{['', 'l'][self.limit_lines]}{['', 'T'][self.trim]}")
+                         f"{['', 'l'][self.limit_lines]}{['', 'T'][self.trim]}{['', 't'][self.force_text]}")
 
     DOLLAR_PATTERN = re.compile(rb"(^|[^\\])\$", re.MULTILINE)
 
     def is_text(self, value: MagicRegex) -> bool:
+        if self.force_text:
+            return True
         try:
             _ = value.pattern.decode("ascii")
             return True
@@ -2375,7 +2379,8 @@ class RegexType(DataType[MagicRegex]):
             case_insensitive="c" in options,
             match_to_start="s" in options,
             limit_lines="l" in options,
-            trim="T" in options
+            trim="T" in options,
+            force_text="t" in options
         )
 
 

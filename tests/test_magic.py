@@ -777,6 +777,26 @@ class RegexSemanticsTest(TestCase):
                          self.messages(self.relative_offset_definition("/s", "bb"), self.DATA))
 
 
+class DataTypeInterningTest(TestCase):
+    """Regression tests for type interning collisions reported in issue #3515."""
+
+    def test_string_full_word_flag_is_part_of_the_type_name(self):
+        plain = DataType.parse("string")
+        full_word = DataType.parse("string/f")
+
+        self.assertIsNot(plain, full_word)
+        self.assertTrue(plain.match(b"wordy", plain.parse_expected("word")))
+        self.assertFalse(full_word.match(b"wordy", full_word.parse_expected("word")))
+
+    def test_regex_force_text_flag_is_part_of_the_type_name(self):
+        plain = DataType.parse("regex")
+        force_text = DataType.parse("regex/t")
+
+        self.assertIsNot(plain, force_text)
+        self.assertFalse(plain.is_text(plain.parse_expected(r"\xff")))
+        self.assertTrue(force_text.is_text(force_text.parse_expected(r"\xff")))
+
+
 class StringDataTypeTest(TestCase):
     """Regression tests for the `string` data type defects reported in issue #3483."""
 
