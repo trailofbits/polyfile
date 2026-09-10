@@ -742,6 +742,20 @@ class RegexSemanticsTest(TestCase):
         self.assertEqual(b"^[0-9]{1,50}", regex.parse_expected("=\\^[0-9]{1,50}").pattern)
         self.assertTrue(regex.match(self.DATA, regex.parse_expected("=[0-9]{1,3}")))
 
+    def test_regex_strips_and_applies_the_negation_operator(self):
+        """A leading `!` is a relation, so a non-matching regex is the successful test."""
+        regex = RegexType.parse("regex/100l")
+        expected = regex.parse_expected(r"!\^[^Cc\ \t].*$")
+
+        self.assertEqual(b"^[^Cc \t].*$", expected.pattern)
+        self.assertEqual("!", regex.relation(expected))
+        self.assertEqual(expected.pattern, regex.parse_expected(r"!=\^[^Cc\ \t].*$").pattern)
+        self.assertFalse(regex.match(b"program\n", expected))
+        self.assertTrue(regex.match(b"C comment\n", expected))
+        self.assertEqual({"FORTRAN program, ASCII text"},
+                         self.messages("0\tregex/100l\t!\\^[^Cc\\ \\t].*$\tFORTRAN program\n",
+                                       b"C comment\n"))
+
     def test_regex_reports_only_the_matched_extent(self):
         """`%s` used to report every byte from offset 0 through the end of the match.
 
