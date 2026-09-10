@@ -1721,3 +1721,136 @@ class MatchOrderTest(TestCase):
                          for seed, output in reported.items())
         self.assertEqual(1, len(set(reported.values())),
                          f"the match order differs between hash seeds:\n{detail}")
+
+
+class MatchJoinTest(TestCase):
+    """Tests for the joined description reported in issue #3491.
+
+    `file -k` renders every match into one description rather than reporting only the strongest,
+    and `file/tests/multiple.result` is the corpus expectation that records the format. Every
+    string these tests expect is what `file -b -k` prints for the same input, checked against
+    libmagic 5.48 built from the `file` submodule.
+    """
+
+    TWO_TEXT_TESTS: str = "0\tstring/t\tMARKED\tFirst file text\n0\tstring/t\tMARK\tSecond\n"
+    """Two text tests that both match `MARKED`.
+
+    Their strings are 6 and 4 bytes long, so their strengths differ and the order of the join
+    does not rest on the tie-break issue #3509 settled. The first message ends in the ` text`
+    that libmagic splices out, which it must keep because the splice lands on the last part.
+    """
+
+    ONE_TEXT_TEST: str = "0\tstring/t\tMARK\tOnly file text\n"
+    """A single text test, so there is nothing to separate."""
+
+    CONTROL_CHARACTER_TEST: str = "0\tstring\tMARK\tMarked\n>4\tbyte\tx\t, code %c\n"
+    """A binary test that prints a byte of the file as a character, as libmagic's tar check does
+    for `file/tests/JW07022A.mp3.testfile`."""
+
+    @staticmethod
+    def matcher(definition: str) -> MagicMatcher:
+        """Parses a single magic definition.
+
+        Args:
+            definition: The text of a magic definition file, with tab-separated columns.
+
+        Returns:
+            A matcher holding just that definition's tests.
+        """
+        with TemporaryDirectory() as tmp_dir:
+            path = Path(tmp_dir) / "match_join"
+            path.write_text(definition)
+            return MagicMatcher.parse(path)
+
+    def join(self, definition: str, data: bytes, raw: bool = False) -> str:
+        """Describes every match one definition reports for `data`, in one string.
+
+        Args:
+            definition: The text of a magic definition file, with tab-separated columns.
+            data: The bytes to classify.
+            raw: Whether to skip the escaping, as libmagic's `MAGIC_RAW` does.
+
+        Returns:
+            The joined description.
+        """
+        return polyfile.magic.join_matches(self.matcher(definition).match(data), raw=raw)
+
+    def test_two_matches_are_joined_with_an_escaped_separator(self):
+        """Tests that the join uses libmagic's separator, escaped the way `file` escapes it.
+
+        `FILE_SEPARATOR` is `\\n- ` (`file/src/funcs.c:276`), and `file_getbuffer` octal-escapes
+        the line feed unless `MAGIC_RAW` is set, which is why `file/tests/multiple.result` holds
+        `\\012- `.
+        """
+        self.assertEqual("First file text\\012- Second, ASCII text, with no line terminators",
+                         self.join(self.TWO_TEXT_TESTS, b"MARKED"))
+
+    def test_the_raw_form_keeps_the_separator_unescaped(self):
+        """Tests that `raw` reports the line feed itself, as `file -r` does."""
+        self.assertEqual("First file text\n- Second, ASCII text, with no line terminators",
+                         self.join(self.TWO_TEXT_TESTS, b"MARKED", raw=True))
+
+    def test_the_encoding_description_is_appended_once(self):
+        """Tests that only the last part carries the text-encoding description.
+
+        libmagic keeps one output buffer, so `file_ascmagic` rewrites the tail of the whole join
+        rather than each part (`file/src/ascmagic.c:235-258`). Issue #3488 attaches the
+        description to every match, which is right for one description per line, so joining those
+        strings directly would report the encoding once per part. That the first part still ends
+        in ` text` is the other half of the evidence: the splice reached only the last part.
+        """
+        joined = self.join(self.TWO_TEXT_TESTS, b"MARKED", raw=True)
+        self.assertEqual(1, joined.count("ASCII text"))
+        self.assertEqual(["First file text", "Second, ASCII text, with no line terminators"],
+                         joined.split(polyfile.magic.MATCH_SEPARATOR))
+
+    def test_joining_does_not_change_what_each_match_reports(self):
+        """Tests that the join leaves the per-match descriptions issue #3488 produces alone.
+
+        `--format file` prints one match per line, and each of those lines has to stand on its
+        own, so the join must not reach into the matches to move the description.
+        """
+        matches = list(self.matcher(self.TWO_TEXT_TESTS).match(b"MARKED"))
+        polyfile.magic.join_matches(matches)
+        self.assertEqual({"First file, ASCII text, with no line terminators",
+                          "Second, ASCII text, with no line terminators"},
+                         {str(match) for match in matches})
+
+    def test_a_single_match_is_its_own_description(self):
+        """Tests that one match joins to just its description, with no separator.
+
+        `trim_separator` (`file/src/funcs.c:284`) takes the trailing separator back off, so a
+        lone match reads exactly as it does without `-k`.
+        """
+        self.assertEqual("Only file, ASCII text, with no line terminators",
+                         self.join(self.ONE_TEXT_TEST, b"MARK"))
+
+    def test_the_parts_follow_the_order_of_the_matches(self):
+        """Tests the join against `file/tests/multiple.result`, the corpus expectation.
+
+        The four parts come out in the order `MagicMatcher.match` reports them, which issue #3509
+        made libmagic's own order. Reordering them here would hide a regression in that.
+        """
+        self.assertTrue(FILE_TEST_DIR.exists(),
+                        "Run `git submodule init && git submodule update` in the repository root.")
+        matcher = MagicMatcher.parse(FILE_TEST_DIR / "multiple-A.magic",
+                                     FILE_TEST_DIR / "multiple-B.magic")
+        data = (FILE_TEST_DIR / "multiple.testfile").read_bytes()
+        self.assertEqual(
+            "Viva File 2.0\\012- RTF1.0\\012- Test File 1.0\\012- ABCD File, ASCII text, "
+            "with no line terminators",
+            polyfile.magic.join_matches(matcher.match(data))
+        )
+
+    def test_an_unprintable_character_is_octal_escaped(self):
+        """Tests that the escaping covers more than the separator's line feed.
+
+        `file_getbuffer` escapes every character it cannot print, not just the one the separator
+        contributes, which is how the `-k` description of `file/tests/JW07022A.mp3.testfile`
+        reports the byte 2 in an ID3 field as `\\002`.
+        """
+        self.assertEqual("Marked , code \\002",
+                         self.join(self.CONTROL_CHARACTER_TEST, b"MARK\x02\x00\x00\x00rest"))
+        self.assertEqual("Marked , code \x02",
+                         self.join(self.CONTROL_CHARACTER_TEST, b"MARK\x02\x00\x00\x00rest",
+                                   raw=True))
