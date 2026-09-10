@@ -14,7 +14,7 @@ from uuid import UUID
 import polyfile.der
 import polyfile.magic
 from polyfile.magic import (
-    MagicMatcher, MAGIC_DEFS, Match, MatchContext, SearchType, StringType, TestResult
+    DataType, MagicMatcher, MAGIC_DEFS, Match, MatchContext, SearchType, StringType, TestResult
 )
 
 
@@ -626,3 +626,14 @@ class StringDataTypeTest(TestCase):
         data = (FILE_TEST_DIR / "gedcom.testfile").read_bytes()
         messages = {str(match) for match in MagicMatcher.DEFAULT_INSTANCE.match(data)}
         self.assertEqual({"GEDCOM genealogy text version 5.5"}, messages)
+
+    def test_pstring_forwards_its_string_flags(self):
+        """`PascalStringType` dropped every string flag, and rejected a declaration carrying one.
+
+        libmagic accepts the string modifiers on `pstring` (`file/src/apprentice.c:1943-2020`).
+        """
+        trimming = DataType.parse("pstring/BT")
+        self.assertEqual("hi", trimming.match(b"\x06  hi  ", trimming.parse_expected("x")).value)
+        verbatim = DataType.parse("pstring/B")
+        untrimmed = verbatim.match(b"\x06  hi  ", verbatim.parse_expected("x"))
+        self.assertEqual("  hi  ", untrimmed.value)

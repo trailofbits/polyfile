@@ -1771,12 +1771,28 @@ class SearchType(StringType):
 
 
 class PascalStringType(DataType[StringTest]):
+    STRING_FLAGS: str = "CcTWwft"
+
     def __init__(
             self,
             byte_length: int = 1,
             endianness: Endianness = Endianness.BIG,
-            count_includes_length: bool = False
+            count_includes_length: bool = False,
+            string_flags: str = ""
     ):
+        """A length-prefixed string.
+
+        Args:
+            byte_length: The width of the length prefix, in bytes: 1, 2, or 4.
+            endianness: The byte order of a two- or four-byte length prefix.
+            count_includes_length: Whether the length prefix counts itself.
+            string_flags: The string modifier letters of the declaration, such as ``T``. libmagic
+                accepts them on ``pstring`` as it does on ``string``
+                (``file/src/apprentice.c:1943-2020``).
+
+        Raises:
+            ValueError: If `byte_length` or `endianness` is not one libmagic supports.
+        """
         if endianness != Endianness.BIG and endianness != Endianness.LITTLE:
             raise ValueError("Endianness must be either BIG or LITTLE")
         elif byte_length == 1:
@@ -1795,17 +1811,18 @@ class PascalStringType(DataType[StringTest]):
             raise ValueError("byte_length must be either 1, 2, or 4")
         if count_includes_length:
             modifier = f"{modifier}J"
-        super().__init__(f"pstring/{modifier}")
+        super().__init__(f"pstring/{modifier}{string_flags}")
         self.byte_length: int = byte_length
         self.endianness: Endianness = endianness
         self.count_includes_length: int = count_includes_length
+        self.string_type: StringType = StringType.parse(f"string/{string_flags}")
 
     def is_text(self, value: StringTest) -> bool:
         # TODO: See if Pascal strings should sometimes be forced to be text
         return False
 
     def parse_expected(self, specification: str) -> StringTest:
-        return StringTest.parse(specification)
+        return self.string_type.parse_expected(specification)
 
     def match(self, data: bytes, expected: StringTest) -> DataTypeMatch:
         if len(data) < self.byte_length:
@@ -1835,17 +1852,17 @@ class PascalStringType(DataType[StringTest]):
             m.raw_match = data[:self.byte_length + effective_len]
         return m
 
-    PSTRING_TYPE_FORMAT: Pattern[str] = re.compile(r"^pstring(/J?[BHhLl]?J?)?$")
+    PSTRING_TYPE_FORMAT: Pattern[str] = re.compile(r"^pstring(?P<opts>/[JBHhLlCcTWwft]*)?$")
 
     @classmethod
     def parse(cls, format_str: str) -> "PascalStringType":
         m = cls.PSTRING_TYPE_FORMAT.match(format_str)
         if not m:
             raise ValueError(f"Invalid pstring type declaration: {format_str!r}")
-        if m.group(1) is None:
-            options: Iterable[str] = ()
+        if m.group("opts") is None:
+            options: str = ""
         else:
-            options = m.group(1)
+            options = m.group("opts")
         if "H" in options:
             byte_length = 2
             endianness = Endianness.BIG
@@ -1864,7 +1881,8 @@ class PascalStringType(DataType[StringTest]):
         return PascalStringType(
             byte_length=byte_length,
             endianness=endianness,
-            count_includes_length="J" in options
+            count_includes_length="J" in options,
+            string_flags="".join(opt for opt in options if opt in cls.STRING_FLAGS)
         )
 
 
