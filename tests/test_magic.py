@@ -909,6 +909,114 @@ class StringDataTypeTest(TestCase):
         self.assertEqual("  hi  ", untrimmed.value)
 
 
+class SearchTextClassificationTest(TestCase):
+    r"""Regression tests for the pass classification defect reported in issue #3511.
+
+    `StringMatch.is_always_text` looked for the two-character sequences `\x` and `\0` in the raw,
+    still-escaped value, so a `search` that escapes a space as `\040` was classified binary and ran
+    in PolyFile's binary pass. libmagic decides from `file_looks_utf8` over the value it unescaped
+    while parsing (`file/src/apprentice.c:1277-1283`), and `file -l` lists every definition named
+    here under `Text patterns`.
+    """
+
+    @staticmethod
+    def runs_in_text_pass(definition: str) -> bool:
+        """Whether PolyFile runs the one level-0 test of `definition` in its text pass.
+
+        Args:
+            definition: The text of a magic definition file, with tab-separated columns.
+
+        Returns:
+            True if the test landed in the text pass, False if it landed in the binary pass.
+        """
+        with TemporaryDirectory() as tmp_dir:
+            magic_file = Path(tmp_dir) / "test.magic"
+            magic_file.write_text(definition)
+            matcher = MagicMatcher.parse(magic_file)
+            text, binary = matcher.text_tests, matcher.non_text_tests
+        assert len(text) + len(binary) == 1, f"expected one test, got {len(text) + len(binary)}"
+        return bool(text)
+
+    def test_an_escaped_space_is_a_space(self):
+        r"""Tests that `\040` no longer reads as an escaped null byte.
+
+        This is the defect itself: the raw value `diff\040` contains the two characters `\0`, so
+        the old rule called it binary even though the byte it stands for is a space.
+        """
+        self.assertTrue(self.runs_in_text_pass("0\tsearch/1\tdiff\\040\tdiff output text\n"))
+
+    def test_an_escaped_line_feed_is_a_text_character(self):
+        r"""Tests that `\012` is text, which is what moves `uuencode:22` into the text pass.
+
+        A line feed is `T` in libmagic's `text_chars` table (`file/src/encoding.c:246-266`), so a
+        value that contains one still looks like text.
+        """
+        self.assertTrue(self.runs_in_text_pass("0\tsearch/1\t$\\012ship\tship'd binary text\n"))
+
+    def test_a_hexadecimal_space_is_a_space(self):
+        r"""Tests that `\x20` is text, which is what moves `javascript:22` into the text pass."""
+        definition = "0\tsearch\t\"use\\x20strict\"\tJavaScript source\n"
+        self.assertTrue(self.runs_in_text_pass(definition))
+
+    def test_utf8_is_text(self):
+        r"""Tests that a value of valid multi-byte UTF-8 is text.
+
+        `file_looks_utf8` returns 2 rather than 1 for such a value, and `set_test_type` compares
+        its result against 0, so both count as text.
+        """
+        self.assertTrue(self.runs_in_text_pass("0\tsearch/1\tcaf\\xc3\\xa9\tcafe\n"))
+
+    def test_a_null_byte_is_not_text(self):
+        r"""Tests that a genuine null byte still classifies a value as binary.
+
+        A null byte is `F` in libmagic's `text_chars` table, so `file_looks_utf8` returns 0 for a
+        value that contains one, whichever escape the definition spelled it with.
+        """
+        self.assertFalse(self.runs_in_text_pass("0\tsearch/1\ta\\x00b\tnull byte\n"))
+        self.assertFalse(self.runs_in_text_pass("0\tsearch/1\ta\\0b\tnull byte\n"))
+
+    def test_a_control_character_is_not_text(self):
+        r"""Tests that a control character outside libmagic's text class is binary.
+
+        `\001` is `F` in the `text_chars` table, unlike the `\012` above, so a value carrying it
+        must stay in the binary pass even though the escape spells no null byte.
+        """
+        self.assertFalse(self.runs_in_text_pass("0\tsearch/1\ta\\001b\tcontrol character\n"))
+
+    def test_a_high_byte_that_is_not_utf8_is_not_text(self):
+        r"""Tests that a high byte which cannot begin a UTF-8 sequence is binary.
+
+        `file_looks_utf8` returns -1 for `\xff`, which never appears in valid UTF-8.
+        """
+        self.assertFalse(self.runs_in_text_pass("0\tsearch/1\ta\\xffb\thigh byte\n"))
+
+    def test_the_shipped_python_and_diff_definitions_are_text_tests(self):
+        """Tests that the two shipped definitions the issue names land in the text pass.
+
+        `python:256` matches a `#!/usr/bin/env python` shebang and `diff:13` matches `diff`
+        output; both escape a space, so both ran in the binary pass and were never described.
+        """
+        matcher = MagicMatcher.parse(*MAGIC_DEFS)
+        text_tests = {
+            (test.source_info.path.name, test.source_info.line)
+            for test in matcher.text_tests if test.source_info is not None
+        }
+        self.assertIn(("python", 256), text_tests)
+        self.assertIn(("diff", 13), text_tests)
+
+    def test_an_env_python_script_is_described(self):
+        """Tests that a `#!/usr/bin/env python` script gains libmagic's encoding description.
+
+        `file -b` reports `Python script, ASCII text executable` for this input. PolyFile reported
+        the undescribed `Python script text executable`, because the test that matched ran in the
+        binary pass and `file_ascmagic` never sees a binary match (`file/src/funcs.c:479-503`).
+        """
+        script = b'#!/usr/bin/env python\nimport sys\nprint("hi")\n'
+        messages = {str(match) for match in MagicMatcher.DEFAULT_INSTANCE.match(script)}
+        self.assertIn("Python script, ASCII text executable", messages)
+        self.assertNotIn("Python script text executable", messages)
+
+
 class UseTestSemanticsTest(TestCase):
     """Regression tests for the `use` test truth value reported in issue #3484."""
 
