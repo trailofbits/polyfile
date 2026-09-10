@@ -2274,3 +2274,100 @@ class PassSelectionTest(TestCase):
             if test.source_info is not None
         }
         self.assertEqual({"sgml:6", "sgml:17", "sgml:74"}, in_both)
+
+
+class PassGateTest(TestCase):
+    """Regression tests for the missing pass gate reported in issue #3490.
+
+    `softmagic` skips an entry when the buffer looks like text and the entry declares only
+    `STRING_BINTEST`, and when it does not and the entry declares only `STRING_TEXTTEST`
+    (`file/src/softmagic.c:249-253`). PolyFile ran every non-text test against every input, so a
+    definition that spells one shebang twice reported both spellings.
+    """
+
+    @staticmethod
+    def messages(definition: str, data: bytes) -> Set[str]:
+        """Runs a single magic definition against `data`.
+
+        Args:
+            definition: The text of a magic definition file, with tab-separated columns.
+            data: The bytes to classify.
+
+        Returns:
+            The message of every match.
+        """
+        with TemporaryDirectory() as tmp_dir:
+            magic_file = Path(tmp_dir) / "test.magic"
+            magic_file.write_text(definition)
+            return {str(match) for match in MagicMatcher.parse(magic_file).match(data)}
+
+    def test_a_binary_flagged_entry_skips_a_text_buffer(self):
+        """Tests that `b` keeps an entry from running against a buffer that looks like text."""
+        definition = "0\tstring/b\tMARK\tbinary only\n"
+        self.assertNotIn("binary only", self.messages(definition, b"MARK and then some text\n"))
+        self.assertIn("binary only", self.messages(definition, b"MARK\x00\x01\x02\xff"))
+
+    def test_a_text_flagged_entry_skips_a_binary_buffer(self):
+        """Tests that `t` keeps an entry from running against a buffer that is not text.
+
+        The entry never reaches the text pass, because `file_buffer` runs `file_ascmagic` only for
+        a buffer `file_encoding` recognized (`file/src/funcs.c:495-503`).
+        """
+        definition = "0\tstring/t\tMARK\ttext only\n"
+        self.assertNotIn("text only", self.messages(definition, b"MARK\x00\x01\x02\xff"))
+        self.assertIn("text only, ASCII text",
+                      self.messages(definition, b"MARK and then some text\n"))
+
+    def test_an_unflagged_entry_runs_against_both_kinds_of_buffer(self):
+        """Tests that an entry naming no pass is never skipped for the pass it landed in.
+
+        The gate reads the declared flags, not the pass the entry was sorted into, because
+        `softmagic` tests `m->str_flags` rather than `m->flag`.
+        """
+        definition = "0\tstring\tMARK\tno flags\n"
+        self.assertIn("no flags", self.messages(definition, b"MARK\x00\x01\x02\xff"))
+        self.assertIn("no flags", self.messages(definition, b"MARK and then some text\n"))
+
+    def test_a_both_flagged_entry_runs_against_both_kinds_of_buffer(self):
+        """Tests that `b` and `t` together survive the gate in either direction.
+
+        `softmagic`'s skip fires only when exactly one of the two bits is set, so an entry that
+        sets both is never skipped. It must still report one match per buffer and not two, because
+        libmagic stops after its binary pass prints something.
+        """
+        definition = "0\tstring/bt\tMARK\tboth flags\n"
+        for data in (b"MARK\x00\x01\x02\xff", b"MARK and then some text\n"):
+            with self.subTest(data=data):
+                self.assertEqual({"both flags"}, self.messages(definition, data))
+
+    def test_a_script_reports_only_libmagics_variant(self):
+        """Tests that `file/tests/cmd1.testfile` no longer reports a binary variant.
+
+        `magic_defs/varied.script` spells one shebang twice, `string/wt` at line 8 and
+        `string/wb` at line 12. PolyFile reported `a /usr/bin/cmd1 script executable (binary
+        data)` alongside the correct message; `file -b` reports only the one asserted here.
+        """
+        self.assertTrue(FILE_TEST_DIR.exists(),
+                        "Run `git submodule init && git submodule update` in the repository root.")
+        for stem in ("cmd1", "cmd2"):
+            with self.subTest(stem=stem):
+                data = (FILE_TEST_DIR / f"{stem}.testfile").read_bytes()
+                messages = {str(m) for m in MagicMatcher.DEFAULT_INSTANCE.match(data)}
+                self.assertEqual({f"a /usr/bin/{stem} script, ASCII text executable"}, messages)
+
+    def test_an_ascii_svg_is_not_described(self):
+        """Tests that an SVG matched on the file's own bytes gains no encoding description.
+
+        `magic_defs/sgml:6` declares both flags, so it runs in both passes. libmagic's binary pass
+        matches it on the file's bytes and `checkdone` stops before `file_ascmagic`
+        (`file/src/funcs.c:479-503`), so `file -b` reports a bare `SVG Scalable Vector Graphics
+        image`. The same definition matched on the decoded buffer does gain the description, which
+        is what `file/tests/utf16xmlsvg.testfile` expects.
+        """
+        svg = b'<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg"><rect/></svg>\n'
+        messages = {str(m) for m in MagicMatcher.DEFAULT_INSTANCE.match(svg)}
+        self.assertIn("SVG Scalable Vector Graphics image", messages)
+        self.assertNotIn("SVG Scalable Vector Graphics image, ASCII text", messages)
+        utf16 = b"\xff\xfe" + svg.decode("utf-8").encode("utf-16le")
+        self.assertIn("SVG Scalable Vector Graphics image, Unicode text, UTF-16, little-endian text",
+                      {str(m) for m in MagicMatcher.DEFAULT_INSTANCE.match(utf16)})

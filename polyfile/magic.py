@@ -4631,20 +4631,21 @@ class MagicMatcher:
             text_encoding: Optional[TextEncodingDescription],
             description: str,
             file_context: Optional[MatchContext] = None
-    ) -> Iterator[Match]:
+    ) -> Iterator[Tuple[MagicTest, Match]]:
         """Yields a match for each of `tests` that matches `context`.
 
         Args:
             tests: the level 0 tests to run.
             context: the buffer to run them against.
-            text_encoding: the description of `context`'s text encoding, or None if it is not text.
+            text_encoding: the description libmagic appends to a match from this pass, or None if
+                this pass appends none.
             description: the label for the progress log.
             file_context: the buffer holding the file's own bytes, when `context` is a rendering of
                 them. A check `MagicTest.precedes_soft_magic` names runs against this instead.
 
         Yields:
-            One match per test that matched, carrying `text_encoding` if libmagic would append it
-            to that test's message.
+            The test and its match, for each test that matched, carrying `text_encoding` if
+            libmagic would append it to that test's message.
         """
         for test in log.range(tests, desc=description, unit=" tests", delay=1.0):
             if file_context is not None and test.precedes_soft_magic:
@@ -4657,7 +4658,29 @@ class MagicMatcher:
             if m and (not test_context.only_match_mime or any(t is not None for t in m.mimetypes)):
                 if test.appends_text_encoding:
                     m.text_encoding = text_encoding
-                yield m
+                yield test, m
+
+    def binary_pass_tests(self, looks_text: bool) -> Iterable[MagicTest]:
+        """The level 0 tests `MagicMatcher.match` runs over the file's own bytes.
+
+        ``softmagic`` skips an entry whose declared string flags are exactly ``STRING_BINTEST``
+        when the buffer looks like text (``file/src/softmagic.c:249-253``). That is what keeps
+        libmagic from reporting the binary half of a definition that spells one shebang twice, as
+        ``magic_defs/varied.script`` does. An entry that declares both flags is not skipped,
+        because the test is for one bit and not the other.
+
+        Args:
+            looks_text: Whether `TextEncodingDescription.detect` recognized the buffer as text,
+                which is the ``looks_text`` ``file_buffer`` hands ``file_softmagic``
+                (``file/src/funcs.c:314-317`` and ``482``).
+
+        Returns:
+            The tests to run, in the order `MagicMatcher.match` runs them.
+        """
+        if not looks_text:
+            return self.non_text_tests
+        return [test for test in self.non_text_tests
+                if test.declared_test_type() != TestType.BINARY]
 
     def match(self, to_match: Union[bytes, BinaryIO, str, Path, MatchContext]) -> Iterator[Match]:
         if isinstance(to_match, bytes):
@@ -4666,7 +4689,13 @@ class MagicMatcher:
             to_match = MatchContext.load(to_match)
         text_encoding = TextEncodingDescription.detect(to_match.data)
         yielded = False
-        for m in self._run_tests(self.non_text_tests, to_match, text_encoding, "binary matching"):
+        matched_on_the_files_bytes: Set[MagicTest] = set()
+        # only the text pass carries the encoding description: `file_ascmagic` prints it, and
+        # `file_buffer` reaches `file_ascmagic` only once binary soft magic has printed nothing
+        # (`file/src/funcs.c:479-503`)
+        for test, m in self._run_tests(self.binary_pass_tests(text_encoding is not None),
+                                       to_match, None, "binary matching"):
+            matched_on_the_files_bytes.add(test)
             yield m
             yielded = True
         # is this a plain text file?
@@ -4678,8 +4707,9 @@ class MagicMatcher:
             # this is a text file, so try all of the textual tests, against the buffer libmagic
             # hands them rather than against the file's bytes
             text_context = to_match.text_test_context(text_encoding.encoding)
-            for m in self._run_tests(self.text_tests, text_context, text_encoding, "text matching",
-                                     file_context=to_match):
+            text_tests = [test for test in self.text_tests if test not in matched_on_the_files_bytes]
+            for _, m in self._run_tests(text_tests, text_context, text_encoding, "text matching",
+                                        file_context=to_match):
                 yield m
                 yielded = True
         if not yielded:
