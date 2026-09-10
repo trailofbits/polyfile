@@ -3582,6 +3582,44 @@ class MagicMatcher:
         test.source_info = SourceInfo(def_file, line_number, line)
         return test
 
+    STRENGTH_OPS: Dict[str, StrengthOp] = {
+        "+": StrengthOp.PLUS,
+        "-": StrengthOp.MINUS,
+        "*": StrengthOp.TIMES,
+        "/": StrengthOp.DIV,
+    }
+
+    @staticmethod
+    def parse_strength(specification: bytes, current_test: MagicTest):
+        """Records a ``!:strength`` factor on the entry that the directive applies to.
+
+        libmagic assigns the factor to ``me->mp[0]``, the level-0 test of the entry, whatever depth
+        the directive appears at, and keeps the first factor an entry declares
+        (``file/src/apprentice.c:2470-2497``). A ``name`` entry rejects the directive outright.
+
+        Args:
+            specification: The rest of the line after ``!:strength``.
+            current_test: The most recently parsed test, which locates the entry.
+        """
+        entry = current_test
+        while entry.parent is not None:
+            entry = entry.parent
+        if isinstance(entry, NamedTest) or entry.strength_op != StrengthOp.NONE:
+            return
+        spec = specification.strip().decode("utf-8")
+        if not spec:
+            return
+        op = MagicMatcher.STRENGTH_OPS.get(spec[0])
+        if op is None:
+            factor_str, op = spec, StrengthOp.PLUS
+        else:
+            factor_str = spec[1:].strip()
+        try:
+            entry.strength_factor = int(factor_str)
+        except ValueError:
+            return
+        entry.strength_op = op
+
     @staticmethod
     def _parse_file(
             def_file: Union[str, Path], matcher: "MagicMatcher"
@@ -3614,25 +3652,7 @@ class MagicMatcher:
                     continue
                 elif raw_line.startswith(b"!:strength"):
                     if current_test is not None:
-                        strength_spec = raw_line[10:].strip().decode("utf-8")
-                        if strength_spec:
-                            op = strength_spec[0]
-                            factor_str = strength_spec[1:].strip()
-                            if op == '+':
-                                current_test.strength_op = StrengthOp.PLUS
-                            elif op == '-':
-                                current_test.strength_op = StrengthOp.MINUS
-                            elif op == '*':
-                                current_test.strength_op = StrengthOp.TIMES
-                            elif op == '/':
-                                current_test.strength_op = StrengthOp.DIV
-                            else:
-                                factor_str = strength_spec
-                                current_test.strength_op = StrengthOp.PLUS
-                            try:
-                                current_test.strength_factor = int(factor_str)
-                            except ValueError:
-                                pass
+                        MagicMatcher.parse_strength(raw_line[10:], current_test)
                     continue
                 try:
                     line = raw_line.decode("utf-8")
