@@ -29,25 +29,15 @@ KNOWN_FAILURES: Dict[str, int] = {
     # has to be fixed first, and the trailing comment names what blocks the stem after that.
     # Issue #3480 tracks the whole set.
     #
-    # Seven of the nine wait on the same thing: PolyFile never appends libmagic's text-encoding
-    # description, so it reports `OpenStreetMap XML data` where libmagic reports
-    # `OpenStreetMap XML data, ASCII text`.
-    "cmd1": 3488,           # and #3490, which is why a second, binary variant also matches
-    "cmd2": 3488,           # and #3490, as for cmd1
-    "gedcom": 3488,
-    "jpeg-text": 3488,      # needs the line-terminator clause and the upper-case encoding name
-    # This test ships two sidecars, which the harness now loads, and a `.flags` of `k`. PolyFile
-    # reports all four names as separate matches, so what is left is the joined form: #3491 for
-    # the `\012- ` separator, #3477 for the strength order the parts appear in, and #3488 for the
-    # trailer on the last one. Splitting the expected string on `\012- ` here instead would drop
+    # This test ships two sidecars, which the harness loads, and a `.flags` of `k`. PolyFile
+    # reports all four names as separate matches, each with its own text-encoding description, so
+    # what is left is the joined form: #3491 for the `\012- ` separator and #3477 for the strength
+    # order the parts appear in. Splitting the expected string on `\012- ` here instead would drop
     # #3491 from that list.
-    "multiple": 3491,       # then #3477 and #3488
-    "osm": 3488,
-    "pnm1": 3488,
-    "pnm3": 3488,
+    "multiple": 3491,       # then #3477
     # Text tests run against the raw bytes, so the SVG test never matches a UTF-16 file and
-    # PolyFile reports only `UTF-16 text`.
-    "utf16xmlsvg": 3489,    # then #3488
+    # PolyFile reports only the text-encoding description.
+    "utf16xmlsvg": 3489,
 }
 """Corpus stems that cannot pass yet, each mapped to the issue that has to be fixed first."""
 
@@ -125,13 +115,10 @@ def corpus_result_matches(expected: str, matches: Set[str]) -> bool:
     Returns:
         True if one of `matches` corresponds to `expected`.
     """
-    if expected == "ASCII text" and expected not in matches:
-        # PolyFile emits "ascii text" in lower case; part of issue #3488.
-        return expected.lower() in matches
     expected = expected.rstrip().lower()
     lowered = {match.rstrip().lower() for match in matches}
     if "00000000" in expected and expected not in lowered:
-        # Technically correct, but PolyFile formats a zero as "0x000000"; part of issue #3488.
+        # Technically correct, but PolyFile formats a `%#8.8x` zero as "0x000000".
         return expected.replace("00000000", "0x000000") in lowered
     if expected.startswith("hancom hwp"):
         return any(match.endswith(expected) for match in lowered)
@@ -429,7 +416,7 @@ class MagicTest(TestCase):
         messages = self.messages(MagicMatcher.DEFAULT_INSTANCE, b"{}\n[]\n")
         self.assertNotIn("New Line Delimited JSON text data", messages)
         self.assertNotIn("JSON text data", messages)
-        self.assertIn("ascii text", messages)
+        self.assertIn("ASCII text", messages)
 
     def test_bare_json_scalar_is_not_json(self):
         """Tests that a bare top-level scalar is not JSON.
@@ -734,7 +721,9 @@ class RegexSemanticsTest(TestCase):
             data: The bytes to classify.
 
         Returns:
-            The message of every match.
+            The message of every match. A level 0 `regex` is a text test, so each message carries
+            the text-encoding description that `TextEncodingDescription` appends, exactly as
+            `file -b -m <definition>` prints it.
         """
         with TemporaryDirectory() as tmp_dir:
             path = Path(tmp_dir) / "regex_semantics"
@@ -765,14 +754,14 @@ class RegexSemanticsTest(TestCase):
         self.assertEqual(b"123", match.raw_match)
         self.assertEqual("123", match.value)
         self.assertEqual(2, match.initial_offset)
-        self.assertEqual({"digits 123"},
+        self.assertEqual({"digits 123, ASCII text, with no line terminators"},
                          self.messages("0\tregex\t=[0-9]{1,3}\tdigits %s\n", self.DATA))
 
     def test_regex_relative_offset_resolves_from_the_match_end(self):
         """A `&` offset after a plain `regex` reads from the end of the match, at offset 5."""
-        self.assertEqual({"digits then"},
+        self.assertEqual({"digits then, ASCII text, with no line terminators"},
                          self.messages(self.relative_offset_definition("", "bb"), self.DATA))
-        self.assertEqual({"digits"},
+        self.assertEqual({"digits, ASCII text, with no line terminators"},
                          self.messages(self.relative_offset_definition("", "123"), self.DATA))
 
     def test_regex_s_relative_offset_resolves_from_the_match_start(self):
@@ -782,9 +771,9 @@ class RegexSemanticsTest(TestCase):
         resolve from the start of the match, at offset 2 rather than offset 5
         (`file/src/softmagic.c:959-963`).
         """
-        self.assertEqual({"digits then"},
+        self.assertEqual({"digits then, ASCII text, with no line terminators"},
                          self.messages(self.relative_offset_definition("/s", "123"), self.DATA))
-        self.assertEqual({"digits"},
+        self.assertEqual({"digits, ASCII text, with no line terminators"},
                          self.messages(self.relative_offset_definition("/s", "bb"), self.DATA))
 
 
@@ -881,7 +870,8 @@ class StringDataTypeTest(TestCase):
         `GEDCOM genealogy text version 2 VERS 2.x`.
         """
         definition = "0\tsearch/16\tVERS\tversion\n>&1\tstring\tx\t%s\n"
-        self.assertEqual({"version 5.5"}, self.messages(definition, b"xxx VERS 5.5\nnext line\n"))
+        self.assertEqual({"version 5.5, ASCII text"},
+                         self.messages(definition, b"xxx VERS 5.5\nnext line\n"))
 
     def test_wildcard_string_stops_at_a_line_break(self):
         """A wildcard value ran to the first null byte, so a `%s` leaked the rest of the file.
@@ -897,16 +887,12 @@ class StringDataTypeTest(TestCase):
         self.assertEqual(b"a" * 128, wildcard.matches(b"a" * 300).raw_match)
 
     def test_gedcom_reports_one_version_and_not_four_lines(self):
-        """`magic_defs/scientific`'s `%s` reported four lines of `gedcom.testfile`.
-
-        `gedcom` still fails the corpus check because its message needs the encoding trailer
-        (trailofbits/polyfile#3488), so the corpus check does not pin what this fixes.
-        """
+        """`magic_defs/scientific`'s `%s` reported four lines of `gedcom.testfile`."""
         self.assertTrue(FILE_TEST_DIR.exists(),
                         "Run `git submodule init && git submodule update` in the repository root.")
         data = (FILE_TEST_DIR / "gedcom.testfile").read_bytes()
         messages = {str(match) for match in MagicMatcher.DEFAULT_INSTANCE.match(data)}
-        self.assertEqual({"GEDCOM genealogy text version 5.5"}, messages)
+        self.assertEqual({"GEDCOM genealogy text version 5.5, ASCII text"}, messages)
 
     def test_pstring_forwards_its_string_flags(self):
         """`PascalStringType` dropped every string flag, and rejected a declaration carrying one.
@@ -1017,6 +1003,32 @@ class TextEncodingDescriptionTest(TestCase):
     libmagic 5.48 built from the `file` submodule.
     """
 
+    TEXT_SUFFIX_DEFINITION: str = "0\tstring/t\tMARK\tMarked file text\n"
+    """A text test whose message ends in the ` text` that libmagic splices out."""
+
+    EXECUTABLE_DEFINITION: str = "0\tstring/t\tMARK\tMarked file text executable\n"
+    """A text test whose message ends in the ` text executable` that libmagic splices out."""
+
+    BINARY_DEFINITION: str = "0\tstring\tMARK\tMarked file text\n"
+    """The same test without `t`, which libmagic runs in its binary pass and never describes."""
+
+    @staticmethod
+    def messages(definition: str, data: bytes) -> Set[str]:
+        """Runs a single magic definition against `data`.
+
+        Args:
+            definition: The text of a magic definition file, with tab-separated columns.
+            data: The bytes to classify.
+
+        Returns:
+            The message of every match.
+        """
+        with TemporaryDirectory() as tmp_dir:
+            path = Path(tmp_dir) / "text_encoding"
+            path.write_text(definition)
+            matcher = MagicMatcher.parse(path)
+        return {str(match) for match in matcher.match(data)}
+
     def describe(self, data: bytes, message: str = "") -> str:
         """Describes `data` the way libmagic describes a match on it.
 
@@ -1031,6 +1043,26 @@ class TextEncodingDescriptionTest(TestCase):
         self.assertIsNotNone(description, f"{data!r} was not classified as text")
         return description.describe(message)
 
+    def test_a_text_suffix_is_replaced_by_the_encoding(self):
+        """Tests that a message ending in ` text` loses it before the encoding is appended.
+
+        libmagic rewrites its output buffer with `file_replace(ms, " text$", ", ")`
+        (`file/src/ascmagic.c:238`), so `Marked file text` becomes `Marked file, ASCII text` and
+        not `Marked file text, ASCII text`.
+        """
+        self.assertEqual({"Marked file, ASCII text"},
+                         self.messages(self.TEXT_SUFFIX_DEFINITION, b"MARKED\n"))
+
+    def test_a_text_executable_suffix_keeps_its_executable(self):
+        """Tests that ` text executable` is spliced out and the `executable` printed again.
+
+        libmagic falls back to `file_replace(ms, " text executable$", ", ")` and remembers to
+        print ` executable` after the encoding (`file/src/ascmagic.c:240-268`), so
+        `POSIX shell script text executable` becomes `POSIX shell script, ASCII text executable`.
+        """
+        self.assertEqual({"Marked file, ASCII text executable"},
+                         self.messages(self.EXECUTABLE_DEFINITION, b"MARKED\n"))
+
     def test_a_message_with_no_text_suffix_gets_a_separator(self):
         """Tests that a message that ends in neither suffix is joined with `, `.
 
@@ -1039,6 +1071,26 @@ class TextEncodingDescriptionTest(TestCase):
         """
         self.assertEqual("Netpbm image data, greymap, ASCII text",
                          self.describe(b"MARKED\n", "Netpbm image data, greymap"))
+
+    def test_a_binary_test_is_not_described(self):
+        """Tests that a definition libmagic runs in its binary pass gets no description.
+
+        `file_buffer` reaches `file_ascmagic` only when the binary soft magic pass printed nothing
+        (`file/src/funcs.c:479-503`), and `set_test_type` puts a `string` with no `t` flag in that
+        pass (`file/src/apprentice.c:1255-1275`). `file -b` reports `Marked file text` for this
+        input, with no encoding appended.
+        """
+        self.assertEqual({"Marked file text"}, self.messages(self.BINARY_DEFINITION, b"MARKED\n"))
+
+    def test_json_is_not_described(self):
+        """Tests that PolyFile's JSON test keeps libmagic's undecorated verdict.
+
+        `file_is_json` runs ahead of soft magic in `file_buffer` and its match ends the run
+        (`file/src/funcs.c:410-418`), so `file` reports `JSON text data` rather than
+        `JSON text data, ASCII text`.
+        """
+        messages = {str(match) for match in MagicMatcher.DEFAULT_INSTANCE.match(b'{"a": 1}\n')}
+        self.assertIn("JSON text data", messages)
 
     def test_encoding_names_match_libmagics_spelling(self):
         """Tests that the encoding is named as libmagic names it, in libmagic's case.
@@ -1127,3 +1179,48 @@ class TextEncodingDescriptionTest(TestCase):
         self.assertEqual("ASCII text, with very long lines (402), with CRLF line terminators, "
                          "with escape sequences, with overstriking",
                          self.describe(b"x" * 400 + b"\x1b\b\r\n"))
+
+    def test_a_description_belongs_to_one_match_only(self):
+        """Tests that one matcher describes each buffer on its own terms.
+
+        Test objects are shared across calls to `MagicMatcher.match`, so a description stored on a
+        test would leak into every later match. PolyFile used to assign `PlainTextTest.message`
+        during a match for exactly this reason, and only got away with it because
+        `MagicMatcher.match` built a fresh instance every call.
+        """
+        with TemporaryDirectory() as tmp_dir:
+            path = Path(tmp_dir) / "text_encoding"
+            path.write_text(self.TEXT_SUFFIX_DEFINITION)
+            matcher = MagicMatcher.parse(path)
+        crlf = "Marked file, ASCII text, with CRLF line terminators"
+        for data, expected in ((b"MARKED\r\n", crlf),
+                               (b"MARKED\n", "Marked file, ASCII text"),
+                               (b"MARKED\r\n", crlf),
+                               (b"MARKED", "Marked file, ASCII text, with no line terminators")):
+            with self.subTest(data=data):
+                self.assertEqual({expected}, {str(match) for match in matcher.match(data)})
+
+    def test_only_match_mime_reports_the_same_types(self):
+        """Tests that the description does not disturb which MIME types a match reports.
+
+        `MagicTest._match` prunes subtrees that cannot report a MIME type when
+        `MatchContext.only_match_mime` is set, and the description is appended to a match's
+        message rather than to its results, so both modes report the types they did before.
+        """
+        self.assertTrue(FILE_TEST_DIR.exists(),
+                        "Run `git submodule init && git submodule update` in the repository root.")
+        for stem, expected in (("osm", {"text/xml"}),
+                               ("gedcom", {"text/vnd.familysearch.gedcom"}),
+                               ("pnm1", {"image/x-portable-graymap"}),
+                               ("json1", {"application/json"}),
+                               ("jpeg-text", {"text/plain"})):
+            data = (FILE_TEST_DIR / f"{stem}.testfile").read_bytes()
+            for only_match_mime in (False, True):
+                with self.subTest(test=stem, only_match_mime=only_match_mime):
+                    context = MatchContext(data, only_match_mime=only_match_mime)
+                    self.assertEqual(expected, {
+                        mimetype
+                        for match in MagicMatcher.DEFAULT_INSTANCE.match(context)
+                        for mimetype in match.mimetypes
+                        if mimetype is not None
+                    })
