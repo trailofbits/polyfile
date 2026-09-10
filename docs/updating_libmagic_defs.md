@@ -16,7 +16,7 @@ The directory holds a byte-for-byte copy of `file/magic/Magdir/`, plus five entr
 | `__init__.py` | Empty. Makes the directory an importable package, so `MAGIC_DEFS` can find it through `importlib.resources`. |
 | `COPYING` | A copy of `file/COPYING`, the license the definitions are distributed under. |
 | `csv` | Declares PolyFile's `csv` test type, which libmagic implements in C rather than in the DSL. |
-| `json` | Declares PolyFile's `json` test type, for the same reason. |
+| `json` | Declares PolyFile's `json` and `ndjson` test types, for the same reason. |
 | `polyfile_zip` | An extra backwards search for a ZIP end-of-central-directory record, which helps detect ZIP polyglots. |
 
 `MAGIC_DEFS` in [`polyfile/magic.py`](../polyfile/magic.py) globs this directory and skips only

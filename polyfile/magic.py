@@ -24,7 +24,8 @@ import struct
 import sys
 from time import gmtime, localtime, strftime
 from typing import (
-    Any, BinaryIO, Callable, Dict, Generic, Iterable, Iterator, List, Optional, Set, Tuple, Type, TypeVar, Union
+    Any, BinaryIO, Callable, Dict, Generic, Iterable, Iterator, List, NamedTuple, Optional, Set,
+    Tuple, Type, TypeVar, Union
 )
 from uuid import UUID
 
@@ -73,6 +74,12 @@ MAGIC_DEFS: List[Path] = sorted([
 
 
 WHITESPACE: bytes = b" \r\t\n\v\f"
+# a whitespace byte of an `re.escape`-ed pattern, with or without the backslash that escaped it
+BLANK_IN_PATTERN: Pattern[bytes] = re.compile(rb"\\?[ \t\n\v\f\r]")
+# a wildcard string value ends at the first of these, per `file/src/softmagic.c:683-684`
+VALUE_TERMINATOR: Pattern[bytes] = re.compile(rb"[\0\r\n]")
+# `MAXstring`, the size of the buffer libmagic copies a string value into: `file/src/file.h:179`
+MAX_STRING_BYTES: int = 128
 ESCAPES = {
     "n": ord("\n"),
     "r": ord("\r"),
@@ -427,56 +434,85 @@ class RelativeOffset(Offset):
         return f"&{self.relative_to}"
 
 
+def decode_id3_synchsafe(value: int) -> int:
+    """Decodes a 32-bit ID3v2 synchsafe integer.
+
+    An ID3v2 tag stores its size with only seven significant bits per byte so that the encoded
+    size can never be mistaken for an MPEG frame sync. This mirrors `cvt_id3` in libmagic's
+    `src/softmagic.c`, which libmagic applies to the `i` and `I` indirect offset types before
+    any offset arithmetic.
+
+    Args:
+        value: The four size bytes, already interpreted in the field's byte order.
+
+    Returns:
+        The decoded 28-bit integer.
+    """
+    return ((value & 0x7F)
+            | ((value >> 8 & 0x7F) << 7)
+            | ((value >> 16 & 0x7F) << 14)
+            | ((value >> 24 & 0x7F) << 21))
+
+
 class IndirectOffset(Offset):
     OctalIndirectOffset = -1
 
+    STRUCT_FORMATS: Dict[int, str] = {1: "B", 2: "H", 4: "I", 8: "Q"}
+
+    TYPE_NUM_BYTES: Dict[str, int] = {
+        "b": 1, "c": 1,
+        "h": 2, "s": 2,
+        "i": 4, "l": 4,
+        "e": 8, "f": 8, "g": 8, "q": 8,
+        "o": OctalIndirectOffset,
+    }
+
     def __init__(self, offset: Offset, num_bytes: int, endianness: Endianness, signed: bool,
-                 post_process: Callable[[int], int] = lambda n: n):
+                 post_process: Callable[[int], int] = lambda n: n, *, is_id3: bool = False):
         self.offset: Offset = offset
         self.num_bytes: int = num_bytes
         self.endianness: Endianness = endianness
         self.signed: bool = signed
         self.post_process: Callable[[int], int] = post_process
+        self.is_id3: bool = is_id3
         if self.endianness != Endianness.LITTLE and self.endianness != endianness.BIG:
             raise ValueError(f"Invalid endianness: {endianness!r}")
         elif num_bytes not in (1, 2, 4, 8, IndirectOffset.OctalIndirectOffset):
             raise ValueError(f"Invalid number of bytes: {num_bytes}")
+        elif is_id3 and num_bytes != 4:
+            raise ValueError(f"An ID3 indirect offset must be four bytes, not {num_bytes}")
 
-    def to_absolute(self, data: bytes, last_match: Optional[TestResult], allow_invalid: bool = False) -> int:
-        if self.num_bytes == IndirectOffset.OctalIndirectOffset:
-            # Special case: This is for the new octal type used here:
-            # https://github.com/file/file/blob/7a4e60a8f56ed45f76f28d2812a88d82efdc4bb8/magic/Magdir/gentoo#L81
-            offset = self.offset.to_absolute(data, last_match)
-            octal_string_end = offset
-            while octal_string_end < len(data) and ord('0') <= data[octal_string_end] <= ord('7'):
-                octal_string_end += 1
-            value: Optional[int] = None
-            if octal_string_end > offset:
-                try:
-                    value = int(data[:octal_string_end], 8)
-                except ValueError:
-                    pass
-            if value is None:
-                if allow_invalid:
-                    value = 0
-                else:
-                    return len(data)
-                    # raise ValueError(f"Invalid octal string expected for {self} at file offset {offset}")
-            return self.post_process(value)
-        elif self.num_bytes == 1:
-            fmt = "B"
-        elif self.num_bytes == 2:
-            fmt = "H"
-        elif self.num_bytes == 8:
-            fmt = "Q"
-        else:
-            fmt = "I"
+    def _octal_to_absolute(self, data: bytes, last_match: Optional[TestResult],
+                           allow_invalid: bool) -> int:
+        # This is for the octal type used here:
+        # https://github.com/file/file/blob/7a4e60a8f56ed45f76f28d2812a88d82efdc4bb8/magic/Magdir/gentoo#L81
+        offset = self.offset.to_absolute(data, last_match)
+        octal_string_end = offset
+        while octal_string_end < len(data) and ord('0') <= data[octal_string_end] <= ord('7'):
+            octal_string_end += 1
+        value: Optional[int] = None
+        if octal_string_end > offset:
+            try:
+                value = int(data[:octal_string_end], 8)
+            except ValueError:
+                pass
+        if value is None:
+            if not allow_invalid:
+                return len(data)
+            value = 0
+        return self.post_process(value)
+
+    def _struct_format(self) -> str:
+        fmt = IndirectOffset.STRUCT_FORMATS[self.num_bytes]
         if self.signed:
             fmt = fmt.lower()
         if self.endianness == Endianness.LITTLE:
-            fmt = f"<{fmt}"
-        else:
-            fmt = f">{fmt}"
+            return f"<{fmt}"
+        return f">{fmt}"
+
+    def to_absolute(self, data: bytes, last_match: Optional[TestResult], allow_invalid: bool = False) -> int:
+        if self.num_bytes == IndirectOffset.OctalIndirectOffset:
+            return self._octal_to_absolute(data, last_match, allow_invalid)
         offset = self.offset.to_absolute(data, last_match)
         to_unpack = data[offset:offset + self.num_bytes]
         if len(to_unpack) < self.num_bytes:
@@ -484,7 +520,10 @@ class IndirectOffset(Offset):
                 return len(data)
             else:
                 raise InvalidOffsetError(offset=self)
-        return self.post_process(struct.unpack(fmt, to_unpack)[0])
+        value = struct.unpack(self._struct_format(), to_unpack)[0]
+        if self.is_id3:
+            value = decode_id3_synchsafe(value)
+        return self.post_process(value)
 
     NUMBER_PATTERN: str = r"(0[xX][\dA-Fa-f]+|\d+)L?"
     INDIRECT_OFFSET_PATTERN: Pattern[str] = re.compile(
@@ -495,14 +534,57 @@ class IndirectOffset(Offset):
         r"\)$"
     )
 
+    @staticmethod
+    def _parse_post_process(pp: Optional[str]) -> Callable[[int], int]:
+        if pp is None:
+            return lambda n: n
+        multiply = pp.startswith("*")
+        bitwise_and = pp.startswith("&")
+        divide = pp.startswith("/")
+        if multiply or bitwise_and or divide:
+            pp = pp[1:]
+        if pp.startswith("+"):
+            pp = pp[1:]
+        if pp.startswith("(") and pp.endswith(")"):
+            # some definition files like `msdos` have indirect offsets of the form: >>>(&0x0f.l+(-4))
+            # Handle those nested parenthesis around the `(-4)` here. This is an undocumented part of the DSL,
+            # so, TODO: confirm we are handling it properly and it's not something more complex like a nested
+            #           indirect offset
+            pp = pp[1:-1]
+        operand = parse_numeric(pp)
+        if multiply:
+            return lambda n: n * operand
+        elif bitwise_and:
+            return lambda n: n & operand
+        elif divide:
+            return lambda n: n // operand
+        return lambda n: n + operand
+
     @classmethod
     def parse(cls, offset: str) -> "IndirectOffset":
+        """Parses an indirect offset such as `(6.I+10)`.
+
+        The type character selects the width and byte order of the field to read, following
+        libmagic's `parse_type` in `src/apprentice.c`: `l`/`L` are four-byte integers, `i`/`I`
+        are four-byte ID3v2 synchsafe integers, and an absent type defaults to a four-byte
+        integer. A lowercase character means little endian and an uppercase one big endian.
+
+        Args:
+            offset: The parenthesized text of the offset, including its surrounding parentheses.
+
+        Returns:
+            The parsed offset.
+
+        Raises:
+            ValueError: If `offset` is not a valid indirect offset, or names an unsupported type.
+            NotImplementedError: If `offset` uses middle endianness.
+        """
         m = cls.INDIRECT_OFFSET_PATTERN.match(offset)
         if not m:
             raise ValueError(f"Invalid indirect offset: {offset!r}")
         t = m.group("type")
         if t is None:
-            t = "I"
+            t = "L"
         if t == "m":
             raise NotImplementedError("TODO: Add support for middle endianness")
         elif t.islower():
@@ -510,56 +592,21 @@ class IndirectOffset(Offset):
         else:
             endianness = Endianness.BIG
         t = t.lower()
-        if t in ("b", "c"):
-            num_bytes = 1
-        elif t in ("e", "f", "g", "q"):
-            num_bytes = 8
-        elif t in ("h", "s"):
-            num_bytes = 2
-        elif t in ("i", "l"):
-            # TODO: Confirm that "l" should really be here
-            num_bytes = 4
-        elif t in ("o",):
-            num_bytes = IndirectOffset.OctalIndirectOffset
-        else:
+        if t not in cls.TYPE_NUM_BYTES:
             raise ValueError(f"Unsupported indirect specifier type: {m.group('type')!r}")
-        pp = m.group("post_process")
-        if pp is None:
-            post_process = lambda n: n
-        else:
-            multiply = pp.startswith("*")
-            bitwise_and = pp.startswith("&")
-            divide = pp.startswith("/")
-            if multiply or bitwise_and or divide:
-                pp = pp[1:]
-            if pp.startswith("+"):
-                pp = pp[1:]
-            if pp.startswith("(") and pp.endswith(")"):
-                # some definition files like `msdos` have indirect offsets of the form: >>>(&0x0f.l+(-4))
-                # Handle those nested parenthesis around the `(-4)` here. This is an undocumented part of the DSL,
-                # so, TODO: confirm we are handling it properly and it's not something more complex like a nested
-                #           indirect offset
-                pp = pp[1:-1]
-            operand = parse_numeric(pp)
-            if multiply:
-                post_process = lambda n: n * operand
-            elif bitwise_and:
-                post_process = lambda n: n & operand
-            elif divide:
-                post_process = lambda n: n // operand
-            else:
-                post_process = lambda n: n + operand
         return IndirectOffset(
             offset=Offset.parse(m.group("offset")),
-            num_bytes=num_bytes,
+            num_bytes=cls.TYPE_NUM_BYTES[t],
             endianness=endianness,
             signed=m.group("signedness") == ",",
-            post_process=post_process
+            post_process=cls._parse_post_process(m.group("post_process")),
+            is_id3=t == "i"
         )
 
     def __repr__(self):
         return f"{self.__class__.__name__}(offset={self.offset!r}, num_bytes={self.num_bytes}, "\
-               f"endianness={self.endianness!r}, signed={self.signed}, post_process={self.post_process!r})"
+               f"endianness={self.endianness!r}, signed={self.signed}, "\
+               f"post_process={self.post_process!r}, is_id3={self.is_id3})"
 
     def __str__(self):
         if self.num_bytes == IndirectOffset.OctalIndirectOffset:
@@ -1097,15 +1144,32 @@ T = TypeVar("T")
 
 
 class DataTypeMatch:
+    """The portion of the tested data that a :class:`DataType` matched.
+
+    Attributes:
+        raw_match: The bytes that matched, or `None` if the data type did not match.
+        value: The value to interpolate into the message of the test that matched.
+        initial_offset: The offset of `raw_match` within the data that was tested.
+        relative_base: The offset within the tested data that a subsequent relative (`&`) offset
+            resolves against, or `None` to resolve against the end of `raw_match`.
+    """
+
     INVALID: "DataTypeMatch"
 
-    def __init__(self, raw_match: Optional[bytes] = None, value: Optional[Any] = None, initial_offset: int = 0):
+    def __init__(
+            self,
+            raw_match: Optional[bytes] = None,
+            value: Optional[Any] = None,
+            initial_offset: int = 0,
+            relative_base: Optional[int] = None
+    ):
         self.raw_match: Optional[bytes] = raw_match
         if value is None and raw_match is not None:
             self.value: Optional[bytes] = raw_match
         else:
             self.value = value
         self.initial_offset: int = initial_offset
+        self.relative_base: Optional[int] = relative_base
 
     def __bool__(self):
         return self.raw_match is not None
@@ -1344,28 +1408,49 @@ class StringTest(ABC):
 
 
 class StringWildcard(StringTest):
+    def value_end(self, data: bytes, max_bytes: Optional[int] = None) -> int:
+        """Finds the length of the value that libmagic would read from the head of `data`.
+
+        A wildcard value ends at the first null byte, carriage return, or line feed, whichever
+        comes first (``file/src/softmagic.c:683-684`` and ``909-910``).
+
+        Args:
+            data: The bytes at the offset being tested.
+            max_bytes: The most bytes to read, if the type or the buffer bounds it.
+
+        Returns:
+            The number of bytes of `data` that make up the value.
+        """
+        end = len(data) if max_bytes is None else min(max_bytes, len(data))
+        terminator = VALUE_TERMINATOR.search(data, 0, end)
+        if terminator is None:
+            return end
+        return terminator.start()
+
     def matches(self, data: bytes) -> DataTypeMatch:
         if self.num_bytes is None:
-            first_null = data.find(b"\0")
+            max_bytes = MAX_STRING_BYTES
         else:
-            first_null = data.find(b"\0", 0, self.num_bytes)
-            if first_null < 0:
-                return self.post_process(data[:self.num_bytes])
-        if first_null >= 0:
-            return self.post_process(data[:first_null])
-        else:
-            return self.post_process(data)
+            max_bytes = min(self.num_bytes, MAX_STRING_BYTES)
+        return self.post_process(data[:self.value_end(data, max_bytes)])
 
     def is_always_text(self) -> bool:
         return False
 
     def search(self, data: bytes) -> DataTypeMatch:
-        # `num_bytes` bounds the start offsets a search tries, not the extent of the value it
-        # yields, so a search always reads up to the first null byte
-        first_null = data.find(b"\0")
-        if first_null >= 0:
-            return self.post_process(data[:first_null])
-        return self.post_process(data)
+        """Reads the value that a `search` test reports.
+
+        `num_bytes` bounds the start offsets a search tries, not the extent of the value it
+        yields, and a search reads the buffer in place rather than copying it into libmagic's
+        128-byte value union (``file/src/softmagic.c:1389-1395``), so neither bound applies here.
+
+        Args:
+            data: The bytes at the offset being tested.
+
+        Returns:
+            The value, ending at the first null byte, carriage return, or line feed.
+        """
+        return self.post_process(data[:self.value_end(data)])
 
     def __str__(self):
         return "null-terminated string"
@@ -1458,13 +1543,20 @@ class StringMatch(StringTest):
         self.case_insensitive_upper: bool = case_insensitive_upper
         self.optional_blanks: bool = optional_blanks
         self.full_word_match: bool = full_word_match
-        if optional_blanks and compact_whitespace:
-            raise ValueError("Optional blanks `w` and compacting whitespace `W` cannot be selected at the same time")
         self._is_always_text: Optional[bool] = None
         self._pattern: Optional[re.Pattern] = None
         _ = self.pattern
 
     def pattern_string(self) -> bytes:
+        """Builds the regular expression that implements this test's string flags.
+
+        A definition may set both ``W`` (compact whitespace) and ``w`` (optional blanks);
+        ``polyfile/magic_defs/sgml`` does. libmagic keeps both bits and lets ``W`` win, because
+        ``file_strncmp`` tests it first (``file/src/softmagic.c:2103-2120``).
+
+        Returns:
+            The pattern to compile, with the flags folded into it.
+        """
         pattern = re.escape(self.string)
         if self.case_insensitive_lower and not self.case_insensitive_upper:
             # treat lower case letters as either lower or upper case
@@ -1505,7 +1597,7 @@ class StringMatch(StringTest):
                     pattern_bytes.extend(f"{{{count}}}".encode("utf-8"))
             pattern = bytes(pattern_bytes)
         elif self.optional_blanks:
-            pattern = pattern.replace(rb"\ ", rb"\ ?")
+            pattern = BLANK_IN_PATTERN.sub(rb"\\s*", pattern)
         if self.full_word_match:
             pattern = rb"\b" + pattern + rb"\b"
         return pattern
@@ -1605,6 +1697,7 @@ class StringType(DataType[StringTest]):
             case_insensitive_lower=self.case_insensitive_lower,
             case_insensitive_upper=self.case_insensitive_upper,
             compact_whitespace=self.compact_whitespace,
+            optional_blanks=self.optional_blanks,
             full_word_match=self.full_word_match,
             num_bytes=self.num_bytes
         )
@@ -1727,8 +1820,8 @@ class SearchType(StringType):
             repetitions=repetitions,
             case_insensitive_lower="c" in options,
             case_insensitive_upper="C" in options,
-            compact_whitespace="B" in options or "W" in options,
-            optional_blanks="b" in options or "w" in options,
+            compact_whitespace="W" in options,
+            optional_blanks="w" in options,
             full_word_match="f" in options,
             trim="T" in options,
             match_to_start="s" in options
@@ -1736,12 +1829,28 @@ class SearchType(StringType):
 
 
 class PascalStringType(DataType[StringTest]):
+    STRING_FLAGS: str = "CcTWwft"
+
     def __init__(
             self,
             byte_length: int = 1,
             endianness: Endianness = Endianness.BIG,
-            count_includes_length: bool = False
+            count_includes_length: bool = False,
+            string_flags: str = ""
     ):
+        """A length-prefixed string.
+
+        Args:
+            byte_length: The width of the length prefix, in bytes: 1, 2, or 4.
+            endianness: The byte order of a two- or four-byte length prefix.
+            count_includes_length: Whether the length prefix counts itself.
+            string_flags: The string modifier letters of the declaration, such as ``T``. libmagic
+                accepts them on ``pstring`` as it does on ``string``
+                (``file/src/apprentice.c:1943-2020``).
+
+        Raises:
+            ValueError: If `byte_length` or `endianness` is not one libmagic supports.
+        """
         if endianness != Endianness.BIG and endianness != Endianness.LITTLE:
             raise ValueError("Endianness must be either BIG or LITTLE")
         elif byte_length == 1:
@@ -1760,17 +1869,18 @@ class PascalStringType(DataType[StringTest]):
             raise ValueError("byte_length must be either 1, 2, or 4")
         if count_includes_length:
             modifier = f"{modifier}J"
-        super().__init__(f"pstring/{modifier}")
+        super().__init__(f"pstring/{modifier}{string_flags}")
         self.byte_length: int = byte_length
         self.endianness: Endianness = endianness
         self.count_includes_length: int = count_includes_length
+        self.string_type: StringType = StringType.parse(f"string/{string_flags}")
 
     def is_text(self, value: StringTest) -> bool:
         # TODO: See if Pascal strings should sometimes be forced to be text
         return False
 
     def parse_expected(self, specification: str) -> StringTest:
-        return StringTest.parse(specification)
+        return self.string_type.parse_expected(specification)
 
     def match(self, data: bytes, expected: StringTest) -> DataTypeMatch:
         if len(data) < self.byte_length:
@@ -1800,17 +1910,17 @@ class PascalStringType(DataType[StringTest]):
             m.raw_match = data[:self.byte_length + effective_len]
         return m
 
-    PSTRING_TYPE_FORMAT: Pattern[str] = re.compile(r"^pstring(/J?[BHhLl]?J?)?$")
+    PSTRING_TYPE_FORMAT: Pattern[str] = re.compile(r"^pstring(?P<opts>/[JBHhLlCcTWwft]*)?$")
 
     @classmethod
     def parse(cls, format_str: str) -> "PascalStringType":
         m = cls.PSTRING_TYPE_FORMAT.match(format_str)
         if not m:
             raise ValueError(f"Invalid pstring type declaration: {format_str!r}")
-        if m.group(1) is None:
-            options: Iterable[str] = ()
+        if m.group("opts") is None:
+            options: str = ""
         else:
-            options = m.group(1)
+            options = m.group("opts")
         if "H" in options:
             byte_length = 2
             endianness = Endianness.BIG
@@ -1829,7 +1939,8 @@ class PascalStringType(DataType[StringTest]):
         return PascalStringType(
             byte_length=byte_length,
             endianness=endianness,
-            count_includes_length="J" in options
+            count_includes_length="J" in options,
+            string_flags="".join(opt for opt in options if opt in cls.STRING_FLAGS)
         )
 
 
@@ -1885,6 +1996,10 @@ class RegexType(DataType[Pattern[bytes]]):
             return False
 
     def parse_expected(self, specification: str) -> Pattern[bytes]:
+        if specification.startswith("="):
+            # libmagic parses a leading `=` as the equality operator, not as part of the pattern
+            # (`file/src/apprentice.c:2383-2384`)
+            specification = specification[1:]
         # handle POSIX-style character classes:
         unescaped_spec = posix_to_python_re(unescape(specification))
         # convert '$' to '[\r$]'
@@ -1897,41 +2012,52 @@ class RegexType(DataType[Pattern[bytes]]):
         except re.error as e:
             raise ValueError(str(e))
 
+    def matched_extent(self, m: "re.Match[bytes]", subject_offset: int) -> DataTypeMatch:
+        """Builds the match that libmagic reports for a regular expression match.
+
+        libmagic reports only the bytes between `pmatch.rm_so` and `pmatch.rm_eo`, positioned at
+        `rm_so` (`file/src/softmagic.c:2413-2416`, printed at `file/src/softmagic.c:785-801`).
+
+        Args:
+            m: The regular expression match.
+            subject_offset: The offset of `m`'s subject within the data that was tested.
+
+        Returns:
+            A match covering only the matched bytes, positioned at the start of the match.
+        """
+        raw_match = m.group()
+        try:
+            value: Any = raw_match.decode("utf-8")
+        except UnicodeDecodeError:
+            value = raw_match
+        if self.trim:
+            value = value.strip()
+        start = subject_offset + m.start()
+        if self.match_to_start:
+            # the `s` flag resolves a subsequent relative offset from the start of the match rather
+            # than from its end (`CHAR_REGEX_OFFSET_START` in `file/src/file.h:419`, applied in
+            # `moffset`'s `FILE_REGEX` case at `file/src/softmagic.c:959-963`)
+            return DataTypeMatch(raw_match, value, initial_offset=start, relative_base=start)
+        return DataTypeMatch(raw_match, value, initial_offset=start)
+
     def match(self, data: bytes, expected: Pattern[bytes]) -> DataTypeMatch:
-        if self.limit_lines:
-            limit = self.length
-            offset = 0
-            byte_limit = 80 * self.length  # libmagic uses an implicit byte limit assuming 80 characters per line
-            while limit > 0:
-                limit -= 1
-                line_offset = data.find(b"\n", offset, byte_limit)
-                if line_offset < 0:
-                    return DataTypeMatch.INVALID
-                line = data[offset:line_offset]
-                m = expected.match(line)
-                if m:
-                    match = data[:offset + m.end()]
-                    try:
-                        value = match.decode("utf-8")
-                    except UnicodeDecodeError:
-                        value = match
-                    if self.trim:
-                        value = value.strip()
-                    return DataTypeMatch(match, value)
-                offset = line_offset + 1
-        else:
+        if not self.limit_lines:
             m = expected.search(data[:self.length])
-            if m:
-                match = data[:m.end()]
-                try:
-                    value = match.decode("utf-8")
-                except UnicodeDecodeError:
-                    value = match
-                if self.trim:
-                    value = value.strip()
-                return DataTypeMatch(match, value)
-            else:
+            if m is None:
                 return DataTypeMatch.INVALID
+            return self.matched_extent(m, 0)
+        offset = 0
+        # libmagic uses an implicit byte limit that assumes 80 characters per line
+        byte_limit = 80 * self.length
+        for _ in range(self.length):
+            line_offset = data.find(b"\n", offset, byte_limit)
+            if line_offset < 0:
+                return DataTypeMatch.INVALID
+            m = expected.match(data[offset:line_offset])
+            if m is not None:
+                return self.matched_extent(m, offset)
+            offset = line_offset + 1
+        return DataTypeMatch.INVALID
 
     REGEX_TYPE_FORMAT: Pattern[str] = re.compile(
         r"^regex(/(?P<length>\d+)?(?P<flags1>[cslTt]*)(/(?P<flags2>[cslTt]*))?(b\d*)?)?$"
@@ -2295,11 +2421,46 @@ class ConstantMatchTest(MagicTest, Generic[T]):
     def calculate_absolute_offset(self, data: bytes, parent_match: Optional[TestResult] = None) -> int:
         return self.offset.to_absolute(data, parent_match, self.data_type.allows_invalid_offsets(self.constant))
 
+    def matched_test(
+            self, match: DataTypeMatch, absolute_offset: int, parent_match: Optional[TestResult]
+    ) -> MatchedTest:
+        """Records a successful match, with the relative base that libmagic would resolve against.
+
+        A data type that knows its own base reports it as `DataTypeMatch.relative_base`, and that
+        wins: the `regex` `s` flag uses it to resolve against the start of the match instead of its
+        end (`file/src/softmagic.c:959-963`).
+
+        Failing that, a relative (`&`) offset after a `string` test with an `=` relation resolves
+        against the declared length of the magic value rather than the number of bytes the match
+        consumed (`file/src/softmagic.c:904-905`). The two differ when the `w` flag matches fewer
+        blanks than the value declares. A `search` measures from where it found its value, which
+        PolyFile records as the extent it matched; libmagic adds the declared length there too, but
+        zeroes it for the `s` flag (`file/src/softmagic.c:966-968`), which PolyFile does not model
+        yet. A `pstring` carries its own length prefix, so neither rule takes this path.
+
+        Args:
+            match: The match that this test's data type produced.
+            absolute_offset: The offset in the file at which the data type was applied.
+            parent_match: The result of the test that this one is nested under, if any.
+
+        Returns:
+            The result of the test, carrying a relative base when either rule applies.
+        """
+        result = MatchedTest(self, offset=absolute_offset + match.initial_offset,
+                             length=len(match.raw_match), value=match.value, parent=parent_match)
+        declares_its_length = (isinstance(self.data_type, StringType)
+                               and not isinstance(self.data_type, SearchType)
+                               and isinstance(self.constant, StringMatch))
+        if match.relative_base is not None:
+            result.relative_base = absolute_offset + match.relative_base
+        elif declares_its_length:
+            result.relative_base = result.offset + len(self.constant.string)
+        return result
+
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
         match = self.data_type.match(data[absolute_offset:], self.constant)
         if match:
-            return MatchedTest(self, offset=absolute_offset + match.initial_offset, length=len(match.raw_match),
-                               value=match.value, parent=parent_match)
+            return self.matched_test(match, absolute_offset, parent_match)
         else:
             return FailedTest(
                 self,
@@ -2317,8 +2478,7 @@ class ConstantMatchTest(MagicTest, Generic[T]):
             data_type = self.data_type
         match = data_type.match(data[absolute_offset:], self.constant)
         if match:
-            return MatchedTest(self, offset=absolute_offset + match.initial_offset, length=len(match.raw_match),
-                               value=match.value, parent=parent_match)
+            return self.matched_test(match, absolute_offset, parent_match)
         else:
             return FailedTest(
                 self,
@@ -2572,19 +2732,90 @@ class UseTest(MagicTest):
         raise NotImplementedError("This function should never be called")
 
 
+JSON_WHITESPACE: str = " \t\n\r"
+"""The characters that libmagic's `json_skip_space` skips (`file/src/is_json.c`)."""
+
+
+class ParsedJSON(NamedTuple):
+    """A buffer that parsed as JSON under libmagic's rules."""
+
+    value: Any
+    """The first top-level JSON value in the buffer."""
+
+    newline_delimited: bool
+    """Whether a second top-level JSON value follows the first one."""
+
+
+def _skip_json_whitespace(text: str, offset: int) -> int:
+    while offset < len(text) and text[offset] in JSON_WHITESPACE:
+        offset += 1
+    return offset
+
+
+def parse_json(raw: bytes) -> ParsedJSON:
+    """Parses a buffer as JSON the way libmagic's `file_is_json` does.
+
+    libmagic implements JSON detection with a C parser rather than with the magic DSL, and its
+    rules are narrower than `json.loads`:
+
+    * The top-level value must be an object or an array, because libmagic only reports JSON when
+      `st[JSON_OBJECT]` or `st[JSON_ARRAYN]` is set (`file/src/is_json.c`). A bare scalar such as
+      `42` is therefore not JSON, even though `json.loads` accepts one.
+    * If more data follows the first value, it is newline-delimited JSON as long as the next byte
+      equals the first byte of the first value and a second value parses there. libmagic stops
+      after that second value, so trailing garbage does not disqualify the buffer.
+
+    Args:
+        raw: the bytes to parse, starting at the first byte of the candidate JSON value.
+
+    Returns:
+        The first top-level value, and whether a second top-level value follows it.
+
+    Raises:
+        json.JSONDecodeError: if the buffer is not JSON under libmagic's rules.
+        UnicodeDecodeError: if the buffer is not text in an encoding that JSON allows.
+    """
+    text = raw.decode(json.detect_encoding(raw), "surrogatepass")
+    decoder = json.JSONDecoder()
+    start = _skip_json_whitespace(text, 0)
+    value, offset = decoder.raw_decode(text, start)
+    if not isinstance(value, (dict, list)):
+        raise json.JSONDecodeError("the top-level JSON value is neither an object nor an array", text, start)
+    offset = _skip_json_whitespace(text, offset)
+    if offset >= len(text):
+        return ParsedJSON(value, False)
+    if text[offset] != text[start]:
+        raise json.JSONDecodeError("the data after the top-level JSON value does not start another one",
+                                   text, offset)
+    decoder.raw_decode(text, offset)
+    return ParsedJSON(value, True)
+
+
 class JSONTest(MagicTest):
-    def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> Optional[TestResult]:
+    """Matches a buffer that holds a single top-level JSON object or array.
+
+    `NEWLINE_DELIMITED` selects which of libmagic's two JSON verdicts this test accepts, so the
+    two messages come from two tests in `polyfile/magic_defs/json` rather than from reassigning
+    `MagicTest.message` at match time. Test objects are shared across calls to
+    `MagicMatcher.match`, so a message assigned during one match would leak into the next.
+    """
+
+    NEWLINE_DELIMITED: bool = False
+    """Whether this test matches newline-delimited JSON rather than a single JSON value."""
+
+    def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
         try:
-            parsed = json.loads(data[absolute_offset:])
-            return MatchedTest(self, offset=absolute_offset, length=len(data) - absolute_offset, value=parsed,
-                               parent=parent_match)
+            parsed = parse_json(data[absolute_offset:])
         except (json.JSONDecodeError, UnicodeDecodeError) as e:
-            return FailedTest(
-                test=self,
-                offset=absolute_offset,
-                parent=parent_match,
-                message=str(e)
-            )
+            return FailedTest(test=self, offset=absolute_offset, parent=parent_match, message=str(e))
+        if parsed.newline_delimited != self.NEWLINE_DELIMITED:
+            if parsed.newline_delimited:
+                reason = "the data holds more than one top-level JSON value"
+            else:
+                reason = "the data holds only one top-level JSON value"
+            return FailedTest(test=self, offset=absolute_offset, parent=parent_match, message=reason)
+        return MatchedTest(self, offset=absolute_offset, length=len(data) - absolute_offset, value=parsed.value,
+                           parent=parent_match)
 
     def subtest_type(self) -> TestType:
         return TestType.TEXT
@@ -2593,6 +2824,12 @@ class JSONTest(MagicTest):
             self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]
     ) -> TestResult:
         return self.test(data, absolute_offset, parent_match)
+
+
+class NDJSONTest(JSONTest):
+    """Matches newline-delimited JSON, which libmagic names separately from single-value JSON."""
+
+    NEWLINE_DELIMITED: bool = True
 
 
 class CSVTest(MagicTest):
@@ -3280,6 +3517,8 @@ class MagicMatcher:
                                        parent=parent, subtraction=subtraction, modulo=modulo)
             elif data_type == "json":
                 test = JSONTest(offset=offset, message=message, parent=parent)
+            elif data_type == "ndjson":
+                test = NDJSONTest(offset=offset, message=message, parent=parent)
             elif data_type == "csv":
                 test = CSVTest(offset=offset, message=message, parent=parent)
             elif data_type == "indirect" or data_type == "indirect/r":
