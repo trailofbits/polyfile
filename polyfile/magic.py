@@ -24,8 +24,8 @@ import struct
 import sys
 from time import gmtime, localtime, strftime
 from typing import (
-    Any, BinaryIO, Callable, Dict, Generic, Iterable, Iterator, List, NamedTuple, Optional, Set,
-    Tuple, Type, TypeVar, Union
+    Any, BinaryIO, Callable, Dict, FrozenSet, Generic, Iterable, Iterator, List, NamedTuple,
+    Optional, Set, Tuple, Type, TypeVar, Union
 )
 from uuid import UUID
 
@@ -296,6 +296,29 @@ class StrengthOp(Enum):
     MINUS = "-"
     TIMES = "*"
     DIV = "/"
+
+
+STRENGTH_MULT: int = 10
+"""libmagic's strength unit, ``MULT`` in ``file/src/apprentice.c:928``."""
+
+STRENGTH_BASELINE: int = 2 * STRENGTH_MULT
+"""The strength every test starts from, before its type and relation terms."""
+
+RELATION_STRENGTH: Dict[str, int] = {
+    "=": STRENGTH_MULT,
+    ">": -2 * STRENGTH_MULT,
+    "<": -2 * STRENGTH_MULT,
+    "^": -STRENGTH_MULT,
+    "&": -STRENGTH_MULT,
+}
+"""How each relational operator adjusts a test's strength (``file/src/apprentice.c:1034-1051``).
+
+An exact match is the most specific, so it gains a unit; an inequality is the least specific of the
+operators that still read a value, so it loses two.
+"""
+
+UNSELECTIVE_RELATIONS: FrozenSet[str] = frozenset({"x", "!"})
+"""The relations libmagic zeroes the strength for, because they match anything or almost anything."""
 
 
 def parse_numeric(text: Union[str, bytes]) -> int:
@@ -860,12 +883,59 @@ class MagicTest(ABC):
     def subtest_type(self) -> TestType:
         raise NotImplementedError()
 
+    def type_strength(self) -> int:
+        """The term this test's type contributes to its strength.
+
+        libmagic grows the term with how much of the file the type inspects, so a wider integer or
+        a longer string outranks a narrower one (``file/src/apprentice.c:930-1030``). The types
+        that only dispatch another test — ``indirect``, ``name``, ``use``, and ``clear`` — add
+        nothing.
+
+        Returns:
+            The number to add to the baseline strength.
+        """
+        return 0
+
+    def relation(self) -> str:
+        """The relational operator libmagic parsed for this test.
+
+        Every type takes an operator from the head of its value, defaulting to ``=`` when the value
+        names none (``file/src/apprentice.c:2366-2401``).
+
+        Returns:
+            One of ``=``, ``<``, ``>``, ``&``, ``^``, ``!``, or ``x``.
+        """
+        return "="
+
     def base_strength(self) -> int:
-        """Computes the base strength value before applying !:strength modifier."""
-        return 20
+        """Computes the base strength value before applying !:strength modifier.
+
+        This is libmagic's ``apprentice_magic_strength_1``
+        (``file/src/apprentice.c:925-1058``): a fixed baseline plus a term for the type, then
+        adjusted by the relational operator. A relation that matches anything discards both terms.
+
+        Returns:
+            The strength before the ``!:strength`` factor, the clamp, and the description bonus.
+        """
+        rel = self.relation()
+        if rel in UNSELECTIVE_RELATIONS:
+            return 0
+        return STRENGTH_BASELINE + self.type_strength() + RELATION_STRENGTH[rel]
 
     def compute_strength(self) -> int:
-        """Computes the test strength for sorting, mimicking libmagic's algorithm."""
+        """Computes the test strength for sorting, mimicking libmagic's algorithm.
+
+        This is libmagic's ``file_magic_strength`` (``file/src/apprentice.c:1064-1120``): the base
+        strength, then the ``!:strength`` factor, then a clamp to a positive value, and finally a
+        bonus for a test with no description, which depends on its children to print anything.
+
+        A description made only of blanks counts as absent, because libmagic skips the blanks
+        between the value and the description before it copies what remains
+        (``file/src/apprentice.c:2425-2436``).
+
+        Returns:
+            The sort key libmagic would use for this test.
+        """
         val = self.base_strength()
         if self.strength_op == StrengthOp.PLUS:
             val += self.strength_factor
@@ -875,6 +945,10 @@ class MagicTest(ABC):
             val *= self.strength_factor
         elif self.strength_op == StrengthOp.DIV and self.strength_factor != 0:
             val //= self.strength_factor
+        if val <= 0:
+            val = 1
+        if not str(self.message).strip():
+            val += 1
         return val
 
     @property
@@ -1200,6 +1274,29 @@ class DataType(ABC, Generic[T]):
     def allows_invalid_offsets(self, expected: T) -> bool:
         return False
 
+    def strength_term(self, expected: T) -> int:
+        """The term this type contributes to a test's strength.
+
+        Args:
+            expected: The value the test compares against, which sizes the term for the types
+                whose values vary in length.
+
+        Returns:
+            The number to add to the baseline strength.
+        """
+        return 0
+
+    def relation(self, expected: T) -> str:
+        """The relational operator that `expected` carried in the definition.
+
+        Args:
+            expected: The parsed value, which records the operator it was declared with.
+
+        Returns:
+            One of ``=``, ``<``, ``>``, ``&``, ``^``, ``!``, or ``x``.
+        """
+        return "="
+
     @abstractmethod
     def is_text(self, value: T) -> bool:
         raise NotImplementedError()
@@ -1277,6 +1374,13 @@ class GUIDType(DataType[Union[UUID, UUIDWildcard]]):
     def is_text(self, value: Union[UUID, UUIDWildcard]) -> bool:
         return False
 
+    def strength_term(self, expected: Union[UUID, UUIDWildcard]) -> int:
+        """A GUID is sized like the sixteen-byte integer it is (``file/src/apprentice.c:912-915``)."""
+        return 16 * STRENGTH_MULT
+
+    def relation(self, expected: Union[UUID, UUIDWildcard]) -> str:
+        return "x" if isinstance(expected, UUIDWildcard) else "="
+
     def parse_expected(self, specification: str) -> Union[UUID, UUIDWildcard]:
         if specification.strip() == "x":
             return UUIDWildcard()
@@ -1315,6 +1419,15 @@ class UTF16Type(DataType[bytes]):
     def is_text(self, value: bytes) -> bool:
         return True
 
+    def strength_term(self, expected: bytes) -> int:
+        """Half of what the same value would score as a `string` (``file/src/apprentice.c:1003``).
+
+        libmagic stores a sixteen-bit string's value as the bytes the definition spelled and widens
+        it only when matching, so its ``vallen`` counts characters, not the code units PolyFile
+        holds here.
+        """
+        return len(expected) // 2 * STRENGTH_MULT // 2
+
     def parse_expected(self, specification: str) -> bytes:
         specification = unescape(specification).decode("utf-8")
         if self.endianness == Endianness.LITTLE:
@@ -1339,6 +1452,27 @@ class StringTest(ABC):
         self.trim: bool = trim
         self.compact_whitespace: bool = compact_whitespace
         self.num_bytes: Optional[int] = num_bytes
+
+    @property
+    def value_length(self) -> int:
+        """The number of unescaped bytes in this test's value, libmagic's ``m->vallen``.
+
+        libmagic reads no value at all for the ``x`` relation, so a wildcard has none
+        (``file/src/apprentice.c:2409``).
+
+        Returns:
+            The length that sizes this test's strength term.
+        """
+        return 0
+
+    @property
+    def relation(self) -> str:
+        """The relational operator this test was declared with.
+
+        Returns:
+            One of ``=``, ``<``, ``>``, ``!``, or ``x``.
+        """
+        return "x"
 
     def post_process(self, data: bytes, initial_offset: int = 0) -> DataTypeMatch:
         value = data
@@ -1461,6 +1595,14 @@ class NegatedStringTest(StringWildcard):
         super().__init__(trim=parent_test.trim, compact_whitespace=parent_test.compact_whitespace)
         self.parent: StringTest = parent_test
 
+    @property
+    def value_length(self) -> int:
+        return self.parent.value_length
+
+    @property
+    def relation(self) -> str:
+        return "!"
+
     def is_always_text(self) -> bool:
         return self.parent.is_always_text()
 
@@ -1488,11 +1630,21 @@ class StringLengthTest(StringWildcard):
         super().__init__(trim=trim, compact_whitespace=compact_whitespace, num_bytes=num_bytes)
         self.raw_pattern: str = to_match
         self.to_match: bytes = unescape(to_match)
+        self._value_length: int = len(self.to_match)
         null_termination_index = self.to_match.find(0)
         if null_termination_index >= 0:
             self.to_match = self.to_match[:null_termination_index]
         self.desired_length: int = len(self.to_match)
         self.test_smaller: bool = test_smaller
+
+    @property
+    def value_length(self) -> int:
+        """The declared length, which libmagic counts past an embedded null byte."""
+        return self._value_length
+
+    @property
+    def relation(self) -> str:
+        return "<" if self.test_smaller else ">"
 
     def matches(self, data: bytes) -> DataTypeMatch:
         match = super().matches(data)
@@ -1546,6 +1698,14 @@ class StringMatch(StringTest):
         self._is_always_text: Optional[bool] = None
         self._pattern: Optional[re.Pattern] = None
         _ = self.pattern
+
+    @property
+    def value_length(self) -> int:
+        return len(self.string)
+
+    @property
+    def relation(self) -> str:
+        return "="
 
     def pattern_string(self) -> bytes:
         """Builds the regular expression that implements this test's string flags.
@@ -1687,6 +1847,16 @@ class StringType(DataType[StringTest]):
     def is_text(self, value: StringTest) -> bool:
         return self.force_text
 
+    def strength_term(self, expected: StringTest) -> int:
+        """One unit per byte of the value, the dominant term for most definitions.
+
+        See ``file/src/apprentice.c:998-1000``.
+        """
+        return expected.value_length * STRENGTH_MULT
+
+    def relation(self, expected: StringTest) -> str:
+        return expected.relation
+
     def allows_invalid_offsets(self, expected: StringTest) -> bool:
         return isinstance(expected, NegatedStringTest)
 
@@ -1784,6 +1954,18 @@ class SearchType(StringType):
     def is_text(self, value: StringTest) -> bool:
         return value.is_always_text()
 
+    def strength_term(self, expected: StringTest) -> int:
+        """Far less than a `string` of the same length, because a search roams the buffer.
+
+        libmagic caps the per-byte credit so the whole term never exceeds one unit's worth for a
+        value of two bytes or more (``file/src/apprentice.c:1008-1012``): ``vallen * max(MULT //
+        vallen, 1)`` is ``MULT`` for a one-byte value and ``vallen`` beyond that.
+        """
+        vallen = expected.value_length
+        if vallen == 0:
+            return 0
+        return vallen * max(STRENGTH_MULT // vallen, 1)
+
     def match(self, data: bytes, expected: StringTest) -> DataTypeMatch:
         return expected.search(data)
 
@@ -1879,6 +2061,17 @@ class PascalStringType(DataType[StringTest]):
         # TODO: See if Pascal strings should sometimes be forced to be text
         return False
 
+    def strength_term(self, expected: StringTest) -> int:
+        """Scored like a `string`, counting the length prefix as part of the value.
+
+        ``getstr`` folds ``file_pstring_length_size`` into ``m->vallen`` for a ``pstring``
+        (``file/src/apprentice.c:3181-3188``), so the prefix widens the term.
+        """
+        return (expected.value_length + self.byte_length) * STRENGTH_MULT
+
+    def relation(self, expected: StringTest) -> str:
+        return expected.relation
+
     def parse_expected(self, specification: str) -> StringTest:
         return self.string_type.parse_expected(specification)
 
@@ -1964,7 +2157,82 @@ def posix_to_python_re(match: bytes) -> bytes:
     return match
 
 
-class RegexType(DataType[Pattern[bytes]]):
+def nonmagic(pattern: bytes) -> int:
+    """Counts the literal characters of a regular expression, libmagic's ``nonmagic``.
+
+    Metacharacters describe how to match rather than what to match, so they earn no strength
+    (``file/src/apprentice.c:813-849``). A bracketed class counts one, for its closing bracket; a
+    braced repetition counts nothing; an escape counts one, whatever it escapes.
+
+    Note that libmagic applies this to the *unescaped* value, so a pattern written ``\\.`` arrives
+    here as a bare ``.`` and counts zero, which is why libmagic warns to write ``\\\\.`` instead.
+    For the same reason an escaped null byte ends the count, because libmagic walks the value as a
+    C string.
+
+    Args:
+        pattern: The unescaped pattern bytes.
+
+    Returns:
+        The number of literal characters, at least one.
+    """
+    count = 0
+    i = 0
+    terminator = pattern.find(b"\0")
+    if terminator >= 0:
+        pattern = pattern[:terminator]
+    while i < len(pattern):
+        char = pattern[i:i + 1]
+        if char == b"\\":
+            i += 2 if i + 1 < len(pattern) else 1
+            count += 1
+        elif char in (b"?", b"*", b".", b"+", b"^", b"$"):
+            i += 1
+        elif char == b"[":
+            closing = pattern.find(b"]", i)
+            i = len(pattern) if closing < 0 else closing
+        elif char == b"{":
+            closing = pattern.find(b"}", i)
+            i = len(pattern) if closing < 0 else closing + 1
+        else:
+            i += 1
+            count += 1
+    return max(count, 1)
+
+
+class MagicRegex:
+    """A definition's regular expression, alongside the literal count libmagic scores it by.
+
+    libmagic counts literals on the value as its own unescaping left it
+    (``file/src/apprentice.c:1015``), which is before PolyFile rewrites POSIX character classes
+    into their Python equivalents. The rewrite drops the inner ``:]`` that ends libmagic's bracket
+    scan, so the count is one lower per class unless it is taken first.
+    """
+
+    def __init__(self, specification: bytes, flags: int = 0):
+        """Compiles `specification`, counting its literals before the POSIX rewrite.
+
+        Args:
+            specification: The unescaped pattern, as libmagic would hold it.
+            flags: The regular expression flags to compile with.
+
+        Raises:
+            re.error: If `specification` is not a valid regular expression.
+        """
+        self.literal_count: int = nonmagic(specification)
+        self.pattern: bytes = posix_to_python_re(specification)
+        self.compiled: Pattern[bytes] = re.compile(self.pattern, flags)
+
+    def search(self, data: bytes) -> Optional["re.Match[bytes]"]:
+        return self.compiled.search(data)
+
+    def match(self, data: bytes) -> Optional["re.Match[bytes]"]:
+        return self.compiled.match(data)
+
+    def __str__(self):
+        return self.pattern.decode("utf-8", errors="replace")
+
+
+class RegexType(DataType[MagicRegex]):
     def __init__(
             self,
             length: Optional[int] = None,
@@ -1988,27 +2256,31 @@ class RegexType(DataType[Pattern[bytes]]):
 
     DOLLAR_PATTERN = re.compile(rb"(^|[^\\])\$", re.MULTILINE)
 
-    def is_text(self, value: Pattern[bytes]) -> bool:
+    def is_text(self, value: MagicRegex) -> bool:
         try:
             _ = value.pattern.decode("ascii")
             return True
         except UnicodeDecodeError:
             return False
 
-    def parse_expected(self, specification: str) -> Pattern[bytes]:
+    def strength_term(self, expected: MagicRegex) -> int:
+        """One unit per literal character, capped the way a `search` is.
+
+        See ``file/src/apprentice.c:1014-1017``.
+        """
+        literals = expected.literal_count
+        return literals * max(STRENGTH_MULT // literals, 1)
+
+    def parse_expected(self, specification: str) -> MagicRegex:
         if specification.startswith("="):
             # libmagic parses a leading `=` as the equality operator, not as part of the pattern
             # (`file/src/apprentice.c:2383-2384`)
             specification = specification[1:]
-        # handle POSIX-style character classes:
-        unescaped_spec = posix_to_python_re(unescape(specification))
-        # convert '$' to '[\r$]'
-        # unescaped_spec = self.__class__.DOLLAR_PATTERN.sub(rb"[\r$]", unescaped_spec)
+        flags = re.MULTILINE
+        if self.case_insensitive:
+            flags |= re.IGNORECASE
         try:
-            if self.case_insensitive:
-                return re.compile(unescaped_spec, re.IGNORECASE | re.MULTILINE)
-            else:
-                return re.compile(unescaped_spec, re.MULTILINE)
+            return MagicRegex(unescape(specification), flags)
         except re.error as e:
             raise ValueError(str(e))
 
@@ -2040,7 +2312,7 @@ class RegexType(DataType[Pattern[bytes]]):
             return DataTypeMatch(raw_match, value, initial_offset=start, relative_base=start)
         return DataTypeMatch(raw_match, value, initial_offset=start)
 
-    def match(self, data: bytes, expected: Pattern[bytes]) -> DataTypeMatch:
+    def match(self, data: bytes, expected: MagicRegex) -> DataTypeMatch:
         if not self.limit_lines:
             m = expected.search(data[:self.length])
             if m is None:
@@ -2299,6 +2571,15 @@ class NumericDataType(DataType[NumericValue]):
     def is_text(self, value: NumericValue) -> bool:
         return False
 
+    def strength_term(self, expected: NumericValue) -> int:
+        """One unit per byte the type reads (``file/src/apprentice.c:975-996``)."""
+        return self.base_type.num_bytes * STRENGTH_MULT
+
+    def relation(self, expected: NumericValue) -> str:
+        if isinstance(expected, NumericWildcard):
+            return "x"
+        return expected.operator.symbol
+
     def parse_expected(self, specification: str) -> NumericValue:
         if specification.strip() == "x":
             return NumericWildcard()
@@ -2412,6 +2693,12 @@ class ConstantMatchTest(MagicTest, Generic[T]):
         self.data_type: DataType[T] = data_type
         self.constant: T = constant
 
+    def type_strength(self) -> int:
+        return self.data_type.strength_term(self.constant)
+
+    def relation(self) -> str:
+        return self.data_type.relation(self.constant)
+
     def subtest_type(self) -> TestType:
         if self.data_type.is_text(self.constant):
             return TestType.TEXT
@@ -2504,6 +2791,15 @@ class OffsetMatchTest(MagicTest):
         self.value: IntegerValue = value
         self.subtraction: int = subtraction
         self.modulo: int = modulo
+
+    def type_strength(self) -> int:
+        """``offset`` is an eight-byte quantity (``file/src/apprentice.c:906-908``)."""
+        return 8 * STRENGTH_MULT
+
+    def relation(self) -> str:
+        if isinstance(self.value, NumericWildcard):
+            return "x"
+        return self.value.operator.symbol
 
     def subtest_type(self) -> TestType:
         return TestType.UNKNOWN
@@ -2880,6 +3176,14 @@ class DefaultTest(MagicTest):
     def subtest_type(self) -> TestType:
         return TestType.UNKNOWN
 
+    def base_strength(self) -> int:
+        """Zero, so that a `default` sorts last (``file/src/apprentice.c:932-938``).
+
+        libmagic returns before reaching the relation term here, and its own clamp then raises the
+        zero to one, so a `default` is the weakest test rather than a strengthless one.
+        """
+        return 0
+
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
         if parent_match is None or not parent_match.child_matched:
             return MatchedTest(self, offset=absolute_offset, length=0, value=True, parent=parent_match)
@@ -2896,6 +3200,10 @@ class DefaultTest(MagicTest):
 class ClearTest(MagicTest):
     def subtest_type(self) -> TestType:
         return TestType.UNKNOWN
+
+    def relation(self) -> str:
+        """``clear`` takes no value, so libmagic parses it as the ``x`` relation."""
+        return "x"
 
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> MatchedTest:
         if parent_match is None:
@@ -2926,6 +3234,10 @@ class DERTest(MagicTest):
         super().__init__(offset=offset, mime=mime, extensions=extensions, message=message,
                          parent=parent, comments=comments)
         self.specification: DERSpecification = specification
+
+    def type_strength(self) -> int:
+        """One flat unit, whatever the specification says (``file/src/apprentice.c:1024-1026``)."""
+        return STRENGTH_MULT
 
     def subtest_type(self) -> TestType:
         return TestType.BINARY
