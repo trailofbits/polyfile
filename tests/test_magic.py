@@ -514,6 +514,19 @@ class RegexSemanticsTest(TestCase):
     """Test data whose only run of digits starts at offset 2 and ends at offset 5."""
 
     @staticmethod
+    def relative_offset_definition(flags: str, follow_up: str) -> str:
+        """Builds a definition whose second test reads at `&0` after a regex match.
+
+        Args:
+            flags: The flags to append to the `regex` type, such as `/s`.
+            follow_up: The string that the second test expects to find at `&0`.
+
+        Returns:
+            The contents of a libmagic definition file.
+        """
+        return f"0\tregex{flags}\t=[0-9]{{1,3}}\tdigits\n>&0\tstring\t{follow_up}\tthen\n"
+
+    @staticmethod
     def messages(definition: str, data: bytes) -> Set[str]:
         """Classifies `data` with a matcher built from a single magic definition.
 
@@ -555,3 +568,22 @@ class RegexSemanticsTest(TestCase):
         self.assertEqual(2, match.initial_offset)
         self.assertEqual({"digits 123"},
                          self.messages("0\tregex\t=[0-9]{1,3}\tdigits %s\n", self.DATA))
+
+    def test_regex_relative_offset_resolves_from_the_match_end(self):
+        """A `&` offset after a plain `regex` reads from the end of the match, at offset 5."""
+        self.assertEqual({"digits then"},
+                         self.messages(self.relative_offset_definition("", "bb"), self.DATA))
+        self.assertEqual({"digits"},
+                         self.messages(self.relative_offset_definition("", "123"), self.DATA))
+
+    def test_regex_s_relative_offset_resolves_from_the_match_start(self):
+        """The `s` flag was parsed and then never read, so `&` resolved from the match end.
+
+        `CHAR_REGEX_OFFSET_START` (`file/src/file.h:419`) makes a following relative offset
+        resolve from the start of the match, at offset 2 rather than offset 5
+        (`file/src/softmagic.c:959-963`).
+        """
+        self.assertEqual({"digits then"},
+                         self.messages(self.relative_offset_definition("/s", "123"), self.DATA))
+        self.assertEqual({"digits"},
+                         self.messages(self.relative_offset_definition("/s", "bb"), self.DATA))

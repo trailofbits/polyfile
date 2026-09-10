@@ -1097,15 +1097,32 @@ T = TypeVar("T")
 
 
 class DataTypeMatch:
+    """The portion of the tested data that a :class:`DataType` matched.
+
+    Attributes:
+        raw_match: The bytes that matched, or `None` if the data type did not match.
+        value: The value to interpolate into the message of the test that matched.
+        initial_offset: The offset of `raw_match` within the data that was tested.
+        relative_base: The offset within the tested data that a subsequent relative (`&`) offset
+            resolves against, or `None` to resolve against the end of `raw_match`.
+    """
+
     INVALID: "DataTypeMatch"
 
-    def __init__(self, raw_match: Optional[bytes] = None, value: Optional[Any] = None, initial_offset: int = 0):
+    def __init__(
+            self,
+            raw_match: Optional[bytes] = None,
+            value: Optional[Any] = None,
+            initial_offset: int = 0,
+            relative_base: Optional[int] = None
+    ):
         self.raw_match: Optional[bytes] = raw_match
         if value is None and raw_match is not None:
             self.value: Optional[bytes] = raw_match
         else:
             self.value = value
         self.initial_offset: int = initial_offset
+        self.relative_base: Optional[int] = relative_base
 
     def __bool__(self):
         return self.raw_match is not None
@@ -1921,7 +1938,13 @@ class RegexType(DataType[Pattern[bytes]]):
             value = raw_match
         if self.trim:
             value = value.strip()
-        return DataTypeMatch(raw_match, value, initial_offset=subject_offset + m.start())
+        start = subject_offset + m.start()
+        if self.match_to_start:
+            # the `s` flag resolves a subsequent relative offset from the start of the match rather
+            # than from its end (`CHAR_REGEX_OFFSET_START` in `file/src/file.h:419`, applied in
+            # `moffset`'s `FILE_REGEX` case at `file/src/softmagic.c:959-963`)
+            return DataTypeMatch(raw_match, value, initial_offset=start, relative_base=start)
+        return DataTypeMatch(raw_match, value, initial_offset=start)
 
     def match(self, data: bytes, expected: Pattern[bytes]) -> DataTypeMatch:
         if not self.limit_lines:
@@ -2304,11 +2327,30 @@ class ConstantMatchTest(MagicTest, Generic[T]):
     def calculate_absolute_offset(self, data: bytes, parent_match: Optional[TestResult] = None) -> int:
         return self.offset.to_absolute(data, parent_match, self.data_type.allows_invalid_offsets(self.constant))
 
+    def matched_test(
+            self, match: DataTypeMatch, absolute_offset: int, parent_match: Optional[TestResult]
+    ) -> "MatchedTest":
+        """Builds the result of a successful match of this test's data type.
+
+        Args:
+            match: The match that the data type reported.
+            absolute_offset: The offset at which the data type was tested.
+            parent_match: The result of the parent test, if this test has one.
+
+        Returns:
+            The result, positioned at the match and carrying the relative base that the data type
+            asked for.
+        """
+        result = MatchedTest(self, offset=absolute_offset + match.initial_offset,
+                             length=len(match.raw_match), value=match.value, parent=parent_match)
+        if match.relative_base is not None:
+            result.relative_base = absolute_offset + match.relative_base
+        return result
+
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
         match = self.data_type.match(data[absolute_offset:], self.constant)
         if match:
-            return MatchedTest(self, offset=absolute_offset + match.initial_offset, length=len(match.raw_match),
-                               value=match.value, parent=parent_match)
+            return self.matched_test(match, absolute_offset, parent_match)
         else:
             return FailedTest(
                 self,
@@ -2326,8 +2368,7 @@ class ConstantMatchTest(MagicTest, Generic[T]):
             data_type = self.data_type
         match = data_type.match(data[absolute_offset:], self.constant)
         if match:
-            return MatchedTest(self, offset=absolute_offset + match.initial_offset, length=len(match.raw_match),
-                               value=match.value, parent=parent_match)
+            return self.matched_test(match, absolute_offset, parent_match)
         else:
             return FailedTest(
                 self,
