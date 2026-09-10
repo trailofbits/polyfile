@@ -73,6 +73,8 @@ MAGIC_DEFS: List[Path] = sorted([
 
 
 WHITESPACE: bytes = b" \r\t\n\v\f"
+# a whitespace byte of an `re.escape`-ed pattern, with or without the backslash that escaped it
+BLANK_IN_PATTERN: Pattern[bytes] = re.compile(rb"\\?[ \t\n\v\f\r]")
 ESCAPES = {
     "n": ord("\n"),
     "r": ord("\r"),
@@ -1458,13 +1460,20 @@ class StringMatch(StringTest):
         self.case_insensitive_upper: bool = case_insensitive_upper
         self.optional_blanks: bool = optional_blanks
         self.full_word_match: bool = full_word_match
-        if optional_blanks and compact_whitespace:
-            raise ValueError("Optional blanks `w` and compacting whitespace `W` cannot be selected at the same time")
         self._is_always_text: Optional[bool] = None
         self._pattern: Optional[re.Pattern] = None
         _ = self.pattern
 
     def pattern_string(self) -> bytes:
+        """Builds the regular expression that implements this test's string flags.
+
+        A definition may set both ``W`` (compact whitespace) and ``w`` (optional blanks);
+        ``polyfile/magic_defs/sgml`` does. libmagic keeps both bits and lets ``W`` win, because
+        ``file_strncmp`` tests it first (``file/src/softmagic.c:2103-2120``).
+
+        Returns:
+            The pattern to compile, with the flags folded into it.
+        """
         pattern = re.escape(self.string)
         if self.case_insensitive_lower and not self.case_insensitive_upper:
             # treat lower case letters as either lower or upper case
@@ -1505,7 +1514,7 @@ class StringMatch(StringTest):
                     pattern_bytes.extend(f"{{{count}}}".encode("utf-8"))
             pattern = bytes(pattern_bytes)
         elif self.optional_blanks:
-            pattern = pattern.replace(rb"\ ", rb"\ ?")
+            pattern = BLANK_IN_PATTERN.sub(rb"\\s*", pattern)
         if self.full_word_match:
             pattern = rb"\b" + pattern + rb"\b"
         return pattern
@@ -1605,6 +1614,7 @@ class StringType(DataType[StringTest]):
             case_insensitive_lower=self.case_insensitive_lower,
             case_insensitive_upper=self.case_insensitive_upper,
             compact_whitespace=self.compact_whitespace,
+            optional_blanks=self.optional_blanks,
             full_word_match=self.full_word_match,
             num_bytes=self.num_bytes
         )
@@ -1727,8 +1737,8 @@ class SearchType(StringType):
             repetitions=repetitions,
             case_insensitive_lower="c" in options,
             case_insensitive_upper="C" in options,
-            compact_whitespace="B" in options or "W" in options,
-            optional_blanks="b" in options or "w" in options,
+            compact_whitespace="W" in options,
+            optional_blanks="w" in options,
             full_word_match="f" in options,
             trim="T" in options,
             match_to_start="s" in options

@@ -13,7 +13,9 @@ from uuid import UUID
 # from polyfile import logger
 import polyfile.der
 import polyfile.magic
-from polyfile.magic import MagicMatcher, MAGIC_DEFS, Match, MatchContext, SearchType, TestResult
+from polyfile.magic import (
+    MagicMatcher, MAGIC_DEFS, Match, MatchContext, SearchType, StringType, TestResult
+)
 
 
 # logger.setLevel(logger.TRACE)
@@ -489,8 +491,8 @@ class MagicMatchingRegressionTest(TestCase):
 
     def test_match_truthiness_is_lazy(self):
         """`bool(match)` used to match the whole subtree before it could answer."""
-        data = b"#!/bin/sh\nexec cat \"$@\"\n"
-        result = next(iter(MagicMatcher.DEFAULT_INSTANCE.match(data)))[0]
+        result = next(iter(MagicMatcher.DEFAULT_INSTANCE.match(b"plain ASCII text\n")))[0]
+        self.assertIsNotNone(result.test.mime, "bool() stops at the first result of a MIME match")
         match, produced = self.counting_match(result, 8)
         self.assertTrue(match)
         self.assertEqual(1, len(produced))
@@ -503,3 +505,77 @@ class MagicMatchingRegressionTest(TestCase):
         self.assertEqual(8192, expected.num_bytes)
         self.assertTrue(search.match(b"." * 8000 + b"needle", expected))
         self.assertFalse(search.match(b"." * 9000 + b"needle", expected))
+
+
+class StringDataTypeTest(TestCase):
+    """Regression tests for the `string` data type defects reported in issue #3483."""
+
+    @staticmethod
+    def messages(definition: str, data: bytes) -> Set[str]:
+        """Runs a single magic definition against `data`.
+
+        Args:
+            definition: The text of a magic definition file, with tab-separated columns.
+            data: The bytes to classify.
+
+        Returns:
+            The message of every match.
+        """
+        with TemporaryDirectory() as tmp_dir:
+            magic_file = Path(tmp_dir) / "test.magic"
+            magic_file.write_text(definition)
+            matcher = MagicMatcher.parse(magic_file)
+            return {str(match) for match in matcher.match(data)}
+
+    def test_optional_blanks_reach_the_matcher(self):
+        """`StringType.parse_expected` dropped the `w` flag, so `#!\\ ` needed a literal space.
+
+        This is what `magic_defs/varied.script` relies on to report both `#!/usr/bin/cmd` and
+        `#! /usr/bin/cmd`.
+        """
+        shebang = StringType.parse("string/wt")
+        self.assertTrue(shebang.optional_blanks)
+        expected = shebang.parse_expected("#!\\ ")
+        self.assertTrue(expected.optional_blanks)
+        for data in (b"#!/usr/bin/x", b"#! /usr/bin/x", b"#!\t/usr/bin/x", b"#!  \t/usr/bin/x"):
+            self.assertTrue(shebang.match(data, expected), repr(data))
+        self.assertFalse(shebang.match(b"#x/usr/bin/x", expected))
+
+    def test_optional_blanks_accept_any_whitespace(self):
+        """`w` was rendered as one optional literal space, so a tab or a run of blanks failed.
+
+        libmagic consumes a run of any whitespace, of any length including none, wherever the magic
+        value holds a blank (`file/src/softmagic.c:2116-2120`).
+        """
+        blanks = StringType.parse("string/w")
+        space_in_value = blanks.parse_expected("A\\ B")
+        for data in (b"AB", b"A B", b"A  B", b"A\tB", b"A \t B"):
+            self.assertTrue(blanks.match(data, space_in_value), repr(data))
+        self.assertFalse(blanks.match(b"AxB", space_in_value))
+        self.assertTrue(blanks.match(b"AB", blanks.parse_expected("A\\tB")))
+
+    def test_compact_whitespace_wins_over_optional_blanks(self):
+        """`StringMatch` raised when a definition set both `W` and `w`, as `magic_defs/sgml` does.
+
+        libmagic keeps both bits and lets `W` win, because `file_strncmp` tests it first
+        (`file/src/softmagic.c:2103-2120`).
+        """
+        both = StringType.parse("string/Ww")
+        self.assertTrue(both.compact_whitespace)
+        self.assertTrue(both.optional_blanks)
+        expected = both.parse_expected("A\\ B")
+        self.assertTrue(both.match(b"A  B", expected))
+        self.assertFalse(both.match(b"AB", expected))
+
+    def test_search_b_flag_is_not_optional_blanks(self):
+        """`search/…b…` was read as optional blanks; `b` selects the binary pass.
+
+        `CHAR_BINTEST` is `b` and `CHAR_COMPACT_OPTIONAL_WHITESPACE` is `w`
+        (`file/src/file.h:416` and `423`).
+        """
+        binary_test = SearchType.parse("search/100/b")
+        self.assertFalse(binary_test.optional_blanks)
+        self.assertFalse(binary_test.compact_whitespace)
+        sgml = SearchType.parse("search/4096/cWbt")
+        self.assertTrue(sgml.compact_whitespace)
+        self.assertFalse(sgml.optional_blanks)
