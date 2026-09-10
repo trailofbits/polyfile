@@ -4176,6 +4176,69 @@ class Match:
     __str__ = message
 
 
+MATCH_SEPARATOR: str = "\n- "
+"""What libmagic puts between the matches it joins.
+
+``FILE_SEPARATOR`` in ``src/funcs.c``, printed by ``file_separator`` after every check that
+matched and trimmed off the end again by ``trim_separator``.
+"""
+
+
+def octal_escape(description: str) -> str:
+    """Escapes the characters `file` escapes when it is not run with ``-r``.
+
+    ``file_getbuffer`` in libmagic's ``src/funcs.c`` copies its output buffer verbatim when
+    ``MAGIC_RAW`` is set, and otherwise replaces every character it cannot print with a
+    backslash and three octal digits per byte. That is why ``file/tests/multiple.result`` holds
+    the separator's line feed as ``\\012``.
+
+    Args:
+        description: the description to escape.
+
+    Returns:
+        `description` with each unprintable character replaced by the octal escape of its UTF-8
+        bytes.
+    """
+    escaped: List[str] = []
+    for character in description:
+        if character.isprintable():
+            escaped.append(character)
+        else:
+            escaped.extend(f"\\{byte:03o}" for byte in character.encode("utf-8"))
+    return "".join(escaped)
+
+
+def join_matches(matches: Iterable[Match], raw: bool = False) -> str:
+    """Describes several matches the way ``file -k`` describes them, in one string.
+
+    ``MAGIC_CONTINUE`` does not change which checks libmagic runs; it changes how their messages
+    reach the one output buffer libmagic prints. Every check that matched appends its message and
+    a `MATCH_SEPARATOR`, ``file_ascmagic`` then rewrites the tail of that whole buffer, and
+    ``file_getbuffer`` escapes it. So the text-encoding description lands once, after the last
+    match, rather than once per match, and this consumes the matches `MagicMatcher.match` yields
+    without changing them.
+
+    Args:
+        matches: the matches to describe, in the order `MagicMatcher.match` reported them.
+        raw: whether to skip the escaping, as libmagic's ``MAGIC_RAW`` does.
+
+    Returns:
+        The joined description, which is empty when `matches` is.
+    """
+    text_encoding: Optional[TextEncodingDescription] = None
+    parts: List[str] = []
+    for match in matches:
+        parts.append(match._soft_magic_message())
+        if match.text_encoding is not None:
+            text_encoding = match.text_encoding
+    joined = MATCH_SEPARATOR.join(parts)
+    if text_encoding is not None:
+        joined = text_encoding.describe(joined)
+    if raw:
+        return joined
+    return octal_escape(joined)
+
+
 class DefaultMagicMatcher:
     _DEFAULT_INSTANCE: Optional["MagicMatcher"] = None
 
