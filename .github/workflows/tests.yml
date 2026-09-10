@@ -30,19 +30,24 @@ jobs:
       uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
       with:
         python-version: ${{ matrix.python-version }}
+    - name: Install uv
+      uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+      with:
+        enable-cache: true
     - name: Install Python Dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install setuptools
-        pip install .[dev]
+      # --system installs into the interpreter actions/setup-python put on the PATH, which is
+      # also the environment pip-audit scans. Installing into a virtualenv would hide every
+      # dependency from it. setuptools no longer needs installing here: the isolated build
+      # environment gets it from [build-system] requires in pyproject.toml.
+      run: uv pip install --system '.[dev]'
     - name: Scan with pip-audit
       uses: trailofbits/gh-action-pip-audit@1220774d901786e6f652ae159f7b6bc8fea6d266 # v1.1.0
     - name: Lint with flake8
       run: |
         # stop the build if there are Python syntax errors or undefined names
-        flake8 polyfile polymerge tests --exclude polyfile/kaitai/parsers --count --select=E9,F63,F7,F82 --show-source --statistics
+        flake8 polyfile polymerge tests build_backend.py compile_kaitai_parsers.py --exclude polyfile/kaitai/parsers --count --select=E9,F63,F7,F82 --show-source --statistics
         # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
-        flake8 polyfile polymerge tests --exclude polyfile/kaitai/parsers --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+        flake8 polyfile polymerge tests build_backend.py compile_kaitai_parsers.py --exclude polyfile/kaitai/parsers --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
     - name: Test with pytest
       run: |
         pytest tests
