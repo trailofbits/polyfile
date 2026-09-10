@@ -427,56 +427,85 @@ class RelativeOffset(Offset):
         return f"&{self.relative_to}"
 
 
+def decode_id3_synchsafe(value: int) -> int:
+    """Decodes a 32-bit ID3v2 synchsafe integer.
+
+    An ID3v2 tag stores its size with only seven significant bits per byte so that the encoded
+    size can never be mistaken for an MPEG frame sync. This mirrors `cvt_id3` in libmagic's
+    `src/softmagic.c`, which libmagic applies to the `i` and `I` indirect offset types before
+    any offset arithmetic.
+
+    Args:
+        value: The four size bytes, already interpreted in the field's byte order.
+
+    Returns:
+        The decoded 28-bit integer.
+    """
+    return ((value & 0x7F)
+            | ((value >> 8 & 0x7F) << 7)
+            | ((value >> 16 & 0x7F) << 14)
+            | ((value >> 24 & 0x7F) << 21))
+
+
 class IndirectOffset(Offset):
     OctalIndirectOffset = -1
 
+    STRUCT_FORMATS: Dict[int, str] = {1: "B", 2: "H", 4: "I", 8: "Q"}
+
+    TYPE_NUM_BYTES: Dict[str, int] = {
+        "b": 1, "c": 1,
+        "h": 2, "s": 2,
+        "i": 4, "l": 4,
+        "e": 8, "f": 8, "g": 8, "q": 8,
+        "o": OctalIndirectOffset,
+    }
+
     def __init__(self, offset: Offset, num_bytes: int, endianness: Endianness, signed: bool,
-                 post_process: Callable[[int], int] = lambda n: n):
+                 post_process: Callable[[int], int] = lambda n: n, *, is_id3: bool = False):
         self.offset: Offset = offset
         self.num_bytes: int = num_bytes
         self.endianness: Endianness = endianness
         self.signed: bool = signed
         self.post_process: Callable[[int], int] = post_process
+        self.is_id3: bool = is_id3
         if self.endianness != Endianness.LITTLE and self.endianness != endianness.BIG:
             raise ValueError(f"Invalid endianness: {endianness!r}")
         elif num_bytes not in (1, 2, 4, 8, IndirectOffset.OctalIndirectOffset):
             raise ValueError(f"Invalid number of bytes: {num_bytes}")
+        elif is_id3 and num_bytes != 4:
+            raise ValueError(f"An ID3 indirect offset must be four bytes, not {num_bytes}")
 
-    def to_absolute(self, data: bytes, last_match: Optional[TestResult], allow_invalid: bool = False) -> int:
-        if self.num_bytes == IndirectOffset.OctalIndirectOffset:
-            # Special case: This is for the new octal type used here:
-            # https://github.com/file/file/blob/7a4e60a8f56ed45f76f28d2812a88d82efdc4bb8/magic/Magdir/gentoo#L81
-            offset = self.offset.to_absolute(data, last_match)
-            octal_string_end = offset
-            while octal_string_end < len(data) and ord('0') <= data[octal_string_end] <= ord('7'):
-                octal_string_end += 1
-            value: Optional[int] = None
-            if octal_string_end > offset:
-                try:
-                    value = int(data[:octal_string_end], 8)
-                except ValueError:
-                    pass
-            if value is None:
-                if allow_invalid:
-                    value = 0
-                else:
-                    return len(data)
-                    # raise ValueError(f"Invalid octal string expected for {self} at file offset {offset}")
-            return self.post_process(value)
-        elif self.num_bytes == 1:
-            fmt = "B"
-        elif self.num_bytes == 2:
-            fmt = "H"
-        elif self.num_bytes == 8:
-            fmt = "Q"
-        else:
-            fmt = "I"
+    def _octal_to_absolute(self, data: bytes, last_match: Optional[TestResult],
+                           allow_invalid: bool) -> int:
+        # This is for the octal type used here:
+        # https://github.com/file/file/blob/7a4e60a8f56ed45f76f28d2812a88d82efdc4bb8/magic/Magdir/gentoo#L81
+        offset = self.offset.to_absolute(data, last_match)
+        octal_string_end = offset
+        while octal_string_end < len(data) and ord('0') <= data[octal_string_end] <= ord('7'):
+            octal_string_end += 1
+        value: Optional[int] = None
+        if octal_string_end > offset:
+            try:
+                value = int(data[:octal_string_end], 8)
+            except ValueError:
+                pass
+        if value is None:
+            if not allow_invalid:
+                return len(data)
+            value = 0
+        return self.post_process(value)
+
+    def _struct_format(self) -> str:
+        fmt = IndirectOffset.STRUCT_FORMATS[self.num_bytes]
         if self.signed:
             fmt = fmt.lower()
         if self.endianness == Endianness.LITTLE:
-            fmt = f"<{fmt}"
-        else:
-            fmt = f">{fmt}"
+            return f"<{fmt}"
+        return f">{fmt}"
+
+    def to_absolute(self, data: bytes, last_match: Optional[TestResult], allow_invalid: bool = False) -> int:
+        if self.num_bytes == IndirectOffset.OctalIndirectOffset:
+            return self._octal_to_absolute(data, last_match, allow_invalid)
         offset = self.offset.to_absolute(data, last_match)
         to_unpack = data[offset:offset + self.num_bytes]
         if len(to_unpack) < self.num_bytes:
@@ -484,7 +513,10 @@ class IndirectOffset(Offset):
                 return len(data)
             else:
                 raise InvalidOffsetError(offset=self)
-        return self.post_process(struct.unpack(fmt, to_unpack)[0])
+        value = struct.unpack(self._struct_format(), to_unpack)[0]
+        if self.is_id3:
+            value = decode_id3_synchsafe(value)
+        return self.post_process(value)
 
     NUMBER_PATTERN: str = r"(0[xX][\dA-Fa-f]+|\d+)L?"
     INDIRECT_OFFSET_PATTERN: Pattern[str] = re.compile(
@@ -495,14 +527,57 @@ class IndirectOffset(Offset):
         r"\)$"
     )
 
+    @staticmethod
+    def _parse_post_process(pp: Optional[str]) -> Callable[[int], int]:
+        if pp is None:
+            return lambda n: n
+        multiply = pp.startswith("*")
+        bitwise_and = pp.startswith("&")
+        divide = pp.startswith("/")
+        if multiply or bitwise_and or divide:
+            pp = pp[1:]
+        if pp.startswith("+"):
+            pp = pp[1:]
+        if pp.startswith("(") and pp.endswith(")"):
+            # some definition files like `msdos` have indirect offsets of the form: >>>(&0x0f.l+(-4))
+            # Handle those nested parenthesis around the `(-4)` here. This is an undocumented part of the DSL,
+            # so, TODO: confirm we are handling it properly and it's not something more complex like a nested
+            #           indirect offset
+            pp = pp[1:-1]
+        operand = parse_numeric(pp)
+        if multiply:
+            return lambda n: n * operand
+        elif bitwise_and:
+            return lambda n: n & operand
+        elif divide:
+            return lambda n: n // operand
+        return lambda n: n + operand
+
     @classmethod
     def parse(cls, offset: str) -> "IndirectOffset":
+        """Parses an indirect offset such as `(6.I+10)`.
+
+        The type character selects the width and byte order of the field to read, following
+        libmagic's `parse_type` in `src/apprentice.c`: `l`/`L` are four-byte integers, `i`/`I`
+        are four-byte ID3v2 synchsafe integers, and an absent type defaults to a four-byte
+        integer. A lowercase character means little endian and an uppercase one big endian.
+
+        Args:
+            offset: The parenthesized text of the offset, including its surrounding parentheses.
+
+        Returns:
+            The parsed offset.
+
+        Raises:
+            ValueError: If `offset` is not a valid indirect offset, or names an unsupported type.
+            NotImplementedError: If `offset` uses middle endianness.
+        """
         m = cls.INDIRECT_OFFSET_PATTERN.match(offset)
         if not m:
             raise ValueError(f"Invalid indirect offset: {offset!r}")
         t = m.group("type")
         if t is None:
-            t = "I"
+            t = "L"
         if t == "m":
             raise NotImplementedError("TODO: Add support for middle endianness")
         elif t.islower():
@@ -510,56 +585,21 @@ class IndirectOffset(Offset):
         else:
             endianness = Endianness.BIG
         t = t.lower()
-        if t in ("b", "c"):
-            num_bytes = 1
-        elif t in ("e", "f", "g", "q"):
-            num_bytes = 8
-        elif t in ("h", "s"):
-            num_bytes = 2
-        elif t in ("i", "l"):
-            # TODO: Confirm that "l" should really be here
-            num_bytes = 4
-        elif t in ("o",):
-            num_bytes = IndirectOffset.OctalIndirectOffset
-        else:
+        if t not in cls.TYPE_NUM_BYTES:
             raise ValueError(f"Unsupported indirect specifier type: {m.group('type')!r}")
-        pp = m.group("post_process")
-        if pp is None:
-            post_process = lambda n: n
-        else:
-            multiply = pp.startswith("*")
-            bitwise_and = pp.startswith("&")
-            divide = pp.startswith("/")
-            if multiply or bitwise_and or divide:
-                pp = pp[1:]
-            if pp.startswith("+"):
-                pp = pp[1:]
-            if pp.startswith("(") and pp.endswith(")"):
-                # some definition files like `msdos` have indirect offsets of the form: >>>(&0x0f.l+(-4))
-                # Handle those nested parenthesis around the `(-4)` here. This is an undocumented part of the DSL,
-                # so, TODO: confirm we are handling it properly and it's not something more complex like a nested
-                #           indirect offset
-                pp = pp[1:-1]
-            operand = parse_numeric(pp)
-            if multiply:
-                post_process = lambda n: n * operand
-            elif bitwise_and:
-                post_process = lambda n: n & operand
-            elif divide:
-                post_process = lambda n: n // operand
-            else:
-                post_process = lambda n: n + operand
         return IndirectOffset(
             offset=Offset.parse(m.group("offset")),
-            num_bytes=num_bytes,
+            num_bytes=cls.TYPE_NUM_BYTES[t],
             endianness=endianness,
             signed=m.group("signedness") == ",",
-            post_process=post_process
+            post_process=cls._parse_post_process(m.group("post_process")),
+            is_id3=t == "i"
         )
 
     def __repr__(self):
         return f"{self.__class__.__name__}(offset={self.offset!r}, num_bytes={self.num_bytes}, "\
-               f"endianness={self.endianness!r}, signed={self.signed}, post_process={self.post_process!r})"
+               f"endianness={self.endianness!r}, signed={self.signed}, "\
+               f"post_process={self.post_process!r}, is_id3={self.is_id3})"
 
     def __str__(self):
         if self.num_bytes == IndirectOffset.OctalIndirectOffset:
