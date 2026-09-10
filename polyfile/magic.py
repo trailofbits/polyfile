@@ -2330,11 +2330,40 @@ class ConstantMatchTest(MagicTest, Generic[T]):
     def calculate_absolute_offset(self, data: bytes, parent_match: Optional[TestResult] = None) -> int:
         return self.offset.to_absolute(data, parent_match, self.data_type.allows_invalid_offsets(self.constant))
 
+    def matched_test(
+            self, match: DataTypeMatch, absolute_offset: int, parent_match: Optional[TestResult]
+    ) -> MatchedTest:
+        """Records a successful match, with the relative base that libmagic would resolve against.
+
+        libmagic resolves a relative (``&``) offset after a ``string`` test with an ``=`` relation
+        against the declared length of the magic value rather than the number of bytes the match
+        consumed (``file/src/softmagic.c:904-905``). The two differ when the ``w`` flag matches
+        fewer blanks than the value declares. A ``search`` measures from where it found its value,
+        which PolyFile records as the extent it matched; libmagic adds the declared length there
+        too, but zeroes it for the ``s`` flag (``file/src/softmagic.c:966-968``), which PolyFile
+        does not model yet. A ``pstring`` carries its own length prefix, so neither takes this
+        path.
+
+        Args:
+            match: The match that this test's data type produced.
+            absolute_offset: The offset in the file at which the data type was applied.
+            parent_match: The result of the test that this one is nested under, if any.
+
+        Returns:
+            The result of the test, with its relative base set when the declared length applies.
+        """
+        result = MatchedTest(self, offset=absolute_offset + match.initial_offset,
+                             length=len(match.raw_match), value=match.value, parent=parent_match)
+        declares_its_length = (isinstance(self.data_type, StringType)
+                               and not isinstance(self.data_type, SearchType))
+        if declares_its_length and isinstance(self.constant, StringMatch):
+            result.relative_base = result.offset + len(self.constant.string)
+        return result
+
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
         match = self.data_type.match(data[absolute_offset:], self.constant)
         if match:
-            return MatchedTest(self, offset=absolute_offset + match.initial_offset, length=len(match.raw_match),
-                               value=match.value, parent=parent_match)
+            return self.matched_test(match, absolute_offset, parent_match)
         else:
             return FailedTest(
                 self,
@@ -2352,8 +2381,7 @@ class ConstantMatchTest(MagicTest, Generic[T]):
             data_type = self.data_type
         match = data_type.match(data[absolute_offset:], self.constant)
         if match:
-            return MatchedTest(self, offset=absolute_offset + match.initial_offset, length=len(match.raw_match),
-                               value=match.value, parent=parent_match)
+            return self.matched_test(match, absolute_offset, parent_match)
         else:
             return FailedTest(
                 self,

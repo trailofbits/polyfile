@@ -580,6 +580,28 @@ class StringDataTypeTest(TestCase):
         self.assertTrue(sgml.compact_whitespace)
         self.assertFalse(sgml.optional_blanks)
 
+    def test_string_relative_base_is_the_declared_length(self):
+        """`>&-1` under a `string/w` read one byte early when `w` matched no blanks.
+
+        libmagic's `moffset` adds the declared length of the magic value, not the number of bytes
+        the match consumed (`file/src/softmagic.c:904-905`), which is what lets one definition
+        cover both `#!/bin/x` and `#! /bin/x`.
+        """
+        definition = "0\tstring/w\t#!\\ \tshebang\n>&-1\tstring\tx\t%s\n"
+        self.assertEqual({"shebang /bin/x"}, self.messages(definition, b"#!/bin/x\n"))
+        self.assertEqual({"shebang  /bin/x"}, self.messages(definition, b"#! /bin/x\n"))
+        self.assertEqual({"shebang \t/bin/x"}, self.messages(definition, b"#!\t/bin/x\n"))
+
+    def test_search_relative_base_starts_where_it_found_its_value(self):
+        """A `search` resolves a relative offset from where it found its value, not from where it
+        started looking (`file/src/softmagic.c:966-968`).
+
+        Measuring from the start of the search instead turned `gedcom.testfile`'s message into
+        `GEDCOM genealogy text version 2 VERS 2.x`.
+        """
+        definition = "0\tsearch/16\tVERS\tversion\n>&1\tstring\tx\t%s\n"
+        self.assertEqual({"version 5.5"}, self.messages(definition, b"xxx VERS 5.5\nnext line\n"))
+
     def test_wildcard_string_stops_at_a_line_break(self):
         """A wildcard value ran to the first null byte, so a `%s` leaked the rest of the file.
 
