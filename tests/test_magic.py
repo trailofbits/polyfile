@@ -13,7 +13,10 @@ from uuid import UUID
 # from polyfile import logger
 import polyfile.der
 import polyfile.magic
-from polyfile.magic import MagicMatcher, MAGIC_DEFS, Match, MatchContext, SearchType, TestResult
+from polyfile.magic import (
+    DataType, MagicMatcher, MAGIC_DEFS, Match, MatchContext, RegexType, SearchType, StringType,
+    TestResult
+)
 
 
 # logger.setLevel(logger.TRACE)
@@ -74,6 +77,56 @@ class MagicTest(TestCase):
                 self.assertEqual(expected, data_type.match(data, expected).value)
                 self.assertIs(polyfile.magic.DataTypeMatch.INVALID,
                               data_type.match(data, UUID(int=0)))
+
+    def test_id3_synchsafe_decode(self):
+        """Tests that `decode_id3_synchsafe` drops bit 7 of every byte and repacks the rest.
+
+        This is a regression test for trailofbits/polyfile#3485. An ID3v2 tag stores its size
+        with seven significant bits per byte, so a plain four-byte read overstates it: the size
+        field `00 00 10 24` is 2084, not 0x1024.
+        """
+        self.assertEqual(2084, polyfile.magic.decode_id3_synchsafe(0x00001024))
+        self.assertEqual(0x0FFFFFFF, polyfile.magic.decode_id3_synchsafe(0x7F7F7F7F))
+        self.assertEqual(0, polyfile.magic.decode_id3_synchsafe(0x80808080))
+        for shift, expected in ((0, 1), (8, 1 << 7), (16, 1 << 14), (24, 1 << 21)):
+            with self.subTest(shift=shift):
+                self.assertEqual(expected, polyfile.magic.decode_id3_synchsafe(1 << shift))
+
+    def test_id3_indirect_offset_byte_orders(self):
+        """Tests that `.i` and `.I` indirect offsets read their field as an ID3 synchsafe integer.
+
+        This is a regression test for trailofbits/polyfile#3485. libmagic maps the `i` and `I`
+        indirect types to FILE_LEID3 and FILE_BEID3 and applies `cvt_id3` before the offset
+        arithmetic, so `>(6.I+10)` in `magic_defs/audio` resolves to 2094 and not to 4142. The
+        `10 7a` case pins the decode ahead of the `+10`: decoding afterwards carries `0x7a + 10`
+        into bit 7 and yields 2052 instead of 2180.
+        """
+        for spec, size_field, endianness, expected in (
+                ("(6.I+10)", b"\x00\x00\x10\x24", polyfile.magic.Endianness.BIG, 2094),
+                ("(6.i+10)", b"\x24\x10\x00\x00", polyfile.magic.Endianness.LITTLE, 2094),
+                ("(6.I+10)", b"\x00\x00\x10\x7a", polyfile.magic.Endianness.BIG, 2180)):
+            with self.subTest(offset=spec, size_field=size_field):
+                offset = polyfile.magic.IndirectOffset.parse(spec)
+                self.assertTrue(offset.is_id3)
+                self.assertEqual(endianness, offset.endianness)
+                header = b"ID3\x02\x00\x00" + size_field
+                self.assertEqual(expected, offset.to_absolute(header, None))
+        for spec in ("(6.l+10)", "(6.L+10)", "(6+10)"):
+            with self.subTest(offset=spec):
+                self.assertFalse(polyfile.magic.IndirectOffset.parse(spec).is_id3)
+
+    def test_id3v2_tag_locates_its_audio_frames(self):
+        """Tests that an ID3v2 tag's indirect offset lands on the MPEG frame that follows it.
+
+        This is a regression test for trailofbits/polyfile#3485. `magic_defs/audio` reaches the
+        audio frames with `>(6.I+10) indirect`; without the synchsafe decode PolyFile read the
+        2084-byte tag size as 4132 and reported `contains: data`.
+        """
+        tag = b"ID3\x02\x00\x00\x00\x00\x10\x24"
+        data = tag + b"A" * (2094 - len(tag)) + b"\xff\xfb\x70\xc0" + b"\x55" * 380
+        matches = {str(match) for match in MagicMatcher.DEFAULT_INSTANCE.match(data)}
+        self.assertIn("Audio file with ID3 version 2.2.0, contains: MPEG ADTS, layer III, v1, "
+                      "96 kbps, 44.1 kHz, Monaural", matches)
 
     def test_text_tests(self):
         matcher = MagicMatcher.parse(*MAGIC_DEFS)
@@ -394,8 +447,8 @@ class MagicTest(TestCase):
                         matches.add(actual)
                         print(f"\tActual:   {actual!r}")
                     if testfile.stem not in (
-                            "JW07022A.mp3", "gedcom", "cmd1", "cmd2", "cmd3", "cmd4", "jpeg-text",
-                            "multiple", "osm", "pnm1", "pnm2", "pnm3", "utf16xmlsvg"
+                            "gedcom", "cmd1", "cmd2", "jpeg-text", "multiple", "osm", "pnm1",
+                            "pnm3", "utf16xmlsvg"
                     ):
                         # The files we skip fail because there is a bug in our implementation that we have not yet fixed
                         if expected == "ASCII text" and expected not in matches:
@@ -538,8 +591,8 @@ class MagicMatchingRegressionTest(TestCase):
 
     def test_match_truthiness_is_lazy(self):
         """`bool(match)` used to match the whole subtree before it could answer."""
-        data = b"#!/bin/sh\nexec cat \"$@\"\n"
-        result = next(iter(MagicMatcher.DEFAULT_INSTANCE.match(data)))[0]
+        result = next(iter(MagicMatcher.DEFAULT_INSTANCE.match(b"plain ASCII text\n")))[0]
+        self.assertIsNotNone(result.test.mime, "bool() stops at the first result of a MIME match")
         match, produced = self.counting_match(result, 8)
         self.assertTrue(match)
         self.assertEqual(1, len(produced))
@@ -552,3 +605,217 @@ class MagicMatchingRegressionTest(TestCase):
         self.assertEqual(8192, expected.num_bytes)
         self.assertTrue(search.match(b"." * 8000 + b"needle", expected))
         self.assertFalse(search.match(b"." * 9000 + b"needle", expected))
+
+
+class RegexSemanticsTest(TestCase):
+    """Regression tests for the `regex` data type reported in issue #3482."""
+
+    DATA: bytes = b"aa123bb"
+    """Test data whose only run of digits starts at offset 2 and ends at offset 5."""
+
+    @staticmethod
+    def relative_offset_definition(flags: str, follow_up: str) -> str:
+        """Builds a definition whose second test reads at `&0` after a regex match.
+
+        Args:
+            flags: The flags to append to the `regex` type, such as `/s`.
+            follow_up: The string that the second test expects to find at `&0`.
+
+        Returns:
+            The contents of a libmagic definition file.
+        """
+        return f"0\tregex{flags}\t=[0-9]{{1,3}}\tdigits\n>&0\tstring\t{follow_up}\tthen\n"
+
+    @staticmethod
+    def messages(definition: str, data: bytes) -> Set[str]:
+        """Classifies `data` with a matcher built from a single magic definition.
+
+        Args:
+            definition: The contents of a libmagic definition file.
+            data: The bytes to classify.
+
+        Returns:
+            The message of every match.
+        """
+        with TemporaryDirectory() as tmp_dir:
+            path = Path(tmp_dir) / "regex_semantics"
+            path.write_text(definition)
+            matcher = MagicMatcher.parse(path)
+        return {str(match) for match in matcher.match(data)}
+
+    def test_regex_strips_the_equality_operator(self):
+        """A leading `=` used to compile into the pattern, so such a test could never match.
+
+        libmagic consumes the relation operator before it compiles the pattern
+        (`file/src/apprentice.c:2383-2384`). 40 `=`-prefixed regex tests ship in the definitions,
+        among them the `netpbm` chain that `file/tests/pnm2.testfile` exercises.
+        """
+        regex = RegexType.parse("regex")
+        self.assertEqual(b"^[0-9]{1,50}", regex.parse_expected("=\\^[0-9]{1,50}").pattern)
+        self.assertTrue(regex.match(self.DATA, regex.parse_expected("=[0-9]{1,3}")))
+
+    def test_regex_reports_only_the_matched_extent(self):
+        """`%s` used to report every byte from offset 0 through the end of the match.
+
+        libmagic reports only the bytes between `rm_so` and `rm_eo`
+        (`file/src/softmagic.c:2413-2416`), and positions the match at `rm_so` rather than at the
+        offset the test ran at.
+        """
+        regex = RegexType.parse("regex")
+        match = regex.match(self.DATA, regex.parse_expected("=[0-9]{1,3}"))
+        self.assertEqual(b"123", match.raw_match)
+        self.assertEqual("123", match.value)
+        self.assertEqual(2, match.initial_offset)
+        self.assertEqual({"digits 123"},
+                         self.messages("0\tregex\t=[0-9]{1,3}\tdigits %s\n", self.DATA))
+
+    def test_regex_relative_offset_resolves_from_the_match_end(self):
+        """A `&` offset after a plain `regex` reads from the end of the match, at offset 5."""
+        self.assertEqual({"digits then"},
+                         self.messages(self.relative_offset_definition("", "bb"), self.DATA))
+        self.assertEqual({"digits"},
+                         self.messages(self.relative_offset_definition("", "123"), self.DATA))
+
+    def test_regex_s_relative_offset_resolves_from_the_match_start(self):
+        """The `s` flag was parsed and then never read, so `&` resolved from the match end.
+
+        `CHAR_REGEX_OFFSET_START` (`file/src/file.h:419`) makes a following relative offset
+        resolve from the start of the match, at offset 2 rather than offset 5
+        (`file/src/softmagic.c:959-963`).
+        """
+        self.assertEqual({"digits then"},
+                         self.messages(self.relative_offset_definition("/s", "123"), self.DATA))
+        self.assertEqual({"digits"},
+                         self.messages(self.relative_offset_definition("/s", "bb"), self.DATA))
+
+
+class StringDataTypeTest(TestCase):
+    """Regression tests for the `string` data type defects reported in issue #3483."""
+
+    @staticmethod
+    def messages(definition: str, data: bytes) -> Set[str]:
+        """Runs a single magic definition against `data`.
+
+        Args:
+            definition: The text of a magic definition file, with tab-separated columns.
+            data: The bytes to classify.
+
+        Returns:
+            The message of every match.
+        """
+        with TemporaryDirectory() as tmp_dir:
+            magic_file = Path(tmp_dir) / "test.magic"
+            magic_file.write_text(definition)
+            matcher = MagicMatcher.parse(magic_file)
+            return {str(match) for match in matcher.match(data)}
+
+    def test_optional_blanks_reach_the_matcher(self):
+        """`StringType.parse_expected` dropped the `w` flag, so `#!\\ ` needed a literal space.
+
+        This is what `magic_defs/varied.script` relies on to report both `#!/usr/bin/cmd` and
+        `#! /usr/bin/cmd`.
+        """
+        shebang = StringType.parse("string/wt")
+        self.assertTrue(shebang.optional_blanks)
+        expected = shebang.parse_expected("#!\\ ")
+        self.assertTrue(expected.optional_blanks)
+        for data in (b"#!/usr/bin/x", b"#! /usr/bin/x", b"#!\t/usr/bin/x", b"#!  \t/usr/bin/x"):
+            self.assertTrue(shebang.match(data, expected), repr(data))
+        self.assertFalse(shebang.match(b"#x/usr/bin/x", expected))
+
+    def test_optional_blanks_accept_any_whitespace(self):
+        """`w` was rendered as one optional literal space, so a tab or a run of blanks failed.
+
+        libmagic consumes a run of any whitespace, of any length including none, wherever the magic
+        value holds a blank (`file/src/softmagic.c:2116-2120`).
+        """
+        blanks = StringType.parse("string/w")
+        space_in_value = blanks.parse_expected("A\\ B")
+        for data in (b"AB", b"A B", b"A  B", b"A\tB", b"A \t B"):
+            self.assertTrue(blanks.match(data, space_in_value), repr(data))
+        self.assertFalse(blanks.match(b"AxB", space_in_value))
+        self.assertTrue(blanks.match(b"AB", blanks.parse_expected("A\\tB")))
+
+    def test_compact_whitespace_wins_over_optional_blanks(self):
+        """`StringMatch` raised when a definition set both `W` and `w`, as `magic_defs/sgml` does.
+
+        libmagic keeps both bits and lets `W` win, because `file_strncmp` tests it first
+        (`file/src/softmagic.c:2103-2120`).
+        """
+        both = StringType.parse("string/Ww")
+        self.assertTrue(both.compact_whitespace)
+        self.assertTrue(both.optional_blanks)
+        expected = both.parse_expected("A\\ B")
+        self.assertTrue(both.match(b"A  B", expected))
+        self.assertFalse(both.match(b"AB", expected))
+
+    def test_search_b_flag_is_not_optional_blanks(self):
+        """`search/…b…` was read as optional blanks; `b` selects the binary pass.
+
+        `CHAR_BINTEST` is `b` and `CHAR_COMPACT_OPTIONAL_WHITESPACE` is `w`
+        (`file/src/file.h:416` and `423`).
+        """
+        binary_test = SearchType.parse("search/100/b")
+        self.assertFalse(binary_test.optional_blanks)
+        self.assertFalse(binary_test.compact_whitespace)
+        sgml = SearchType.parse("search/4096/cWbt")
+        self.assertTrue(sgml.compact_whitespace)
+        self.assertFalse(sgml.optional_blanks)
+
+    def test_string_relative_base_is_the_declared_length(self):
+        """`>&-1` under a `string/w` read one byte early when `w` matched no blanks.
+
+        libmagic's `moffset` adds the declared length of the magic value, not the number of bytes
+        the match consumed (`file/src/softmagic.c:904-905`), which is what lets one definition
+        cover both `#!/bin/x` and `#! /bin/x`.
+        """
+        definition = "0\tstring/w\t#!\\ \tshebang\n>&-1\tstring\tx\t%s\n"
+        self.assertEqual({"shebang /bin/x"}, self.messages(definition, b"#!/bin/x\n"))
+        self.assertEqual({"shebang  /bin/x"}, self.messages(definition, b"#! /bin/x\n"))
+        self.assertEqual({"shebang \t/bin/x"}, self.messages(definition, b"#!\t/bin/x\n"))
+
+    def test_search_relative_base_starts_where_it_found_its_value(self):
+        """A `search` resolves a relative offset from where it found its value, not from where it
+        started looking (`file/src/softmagic.c:966-968`).
+
+        Measuring from the start of the search instead turned `gedcom.testfile`'s message into
+        `GEDCOM genealogy text version 2 VERS 2.x`.
+        """
+        definition = "0\tsearch/16\tVERS\tversion\n>&1\tstring\tx\t%s\n"
+        self.assertEqual({"version 5.5"}, self.messages(definition, b"xxx VERS 5.5\nnext line\n"))
+
+    def test_wildcard_string_stops_at_a_line_break(self):
+        """A wildcard value ran to the first null byte, so a `%s` leaked the rest of the file.
+
+        libmagic cuts it at the first carriage return or line feed
+        (`file/src/softmagic.c:683-684`) and reads at most `MAXstring` bytes
+        (`file/src/file.h:179`).
+        """
+        wildcard = StringType.parse("string").parse_expected("x")
+        self.assertEqual(b"first", wildcard.matches(b"first\nsecond").raw_match)
+        self.assertEqual(b"first", wildcard.matches(b"first\r\nsecond").raw_match)
+        self.assertEqual(b"first", wildcard.matches(b"first\0second").raw_match)
+        self.assertEqual(b"a" * 128, wildcard.matches(b"a" * 300).raw_match)
+
+    def test_gedcom_reports_one_version_and_not_four_lines(self):
+        """`magic_defs/scientific`'s `%s` reported four lines of `gedcom.testfile`.
+
+        `gedcom` still fails the corpus check because its message needs the encoding trailer
+        (trailofbits/polyfile#3488), so the corpus check does not pin what this fixes.
+        """
+        self.assertTrue(FILE_TEST_DIR.exists(),
+                        "Run `git submodule init && git submodule update` in the repository root.")
+        data = (FILE_TEST_DIR / "gedcom.testfile").read_bytes()
+        messages = {str(match) for match in MagicMatcher.DEFAULT_INSTANCE.match(data)}
+        self.assertEqual({"GEDCOM genealogy text version 5.5"}, messages)
+
+    def test_pstring_forwards_its_string_flags(self):
+        """`PascalStringType` dropped every string flag, and rejected a declaration carrying one.
+
+        libmagic accepts the string modifiers on `pstring` (`file/src/apprentice.c:1943-2020`).
+        """
+        trimming = DataType.parse("pstring/BT")
+        self.assertEqual("hi", trimming.match(b"\x06  hi  ", trimming.parse_expected("x")).value)
+        verbatim = DataType.parse("pstring/B")
+        untrimmed = verbatim.match(b"\x06  hi  ", verbatim.parse_expected("x"))
+        self.assertEqual("  hi  ", untrimmed.value)
