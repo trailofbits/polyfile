@@ -1792,16 +1792,18 @@ class StringMatch(StringTest):
         return self._pattern
 
     def is_always_text(self) -> bool:
+        r"""Whether libmagic classifies a test looking for this value as a text test.
+
+        libmagic decides from ``file_looks_utf8`` over the value it unescaped while parsing the
+        definition (``file/src/apprentice.c:1277-1283``), so an escaped space is a space rather
+        than a null byte: ``\040`` is text, and only a genuine control character or a byte
+        sequence that is not valid UTF-8 makes the value binary.
+
+        Returns:
+            True if the unescaped value is valid UTF-8 made only of text characters.
+        """
         if self._is_always_text is None:
-            if "\\x" in self.raw_pattern or "\\0" in self.raw_pattern:
-                # the string has hex escapes, so do not treat it as text
-                self._is_always_text = False
-            else:
-                try:
-                    _ = self.pattern.pattern.decode("ascii")
-                    self._is_always_text = True
-                except UnicodeDecodeError:
-                    self._is_always_text = False
+            self._is_always_text = _looks_like_utf8(self.string)
         return self._is_always_text
 
     def matches(self, data: bytes) -> DataTypeMatch:
@@ -1932,7 +1934,8 @@ class SearchType(StringType):
             optional_blanks: bool = False,
             match_to_start: bool = False,
             full_word_match: bool = False,
-            trim: bool = False
+            trim: bool = False,
+            force_binary: bool = False
     ):
         if repetitions is not None and repetitions <= 0:
             raise ValueError("repetitions must be either None or a positive integer")
@@ -1952,11 +1955,26 @@ class SearchType(StringType):
         assert self.name.startswith("string")
         self.name = f"search{rep_str}{self.name[6:]}"
         self.match_to_start: bool = match_to_start
+        self.force_binary: bool = force_binary
         if match_to_start:
-            if self.name == f"search{rep_str}":
-                self.name = f"search{rep_str}/s"
-            else:
-                self.name = f"{self.name}s"
+            self._name_flag("s", rep_str)
+        if force_binary:
+            self._name_flag("b", rep_str)
+
+    def _name_flag(self, flag: str, rep_str: str) -> None:
+        """Records `flag` in this type's name, opening the flag group if it is the first one.
+
+        `DataType.parse` keys its cache of parsed types on the name, so a flag left out of the
+        name would make a declaration that carries it share an instance with one that does not.
+
+        Args:
+            flag: The declaration letter of the flag.
+            rep_str: The repetition count as it appears in the name, or an empty string.
+        """
+        if self.name == f"search{rep_str}":
+            self.name = f"search{rep_str}/{flag}"
+        else:
+            self.name = f"{self.name}{flag}"
 
     @property
     def repetitions(self) -> Optional[int]:
@@ -1969,6 +1987,20 @@ class SearchType(StringType):
         return self.num_bytes
 
     def is_text(self, value: StringTest) -> bool:
+        """Whether libmagic runs a search for `value` in its text pass.
+
+        An explicit ``b`` flag decides on its own: ``set_test_type`` sets ``BINTEST`` from the
+        declared string flags and breaks out of the case before it ever reaches
+        ``file_looks_utf8`` (``file/src/apprentice.c:1258-1283``).
+
+        Args:
+            value: The parsed value the search looks for.
+
+        Returns:
+            True if libmagic classifies the search as a text test.
+        """
+        if self.force_binary:
+            return False
         return value.is_always_text()
 
     def strength_term(self, expected: StringTest) -> int:
@@ -2023,7 +2055,8 @@ class SearchType(StringType):
             optional_blanks="w" in options,
             full_word_match="f" in options,
             trim="T" in options,
-            match_to_start="s" in options
+            match_to_start="s" in options,
+            force_binary="b" in options
         )
 
 

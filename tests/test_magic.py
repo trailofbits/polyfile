@@ -229,59 +229,61 @@ class MagicTest(TestCase):
             'c-lang:29', 'c-lang:32', 'c-lang:35', 'c-lang:38', 'c-lang:41', 'c-lang:44',
             'c-lang:47', 'c-lang:50', 'c-lang:59', 'c-lang:64', 'c-lang:68', 'c-lang:72',
             'c-lang:77', 'c-lang:8', 'c-lang:81', 'c-lang:85', 'c-lang:89', 'c-lang:95', 'cad:317',
-            'cad:365', 'clojure:23', 'clojure:26', 'clojure:29', 'commands:101', 'commands:104',
-            'commands:106', 'commands:111', 'commands:113', 'commands:115', 'commands:118',
-            'commands:121', 'commands:123', 'commands:125', 'commands:128', 'commands:131',
-            'commands:133', 'commands:138', 'commands:14', 'commands:140', 'commands:146',
-            'commands:148', 'commands:150', 'commands:152', 'commands:164', 'commands:167',
-            'commands:169', 'commands:171', 'commands:174', 'commands:18', 'commands:191',
-            'commands:213', 'commands:23', 'commands:231', 'commands:232', 'commands:233',
-            'commands:25', 'commands:27', 'commands:29', 'commands:34', 'commands:36',
-            'commands:38', 'commands:40', 'commands:43', 'commands:45', 'commands:47',
-            'commands:49', 'commands:51', 'commands:53', 'commands:55', 'commands:57',
-            'commands:59', 'commands:61', 'commands:64', 'commands:66', 'commands:68', 'commands:7',
-            'commands:70', 'commands:72', 'commands:74', 'commands:76', 'commands:80',
-            'commands:83', 'commands:87', 'commands:91', 'commands:95', 'commands:99', 'csv:6',
-            'ctags:6', 'diff:48', 'fonts:132', 'fonts:6', 'forth:10', 'forth:16', 'fortran:6',
+            'cad:365', 'cddb:12', 'clojure:23', 'clojure:26', 'clojure:29', 'commands:101',
+            'commands:104', 'commands:106', 'commands:111', 'commands:113', 'commands:115',
+            'commands:118', 'commands:121', 'commands:123', 'commands:125', 'commands:128',
+            'commands:131', 'commands:133', 'commands:138', 'commands:14', 'commands:140',
+            'commands:146', 'commands:148', 'commands:150', 'commands:152', 'commands:164',
+            'commands:167', 'commands:169', 'commands:171', 'commands:174', 'commands:18',
+            'commands:191', 'commands:213', 'commands:23', 'commands:231', 'commands:232',
+            'commands:233', 'commands:25', 'commands:27', 'commands:29', 'commands:34',
+            'commands:36', 'commands:38', 'commands:40', 'commands:43', 'commands:45',
+            'commands:47', 'commands:49', 'commands:51', 'commands:53', 'commands:55',
+            'commands:57', 'commands:59', 'commands:61', 'commands:64', 'commands:66',
+            'commands:68', 'commands:7', 'commands:70', 'commands:72', 'commands:74', 'commands:76',
+            'commands:80', 'commands:83', 'commands:87', 'commands:91', 'commands:95',
+            'commands:99', 'csv:6', 'ctags:6', 'database:900', 'diff:13', 'diff:25', 'diff:35',
+            'diff:41', 'diff:48', 'fonts:132', 'fonts:6', 'forth:10', 'forth:16', 'fortran:6',
             'games:248', 'games:411', 'games:412', 'gentoo:44', 'gimp:14', 'gimp:7', 'gnu:170',
-            'images:2657', 'inform:9', 'java:19', 'java:49', 'java:51', 'javascript:10',
-            'javascript:12', 'javascript:14', 'javascript:16', 'javascript:30', 'javascript:34',
-            'javascript:38', 'javascript:42', 'javascript:46', 'javascript:50', 'javascript:54',
-            'javascript:6', 'javascript:60', 'javascript:8', 'json:12', 'json:6', 'k9:28', 'kde:10',
-            'kde:6', 'kde:8', 'lex:10', 'lex:12', 'linux:366', 'linux:369', 'linux:370', 'linux:54',
-            'linux:938', 'lisp:16', 'lisp:18', 'lisp:20', 'lisp:22', 'lisp:24', 'lisp:26',
-            'lisp:77', 'lua:11', 'lua:13', 'lua:15', 'lua:17', 'lua:9', 'm4:5', 'm4:8', 'magic:8',
-            'mail.news:11', 'mail.news:13', 'mail.news:15', 'mail.news:17', 'mail.news:19',
-            'mail.news:21', 'mail.news:23', 'mail.news:25', 'mail.news:27', 'mail.news:29',
-            'mail.news:31', 'mail.news:33', 'mail.news:35', 'mail.news:49', 'mail.news:7',
-            'mail.news:9', 'make:15', 'make:19', 'make:6', 'misctools:104', 'misctools:6',
-            'misctools:99', 'msdos:26', 'msdos:28', 'msx:79', 'nim-lang:7', 'pascal:5', 'perl:10',
-            'perl:12', 'perl:14', 'perl:16', 'perl:18', 'perl:20', 'perl:22', 'perl:24', 'perl:36',
-            'perl:40', 'perl:47', 'perl:48', 'perl:49', 'perl:50', 'perl:51', 'perl:52', 'perl:53',
-            'perl:54', 'perl:8', 'psl:9', 'python:262', 'python:271', 'python:277', 'python:295',
-            'python:303', 'python:309', 'python:9', 'revision:7', 'ringdove:12', 'ringdove:13',
-            'ringdove:14', 'ringdove:15', 'ringdove:16', 'ringdove:17', 'ringdove:18',
-            'ringdove:19', 'ringdove:20', 'ringdove:21', 'ringdove:22', 'ringdove:25',
-            'ringdove:26', 'ringdove:27', 'ringdove:28', 'ringdove:29', 'ringdove:32', 'ringdove:6',
-            'ringdove:7', 'ringdove:8', 'ringdove:9', 'ruby:12', 'ruby:15', 'ruby:18', 'ruby:25',
-            'ruby:31', 'ruby:37', 'ruby:44', 'ruby:50', 'ruby:9', 'securitycerts:4',
-            'securitycerts:5', 'sgml:102', 'sgml:105', 'sgml:108', 'sgml:111', 'sgml:115',
-            'sgml:121', 'sgml:128', 'sgml:131', 'sgml:134', 'sgml:140', 'sgml:146', 'sgml:152',
-            'sgml:153', 'sgml:154', 'sgml:160', 'sgml:161', 'sgml:162', 'sgml:17', 'sgml:57',
-            'sgml:6', 'sgml:62', 'sgml:64', 'sgml:66', 'sgml:74', 'sgml:78', 'sgml:81', 'sgml:84',
-            'sgml:87', 'sgml:90', 'sgml:93', 'sgml:96', 'sgml:99', 'sisu:11', 'sisu:14', 'sisu:17',
-            'sisu:5', 'sisu:8', 'sketch:6', 'softquad:26', 'subtitle:19', 'subtitle:25', 'tcl:11',
-            'tcl:13', 'tcl:15', 'tcl:17', 'tcl:19', 'tcl:21', 'tcl:25', 'tcl:28', 'tcl:7', 'tcl:9',
-            'terminfo:49', 'tex:107', 'tex:108', 'tex:109', 'tex:110', 'tex:111', 'tex:112',
-            'tex:113', 'tex:114', 'tex:115', 'tex:116', 'tex:117', 'tex:119', 'tex:121', 'tex:123',
-            'tex:125', 'tex:127', 'tex:133', 'tex:135', 'tex:137', 'tex:139', 'tex:141', 'tex:143',
-            'tex:145', 'tex:147', 'tex:149', 'tex:151', 'tex:153', 'tex:155', 'tex:157', 'tex:159',
-            'tex:22', 'tex:23', 'tex:24', 'tex:25', 'tex:26', 'tex:27', 'tex:28', 'tex:29',
-            'tex:30', 'tex:31', 'tex:32', 'tex:33', 'tex:34', 'tex:47', 'tex:49', 'tex:51',
-            'tex:53', 'tex:61', 'tex:64', 'tex:67', 'tex:70', 'tex:73', 'tex:76', 'tex:79',
-            'tex:82', 'tex:85', 'tex:88', 'tex:92', 'tex:95', 'tex:96', 'tex:97', 'tex:98',
-            'tex:99', 'troff:12', 'troff:15', 'troff:18', 'troff:23', 'troff:26', 'troff:31',
-            'troff:9', 'uuencode:18', 'uuencode:26', 'windows:1064', 'windows:457',
+            'images:2364', 'images:2657', 'inform:9', 'java:19', 'java:49', 'java:51',
+            'javascript:10', 'javascript:12', 'javascript:14', 'javascript:16', 'javascript:22',
+            'javascript:26', 'javascript:30', 'javascript:34', 'javascript:38', 'javascript:42',
+            'javascript:46', 'javascript:50', 'javascript:54', 'javascript:6', 'javascript:60',
+            'javascript:8', 'json:12', 'json:6', 'k9:28', 'kde:10', 'kde:6', 'kde:8', 'lex:10',
+            'lex:12', 'linux:366', 'linux:369', 'linux:370', 'linux:54', 'linux:938', 'lisp:16',
+            'lisp:18', 'lisp:20', 'lisp:22', 'lisp:24', 'lisp:26', 'lisp:77', 'lua:11', 'lua:13',
+            'lua:15', 'lua:17', 'lua:9', 'm4:5', 'm4:8', 'magic:8', 'mail.news:11', 'mail.news:13',
+            'mail.news:15', 'mail.news:17', 'mail.news:19', 'mail.news:21', 'mail.news:23',
+            'mail.news:25', 'mail.news:27', 'mail.news:29', 'mail.news:31', 'mail.news:33',
+            'mail.news:35', 'mail.news:49', 'mail.news:7', 'mail.news:9', 'make:15', 'make:19',
+            'make:6', 'mathematica:21', 'misctools:104', 'misctools:6', 'misctools:99', 'msdos:26',
+            'msdos:28', 'msx:79', 'nim-lang:7', 'pascal:5', 'perl:10', 'perl:12', 'perl:14',
+            'perl:16', 'perl:18', 'perl:20', 'perl:22', 'perl:24', 'perl:36', 'perl:40', 'perl:47',
+            'perl:48', 'perl:49', 'perl:50', 'perl:51', 'perl:52', 'perl:53', 'perl:54', 'perl:8',
+            'psl:9', 'python:250', 'python:253', 'python:256', 'python:262', 'python:271',
+            'python:277', 'python:295', 'python:303', 'python:309', 'python:9', 'qt:13',
+            'revision:7', 'ringdove:12', 'ringdove:13', 'ringdove:14', 'ringdove:15', 'ringdove:16',
+            'ringdove:17', 'ringdove:18', 'ringdove:19', 'ringdove:20', 'ringdove:21',
+            'ringdove:22', 'ringdove:25', 'ringdove:26', 'ringdove:27', 'ringdove:28',
+            'ringdove:29', 'ringdove:32', 'ringdove:6', 'ringdove:7', 'ringdove:8', 'ringdove:9',
+            'rst:5', 'ruby:12', 'ruby:15', 'ruby:18', 'ruby:25', 'ruby:31', 'ruby:37', 'ruby:44',
+            'ruby:50', 'ruby:9', 'securitycerts:4', 'securitycerts:5', 'sgml:102', 'sgml:105',
+            'sgml:108', 'sgml:111', 'sgml:115', 'sgml:121', 'sgml:128', 'sgml:131', 'sgml:134',
+            'sgml:140', 'sgml:146', 'sgml:152', 'sgml:153', 'sgml:154', 'sgml:160', 'sgml:161',
+            'sgml:162', 'sgml:17', 'sgml:57', 'sgml:6', 'sgml:62', 'sgml:64', 'sgml:66', 'sgml:78',
+            'sgml:81', 'sgml:84', 'sgml:87', 'sgml:90', 'sgml:93', 'sgml:96', 'sgml:99', 'sisu:11',
+            'sisu:14', 'sisu:17', 'sisu:5', 'sisu:8', 'sketch:6', 'softquad:26', 'subtitle:19',
+            'subtitle:25', 'tcl:11', 'tcl:13', 'tcl:15', 'tcl:17', 'tcl:19', 'tcl:21', 'tcl:25',
+            'tcl:28', 'tcl:7', 'tcl:9', 'terminfo:49', 'tex:107', 'tex:108', 'tex:109', 'tex:110',
+            'tex:111', 'tex:112', 'tex:113', 'tex:114', 'tex:115', 'tex:116', 'tex:117', 'tex:119',
+            'tex:121', 'tex:123', 'tex:125', 'tex:127', 'tex:133', 'tex:135', 'tex:137', 'tex:139',
+            'tex:141', 'tex:143', 'tex:145', 'tex:147', 'tex:149', 'tex:151', 'tex:153', 'tex:155',
+            'tex:157', 'tex:159', 'tex:22', 'tex:23', 'tex:24', 'tex:25', 'tex:26', 'tex:27',
+            'tex:28', 'tex:29', 'tex:30', 'tex:31', 'tex:32', 'tex:33', 'tex:34', 'tex:61',
+            'tex:64', 'tex:67', 'tex:70', 'tex:73', 'tex:76', 'tex:79', 'tex:82', 'tex:85',
+            'tex:88', 'tex:92', 'tex:95', 'tex:96', 'tex:97', 'tex:98', 'tex:99', 'troff:12',
+            'troff:15', 'troff:18', 'troff:23', 'troff:26', 'troff:31', 'troff:9', 'uuencode:18',
+            'uuencode:22', 'uuencode:26', 'windows:1064', 'windows:457',
         }
         if num_text_tests > len(expected_text_tests):
             actual_text_tests = {
@@ -904,6 +906,149 @@ class StringDataTypeTest(TestCase):
         verbatim = DataType.parse("pstring/B")
         untrimmed = verbatim.match(b"\x06  hi  ", verbatim.parse_expected("x"))
         self.assertEqual("  hi  ", untrimmed.value)
+
+
+class SearchTextClassificationTest(TestCase):
+    r"""Regression tests for the pass classification defect reported in issue #3511.
+
+    `StringMatch.is_always_text` looked for the two-character sequences `\x` and `\0` in the raw,
+    still-escaped value, so a `search` that escapes a space as `\040` was classified binary and ran
+    in PolyFile's binary pass. libmagic decides from `file_looks_utf8` over the value it unescaped
+    while parsing (`file/src/apprentice.c:1277-1283`), and `file -l` lists every definition named
+    here under `Text patterns`.
+    """
+
+    @staticmethod
+    def runs_in_text_pass(definition: str) -> bool:
+        """Whether PolyFile runs the one level-0 test of `definition` in its text pass.
+
+        Args:
+            definition: The text of a magic definition file, with tab-separated columns.
+
+        Returns:
+            True if the test landed in the text pass, False if it landed in the binary pass.
+        """
+        with TemporaryDirectory() as tmp_dir:
+            magic_file = Path(tmp_dir) / "test.magic"
+            magic_file.write_text(definition)
+            matcher = MagicMatcher.parse(magic_file)
+            text, binary = matcher.text_tests, matcher.non_text_tests
+        assert len(text) + len(binary) == 1, f"expected one test, got {len(text) + len(binary)}"
+        return bool(text)
+
+    def test_an_escaped_space_is_a_space(self):
+        r"""Tests that `\040` no longer reads as an escaped null byte.
+
+        This is the defect itself: the raw value `diff\040` contains the two characters `\0`, so
+        the old rule called it binary even though the byte it stands for is a space.
+        """
+        self.assertTrue(self.runs_in_text_pass("0\tsearch/1\tdiff\\040\tdiff output text\n"))
+
+    def test_an_escaped_line_feed_is_a_text_character(self):
+        r"""Tests that `\012` is text, which is what moves `uuencode:22` into the text pass.
+
+        A line feed is `T` in libmagic's `text_chars` table (`file/src/encoding.c:246-266`), so a
+        value that contains one still looks like text.
+        """
+        self.assertTrue(self.runs_in_text_pass("0\tsearch/1\t$\\012ship\tship'd binary text\n"))
+
+    def test_a_hexadecimal_space_is_a_space(self):
+        r"""Tests that `\x20` is text, which is what moves `javascript:22` into the text pass."""
+        definition = "0\tsearch\t\"use\\x20strict\"\tJavaScript source\n"
+        self.assertTrue(self.runs_in_text_pass(definition))
+
+    def test_utf8_is_text(self):
+        r"""Tests that a value of valid multi-byte UTF-8 is text.
+
+        `file_looks_utf8` returns 2 rather than 1 for such a value, and `set_test_type` compares
+        its result against 0, so both count as text.
+        """
+        self.assertTrue(self.runs_in_text_pass("0\tsearch/1\tcaf\\xc3\\xa9\tcafe\n"))
+
+    def test_a_null_byte_is_not_text(self):
+        r"""Tests that a genuine null byte still classifies a value as binary.
+
+        A null byte is `F` in libmagic's `text_chars` table, so `file_looks_utf8` returns 0 for a
+        value that contains one, whichever escape the definition spelled it with.
+        """
+        self.assertFalse(self.runs_in_text_pass("0\tsearch/1\ta\\x00b\tnull byte\n"))
+        self.assertFalse(self.runs_in_text_pass("0\tsearch/1\ta\\0b\tnull byte\n"))
+
+    def test_a_control_character_is_not_text(self):
+        r"""Tests that a control character outside libmagic's text class is binary.
+
+        `\001` is `F` in the `text_chars` table, unlike the `\012` above, so a value carrying it
+        must stay in the binary pass even though the escape spells no null byte.
+        """
+        self.assertFalse(self.runs_in_text_pass("0\tsearch/1\ta\\001b\tcontrol character\n"))
+
+    def test_a_high_byte_that_is_not_utf8_is_not_text(self):
+        r"""Tests that a high byte which cannot begin a UTF-8 sequence is binary.
+
+        `file_looks_utf8` returns -1 for `\xff`, which never appears in valid UTF-8.
+        """
+        self.assertFalse(self.runs_in_text_pass("0\tsearch/1\ta\\xffb\thigh byte\n"))
+
+    def test_the_shipped_python_and_diff_definitions_are_text_tests(self):
+        """Tests that the two shipped definitions the issue names land in the text pass.
+
+        `python:256` matches a `#!/usr/bin/env python` shebang and `diff:13` matches `diff`
+        output; both escape a space, so both ran in the binary pass and were never described.
+        """
+        matcher = MagicMatcher.parse(*MAGIC_DEFS)
+        text_tests = {
+            (test.source_info.path.name, test.source_info.line)
+            for test in matcher.text_tests if test.source_info is not None
+        }
+        self.assertIn(("python", 256), text_tests)
+        self.assertIn(("diff", 13), text_tests)
+
+    def test_a_binary_flagged_search_is_not_text(self):
+        r"""Tests that an explicit `b` flag outranks a value that looks like text.
+
+        `set_test_type` sets `BINTEST` from the declared string flags and breaks out of the case
+        before it reaches `file_looks_utf8` (`file/src/apprentice.c:1258-1283`), so `gimp:67`,
+        whose value is the text-looking `\040ncells:`, is listed under `Binary patterns` by
+        `file -l`. Honoring the value alone moved it into the text pass, where it never ran for
+        the binary files it exists to identify.
+        """
+        self.assertFalse(self.runs_in_text_pass("0\tsearch/21/b\t\\040ncells:\tbrush\n"))
+        self.assertTrue(self.runs_in_text_pass("0\tsearch/21\t\\040ncells:\tbrush\n"))
+
+    def test_the_binary_flag_is_part_of_a_search_type_s_name(self):
+        """Tests that a `b`-flagged search does not share a cached type with a plain one.
+
+        `DataType.parse` keys `TYPES_BY_NAME` on the type's name, so a flag missing from the name
+        makes whichever declaration is parsed second reuse the first one's instance and silently
+        adopt its flags.
+        """
+        flagged = DataType.parse("search/21/b")
+        self.assertTrue(flagged.force_binary)
+        self.assertFalse(DataType.parse("search/21").force_binary)
+        self.assertIs(flagged, DataType.parse("search/b/21"))
+
+    def test_a_gimp_animated_brush_is_still_detected(self):
+        """Tests that a `.gih`-shaped buffer keeps its match once the value rule changed.
+
+        A GIMP animated brush is a name line and a parameter line followed by binary brush data,
+        so the buffer is not text and PolyFile's text pass never runs for it. With `gimp:67` in
+        the text pass the format went undetected. `file -b` reports the string asserted here.
+        """
+        brush = b"confetti\n ncells:4 rank0:4\n" + bytes(range(256)) * 4
+        messages = {str(match) for match in MagicMatcher.DEFAULT_INSTANCE.match(brush)}
+        self.assertIn("GIMP animated brush data", messages)
+
+    def test_an_env_python_script_is_described(self):
+        """Tests that a `#!/usr/bin/env python` script gains libmagic's encoding description.
+
+        `file -b` reports `Python script, ASCII text executable` for this input. PolyFile reported
+        the undescribed `Python script text executable`, because the test that matched ran in the
+        binary pass and `file_ascmagic` never sees a binary match (`file/src/funcs.c:479-503`).
+        """
+        script = b'#!/usr/bin/env python\nimport sys\nprint("hi")\n'
+        messages = {str(match) for match in MagicMatcher.DEFAULT_INSTANCE.match(script)}
+        self.assertIn("Python script, ASCII text executable", messages)
+        self.assertNotIn("Python script text executable", messages)
 
 
 class UseTestSemanticsTest(TestCase):
