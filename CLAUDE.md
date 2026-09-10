@@ -7,7 +7,7 @@ PolyFile is a file analysis utility that identifies and maps the semantic and sy
 **Key capabilities:**
 - Pure-Python libmagic implementation (896 MIME types, from libmagic 5.48)
 - Recursive embedded file detection (like binwalk)
-- Parsers for PDF, ZIP, JPEG, iNES, and 183 Kaitai Struct formats
+- Parsers for PDF, ZIP, JPEG, iNES, and 183 compiled Kaitai Struct formats (44 mapped to MIME types)
 - Interactive HTML hex viewer with structure mapping
 - Drop-in replacement for Unix `file` command
 
@@ -193,6 +193,14 @@ you overwrite them.
 1. Add the `.ksy` file to the `kaitai_struct_formats/` submodule (upstream, or a local commit)
 2. Map the MIME type in `polyfile.kaitaimatcher.KAITAI_MIME_MAPPING`
 3. Rebuild: `python compile_kaitai_parsers.py`
+4. Add a sample to `TestKaitaiParsing` in `tests/test_kaitai.py`
+
+The MIME type must be one PolyFile can emit (check `polyfile --list`); dispatch is an exact lookup,
+so a key nothing emits is dead code that fails silently. Several MIME types may share one spec by
+repeating it as the value; use `EXTRA_PARSERS` to register a second parser for a MIME type that
+already has one. When libmagic detects a format but assigns no MIME type, add the test as an
+inline DSL snippet in Python (see the Doom WAD and Creative Voice File tests in
+`kaitaimatcher.py`) rather than editing `magic_defs/`.
 
 Only specifications under a permissive license are compiled—see the licensing policy below.
 
@@ -229,6 +237,9 @@ from an excluded spec reaches the package, or if `MANIFEST.in` drifts from the a
 
 ### Gotchas
 - `polyfile/kaitai/parsers/` is auto-generated—never edit manually
+- Four generated parsers (`wmf`, `regf`, `openpgp_message`, `sudoers_ts`) are invalid Python:
+  kaitai-struct-compiler 0.11 escapes neither Python reserved words nor docstring backslashes
+- `archive/rar.ksy` loops forever on RAR5, so it is deliberately unmapped
 - Java required at install time for Kaitai compilation
 - `compile_kaitai_parsers.py` runs at build time and must stay standard-library only
 - The downloaded `polyfile/kaitai/kaitai-struct-compiler-*/` is gitignored; it bundles its own
