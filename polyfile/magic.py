@@ -2467,6 +2467,26 @@ class NamedTest(MagicTest):
         return self.name
 
 
+def prints_a_message(result: TestResult, context: MatchContext) -> bool:
+    """Reports whether a test result would print something.
+
+    libmagic raises its ``found_match`` flag only for an entry whose description is not empty
+    (``file/src/softmagic.c:323`` and ``:439``), and it strips a leading ``\\b`` — the NOSPACE
+    flag — off the description while parsing the entry (``file/src/apprentice.c:2427-2435``).
+    A bare ``name`` line therefore prints nothing and raises nothing.
+
+    Args:
+        result: The result of running a test. A failed test never prints.
+        context: The context that the test ran against, used to resolve the message.
+
+    Returns:
+        True if the result is a match whose resolved message is not empty.
+    """
+    if not result:
+        return False
+    return bool(result.test.message.resolve(context).removeprefix("\b"))
+
+
 class UseTest(MagicTest):
     def __init__(
             self,
@@ -2505,25 +2525,48 @@ class UseTest(MagicTest):
             absolute_offset = self.offset.to_absolute(context.data, last_match=parent_match)
         except InvalidOffsetError:
             return None
-        log.trace(
-            f"{self.source_info!s}\tTrue\t{absolute_offset}\t{context.data[absolute_offset:absolute_offset + 20]!r}"
-        )
         use_match = MatchedTest(self, None, absolute_offset, 0, parent=parent_match)
-        yielded = False
-        for named_result in self.referenced_test._match(context, use_match, flip_endianness=flip_endianness):
-            if not yielded:
-                yielded = True
-                yield use_match
-            yield named_result
-        if not yielded:
-            # the named test did not match anything, so don't try any of our children
+        named_results = self._match_referenced_test(context, use_match, flip_endianness)
+        matched = any(prints_a_message(result, context) for result in named_results)
+        log.trace(
+            f"{self.source_info!s}\t{matched}\t{absolute_offset}\t"
+            f"{context.data[absolute_offset:absolute_offset + 20]!r}"
+        )
+        if not matched:
             return
-        elif context.only_match_mime and not self.can_match_mime:
+        yield use_match
+        for named_result in named_results:
+            if not context.only_match_mime or named_result.test.mime is not None:
+                yield named_result
+        if context.only_match_mime and not self.can_match_mime:
             # none of our children can produce a mime type
             return
         for child in self.children:
             if not context.only_match_mime or child.can_match_mime:
                 yield from child._match(context=context, parent_match=use_match, flip_endianness=flip_endianness)
+
+    def _match_referenced_test(
+            self, context: MatchContext, use_match: MatchedTest, flip_endianness: bool
+    ) -> List[TestResult]:
+        """Runs the referenced named test list and collects everything it matched.
+
+        libmagic evaluates the whole named list and uses the number of entries that printed as the
+        ``use`` test's truth value (``file/src/softmagic.c:2001-2039`` and ``:2429-2430``), so
+        MIME-only pruning is lifted for the run: whether the list can report a MIME type must not
+        decide whether the ``use`` succeeds. The caller reapplies the pruning when it picks the
+        results to yield.
+
+        Args:
+            context: The context to match against.
+            use_match: The match for this ``use`` test, which parents the named test's results.
+            flip_endianness: Whether the named test reads its operands with flipped endianness.
+
+        Returns:
+            Every result the named test list matched, in the order it produced them.
+        """
+        if context.only_match_mime:
+            context = MatchContext(data=context.data, path=context.path)
+        return list(self.referenced_test._match(context, use_match, flip_endianness=flip_endianness))
 
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
         raise NotImplementedError("This function should never be called")
