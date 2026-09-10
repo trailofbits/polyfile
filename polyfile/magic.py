@@ -954,9 +954,39 @@ class Comment:
 
 
 class TestType(IntFlag):
+    """The soft magic passes a level 0 test runs in.
+
+    libmagic runs soft magic twice, once over the file's bytes in ``BINTEST`` mode
+    (``file/src/funcs.c:482``) and once over the decoded text buffer in ``TEXTTEST`` mode
+    (``file/src/ascmagic.c:161-162``), and an entry can belong to either pass or to both.
+    """
+
     UNKNOWN = 0
     BINARY = 1
     TEXT = 2
+    BOTH = BINARY | TEXT
+
+
+def declared_passes(force_text: bool, force_binary: bool) -> TestType:
+    """The passes a definition's ``b`` and ``t`` flags name.
+
+    ``set_test_type`` sets ``BINTEST`` for ``b`` and ``TEXTTEST`` for ``t`` and then stops, so a
+    declaration that carries both belongs to both passes and one that carries neither leaves the
+    choice to its type (``file/src/apprentice.c:1258-1266``).
+
+    Args:
+        force_text: Whether the declaration carried ``t``.
+        force_binary: Whether the declaration carried ``b``.
+
+    Returns:
+        The passes the flags name, or `TestType.UNKNOWN` if they name none.
+    """
+    passes = TestType.UNKNOWN
+    if force_binary:
+        passes |= TestType.BINARY
+    if force_text:
+        passes |= TestType.TEXT
+    return passes
 
 
 class MagicTest(ABC):
@@ -1025,27 +1055,33 @@ class MagicTest(ABC):
     def message(self, new_value: Message):
         self._message = new_value
 
+    def declared_test_type(self) -> TestType:
+        """The passes this test's own declaration named, if it named any.
+
+        Returns:
+            `TestType.UNKNOWN`, unless the declaration carried a ``b`` or a ``t`` flag.
+        """
+        return TestType.UNKNOWN
+
     @property
     def test_type(self) -> TestType:
+        """The soft magic passes `MagicMatcher.match` runs this test in.
+
+        libmagic decides from the level 0 line alone. ``set_text_binary`` hands ``set_test_type``
+        one entry per top-level test, and ``set_test_type`` reads that entry's own ``str_flags``
+        and ``type`` (``file/src/apprentice.c:1200-1284`` and ``1423-1453``); a subtest never
+        changes the answer. `subtest_type` reports exactly that decision. `IndirectTest` is the
+        one deliberate exception: it forces every ancestor to binary, because an indirect test can
+        dispatch any other test.
+
+        Returns:
+            The passes this test belongs to.
+        """
         if self._type == TestType.UNKNOWN:
             if hasattr(self, "__calculating_test_type") and getattr(self, "__calculating_test_type"):
                 return TestType.UNKNOWN
             setattr(self, "__calculating_test_type", True)
-            if self.can_be_indirect:
-                # indirect tests can execute any other (binary) test, so classify ourselves as binary
-                self._type = TestType.BINARY
-            else:
-                if any(bool(child.test_type & TestType.BINARY) for child in self.children):
-                    self._type = TestType.BINARY
-                else:
-                    self._type = self.subtest_type()
-                    if (self._type == TestType.UNKNOWN and self.children) or bool(self._type & TestType.TEXT):
-                        # A pattern is considered to be a text test when all its patterns are text patterns;
-                        # otherwise, it is considered to be a binary pattern.
-                        if all(bool(child.test_type & TestType.TEXT) for child in self.children):
-                            self._type = TestType.TEXT
-                        else:
-                            self._type = TestType.UNKNOWN
+            self._type = self.subtest_type()
             delattr(self, "__calculating_test_type")
         return self._type
 
@@ -1070,10 +1106,9 @@ class MagicTest(ABC):
         binary soft magic pass printed nothing, so it lands on whatever the ``TEXTTEST`` soft magic
         pass printed (``src/funcs.c`` and ``src/ascmagic.c``). ``set_test_type`` in
         ``src/apprentice.c`` decides which pass a definition runs in from the type and flags of its
-        level 0 test alone, and that is what `subtest_type` reports. `test_type`, which chooses the
-        pass PolyFile itself runs the test in, cannot answer this: it reports a group with any
-        binary subtest as binary, which is why libmagic describes the encoding of
-        ``file/tests/pnm1.testfile`` while PolyFile matches it in its binary pass.
+        level 0 test alone, and that is what `subtest_type` reports. `test_type` answers from the
+        same place, except where `IndirectTest` has forced an ancestor to binary, so reading
+        `subtest_type` keeps the question about libmagic rather than about PolyFile's own pass.
 
         Returns:
             True if libmagic would append the description to this test's message.
@@ -1361,9 +1396,9 @@ class MagicTest(ABC):
             writer.write(self.message, color=ANSIColor.BLUE, bold=True)
         if self.level == 0:
             if self.test_type & TestType.BINARY:
-                writer.write(f" \uF5BB BINARY TEST", color=ANSIColor.BLUE)
-            elif self.test_type & TestType.TEXT:
-                writer.write(f" \uF5B9 ASCII TEST", color=ANSIColor.BLUE)
+                writer.write(" \uF5BB BINARY TEST", color=ANSIColor.BLUE)
+            if self.test_type & TestType.TEXT:
+                writer.write(" \uF5B9 ASCII TEST", color=ANSIColor.BLUE)
         writer.write(pre_mime_text)
         if self.mime is not None:
             writer.write(f"\n  {indent}!:mime ", dim=True)
@@ -1568,9 +1603,31 @@ class DataType(ABC, Generic[T]):
         """
         return "="
 
-    @abstractmethod
-    def is_text(self, value: T) -> bool:
-        raise NotImplementedError()
+    def declared_test_types(self) -> TestType:
+        """The passes this type's declaration named outright, if it named any.
+
+        Returns:
+            `TestType.UNKNOWN`, unless the declaration carried a ``b`` or a ``t``.
+        """
+        return TestType.UNKNOWN
+
+    def test_types(self, expected: T) -> TestType:
+        """The soft magic passes libmagic runs a level 0 test of this type in.
+
+        ``set_test_type`` assigns ``BINTEST`` to every type that reads a fixed width of bytes, and
+        to a string type that names no pass of its own, which the comment there calls a
+        compatibility choice (``file/src/apprentice.c:1200-1284``).
+
+        Args:
+            expected: The value the test compares against.
+
+        Returns:
+            The passes the test belongs to.
+        """
+        declared = self.declared_test_types()
+        if declared != TestType.UNKNOWN:
+            return declared
+        return TestType.BINARY
 
     @abstractmethod
     def parse_expected(self, specification: str) -> T:
@@ -1673,9 +1730,6 @@ class GUIDType(DataType[Union[UUID, UUIDWildcard]]):
             raise ValueError(f"GUIDs only support big and little endianness, not {endianness!r}")
         self.endianness: Endianness = endianness
 
-    def is_text(self, value: Union[UUID, UUIDWildcard]) -> bool:
-        return False
-
     def strength_term(self, expected: Union[UUID, UUIDWildcard]) -> int:
         """A GUID is sized like the sixteen-byte integer it is (``file/src/apprentice.c:912-915``)."""
         return 16 * STRENGTH_MULT
@@ -1717,9 +1771,6 @@ class UTF16Type(DataType[bytes]):
         super().__init__(name)
         self.endianness: Endianness = endianness
         self.num_bytes: Optional[int] = num_bytes
-
-    def is_text(self, value: bytes) -> bool:
-        return True
 
     def strength_term(self, expected: bytes) -> int:
         """Half of what the same value would score as a `string` (``file/src/apprentice.c:1003``).
@@ -2193,8 +2244,8 @@ class StringType(DataType[StringTest]):
             parts.append(flags)
         return "/".join(parts)
 
-    def is_text(self, value: StringTest) -> bool:
-        return self.force_text
+    def declared_test_types(self) -> TestType:
+        return declared_passes(self.force_text, self.force_binary)
 
     def strength_term(self, expected: StringTest) -> int:
         """One unit per byte of the value, the dominant term for most definitions.
@@ -2292,22 +2343,25 @@ class SearchType(StringType):
         """
         return self.num_bytes
 
-    def is_text(self, value: StringTest) -> bool:
-        """Whether libmagic runs a search for `value` in its text pass.
+    def test_types(self, expected: StringTest) -> TestType:
+        """The passes libmagic runs a search for `expected` in.
 
-        An explicit ``b`` flag decides on its own: ``set_test_type`` sets ``BINTEST`` from the
-        declared string flags and breaks out of the case before it ever reaches
-        ``file_looks_utf8`` (``file/src/apprentice.c:1258-1283``).
+        A declared ``b`` or ``t`` decides on its own: ``set_test_type`` reads the string flags and
+        breaks out of the case before it ever reaches ``file_looks_utf8``
+        (``file/src/apprentice.c:1258-1283``). Otherwise the value itself decides.
 
         Args:
-            value: The parsed value the search looks for.
+            expected: The parsed value the search looks for.
 
         Returns:
-            True if libmagic classifies the search as a text test.
+            The passes the search belongs to.
         """
-        if self.force_binary:
-            return False
-        return value.is_always_text()
+        declared = self.declared_test_types()
+        if declared != TestType.UNKNOWN:
+            return declared
+        elif expected.is_always_text():
+            return TestType.TEXT
+        return TestType.BINARY
 
     def strength_term(self, expected: StringTest) -> int:
         """Far less than a `string` of the same length, because a search roams the buffer.
@@ -2411,10 +2465,6 @@ class PascalStringType(DataType[StringTest]):
         self.endianness: Endianness = endianness
         self.count_includes_length: int = count_includes_length
         self.string_type: StringType = StringType.parse(f"string/{string_flags}")
-
-    def is_text(self, value: StringTest) -> bool:
-        # TODO: See if Pascal strings should sometimes be forced to be text
-        return False
 
     def strength_term(self, expected: StringTest) -> int:
         """Scored like a `string`, counting the length prefix as part of the value.
@@ -2637,8 +2687,11 @@ class RegexType(DataType[MagicRegex]):
 
     DOLLAR_PATTERN = re.compile(rb"(^|[^\\])\$", re.MULTILINE)
 
-    def is_text(self, value: MagicRegex) -> bool:
-        """Whether libmagic runs this regular expression in its text pass.
+    def declared_test_types(self) -> TestType:
+        return declared_passes(self.force_text, self.force_binary)
+
+    def test_types(self, expected: MagicRegex) -> TestType:
+        """The passes libmagic runs this regular expression in.
 
         A declared ``b`` or ``t`` decides on its own, because ``set_test_type`` reads the string
         flags and breaks out of the case before it reaches ``file_looks_utf8``
@@ -2646,16 +2699,17 @@ class RegexType(DataType[MagicRegex]):
         rule libmagic applies to a `search` value.
 
         Args:
-            value: The parsed regular expression.
+            expected: The parsed regular expression.
 
         Returns:
-            True if libmagic classifies the test as a text test.
+            The passes the test belongs to.
         """
-        if self.force_binary:
-            return False
-        elif self.force_text:
-            return True
-        return _looks_like_utf8(value.pattern)
+        declared = self.declared_test_types()
+        if declared != TestType.UNKNOWN:
+            return declared
+        elif _looks_like_utf8(expected.pattern):
+            return TestType.TEXT
+        return TestType.BINARY
 
     def strength_term(self, expected: MagicRegex) -> int:
         """One unit per literal character, capped the way a `search` is.
@@ -2961,9 +3015,6 @@ class NumericDataType(DataType[NumericValue]):
         if self.endianness == Endianness.PDP and self.base_type.num_bytes != 4:
             raise ValueError(f"PDP endianness can only be used with four byte base types, not {self.base_type}")
 
-    def is_text(self, value: NumericValue) -> bool:
-        return False
-
     def strength_term(self, expected: NumericValue) -> int:
         """One unit per byte the type reads (``file/src/apprentice.c:975-996``)."""
         return self.base_type.num_bytes * STRENGTH_MULT
@@ -3187,10 +3238,10 @@ class ConstantMatchTest(MagicTest, Generic[T]):
         return self.data_type.relation(self.constant)
 
     def subtest_type(self) -> TestType:
-        if self.data_type.is_text(self.constant):
-            return TestType.TEXT
-        else:
-            return TestType.BINARY
+        return self.data_type.test_types(self.constant)
+
+    def declared_test_type(self) -> TestType:
+        return self.data_type.declared_test_types()
 
     def calculate_absolute_offset(self, data: bytes, parent_match: Optional[TestResult] = None) -> int:
         return self.offset.to_absolute(data, parent_match, self.data_type.allows_invalid_offsets(self.constant))
@@ -3338,6 +3389,8 @@ class IndirectTest(MagicTest):
         self.relative: bool = relative
         self.can_match_mime = True
         self.can_be_indirect = True
+        # an indirect test can dispatch any other test, so PolyFile keeps the whole group in the
+        # binary pass rather than letting a level 0 flag hand it the decoded text buffer
         self._type = TestType.BINARY
         p = parent
         while p is not None:
@@ -4514,9 +4567,10 @@ class MagicMatcher:
         self._tests_by_ext = defaultdict(set)
         self._tests_by_mime = defaultdict(set)
         for test in self._tests:
-            if test.test_type == TestType.TEXT:
+            test_type = test.test_type
+            if test_type & TestType.TEXT:
                 self._text_tests[test] = None
-            else:
+            if test_type & TestType.BINARY or test_type == TestType.UNKNOWN:
                 self._non_text_tests[test] = None
             if test.can_be_indirect:
                 self._tests_that_can_be_indirect.add(test)

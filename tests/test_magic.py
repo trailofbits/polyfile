@@ -2170,3 +2170,107 @@ class SearchFlagTableTest(TestCase):
         """
         self.assertIs(DataType.parse("search/b64"), DataType.parse("search/64/b"))
         self.assertEqual(64, DataType.parse("search/b64").repetitions)
+
+
+class PassSelectionTest(TestCase):
+    """Regression tests for the pass selection defect reported in issue #3490.
+
+    libmagic decides which of its two soft magic passes a definition belongs to in
+    `set_test_type`, from the type and the `b`/`t` string flags of the entry's level 0 line alone
+    (`file/src/apprentice.c:1200-1284`). `set_text_binary` hands it one entry per top-level test
+    (`file/src/apprentice.c:1423-1453`), so a subtest never changes the answer. PolyFile derived
+    the classification from a test's children instead, which put both halves of a text/binary
+    definition pair in the binary pass.
+    """
+
+    @staticmethod
+    def passes(definition: str) -> polyfile.magic.TestType:
+        """The passes PolyFile runs the one level 0 test of `definition` in.
+
+        Args:
+            definition: The text of a magic definition file, with tab-separated columns.
+
+        Returns:
+            The passes the test landed in.
+        """
+        with TemporaryDirectory() as tmp_dir:
+            magic_file = Path(tmp_dir) / "test.magic"
+            magic_file.write_text(definition)
+            matcher = MagicMatcher.parse(magic_file)
+            text, binary = list(matcher.text_tests), list(matcher.non_text_tests)
+        assert len(set(text) | set(binary)) == 1, "expected exactly one level 0 test"
+        found = polyfile.magic.TestType.UNKNOWN
+        if text:
+            found |= polyfile.magic.TestType.TEXT
+        if binary:
+            found |= polyfile.magic.TestType.BINARY
+        return found
+
+    def test_a_text_flag_outranks_a_binary_subtest(self):
+        """Tests that `t` on the level 0 line wins over a binary subtest under it.
+
+        `magic_defs/varied.script:8` is `string/wt` with a `string/T` subtest, and its `string/wb`
+        twin sits four lines below. PolyFile put both in the binary pass, so
+        `file/tests/cmd1.testfile` reported the binary variant as well as the text one.
+        """
+        definition = "0\tstring/wt\t#!\\ \ta\n>&-1\tstring/T\tx\t%s script text executable\n"
+        self.assertEqual(polyfile.magic.TestType.TEXT, self.passes(definition))
+
+    def test_a_binary_flag_outranks_a_text_subtest(self):
+        """Tests that `b` on the level 0 line wins over an all-text group.
+
+        `magic_defs/varied.script:12` is the binary half of the same pair.
+        """
+        definition = "0\tstring/wb\t#!\\ \ta\n>&-1\tstring/T\tx\t%s script executable\n"
+        self.assertEqual(polyfile.magic.TestType.BINARY, self.passes(definition))
+
+    def test_a_subtest_never_adds_a_pass(self):
+        """Tests that a numeric subtest does not drag a text entry into the binary pass.
+
+        `file -l -m` over a definition of `0 string/t XY` with a `>2 belong 0` subtest lists it
+        under `Text patterns` only, because `set_text_binary` calls `set_test_type` once per
+        top-level entry and never for a continuation line.
+        """
+        definition = "0\tstring/t\tXY\tflagged text\n>2\tbelong\t0\t\\b, zero\n"
+        self.assertEqual(polyfile.magic.TestType.TEXT, self.passes(definition))
+        definition = "0\tsearch/1\tPQ\tunflagged search\n>2\tbelong\t0\t\\b, zero\n"
+        self.assertEqual(polyfile.magic.TestType.TEXT, self.passes(definition))
+
+    def test_an_unflagged_entry_belongs_to_exactly_one_pass(self):
+        """Tests the fallbacks `set_test_type` reaches when no flag names a pass.
+
+        A `string` takes the binary pass whatever its value, which the comment there calls a
+        compatibility choice; a `search` or a `regex` takes the pass its own value looks like,
+        by `file_looks_utf8`.
+        """
+        for definition, expected in (
+                ("0\tstring\tTU\tplain string\n", polyfile.magic.TestType.BINARY),
+                ("0\tregex/1024\tab+c\tunflagged regex\n", polyfile.magic.TestType.TEXT),
+                ("0\tsearch/1\ta\\x00b\tnull byte\n", polyfile.magic.TestType.BINARY),
+                ("0\tlestring16\tVersion=\tsixteen bit\n", polyfile.magic.TestType.BINARY),
+        ):
+            with self.subTest(definition=definition):
+                self.assertEqual(expected, self.passes(definition))
+
+    def test_both_flags_belong_to_both_passes(self):
+        """Tests that an entry carrying `b` and `t` runs in both passes.
+
+        `softmagic` skips an entry only when exactly one of the two bits is set and it is the
+        wrong one (`file/src/softmagic.c:249-253`), and `set_test_type` sets both bits from both
+        flags, so `magic_defs/sgml:6`, `sgml:17` and `sgml:74` are listed under `Binary patterns`
+        and under `Text patterns` by `file -l`. `TestType` could not express that.
+        """
+        self.assertEqual(polyfile.magic.TestType.BOTH,
+                         self.passes("0\tstring/bt\tRS\tboth flags\n"))
+        self.assertEqual(polyfile.magic.TestType.BOTH,
+                         self.passes("0\tsearch/4096/cWbt\t\\<!doctype\\ svg\tSVG XML document\n"))
+
+    def test_the_shipped_both_flag_entries_are_in_both_passes(self):
+        """Tests that the three shipped `b`-and-`t` entries reach both passes."""
+        matcher = MagicMatcher.parse(*MAGIC_DEFS)
+        in_both = {
+            f"{test.source_info.path.name}:{test.source_info.line}"
+            for test in set(matcher.text_tests) & set(matcher.non_text_tests)
+            if test.source_info is not None
+        }
+        self.assertEqual({"sgml:6", "sgml:17", "sgml:74"}, in_both)
