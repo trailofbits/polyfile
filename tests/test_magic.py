@@ -2172,3 +2172,86 @@ class DefaultTestSemanticsTest(TestCase):
         png = b"\x89PNG\r\n\x1a\n" + ihdr
         self.assertIn("PNG image data, 8 x 8, 8-bit/color RGBA, non-interlaced",
                       {str(match) for match in MagicMatcher.DEFAULT_INSTANCE.match(png)})
+
+
+class RegexSubjectTest(TestCase):
+    """Regression tests for the bytes a `regex` test matches against, reported in issue #3517.
+
+    libmagic copies the region a `regex` runs over and NUL-terminates the copy by overwriting its
+    last byte (`file/src/softmagic.c:2393-2405`), then passes it to `regexec` as a C string. The
+    pattern therefore never sees the region's last byte, and never sees anything past a NUL that
+    was already in the region. PolyFile handed the pattern the whole region, so a `regex` matched
+    bytes libmagic cannot reach.
+
+    Every string these tests expect is what `file -b -k` reports for the same definitions and
+    input, checked against libmagic 5.48 built from the `file` submodule.
+    """
+
+    DEFINITION: str = "0\tstring\tHEAD\thead\n>4\tregex\tTARGET\tfound\n"
+    """A level 0 test on `HEAD`, whose continuation looks for `TARGET` in the rest of the file."""
+
+    @staticmethod
+    def messages(definitions: str, data: bytes) -> Set[str]:
+        """Matches `data` against ad-hoc definitions and collects the resulting messages.
+
+        Args:
+            definitions: The contents of a libmagic definition file, with tab separated columns.
+            data: The bytes to classify.
+
+        Returns:
+            The message of every match the definitions produce.
+        """
+        with TemporaryDirectory() as tmp_dir:
+            path = Path(tmp_dir) / "regex_subject"
+            path.write_text(definitions)
+            matcher = MagicMatcher.parse(path)
+            return {str(match) for match in matcher.match(data)}
+
+    def found(self, definitions: str, data: bytes) -> bool:
+        """Reports whether the `found` message of the `regex` test appears in the output.
+
+        Args:
+            definitions: The contents of a libmagic definition file.
+            data: The bytes to classify.
+
+        Returns:
+            True if some match carries the `found` message.
+        """
+        return any("found" in message for message in self.messages(definitions, data))
+
+    def test_a_regex_does_not_see_past_a_nul_in_its_region(self):
+        """A pattern used to match bytes that libmagic's C string cannot reach."""
+        self.assertTrue(self.found(self.DEFINITION, b"HEADTARGETxx\n"))
+        self.assertFalse(self.found(self.DEFINITION, b"HEADxx\x00TARGETxx\n"))
+
+    def test_a_regex_does_not_see_the_last_byte_of_its_region(self):
+        """The NUL that terminates libmagic's copy overwrites the region's final byte."""
+        self.assertFalse(self.found(self.DEFINITION, b"HEADTARGET"))
+        self.assertTrue(self.found(self.DEFINITION, b"HEADTARGETx"))
+
+    def test_an_explicit_range_is_trimmed_after_it_is_applied(self):
+        """`regex/N` reads N bytes and then loses the last of them, so N must exceed the pattern.
+
+        `bytecnt` is the declared range clamped to what is left of the buffer
+        (`file/src/softmagic.c:1417-1422`), and the trim happens afterwards, in `magiccheck`.
+        """
+        self.assertFalse(self.found("0\tstring\tHEAD\thead\n>4\tregex/6\tTARGET\tfound\n",
+                                    b"HEADTARGETxxxx"))
+        self.assertTrue(self.found("0\tstring\tHEAD\thead\n>4\tregex/7\tTARGET\tfound\n",
+                                   b"HEADTARGETxxxx"))
+
+    def test_hwpx_is_not_reported_as_microsoft_ooxml(self):
+        """A Hancom HWPX file used to report as `Microsoft OOXML`, and to report it first.
+
+        `polyfile/magic_defs/msooxml:38` looks for an OOXML part name at offset 0x1E, which in this
+        file holds `mimetypeapplication/hwp+zip` followed by the next local file header. libmagic
+        stops at the NUL inside that header and finds no part name, so it never reaches the
+        `default x  Microsoft OOXML` ladder at `:63-69`. PolyFile read on to the end of the file,
+        found `.png` in a later member name, and took the whole ladder down to `:66`, whose level 0
+        entry scores 81 and so sorted the wrong type to the front of the output.
+        """
+        testfile = FILE_TEST_DIR / "HWP2016.hwpx.zip.testfile"
+        self.assertTrue(testfile.exists(), "Make sure to run `git submodule init && git submodule update`")
+        matches = [str(match) for match in MagicMatcher.DEFAULT_INSTANCE.match(testfile.read_bytes())]
+        self.assertNotIn("Microsoft OOXML", matches)
+        self.assertEqual("Hancom HWP (Hangul Word Processor) file, HWPX", matches[0])

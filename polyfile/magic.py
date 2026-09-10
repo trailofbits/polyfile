@@ -2622,9 +2622,26 @@ class RegexType(DataType[MagicRegex]):
             return DataTypeMatch(raw_match, value, initial_offset=start, relative_base=start)
         return DataTypeMatch(raw_match, value, initial_offset=start)
 
+    def subject(self, data: bytes) -> bytes:
+        """The bytes libmagic hands to ``regexec``, given the file's bytes from this test's offset.
+
+        libmagic copies at most `length` bytes of the region and then terminates the copy by
+        overwriting its last byte with a NUL (``file/src/softmagic.c:2393-2405``). It passes the
+        result as a C string, so the pattern never sees the final byte of the region, and never
+        sees anything past a NUL that was already in it.
+
+        Args:
+            data: The file's bytes from the offset this test runs at.
+
+        Returns:
+            The bytes to match the pattern against.
+        """
+        region = data[:self.length]
+        return region[:-1].partition(b"\0")[0]
+
     def match(self, data: bytes, expected: MagicRegex) -> DataTypeMatch:
         if not self.limit_lines:
-            m = expected.search(data[:self.length])
+            m = expected.search(self.subject(data))
             if m is None:
                 return DataTypeMatch.INVALID
             return self.matched_extent(m, 0)
