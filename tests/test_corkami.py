@@ -3,17 +3,14 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
-from tempfile import TemporaryDirectory
-from typing import Iterator, Set
+from typing import Set
 from unittest import TestCase
-import urllib.request
-from zipfile import ZipFile, ZipInfo
 
 from polyfile.magic import MAGIC_DEFS, MagicMatcher, MatchContext
 
-CORKAMI_CORPUS_ZIP = Path(__file__).absolute().parent / "corkami.zip"
+from .corkami_corpus import CorkamiCorpus
+
 FAILED_FILE_DIR = Path(__file__).absolute().parent / "failed_corkami_files"
-CORKAMI_URL = "https://github.com/corkami/pocs/archive/refs/heads/master.zip"
 SCRIPT_DIR = Path(__file__).absolute().parent
 FILE_DIR = SCRIPT_DIR.parent / "file"
 FILE_PATH = FILE_DIR / "src" / "file"
@@ -48,41 +45,6 @@ KNOWN_BAD_FILES = {
 
 FILE_MIMETYPE_PATTERN = re.compile(rb"^(.*?:|-)\s*(?P<mime>[^/\s]+/[^/;\s]+)\s*(;.*?$|$)(?P<remainder>.*)",
                                    re.MULTILINE)
-
-
-class CorkamiFile:
-    def __init__(self, path_in_zip: Path, info: ZipInfo):
-        self.path_in_zip: Path = path_in_zip
-        self.info: ZipInfo = info
-        self._tmpdir: TemporaryDirectory = None  # type: ignore
-
-    def __enter__(self) -> Path:
-        self._tmpdir = TemporaryDirectory()
-        self._tmpdir.__enter__()
-        with ZipFile(CORKAMI_CORPUS_ZIP, "r") as z:
-            return Path(z.extract(self.info, self._tmpdir.name))
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self._tmpdir.__exit__(exc_type, exc_val, exc_tb)
-
-
-class CorkamiCorpus:
-    @classmethod
-    def download(cls):
-        with urllib.request.urlopen(CORKAMI_URL) as response, open(CORKAMI_CORPUS_ZIP, "wb") as out_file:
-            shutil.copyfileobj(response, out_file)
-
-    @classmethod
-    def files(cls) -> Iterator[CorkamiFile]:
-        if not CORKAMI_CORPUS_ZIP.exists():
-            cls.download()
-        with ZipFile(CORKAMI_CORPUS_ZIP, "r") as z:
-            for info in z.infolist():
-                if info.is_dir() or info.file_size <= 0:
-                    continue
-                path = Path(info.filename)
-                if not path.name.startswith("."):
-                    yield CorkamiFile(path_in_zip=path, info=info)
 
 
 class CorkamiDifferentialTests(TestCase):

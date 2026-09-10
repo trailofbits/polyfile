@@ -157,6 +157,47 @@ KAITAI_MIME_MAPPING: Dict[str, str] = {
 }
 ```
 
+Several MIME types may share one specification. Repeat the specification as the value of each key,
+as `font/ttf`, `font/otf`, and `application/vnd.ms-opentype` all do for `font/ttf.ksy`. To register
+a second parser for a MIME type that already has one, add it to `EXTRA_PARSERS` instead; both
+parsers are tried, and one that cannot handle the data raises `InvalidMatch` and is skipped.
+
+#### Adding a mapping
+
+Three things have to hold, and `tests/test_kaitai.py` checks all of them:
+
+1. **PolyFile must be able to emit the MIME type.** Dispatch is an exact lookup on the MIME type
+   the magic matcher resolved, so a key that no matcher emits is dead code: the parser never runs
+   and nothing reports an error. Check the key against `polyfile --list`.
+2. **The generated parser must be importable.** kaitai-struct-compiler 0.11 does not escape Python
+   reserved words used as identifiers, nor backslashes in the docstrings it copies from a
+   specification's `doc:` key, so a handful of generated parsers are not valid Python.
+3. **Parsing a real file must yield more than a root node.** `StructNode.explore` walks only a
+   specification's `seq:` fields, never its `instances:`, so a specification that keeps its content
+   in `instances:` produces an empty tree. Add a sample to `TestKaitaiParsing` to prove otherwise.
+
+Watch for specifications that can loop forever. `archive/rar.ksy` is deliberately unmapped because
+its `blocks` field is `repeat: eos` over a switch whose RAR5 case consumes no bytes, so a 76-byte
+RAR5 file makes it allocate until memory runs out. `TestKaitaiParsing.test_truncated_input_does_not_hang`
+guards the mapped specifications against the same shape of bug.
+
+#### When libmagic detects a format but assigns no MIME type
+
+Some bundled definitions identify a format without an `!:mime` line, which leaves PolyFile with no
+key to dispatch on. Do not add the `!:mime` line to `polyfile/magic_defs/`: those files are a
+hand-maintained copy of upstream Magdir, and a local edit there is easy to lose the next time they
+are refreshed. Define the test in Python instead, the way [`polyfile/nitf.py`](../polyfile/nitf.py)
+and the Doom WAD and Creative Voice File tests in
+[`polyfile/kaitaimatcher.py`](../polyfile/kaitaimatcher.py) do:
+
+```python
+with ExactNamedTempfile(b"""0\tstring\t=IWAD\t\tDoom main IWAD data
+!:mime application/x-doom
+!:ext wad
+""", name="KaitaiMimeMatchers") as t:
+    MagicMatcher.DEFAULT_INSTANCE.add(Path(t), test_type=TestType.BINARY)
+```
+
 #### Licensing of generated parsers
 
 A parser produced by the Kaitai Struct compiler is a derivative work of the `.ksy` specification it
