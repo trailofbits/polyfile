@@ -6,7 +6,7 @@ import time
 import zlib
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Callable, Iterator, List, Optional, Set, Tuple
+from typing import Callable, Dict, Iterator, List, Optional, Set, Tuple
 from unittest import TestCase
 from uuid import UUID
 
@@ -22,6 +22,34 @@ from polyfile.magic import (
 # logger.setLevel(logger.TRACE)
 
 FILE_TEST_DIR: Path = Path(__file__).parent.parent / "file" / "tests"
+
+KNOWN_FAILURES: Dict[str, int] = {
+    # `test_file_corpus` asserts that each of these stems still fails, so fixing one of these bugs
+    # includes deleting its stems from this map in the same change. Each value is the issue that
+    # has to be fixed first, and the trailing comment names what blocks the stem after that.
+    # Issue #3480 tracks the whole set.
+    #
+    # Seven of the nine wait on the same thing: PolyFile never appends libmagic's text-encoding
+    # description, so it reports `OpenStreetMap XML data` where libmagic reports
+    # `OpenStreetMap XML data, ASCII text`.
+    "cmd1": 3488,           # and #3490, which is why a second, binary variant also matches
+    "cmd2": 3488,           # and #3490, as for cmd1
+    "gedcom": 3488,
+    "jpeg-text": 3488,      # needs the line-terminator clause and the upper-case encoding name
+    # This test ships two sidecars, which the harness now loads, and a `.flags` of `k`. PolyFile
+    # reports all four names as separate matches, so what is left is the joined form: #3491 for
+    # the `\012- ` separator, #3477 for the strength order the parts appear in, and #3488 for the
+    # trailer on the last one. Splitting the expected string on `\012- ` here instead would drop
+    # #3491 from that list.
+    "multiple": 3491,       # then #3477 and #3488
+    "osm": 3488,
+    "pnm1": 3488,
+    "pnm3": 3488,
+    # Text tests run against the raw bytes, so the SVG test never matches a UTF-16 file and
+    # PolyFile reports only `UTF-16 text`.
+    "utf16xmlsvg": 3489,    # then #3488
+}
+"""Corpus stems that cannot pass yet, each mapped to the issue that has to be fixed first."""
 
 DER_CERTIFICATE: Path = Path(__file__).absolute().parent / "msjdbc.cer.gz"
 
@@ -42,6 +70,72 @@ def tag_length_value(tag: int, value: bytes) -> bytes:
     """Encodes a DER tag-length-value triple using the short form of the length."""
     assert len(value) < 128
     return bytes((tag, len(value))) + value
+
+
+def corpus_matcher(test: str) -> MagicMatcher:
+    """Builds the matcher for one libmagic corpus test.
+
+    Upstream's runner loads every `<stem>*.magic` sidecar, joined with the path separator, and
+    falls back to the compiled definitions when a test ships none (`file/tests/Makefile.am`).
+
+    Args:
+        test: The stem shared by the test's `.testfile`, `.result` and sidecar files.
+
+    Returns:
+        A matcher parsed from the test's sidecars, or the default matcher when it has none.
+    """
+    sidecars = sorted(FILE_TEST_DIR.glob(f"{test}*.magic"))
+    if not sidecars:
+        return MagicMatcher.DEFAULT_INSTANCE
+    print(f"\tParsing custom match scripts: {', '.join(s.name for s in sidecars)}")
+    return MagicMatcher.parse(*sidecars)
+
+
+def corpus_flags(test: str) -> str:
+    """Reads the libmagic flags that produced a corpus test's expected result.
+
+    Upstream's runner appends the contents of `<stem>.flags` to the flags it hands to
+    `magic_open` (`file/tests/Makefile.am` and `file/tests/test.c`). `k` is `MAGIC_CONTINUE`,
+    which makes `file` report every match instead of only the strongest one, joining them with
+    `\\012- `. PolyFile always reports every match and never builds that join (issue #3491), so
+    the harness only reports the flags rather than emulating them.
+
+    Args:
+        test: The stem shared by the test's `.testfile`, `.result` and `.flags` files.
+
+    Returns:
+        The flag letters, or the empty string when the test ships no `.flags` file.
+    """
+    flags = FILE_TEST_DIR / f"{test}.flags"
+    if not flags.exists():
+        return ""
+    return flags.read_text().strip()
+
+
+def corpus_result_matches(expected: str, matches: Set[str]) -> bool:
+    """Reports whether PolyFile's matches include libmagic's expected description.
+
+    The comparison ignores case and trailing whitespace, and it works around two known
+    formatting differences between PolyFile and libmagic.
+
+    Args:
+        expected: The contents of the test's `.result` file.
+        matches: The description of every match PolyFile reported for the test file.
+
+    Returns:
+        True if one of `matches` corresponds to `expected`.
+    """
+    if expected == "ASCII text" and expected not in matches:
+        # PolyFile emits "ascii text" in lower case; part of issue #3488.
+        return expected.lower() in matches
+    expected = expected.rstrip().lower()
+    lowered = {match.rstrip().lower() for match in matches}
+    if "00000000" in expected and expected not in lowered:
+        # Technically correct, but PolyFile formats a zero as "0x000000"; part of issue #3488.
+        return expected.replace("00000000", "0x000000") in lowered
+    if expected.startswith("hancom hwp"):
+        return any(match.endswith(expected) for match in lowered)
+    return expected in lowered
 
 
 class MagicTest(TestCase):
@@ -412,57 +506,62 @@ class MagicTest(TestCase):
         self.assertTrue(FILE_TEST_DIR.exists(), "Make sure to run `git submodule init && git submodule update` in the "
                                                 "root of this repository.")
 
-        default_matcher = MagicMatcher.DEFAULT_INSTANCE
-
-        tests = sorted([
-            f.stem for f in FILE_TEST_DIR.glob("*.testfile")
-        ])
-
-        for test in tests:
+        for test in sorted(f.stem for f in FILE_TEST_DIR.glob("*.testfile")):
             with self.subTest(test=test):
-                testfile = FILE_TEST_DIR / f"{test}.testfile"
-                result = FILE_TEST_DIR / f"{test}.result"
+                self.check_corpus_test(test)
 
-                if not testfile.exists() or not result.exists():
-                    continue
+    def check_corpus_test(self, test: str):
+        """Runs one libmagic corpus test and asserts the verdict `KNOWN_FAILURES` calls for.
 
-                magicfile = FILE_TEST_DIR / f"{test}.magic"
+        Args:
+            test: The stem shared by the test's `.testfile`, `.result` and sidecar files.
+        """
+        testfile = FILE_TEST_DIR / f"{test}.testfile"
+        result = FILE_TEST_DIR / f"{test}.result"
 
-                print(f"Testing: {test}")
+        if not testfile.exists() or not result.exists():
+            return
 
-                if magicfile.exists():
-                    print(f"\tParsing custom match script: {magicfile.stem}")
-                    matcher = MagicMatcher.parse(magicfile)
-                else:
-                    matcher = default_matcher
+        print(f"Testing: {test}")
+        matcher = corpus_matcher(test)
+        flags = corpus_flags(test)
+        if flags:
+            print(f"\tlibmagic flags: -{flags}")
 
-                with open(result, "r") as f:
-                    expected = f.read()
-                    print(f"\tExpected: {expected!r}")
+        expected = result.read_text()
+        print(f"\tExpected: {expected!r}")
 
-                with open(testfile, "rb") as f:
-                    matches = set()
-                    for match in matcher.match(f.read()):
-                        actual = str(match)
-                        matches.add(actual)
-                        print(f"\tActual:   {actual!r}")
-                    if testfile.stem not in (
-                            "gedcom", "cmd1", "cmd2", "jpeg-text", "multiple", "osm", "pnm1",
-                            "pnm3", "utf16xmlsvg"
-                    ):
-                        # The files we skip fail because there is a bug in our implementation that we have not yet fixed
-                        if expected == "ASCII text" and expected not in matches:
-                            self.assertIn(expected.lower(), matches)
-                        else:
-                            expected = expected.rstrip().lower()
-                            matches = [m.rstrip().lower() for m in matches]
-                            if "00000000" in expected and expected not in matches:
-                                # our output is technically correct but we output "0x000000" instead of "00000000"
-                                self.assertIn(expected.replace("00000000", "0x000000"), matches)
-                            elif expected.startswith("hancom hwp"):
-                                self.assertTrue(any(m.endswith(expected) for m in matches))
-                            else:
-                                self.assertIn(expected, matches)
+        with open(testfile, "rb") as f:
+            matches = {str(match) for match in matcher.match(f.read())}
+        for actual in sorted(matches):
+            print(f"\tActual:   {actual!r}")
+
+        self.assert_corpus_verdict(test, expected, matches, flags)
+
+    def assert_corpus_verdict(self, test: str, expected: str, matches: Set[str], flags: str):
+        """Asserts that a corpus test passes, or that it still fails if `KNOWN_FAILURES` maps it.
+
+        Args:
+            test: The stem of the corpus test.
+            expected: The contents of the test's `.result` file.
+            matches: The description of every match PolyFile reported for the test file.
+            flags: The libmagic flag letters from the test's `.flags` file, if it ships one.
+        """
+        matched = corpus_result_matches(expected, matches)
+        issue = KNOWN_FAILURES.get(test)
+        context = f" (libmagic ran with -{flags})" if flags else ""
+        if issue is None:
+            self.assertTrue(matched, (
+                f"{test} does not match libmagic{context}: expected {expected!r}, but PolyFile "
+                f"reported {sorted(matches)!r}. If this is a bug we have filed, add {test!r} to "
+                f"KNOWN_FAILURES in tests/test_magic.py, mapped to that issue number."
+            ))
+        else:
+            self.assertFalse(matched, (
+                f"{test} now matches libmagic{context}, so issue #{issue} looks fixed. Delete "
+                f"{test!r} from KNOWN_FAILURES in tests/test_magic.py so that this test keeps "
+                f"checking it, and close issue #{issue} if nothing else blocks it."
+            ))
 
 
 MATCH_TIMEOUT_SECONDS: int = 60
