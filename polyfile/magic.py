@@ -791,15 +791,55 @@ class SourceInfo:
 
 
 class MatchContext:
-    def __init__(self, data: bytes, path: Optional[Path] = None, only_match_mime: bool = False):
+    """A buffer to run tests against, and where that buffer came from."""
+
+    def __init__(
+            self,
+            data: bytes,
+            path: Optional[Path] = None,
+            only_match_mime: bool = False,
+            decoded_from: Optional[str] = None
+    ):
+        """
+        Args:
+            data: the bytes the tests read.
+            path: the file `data` came from, if there is one.
+            only_match_mime: whether to discard matches that name no MIME type.
+            decoded_from: the encoding `data` was decoded from, if `data` is a rendering of the
+                file's bytes rather than the bytes themselves. Offsets into `data` are then
+                offsets into that rendering, not into the file.
+        """
         self.data: bytes = data
         self.path: Optional[Path] = path
         self.only_match_mime: bool = only_match_mime
+        self.decoded_from: Optional[str] = decoded_from
 
     def __getitem__(self, s: slice) -> "MatchContext":
         if not isinstance(s, slice):
             raise ValueError("Match contexts can only be sliced")
-        return MatchContext(data=self.data[s], path=self.path, only_match_mime=self.only_match_mime)
+        return MatchContext(data=self.data[s], path=self.path, only_match_mime=self.only_match_mime,
+                            decoded_from=self.decoded_from)
+
+    def text_test_context(self, encoding: Optional[str]) -> "MatchContext":
+        """The buffer libmagic runs its text tests against.
+
+        libmagic decodes its input into a UCS-4 buffer, drops the byte order mark, re-encodes that
+        buffer as UTF-8, and runs its text tests against the result rather than against the file's
+        bytes (``file_ascmagic_with_encoding`` in ``file/src/ascmagic.c``). That only changes the
+        bytes for a UCS encoding, so every other input keeps this context and the offsets its tests
+        report stay offsets into the file.
+
+        Args:
+            encoding: the encoding `detect_text_encoding` named for this context's data, or None if
+                it is not text.
+
+        Returns:
+            This context, or a context over the decoded text when the data are UCS-encoded.
+        """
+        if encoding is None or encoding not in _UCS_BOM_LENGTHS:
+            return self
+        return MatchContext(data=_decode_text(self.data, encoding).encode("utf-8"), path=self.path,
+                            only_match_mime=self.only_match_mime, decoded_from=encoding)
 
     @property
     def is_executable(self) -> bool:
@@ -3838,13 +3878,20 @@ class TextEncodingDescription:
     characters. `describe` applies that rewrite to one match's message.
     """
 
-    def __init__(self, code: str, text: str):
+    def __init__(self, encoding: str, text: str):
         """
         Args:
-            code: libmagic's name for the encoding, such as ``ASCII``.
+            encoding: the encoding `detect_text_encoding` named, such as ``ascii``.
             text: the decoded characters libmagic would scan.
+
+        Raises:
+            ValueError: if `LIBMAGIC_ENCODING_NAMES` has no description for `encoding`.
         """
-        self.code: str = code
+        if encoding not in LIBMAGIC_ENCODING_NAMES:
+            raise ValueError(f"there is no libmagic description for the text encoding "
+                             f"{encoding!r}; add one to LIBMAGIC_ENCODING_NAMES")
+        self.encoding: str = encoding
+        self.code: str = LIBMAGIC_ENCODING_NAMES[encoding]
         self.crlf: int = text.count("\r\n")
         self.lf: int = text.count("\n") - self.crlf
         # libmagic counts a CR when it reads the character after it, so a CR that ends the buffer
@@ -3875,10 +3922,7 @@ class TextEncodingDescription:
         encoding = detect_text_encoding(data)
         if encoding is None:
             return None
-        if encoding not in LIBMAGIC_ENCODING_NAMES:
-            raise ValueError(f"there is no libmagic description for the text encoding "
-                             f"{encoding!r}; add one to LIBMAGIC_ENCODING_NAMES")
-        return cls(LIBMAGIC_ENCODING_NAMES[encoding], _decode_text(data, encoding))
+        return cls(encoding, _decode_text(data, encoding))
 
     def _splice(self, message: str) -> Tuple[str, bool]:
         """Replaces a soft magic message's trailing ``text`` with the separator libmagic uses.
@@ -4087,9 +4131,26 @@ class Match:
         return LazyIterableSet(_extensions())
 
     def explain(self, file: Streamable, ansi_color: Optional[bool] = None) -> str:
+        """Explains every test that contributed to this match.
+
+        A match against a decoded buffer reports offsets into that buffer, so this explains it
+        against the buffer the tests read and says which encoding it was decoded from. There is no
+        map from those offsets back to the file's bytes; see `MatchContext.decoded_from`.
+
+        Args:
+            file: the file this match came from.
+            ansi_color: whether to colorize the explanation, defaulting to whether stdout is a tty.
+
+        Returns:
+            The explanation.
+        """
         if ansi_color is None:
             ansi_color = sys.stdout.isatty()
         writer = ANSIWriter(use_ansi=ansi_color)
+        if self.context.decoded_from is not None:
+            writer.write(f"  Every offset below is an offset into the text decoded from this file "
+                         f"as {self.context.decoded_from}, not into the file itself\n", dim=True)
+            file = self.context.data
         for result in self:
             result.explain(writer, file=file)
         return str(writer)
@@ -4384,11 +4445,14 @@ class MagicMatcher:
             yielded = True
         # is this a plain text file?
         text_matcher = Match(matcher=self, context=to_match, results=PlainTextTest().match(to_match))
-        is_text = text_matcher and (not to_match.only_match_mime or any(t is not None for t in text_matcher.mimetypes))
+        is_text = text_encoding is not None and text_matcher and (
+            not to_match.only_match_mime or any(t is not None for t in text_matcher.mimetypes))
         if is_text:
             text_matcher.text_encoding = text_encoding
-            # this is a text file, so try all of the textual tests:
-            for m in self._run_tests(self.text_tests, to_match, text_encoding, "text matching"):
+            # this is a text file, so try all of the textual tests, against the buffer libmagic
+            # hands them rather than against the file's bytes
+            text_context = to_match.text_test_context(text_encoding.encoding)
+            for m in self._run_tests(self.text_tests, text_context, text_encoding, "text matching"):
                 yield m
                 yielded = True
         if not yielded:

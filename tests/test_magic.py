@@ -38,9 +38,6 @@ KNOWN_FAILURES: Dict[str, int] = {
     # already right, which `MatchOrderTest` checks directly. Splitting the expected string on
     # `\012- ` here instead would drop #3491 from that list.
     "multiple": 3491,
-    # Text tests run against the raw bytes, so the SVG test never matches a UTF-16 file and
-    # PolyFile reports only the text-encoding description.
-    "utf16xmlsvg": 3489,
 }
 """Corpus stems that cannot pass yet, each mapped to the issue that has to be fixed first."""
 
