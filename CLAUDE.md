@@ -45,62 +45,81 @@ def parse_pdf(file_stream, match):
 
 ```
 polyfile/
-├── polyfile/              # Main package
-│   ├── magic_defs/        # 363 libmagic definition files
-│   ├── kaitai/parsers/    # 183 auto-generated Kaitai parsers (excluded from lint)
-│   └── templates/         # HTML output templates
-├── polymerge/             # Companion merge tool
-├── tests/                 # Test suite
-├── docs/                  # Extension guide, JSON format spec
-└── kaitai_struct_formats/ # Git submodule with KSY definitions
+├── polyfile/                  # Main package
+│   ├── magic_defs/            # libmagic definition files
+│   ├── kaitai/parsers/        # auto-generated Kaitai parsers (excluded from lint)
+│   └── templates/             # HTML output templates
+├── polymerge/                 # Companion merge tool
+├── tests/                     # Test suite
+├── docs/                      # Extension guide, JSON format spec
+├── kaitai_struct_formats/     # Git submodule with KSY definitions
+├── pyproject.toml             # Packaging metadata
+├── build_backend.py           # In-tree PEP 517 backend; regenerates the Kaitai parsers
+├── compile_kaitai_parsers.py  # Kaitai compilation and license audit
+└── MANIFEST.in                # Source distribution contents
 ```
 
 ## Development Commands
 
 ### Setup
 ```bash
-# Install from source (requires Java for Kaitai compiler)
-pip install -e .[dev]
+# Install from source. Needs the submodules, and Java for the Kaitai compiler whenever the
+# parsers actually have to be regenerated.
+git submodule update --init --recursive
+uv venv
+uv pip install -e '.[dev]'
 
 # Install from PyPI
-pip install polyfile
+uv tool install polyfile
 ```
+
+### Building distributions
+```bash
+# Builds the sdist, then the wheel from that sdist
+uv build
+
+# Check the metadata before a release
+uvx twine check dist/*
+```
+
+There is no `setup.py`. `pyproject.toml` selects `build_backend.py`, an in-tree PEP 517 backend
+that regenerates the Kaitai parsers for wheel, sdist and editable builds.
 
 ### Linting
 ```bash
 # Run flake8 (excludes auto-generated kaitai parsers)
-flake8 polyfile polymerge --max-complexity=10 --max-line-length=127 \
-    --exclude=polyfile/kaitai/parsers
+uv run flake8 polyfile polymerge build_backend.py compile_kaitai_parsers.py \
+    --max-complexity=10 --max-line-length=127 --exclude=polyfile/kaitai/parsers
 ```
 
 ### Testing
 ```bash
 # Run all tests
-pytest tests
+uv run pytest tests
 
 # Run specific test file
-pytest tests/test_magic.py
-pytest tests/test_pdf.py
-pytest tests/test_corkami.py  # Polyglot corpus
+uv run pytest tests/test_magic.py
+uv run pytest tests/test_pdf.py
+uv run pytest tests/test_corkami.py  # Polyglot corpus
 ```
 
 ### Security Audit
 ```bash
-pip-audit
+uvx pip-audit
 ```
 
 ### Pre-Commit Checklist
 Run all checks before committing changes:
 ```bash
 # Lint
-flake8 polyfile polymerge --max-complexity=10 --max-line-length=127 \
-    --exclude=polyfile/kaitai/parsers
+uv run flake8 polyfile polymerge build_backend.py compile_kaitai_parsers.py \
+    --max-complexity=10 --max-line-length=127 --exclude=polyfile/kaitai/parsers
 
 # Security audit (checks for vulnerable dependencies)
-pip-audit
+uvx pip-audit
 
 # Tests
-pytest tests
+uv run pytest tests
 ```
 
 ## Code Navigation
@@ -192,7 +211,7 @@ you overwrite them.
 ### Adding Kaitai Struct Format
 1. Add the `.ksy` file to the `kaitai_struct_formats/` submodule (upstream, or a local commit)
 2. Map the MIME type in `polyfile.kaitaimatcher.KAITAI_MIME_MAPPING`
-3. Rebuild: `python compile_kaitai_parsers.py`
+3. Rebuild: `uv run python compile_kaitai_parsers.py`
 
 Only specifications under a permissive license are compiled—see the licensing policy below.
 
@@ -221,7 +240,7 @@ Apache 2.0. `compile_kaitai_parsers.py` therefore compiles a spec only if its `l
 
 ```bash
 # List the specs that are excluded, and why
-python compile_kaitai_parsers.py --audit
+uv run python compile_kaitai_parsers.py --audit
 ```
 
 Run the audit after every `kaitai_struct_formats` bump. `tests/test_licensing.py` fails if a parser
@@ -229,8 +248,13 @@ from an excluded spec reaches the package, or if `MANIFEST.in` drifts from the a
 
 ### Gotchas
 - `polyfile/kaitai/parsers/` is auto-generated—never edit manually
-- Java required at install time for Kaitai compilation
-- `compile_kaitai_parsers.py` runs at build time and must stay standard-library only
+- Java is required only when the parsers must be recompiled; installing from a published sdist
+  or wheel reuses the generated ones
+- `build_backend.py` and `compile_kaitai_parsers.py` run at build time and must stay
+  standard-library only—builds are isolated and contain nothing but `[build-system] requires`
+- `uv build` builds the wheel from the sdist. `build_backend.py` deliberately skips regeneration
+  there, because outside a git checkout `compile_kaitai_parsers.is_stale()` falls back to tarball
+  modification times and would recompile everything
 - The downloaded `polyfile/kaitai/kaitai-struct-compiler-*/` is gitignored; it bundles its own
   copy of the format gallery, copyleft specs included
 - libmagic DSL has quirks—see [blog post](https://blog.trailofbits.com/2022/07/01/libmagic-the-blathering/)

@@ -19,20 +19,34 @@ as _The ALAN Parsers Project_.
 
 ## Quickstart
 
-You can install the latest stable version of PolyFile from PyPI:
+You can install the latest stable version of PolyFile from PyPI with
+[uv](https://docs.astral.sh/uv/):
 ```
-pip3 install polyfile
-```
-
-To install PolyFile from source, in the same directory as this README, run:
-```
-pip3 install .
+uv tool install polyfile
 ```
 
-Important: Before installing from source, make sure Java is installed. Java is used to
-run the Kaitai Struct compiler, which compiles the file format definitions.
+To run PolyFile once without installing it:
+```
+uvx polyfile <file>
+```
 
-This will automatically install the `polyfile` and `polymerge` executables in your path.
+To install PolyFile from source, clone the repository with its submodules and run uv in the
+same directory as this README:
+```
+git submodule update --init --recursive
+uv pip install .
+```
+
+Installing from source builds in an isolated environment, so it needs network access to fetch
+the build backend. To build offline, install `setuptools>=83.0.0` yourself and run
+`uv pip install --no-build-isolation .`.
+
+Installing from PyPI reuses the parsers that the published distribution already carries.
+Installing from a source checkout regenerates them, and only that path needs Java, which runs
+the Kaitai Struct compiler that compiles the file format definitions.
+
+This installs the `polyfile` executable in your path. The companion merge tool runs as
+`python -m polymerge`.
 
 ## Usage
 
