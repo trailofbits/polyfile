@@ -1170,8 +1170,11 @@ class DataType(ABC, Generic[T]):
             dt = SearchType.parse(fmt)
         elif fmt.startswith("regex"):
             dt = RegexType.parse(fmt)
-        elif fmt == "guid":
-            dt = GUIDType()
+        elif fmt in ("guid", "leguid", "beguid"):
+            if fmt == "beguid":
+                dt = GUIDType(endianness=Endianness.BIG)
+            else:
+                dt = GUIDType(endianness=Endianness.LITTLE)
         else:
             dt = NumericDataType.parse(fmt)
         if dt.name in TYPES_BY_NAME:
@@ -1195,8 +1198,17 @@ class UUIDWildcard:
 
 
 class GUIDType(DataType[Union[UUID, UUIDWildcard]]):
-    def __init__(self):
-        super().__init__("guid")
+    # NOTE: libmagic renders `guid` and its `leguid` alias with the first three fields byte-swapped,
+    #       the mixed-endian layout Microsoft uses, and `beguid` with the bytes in file order.
+    #       See file_print_guid and file_print_beguid in libmagic's src/funcs.c.
+    def __init__(self, endianness: Endianness = Endianness.LITTLE):
+        if endianness == Endianness.LITTLE:
+            super().__init__("guid")
+        elif endianness == Endianness.BIG:
+            super().__init__("beguid")
+        else:
+            raise ValueError(f"GUIDs only support big and little endianness, not {endianness!r}")
+        self.endianness: Endianness = endianness
 
     def is_text(self, value: Union[UUID, UUIDWildcard]) -> bool:
         return False
@@ -1213,7 +1225,10 @@ class GUIDType(DataType[Union[UUID, UUIDWildcard]]):
         if len(data) < 16:
             return DataTypeMatch.INVALID
         try:
-            uuid = UUID(bytes_le=data[:16])
+            if self.endianness == Endianness.BIG:
+                uuid = UUID(bytes=data[:16])
+            else:
+                uuid = UUID(bytes_le=data[:16])
         except ValueError:
             return DataTypeMatch.INVALID
         if isinstance(expected, UUIDWildcard) or uuid == expected:
