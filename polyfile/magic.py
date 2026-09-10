@@ -1050,6 +1050,19 @@ class MagicTest(ABC):
         return self._type
 
     @property
+    def precedes_soft_magic(self) -> bool:
+        """Whether libmagic runs this check ahead of soft magic, against the file's own bytes.
+
+        ``file_buffer`` runs its tar, JSON, CSV and SIMH checks before it reaches soft magic
+        (``src/funcs.c``), so such a check never reads the buffer ``file_ascmagic`` decodes for the
+        text pass, and the description ``file_ascmagic`` appends never lands on its message.
+
+        Returns:
+            True if libmagic runs this check before soft magic.
+        """
+        return False
+
+    @property
     def appends_text_encoding(self) -> bool:
         """Whether libmagic appends its text-encoding description to this test's message.
 
@@ -1065,7 +1078,7 @@ class MagicTest(ABC):
         Returns:
             True if libmagic would append the description to this test's message.
         """
-        return bool(self.subtest_type() & TestType.TEXT)
+        return not self.precedes_soft_magic and bool(self.subtest_type() & TestType.TEXT)
 
     @test_type.setter
     def test_type(self, value: TestType):
@@ -3514,17 +3527,17 @@ class JSONTest(MagicTest):
         return TestType.TEXT
 
     @property
-    def appends_text_encoding(self) -> bool:
-        """libmagic never appends its text-encoding description to a JSON verdict.
+    def precedes_soft_magic(self) -> bool:
+        """``file_is_json`` runs ahead of soft magic in ``file_buffer``.
 
-        ``file_is_json`` runs ahead of soft magic in ``file_buffer`` and its match ends the run, so
-        ``file_ascmagic`` never sees it: `file` reports ``JSON text data``, not
-        ``JSON text data, ASCII text``.
+        So it reads the file's own bytes rather than the buffer ``file_ascmagic`` decodes, and its
+        match ends the run before ``file_ascmagic`` can describe it: `file` reports
+        ``JSON text data``, not ``JSON text data, ASCII text``.
 
         Returns:
-            False.
+            True.
         """
-        return False
+        return True
 
     def test_flip_endianness(
             self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]
@@ -3577,16 +3590,16 @@ class CSVTest(MagicTest):
         return TestType.TEXT
 
     @property
-    def appends_text_encoding(self) -> bool:
-        """libmagic never appends its text-encoding description to a CSV verdict.
+    def precedes_soft_magic(self) -> bool:
+        """``file_is_csv`` runs ahead of soft magic in ``file_buffer``.
 
-        ``file_is_csv`` runs ahead of soft magic in ``file_buffer``, names the encoding itself, and
-        its match ends the run, so ``file_ascmagic`` never sees it.
+        So it reads the file's own bytes rather than the buffer ``file_ascmagic`` decodes, and it
+        names the encoding itself and ends the run before ``file_ascmagic`` can describe it.
 
         Returns:
-            False.
+            True.
         """
-        return False
+        return True
 
     def test_flip_endianness(
             self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]
@@ -4410,7 +4423,8 @@ class MagicMatcher:
             tests: Iterable[MagicTest],
             context: MatchContext,
             text_encoding: Optional[TextEncodingDescription],
-            description: str
+            description: str,
+            file_context: Optional[MatchContext] = None
     ) -> Iterator[Match]:
         """Yields a match for each of `tests` that matches `context`.
 
@@ -4419,16 +4433,22 @@ class MagicMatcher:
             context: the buffer to run them against.
             text_encoding: the description of `context`'s text encoding, or None if it is not text.
             description: the label for the progress log.
+            file_context: the buffer holding the file's own bytes, when `context` is a rendering of
+                them. A check `MagicTest.precedes_soft_magic` names runs against this instead.
 
         Yields:
             One match per test that matched, carrying `text_encoding` if libmagic would append it
             to that test's message.
         """
         for test in log.range(tests, desc=description, unit=" tests", delay=1.0):
-            m = Match(matcher=self, context=context, results=test.match(context))
+            if file_context is not None and test.precedes_soft_magic:
+                test_context = file_context
+            else:
+                test_context = context
+            m = Match(matcher=self, context=test_context, results=test.match(test_context))
             # the description is how a match is rendered, so it must not make an empty message
             # look like a match
-            if m and (not context.only_match_mime or any(t is not None for t in m.mimetypes)):
+            if m and (not test_context.only_match_mime or any(t is not None for t in m.mimetypes)):
                 if test.appends_text_encoding:
                     m.text_encoding = text_encoding
                 yield m
@@ -4452,7 +4472,8 @@ class MagicMatcher:
             # this is a text file, so try all of the textual tests, against the buffer libmagic
             # hands them rather than against the file's bytes
             text_context = to_match.text_test_context(text_encoding.encoding)
-            for m in self._run_tests(self.text_tests, text_context, text_encoding, "text matching"):
+            for m in self._run_tests(self.text_tests, text_context, text_encoding, "text matching",
+                                     file_context=to_match):
                 yield m
                 yielded = True
         if not yielded:
