@@ -75,6 +75,56 @@ class MagicTest(TestCase):
                 self.assertIs(polyfile.magic.DataTypeMatch.INVALID,
                               data_type.match(data, UUID(int=0)))
 
+    def test_id3_synchsafe_decode(self):
+        """Tests that `decode_id3_synchsafe` drops bit 7 of every byte and repacks the rest.
+
+        This is a regression test for trailofbits/polyfile#3485. An ID3v2 tag stores its size
+        with seven significant bits per byte, so a plain four-byte read overstates it: the size
+        field `00 00 10 24` is 2084, not 0x1024.
+        """
+        self.assertEqual(2084, polyfile.magic.decode_id3_synchsafe(0x00001024))
+        self.assertEqual(0x0FFFFFFF, polyfile.magic.decode_id3_synchsafe(0x7F7F7F7F))
+        self.assertEqual(0, polyfile.magic.decode_id3_synchsafe(0x80808080))
+        for shift, expected in ((0, 1), (8, 1 << 7), (16, 1 << 14), (24, 1 << 21)):
+            with self.subTest(shift=shift):
+                self.assertEqual(expected, polyfile.magic.decode_id3_synchsafe(1 << shift))
+
+    def test_id3_indirect_offset_byte_orders(self):
+        """Tests that `.i` and `.I` indirect offsets read their field as an ID3 synchsafe integer.
+
+        This is a regression test for trailofbits/polyfile#3485. libmagic maps the `i` and `I`
+        indirect types to FILE_LEID3 and FILE_BEID3 and applies `cvt_id3` before the offset
+        arithmetic, so `>(6.I+10)` in `magic_defs/audio` resolves to 2094 and not to 4142. The
+        `10 7a` case pins the decode ahead of the `+10`: decoding afterwards carries `0x7a + 10`
+        into bit 7 and yields 2052 instead of 2180.
+        """
+        for spec, size_field, endianness, expected in (
+                ("(6.I+10)", b"\x00\x00\x10\x24", polyfile.magic.Endianness.BIG, 2094),
+                ("(6.i+10)", b"\x24\x10\x00\x00", polyfile.magic.Endianness.LITTLE, 2094),
+                ("(6.I+10)", b"\x00\x00\x10\x7a", polyfile.magic.Endianness.BIG, 2180)):
+            with self.subTest(offset=spec, size_field=size_field):
+                offset = polyfile.magic.IndirectOffset.parse(spec)
+                self.assertTrue(offset.is_id3)
+                self.assertEqual(endianness, offset.endianness)
+                header = b"ID3\x02\x00\x00" + size_field
+                self.assertEqual(expected, offset.to_absolute(header, None))
+        for spec in ("(6.l+10)", "(6.L+10)", "(6+10)"):
+            with self.subTest(offset=spec):
+                self.assertFalse(polyfile.magic.IndirectOffset.parse(spec).is_id3)
+
+    def test_id3v2_tag_locates_its_audio_frames(self):
+        """Tests that an ID3v2 tag's indirect offset lands on the MPEG frame that follows it.
+
+        This is a regression test for trailofbits/polyfile#3485. `magic_defs/audio` reaches the
+        audio frames with `>(6.I+10) indirect`; without the synchsafe decode PolyFile read the
+        2084-byte tag size as 4132 and reported `contains: data`.
+        """
+        tag = b"ID3\x02\x00\x00\x00\x00\x10\x24"
+        data = tag + b"A" * (2094 - len(tag)) + b"\xff\xfb\x70\xc0" + b"\x55" * 380
+        matches = {str(match) for match in MagicMatcher.DEFAULT_INSTANCE.match(data)}
+        self.assertIn("Audio file with ID3 version 2.2.0, contains: MPEG ADTS, layer III, v1, "
+                      "96 kbps, 44.1 kHz, Monaural", matches)
+
     def test_text_tests(self):
         matcher = MagicMatcher.parse(*MAGIC_DEFS)
         self.assertEqual(len(matcher.text_tests & matcher.non_text_tests), 0)
