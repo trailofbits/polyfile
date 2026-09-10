@@ -166,8 +166,8 @@ class MagicTest(TestCase):
             'images:2657', 'inform:9', 'java:19', 'java:49', 'java:51', 'javascript:10',
             'javascript:12', 'javascript:14', 'javascript:16', 'javascript:30', 'javascript:34',
             'javascript:38', 'javascript:42', 'javascript:46', 'javascript:50', 'javascript:54',
-            'javascript:6', 'javascript:60', 'javascript:8', 'json:6', 'k9:28', 'kde:10', 'kde:6',
-            'kde:8', 'lex:10', 'lex:12', 'linux:366', 'linux:369', 'linux:370', 'linux:54',
+            'javascript:6', 'javascript:60', 'javascript:8', 'json:12', 'json:6', 'k9:28', 'kde:10',
+            'kde:6', 'kde:8', 'lex:10', 'lex:12', 'linux:366', 'linux:369', 'linux:370', 'linux:54',
             'linux:938', 'lisp:16', 'lisp:18', 'lisp:20', 'lisp:22', 'lisp:24', 'lisp:26',
             'lisp:77', 'lua:11', 'lua:13', 'lua:15', 'lua:17', 'lua:9', 'm4:5', 'm4:8', 'magic:8',
             'mail.news:11', 'mail.news:13', 'mail.news:15', 'mail.news:17', 'mail.news:19',
@@ -298,6 +298,55 @@ class MagicTest(TestCase):
         )
         return matches[0]
 
+    def test_newline_delimited_json(self):
+        """Tests that a buffer holding more than one top-level JSON value matches NDJSON.
+
+        This is a regression test for trailofbits/polyfile#3486. `JSONTest` parsed the whole
+        buffer with a single `json.loads` call, which rejects `{}\\n{}\\n` as extra data, so
+        PolyFile reported `ascii text` where `file` reports `New Line Delimited JSON text data`.
+        """
+        match = self.only_match(b"{}\n{}\n", "New Line Delimited JSON text data")
+        self.assertEqual(["application/x-ndjson"], list(match.mimetypes))
+
+    def test_single_json_value(self):
+        """Tests that a single top-level JSON value still matches plain JSON rather than NDJSON."""
+        match = self.only_match(b'{"a": [1, 2]}\n', "JSON text data")
+        self.assertEqual(["application/json"], list(match.mimetypes))
+
+    def test_json_messages_are_not_shared(self):
+        """Tests that matching NDJSON does not change what a later plain JSON match reports.
+
+        A `MagicMatcher` reuses its test objects across calls to `match`, so deriving the NDJSON
+        message by assigning to `MagicTest.message` made every JSON file matched after the first
+        NDJSON file report `New Line Delimited JSON text data`.
+        """
+        matcher = MagicMatcher.DEFAULT_INSTANCE
+        self.assertIn("New Line Delimited JSON text data", self.messages(matcher, b"{}\n{}\n"))
+        plain = self.messages(matcher, b"{}")
+        self.assertIn("JSON text data", plain)
+        self.assertNotIn("New Line Delimited JSON text data", plain)
+
+    def test_json_values_must_share_a_first_byte(self):
+        """Tests that top-level JSON values with different first bytes are not NDJSON.
+
+        libmagic only continues past the first value if the next byte equals the first byte of
+        that value (`*ouc == *uc` in `file/src/is_json.c`), so `{}\\n[]\\n` is plain text.
+        """
+        messages = self.messages(MagicMatcher.DEFAULT_INSTANCE, b"{}\n[]\n")
+        self.assertNotIn("New Line Delimited JSON text data", messages)
+        self.assertNotIn("JSON text data", messages)
+        self.assertIn("ascii text", messages)
+
+    def test_bare_json_scalar_is_not_json(self):
+        """Tests that a bare top-level scalar is not JSON.
+
+        libmagic only reports JSON when it saw an object or an array (`st[JSON_OBJECT]` or
+        `st[JSON_ARRAYN]` in `file/src/is_json.c`), so `42` is plain text even though
+        `json.loads` accepts it.
+        """
+        messages = self.messages(MagicMatcher.DEFAULT_INSTANCE, b"42")
+        self.assertNotIn("JSON text data", messages)
+
     def test_der_certificate(self):
         with gzip.open(DER_CERTIFICATE, "rb") as f:
             certificate = f.read()
@@ -398,8 +447,8 @@ class MagicTest(TestCase):
                         matches.add(actual)
                         print(f"\tActual:   {actual!r}")
                     if testfile.stem not in (
-                            "gedcom", "cmd1", "cmd2", "jpeg-text", "jsonlines1", "multiple",
-                            "osm", "pnm1", "pnm3", "utf16xmlsvg"
+                            "gedcom", "cmd1", "cmd2", "jpeg-text", "multiple", "osm", "pnm1",
+                            "pnm3", "utf16xmlsvg"
                     ):
                         # The files we skip fail because there is a bug in our implementation that we have not yet fixed
                         if expected == "ASCII text" and expected not in matches:

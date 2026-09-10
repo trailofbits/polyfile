@@ -24,7 +24,8 @@ import struct
 import sys
 from time import gmtime, localtime, strftime
 from typing import (
-    Any, BinaryIO, Callable, Dict, Generic, Iterable, Iterator, List, Optional, Set, Tuple, Type, TypeVar, Union
+    Any, BinaryIO, Callable, Dict, Generic, Iterable, Iterator, List, NamedTuple, Optional, Set,
+    Tuple, Type, TypeVar, Union
 )
 from uuid import UUID
 
@@ -2688,19 +2689,90 @@ class UseTest(MagicTest):
         raise NotImplementedError("This function should never be called")
 
 
+JSON_WHITESPACE: str = " \t\n\r"
+"""The characters that libmagic's `json_skip_space` skips (`file/src/is_json.c`)."""
+
+
+class ParsedJSON(NamedTuple):
+    """A buffer that parsed as JSON under libmagic's rules."""
+
+    value: Any
+    """The first top-level JSON value in the buffer."""
+
+    newline_delimited: bool
+    """Whether a second top-level JSON value follows the first one."""
+
+
+def _skip_json_whitespace(text: str, offset: int) -> int:
+    while offset < len(text) and text[offset] in JSON_WHITESPACE:
+        offset += 1
+    return offset
+
+
+def parse_json(raw: bytes) -> ParsedJSON:
+    """Parses a buffer as JSON the way libmagic's `file_is_json` does.
+
+    libmagic implements JSON detection with a C parser rather than with the magic DSL, and its
+    rules are narrower than `json.loads`:
+
+    * The top-level value must be an object or an array, because libmagic only reports JSON when
+      `st[JSON_OBJECT]` or `st[JSON_ARRAYN]` is set (`file/src/is_json.c`). A bare scalar such as
+      `42` is therefore not JSON, even though `json.loads` accepts one.
+    * If more data follows the first value, it is newline-delimited JSON as long as the next byte
+      equals the first byte of the first value and a second value parses there. libmagic stops
+      after that second value, so trailing garbage does not disqualify the buffer.
+
+    Args:
+        raw: the bytes to parse, starting at the first byte of the candidate JSON value.
+
+    Returns:
+        The first top-level value, and whether a second top-level value follows it.
+
+    Raises:
+        json.JSONDecodeError: if the buffer is not JSON under libmagic's rules.
+        UnicodeDecodeError: if the buffer is not text in an encoding that JSON allows.
+    """
+    text = raw.decode(json.detect_encoding(raw), "surrogatepass")
+    decoder = json.JSONDecoder()
+    start = _skip_json_whitespace(text, 0)
+    value, offset = decoder.raw_decode(text, start)
+    if not isinstance(value, (dict, list)):
+        raise json.JSONDecodeError("the top-level JSON value is neither an object nor an array", text, start)
+    offset = _skip_json_whitespace(text, offset)
+    if offset >= len(text):
+        return ParsedJSON(value, False)
+    if text[offset] != text[start]:
+        raise json.JSONDecodeError("the data after the top-level JSON value does not start another one",
+                                   text, offset)
+    decoder.raw_decode(text, offset)
+    return ParsedJSON(value, True)
+
+
 class JSONTest(MagicTest):
-    def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> Optional[TestResult]:
+    """Matches a buffer that holds a single top-level JSON object or array.
+
+    `NEWLINE_DELIMITED` selects which of libmagic's two JSON verdicts this test accepts, so the
+    two messages come from two tests in `polyfile/magic_defs/json` rather than from reassigning
+    `MagicTest.message` at match time. Test objects are shared across calls to
+    `MagicMatcher.match`, so a message assigned during one match would leak into the next.
+    """
+
+    NEWLINE_DELIMITED: bool = False
+    """Whether this test matches newline-delimited JSON rather than a single JSON value."""
+
+    def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
         try:
-            parsed = json.loads(data[absolute_offset:])
-            return MatchedTest(self, offset=absolute_offset, length=len(data) - absolute_offset, value=parsed,
-                               parent=parent_match)
+            parsed = parse_json(data[absolute_offset:])
         except (json.JSONDecodeError, UnicodeDecodeError) as e:
-            return FailedTest(
-                test=self,
-                offset=absolute_offset,
-                parent=parent_match,
-                message=str(e)
-            )
+            return FailedTest(test=self, offset=absolute_offset, parent=parent_match, message=str(e))
+        if parsed.newline_delimited != self.NEWLINE_DELIMITED:
+            if parsed.newline_delimited:
+                reason = "the data holds more than one top-level JSON value"
+            else:
+                reason = "the data holds only one top-level JSON value"
+            return FailedTest(test=self, offset=absolute_offset, parent=parent_match, message=reason)
+        return MatchedTest(self, offset=absolute_offset, length=len(data) - absolute_offset, value=parsed.value,
+                           parent=parent_match)
 
     def subtest_type(self) -> TestType:
         return TestType.TEXT
@@ -2709,6 +2781,12 @@ class JSONTest(MagicTest):
             self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]
     ) -> TestResult:
         return self.test(data, absolute_offset, parent_match)
+
+
+class NDJSONTest(JSONTest):
+    """Matches newline-delimited JSON, which libmagic names separately from single-value JSON."""
+
+    NEWLINE_DELIMITED: bool = True
 
 
 class CSVTest(MagicTest):
@@ -3396,6 +3474,8 @@ class MagicMatcher:
                                        parent=parent, subtraction=subtraction, modulo=modulo)
             elif data_type == "json":
                 test = JSONTest(offset=offset, message=message, parent=parent)
+            elif data_type == "ndjson":
+                test = NDJSONTest(offset=offset, message=message, parent=parent)
             elif data_type == "csv":
                 test = CSVTest(offset=offset, message=message, parent=parent)
             elif data_type == "indirect" or data_type == "indirect/r":

@@ -6,3 +6,9 @@
 0   json    x   JSON text data
 !:mime  application/json
 !:ext   json
+# libmagic names a file that holds more than one top-level JSON value
+# newline-delimited JSON, and gives it its own MIME type, so PolyFile adds a
+# second test type called `ndjson`:
+0   ndjson  x   New Line Delimited JSON text data
+!:mime  application/x-ndjson
+!:ext   ndjson/jsonl
