@@ -1,12 +1,14 @@
 import base64
 import gzip
+import os
 import subprocess
 import sys
 import time
 import zlib
+from itertools import chain
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Callable, Dict, Iterator, List, Optional, Set, Tuple
+from typing import Callable, Dict, Iterable, Iterator, List, Optional, Set, Tuple
 from unittest import TestCase
 from uuid import UUID
 
@@ -31,10 +33,11 @@ KNOWN_FAILURES: Dict[str, int] = {
     #
     # This test ships two sidecars, which the harness loads, and a `.flags` of `k`. PolyFile
     # reports all four names as separate matches, each with its own text-encoding description, so
-    # what is left is the joined form: #3491 for the `\012- ` separator and #3477 for the strength
-    # order the parts appear in. Splitting the expected string on `\012- ` here instead would drop
-    # #3491 from that list.
-    "multiple": 3491,       # then #3477
+    # what is left is the joined form that #3491 covers: the `\012- ` separator, and one
+    # text-encoding description for the join rather than one per part. The order of the parts is
+    # already right, which `MatchOrderTest` checks directly. Splitting the expected string on
+    # `\012- ` here instead would drop #3491 from that list.
+    "multiple": 3491,
     # Text tests run against the raw bytes, so the SVG test never matches a UTF-16 file and
     # PolyFile reports only the text-encoding description.
     "utf16xmlsvg": 3489,
@@ -1588,3 +1591,137 @@ class TextEncodingDescriptionTest(TestCase):
                         for mimetype in match.mimetypes
                         if mimetype is not None
                     })
+
+
+ORDER_SCRIPT: str = """
+import sys
+from polyfile.magic import MagicMatcher
+for path in sys.argv[1:]:
+    with open(path, "rb") as f:
+        data = f.read()
+    print(path, "\t".join(str(match) for match in MagicMatcher.DEFAULT_INSTANCE.match(data)))
+"""
+
+HASH_SEEDS: Tuple[str, ...] = ("0", "1", "12345")
+
+
+class MatchOrderTest(TestCase):
+    """Regression tests for the match order reported in issue #3509.
+
+    `MagicMatcher` used to hold its level 0 tests in sets, so `MagicMatcher.match` reported them
+    in set-iteration order and threw away the sort `MagicMatcher.parse` had applied. `MagicTest`
+    inherits identity hashing, which ties that order to allocation order and therefore to
+    Python's per-process hash seed, so the same input could name a different primary type on a
+    later run.
+    """
+
+    MULTI_MATCH_STEMS: Tuple[str, ...] = (
+        "HWP2016.hwpx.zip", "keyman-2", "escapevel", "issue311docx", "issue359xlsx", "osm",
+    )
+    """Corpus stems that PolyFile reports more than one match for, so their order is observable."""
+
+    def assert_strongest_first(self, tests: Iterable[polyfile.magic.MagicTest], label: str):
+        """Asserts that `tests` arrive in non-increasing order of strength.
+
+        Args:
+            tests: The level 0 tests to check, in the order something reported them.
+            label: What is being checked, for the failure message.
+        """
+        previous: Optional[polyfile.magic.MagicTest] = None
+        for test in tests:
+            if previous is not None:
+                self.assertLessEqual(
+                    test.compute_strength(), previous.compute_strength(),
+                    f"{label}: {test.source_info} has strength {test.compute_strength()}, above "
+                    f"the {previous.compute_strength()} of the {previous.source_info} before it"
+                )
+            previous = test
+
+    def test_each_pass_runs_its_tests_strongest_first(self):
+        """Tests that both of `MagicMatcher.match`'s passes are ordered, not just the test list.
+
+        This is the assertion a set cannot satisfy: over thousands of tests, an order that came
+        from hashing is not going to be non-increasing by accident.
+        """
+        matcher = MagicMatcher.DEFAULT_INSTANCE
+        self.assert_strongest_first(matcher, "the level 0 tests")
+        self.assert_strongest_first(matcher.non_text_tests, "the binary pass")
+        self.assert_strongest_first(matcher.text_tests, "the text pass")
+
+    def test_only_match_orders_the_tests_it_keeps(self):
+        """Tests that a matcher `MagicMatcher.only_match` narrowed is ordered too.
+
+        `only_match` collects its tests out of `MagicMatcher.tests_by_mime`, which holds sets, so
+        the order has to be established where the matcher stores the tests rather than where
+        `MagicMatcher.parse` reads them.
+        """
+        matcher = MagicMatcher.DEFAULT_INSTANCE.only_match(
+            mimetypes=["application/zip", "application/pdf", "image/jpeg", "text/plain"])
+        self.assert_strongest_first(matcher, "only_match")
+        self.assert_strongest_first(matcher.non_text_tests, "only_match's binary pass")
+        self.assert_strongest_first(matcher.text_tests, "only_match's text pass")
+
+    def test_matches_follow_the_order_of_the_tests_that_produced_them(self):
+        """Tests that a file's matches arrive in the order the matcher runs the tests.
+
+        The binary pass runs before the text pass, so the reported matches are not globally
+        ordered by strength; what has to hold is that they are a subsequence of the two passes.
+        """
+        self.assertTrue(FILE_TEST_DIR.exists(),
+                        "Run `git submodule init && git submodule update` in the repository root.")
+        matcher = MagicMatcher.DEFAULT_INSTANCE
+        position = {
+            test: index
+            for index, test in enumerate(chain(matcher.non_text_tests, matcher.text_tests))
+        }
+        for stem in self.MULTI_MATCH_STEMS:
+            with self.subTest(test=stem):
+                data = (FILE_TEST_DIR / f"{stem}.testfile").read_bytes()
+                tests = [match[0].test for match in matcher.match(data)]
+                self.assertGreater(len(tests), 1, f"{stem} no longer reports several matches")
+                missing = [test for test in tests if test not in position]
+                self.assertEqual([], missing, f"{stem} matched a test the matcher does not hold")
+                indices = [position[test] for test in tests]
+                self.assertEqual(sorted(indices), indices)
+
+    def test_equal_strengths_break_the_way_libmagic_breaks_them(self):
+        """Tests the tie-break `apprentice_sort` applies, over `file/tests/multiple`'s sidecars.
+
+        Those two definition files declare two tests of strength 40 and two of 38, and
+        `file/tests/multiple.result` requires `Viva File 2.0`, `RTF1.0`, `Test File 1.0`,
+        `ABCD File`. Strength does not decide either pair. libmagic compares the two entries'
+        `struct magic` bytes and takes the greater one first
+        (`file/src/apprentice.c:1132-1149`), and for both pairs the first field that differs is
+        `offset`, so the test that reads further into the file wins.
+        """
+        self.assertTrue(FILE_TEST_DIR.exists(),
+                        "Run `git submodule init && git submodule update` in the repository root.")
+        matcher = MagicMatcher.parse(FILE_TEST_DIR / "multiple-A.magic",
+                                     FILE_TEST_DIR / "multiple-B.magic")
+        self.assertEqual([40, 40, 38, 38], [test.compute_strength() for test in matcher])
+        self.assertEqual(["Viva File 2.0", "RTF1.0", "Test File 1.0", "ABCD File"],
+                         [str(test.message) for test in matcher])
+
+    def test_match_order_does_not_depend_on_the_hash_seed(self):
+        """Tests that separate processes report a file's matches in the same order.
+
+        Python randomizes the hash seed per process unless `PYTHONHASHSEED` is set, so this is
+        what made the old behavior reach users rather than only showing up under a debugger.
+        """
+        self.assertTrue(FILE_TEST_DIR.exists(),
+                        "Run `git submodule init && git submodule update` in the repository root.")
+        paths = [str(FILE_TEST_DIR / f"{stem}.testfile") for stem in self.MULTI_MATCH_STEMS]
+        command = [sys.executable, "-c", ORDER_SCRIPT, *paths]
+        reported: Dict[str, str] = {}
+        for seed in HASH_SEEDS:
+            environment = dict(os.environ, PYTHONHASHSEED=seed)
+            try:
+                result = subprocess.run(command, capture_output=True, check=True,
+                                        env=environment, timeout=MATCH_TIMEOUT_SECONDS)
+            except subprocess.CalledProcessError as e:
+                self.fail(f"PYTHONHASHSEED={seed} failed: {e.stderr.decode('utf-8', 'replace')}")
+            reported[seed] = result.stdout.decode("utf-8")
+        detail = "".join(f"PYTHONHASHSEED={seed}:\n{output}"
+                         for seed, output in reported.items())
+        self.assertEqual(1, len(set(reported.values())),
+                         f"the match order differs between hash seeds:\n{detail}")

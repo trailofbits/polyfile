@@ -25,8 +25,8 @@ import struct
 import sys
 from time import gmtime, localtime, strftime
 from typing import (
-    Any, BinaryIO, Callable, Dict, FrozenSet, Generic, Iterable, Iterator, List, NamedTuple,
-    Optional, Set, Tuple, Type, TypeVar, Union
+    Any, BinaryIO, Callable, Dict, FrozenSet, Generic, Iterable, Iterator, KeysView, List,
+    NamedTuple, Optional, Set, Tuple, Type, TypeVar, Union
 )
 from uuid import UUID
 
@@ -318,6 +318,88 @@ operators that still read a value, so it loses two.
 
 UNSELECTIVE_RELATIONS: FrozenSet[str] = frozenset({"x", "!"})
 """The relations libmagic zeroes the strength for, because they match anything or almost anything."""
+
+LIBMAGIC_TYPE_CODES: Dict[str, int] = {
+    "invalid": 0, "byte": 1, "short": 2, "default": 3, "long": 4, "string": 5, "date": 6,
+    "beshort": 7, "belong": 8, "bedate": 9, "leshort": 10, "lelong": 11, "ledate": 12,
+    "pstring": 13, "ldate": 14, "beldate": 15, "leldate": 16, "regex": 17, "bestring16": 18,
+    "lestring16": 19, "search": 20, "medate": 21, "meldate": 22, "melong": 23, "quad": 24,
+    "lequad": 25, "bequad": 26, "qdate": 27, "leqdate": 28, "beqdate": 29, "qldate": 30,
+    "leqldate": 31, "beqldate": 32, "float": 33, "befloat": 34, "lefloat": 35, "double": 36,
+    "bedouble": 37, "ledouble": 38, "beid3": 39, "leid3": 40, "indirect": 41, "qwdate": 42,
+    "leqwdate": 43, "beqwdate": 44, "name": 45, "use": 46, "clear": 47, "der": 48, "guid": 49,
+    "leguid": 50, "beguid": 51, "offset": 52, "bevarint": 53, "levarint": 54, "msdosdate": 55,
+    "lemsdosdate": 56, "bemsdosdate": 57, "msdostime": 58, "lemsdostime": 59, "bemsdostime": 60,
+    "octal": 61,
+}
+"""libmagic's ``FILE_*`` type number for each type name a definition can declare.
+
+The number, not the name, is what orders two tests of equal strength, because libmagic compares
+their raw ``struct magic`` bytes (``file/src/apprentice.c:216-283`` and
+``file/src/file.h:245-306``).
+"""
+
+TYPE_MODIFIER: Pattern[str] = re.compile(r"[/&|^+\-*%]")
+"""The characters that start the modifiers a type declaration can carry after its name."""
+
+FLAG_INDIR: int = 0x01
+FLAG_UNSIGNED: int = 0x08
+FLAG_NOSPACE: int = 0x10
+FLAG_OFFNEGATIVE: int = 0x80
+"""The ``struct magic`` flag bits a level 0 test can carry (``file/src/file.h:225-235``).
+
+``OFFADD`` and ``INDIROFFADD`` are missing because libmagic rejects a relative offset at level 0
+(``file/src/apprentice.c:2132-2137``), and ``BINTEST`` and ``TEXTTEST`` because they only record
+which of `MagicMatcher.match`'s two passes a test belongs to.
+"""
+
+STRING_DEFAULT_RANGE: int = 100
+"""The ``str_range`` libmagic gives a ``search`` that declared none (``file/src/file.h:433``)."""
+
+STRING_FLAG_BITS: Tuple[Tuple[str, int], ...] = (
+    ("compact_whitespace", 0x0001),
+    ("optional_blanks", 0x0002),
+    ("case_insensitive_lower", 0x0004),
+    ("case_insensitive_upper", 0x0008),
+    ("match_to_start", 0x0010),
+    ("force_text", 0x0020),
+    ("trim", 0x2000),
+    ("full_word_match", 0x4000),
+)
+"""Each string modifier PolyFile records, with the ``str_flags`` bit libmagic sets for it.
+
+See ``file/src/file.h:414-432`` for the bit numbering and ``file/src/apprentice.c:1946-1980`` for
+the modifier characters they come from.
+"""
+
+
+def libmagic_field(value: int, num_bytes: int) -> bytes:
+    """Lays `value` out the way ``memcmp`` reads an integer field of ``struct magic``.
+
+    Args:
+        value: The number the field holds.
+        num_bytes: The width of the field.
+
+    Returns:
+        The field's bytes, least significant first, because libmagic runs on little endian
+        hardware.
+    """
+    return (value & ((1 << (8 * num_bytes)) - 1)).to_bytes(num_bytes, "little")
+
+
+def libmagic_base_type(declaration: str) -> str:
+    """Strips a type declaration down to the name libmagic's type table holds.
+
+    Args:
+        declaration: A type as a definition wrote it, such as ``ubelong&0x00ffffff``.
+
+    Returns:
+        A key of `LIBMAGIC_TYPE_CODES`.
+    """
+    name = TYPE_MODIFIER.split(declaration, maxsplit=1)[0]
+    if name.startswith("u") and name[1:] in LIBMAGIC_TYPE_CODES:
+        return name[1:]
+    return name
 
 
 def parse_numeric(text: Union[str, bytes]) -> int:
@@ -638,9 +720,66 @@ class IndirectOffset(Offset):
         return f"({self.offset!s}{['.', ','][self.signed]}{num_bytes}{self.endianness.value})"
 
 
+INDIRECT_OFFSET_TYPES: Dict[Tuple[int, Endianness], str] = {
+    (1, Endianness.LITTLE): "byte", (1, Endianness.BIG): "byte",
+    (2, Endianness.LITTLE): "leshort", (2, Endianness.BIG): "beshort",
+    (4, Endianness.LITTLE): "lelong", (4, Endianness.BIG): "belong",
+    (8, Endianness.LITTLE): "lequad", (8, Endianness.BIG): "bequad",
+}
+"""The type libmagic reads an indirect offset through, by width and byte order.
+
+See the character it comes from in ``file/src/apprentice.c:2158-2215``.
+"""
+
+
+def libmagic_indirect_type(offset: IndirectOffset) -> str:
+    """Names the type libmagic stores in ``in_type`` for `offset`.
+
+    Args:
+        offset: An indirect offset.
+
+    Returns:
+        A key of `LIBMAGIC_TYPE_CODES`.
+    """
+    if offset.is_id3:
+        return "leid3" if offset.endianness is Endianness.LITTLE else "beid3"
+    elif offset.num_bytes == IndirectOffset.OctalIndirectOffset:
+        return "octal"
+    return INDIRECT_OFFSET_TYPES.get((offset.num_bytes, offset.endianness), "long")
+
+
+def libmagic_offset_fields(offset: Offset) -> Tuple[int, int, str]:
+    """The ``struct magic`` fields that `offset` decides.
+
+    libmagic steps over the sign of a negative offset before it reads the number, so the field
+    holds the magnitude and the sign lives in a flag bit
+    (``file/src/apprentice.c:2140-2144``).
+
+    Args:
+        offset: The offset a definition declared.
+
+    Returns:
+        The flag bits `offset` sets, the number libmagic stores in the ``offset`` field, and the
+        name of the type an indirect offset reads through, which is ``"invalid"`` for a direct
+        offset.
+    """
+    if isinstance(offset, RelativeOffset):
+        offset = offset.relative_to
+    if isinstance(offset, IndirectOffset):
+        base = offset.offset
+        return (FLAG_INDIR,
+                base.offset if isinstance(base, AbsoluteOffset) else 0,
+                libmagic_indirect_type(offset))
+    elif isinstance(offset, NegativeOffset):
+        return FLAG_OFFNEGATIVE, offset.magnitude, "invalid"
+    elif isinstance(offset, AbsoluteOffset):
+        return 0, offset.offset, "invalid"
+    return 0, 0, "invalid"
+
+
 class SourceInfo:
-    def __init__(self, path: Path, line: int, original_line: Optional[str] = None):
-        self.path: Path = path
+    def __init__(self, path: Union[str, Path], line: int, original_line: Optional[str] = None):
+        self.path: Path = Path(path)
         self.line: int = line
         self.original_line: Optional[str] = original_line
 
@@ -967,6 +1106,68 @@ class MagicTest(ABC):
         if not str(self.message).strip():
             val += 1
         return val
+
+    def libmagic_type(self) -> str:
+        """Names the type libmagic stores in this test's ``struct magic``.
+
+        Returns:
+            A key of `LIBMAGIC_TYPE_CODES`.
+        """
+        return "invalid"
+
+    def libmagic_flag(self) -> int:
+        """The ``flag`` word libmagic would give this test.
+
+        Returns:
+            The bits named in `FLAG_INDIR` and its neighbors.
+        """
+        flag, _, _ = libmagic_offset_fields(self.offset)
+        if str(self.message).startswith("\b"):
+            flag |= FLAG_NOSPACE
+        return flag
+
+    def libmagic_value_fields(self) -> Tuple[int, bytes, bytes]:
+        """The fields of libmagic's ``struct magic`` that hold this test's value.
+
+        Returns:
+            The value's length in bytes, the eight bytes that carry ``str_range`` and
+            ``str_flags``, and the value itself.
+        """
+        return 0, bytes(8), b""
+
+    def libmagic_sort_key(self) -> Tuple[Any, ...]:
+        """The key that orders this test the way libmagic's ``apprentice_sort`` would.
+
+        libmagic sorts by descending strength and settles a tie by comparing the two entries'
+        ``struct magic`` bytes with ``memcmp``, putting the greater one first
+        (``file/src/apprentice.c:1126-1152``). This key repeats that comparison over the fields
+        that decide it, in the order they sit in memory, so a descending sort by the key
+        reproduces libmagic's order.
+
+        The key stops at the value. ``desc``, ``mimetype``, ``apple``, and ``ext`` follow it in
+        the struct, but libmagic writes a definition file's name into an empty ``desc``
+        (``file/src/apprentice.c:2438``) and PolyFile has already unescaped the description, so
+        neither compares byte for byte. ``in_op``, ``mask_op``, and ``in_offset`` are skipped
+        because PolyFile folds each of them into a callable instead of keeping the number.
+
+        Returns:
+            A tuple to sort by in descending order.
+        """
+        value_length, string_flags, value = self.libmagic_value_fields()
+        _, offset, indirect_type = libmagic_offset_fields(self.offset)
+        return (
+            self.compute_strength(),
+            libmagic_field(self.libmagic_flag(), 2),
+            libmagic_field(self.strength_factor, 1),
+            libmagic_field(ord(self.relation()), 1),
+            libmagic_field(value_length, 1),
+            libmagic_field(LIBMAGIC_TYPE_CODES[self.libmagic_type()], 1),
+            libmagic_field(LIBMAGIC_TYPE_CODES[indirect_type], 1),
+            libmagic_field(ord(self.strength_op.value or "\0"), 1),
+            libmagic_field(offset, 4),
+            string_flags,
+            value.ljust(MAX_STRING_BYTES, b"\0")[:MAX_STRING_BYTES],
+        )
 
     @property
     def parent(self) -> Optional["MagicTest"]:
@@ -2728,6 +2929,87 @@ class NumericDataType(DataType[NumericValue]):
         )
 
 
+def libmagic_string_flags(data_type: DataType) -> bytes:
+    """The ``str_range`` and ``str_flags`` word libmagic gives a string type.
+
+    Args:
+        data_type: The type a definition declared.
+
+    Returns:
+        Eight bytes, which are zero for a type that carries no string modifiers.
+    """
+    if not isinstance(data_type, (StringType, PascalStringType, RegexType, UTF16Type)):
+        return bytes(8)
+    string_range = getattr(data_type, "num_bytes", None) or 0
+    if isinstance(data_type, SearchType) and string_range == 0:
+        string_range = STRING_DEFAULT_RANGE
+    flags = 0
+    for attribute, bit in STRING_FLAG_BITS:
+        if getattr(data_type, attribute, False):
+            flags |= bit
+    return libmagic_field(string_range, 4) + libmagic_field(flags, 4)
+
+
+def libmagic_string_value(constant: StringTest) -> bytes:
+    """The bytes libmagic would copy into ``value.s`` for a string test.
+
+    Args:
+        constant: The parsed value of a string, search, or Pascal string test.
+
+    Returns:
+        The unescaped value, which is empty for a test that declared none.
+    """
+    if isinstance(constant, NegatedStringTest):
+        return libmagic_string_value(constant.parent)
+    elif isinstance(constant, StringMatch):
+        return constant.string
+    elif isinstance(constant, StringLengthTest):
+        return unescape(constant.raw_pattern)
+    return b""
+
+
+def libmagic_numeric_value(data_type: DataType, value: Union[int, float]) -> bytes:
+    """The bytes libmagic would copy into a numeric test's value union.
+
+    Args:
+        data_type: The type a definition declared, which sizes a floating point value.
+        value: The parsed value.
+
+    Returns:
+        The value's little endian bytes.
+    """
+    if isinstance(value, float):
+        base_type = getattr(data_type, "base_type", None)
+        if getattr(base_type, "num_bytes", 8) == 4:
+            return struct.pack("<f", value)
+        return struct.pack("<d", value)
+    return libmagic_field(value, 8)
+
+
+def libmagic_value(data_type: DataType, constant: Any) -> Tuple[int, bytes]:
+    """The ``vallen`` and value bytes libmagic would store for a parsed test value.
+
+    libmagic reads no value at all for the ``x`` relation, so a wildcard leaves both zeroed
+    (``file/src/apprentice.c:2407-2412``).
+
+    Args:
+        data_type: The type a definition declared.
+        constant: The value the type parsed.
+
+    Returns:
+        The value's declared length and its bytes.
+    """
+    if isinstance(constant, StringTest):
+        return constant.value_length, libmagic_string_value(constant)
+    elif isinstance(constant, MagicRegex):
+        return len(constant.pattern), constant.pattern
+    elif isinstance(constant, bytes):
+        return len(constant), constant
+    elif isinstance(constant, NumericValue) and not isinstance(constant, NumericWildcard):
+        return 0, libmagic_numeric_value(data_type, constant.value)
+    return 0, b""
+
+
 class ConstantMatchTest(MagicTest, Generic[T]):
     def __init__(
             self,
@@ -2742,6 +3024,19 @@ class ConstantMatchTest(MagicTest, Generic[T]):
         super().__init__(offset=offset, mime=mime, extensions=extensions, message=message, parent=parent)
         self.data_type: DataType[T] = data_type
         self.constant: T = constant
+
+    def libmagic_type(self) -> str:
+        return libmagic_base_type(self.data_type.name)
+
+    def libmagic_flag(self) -> int:
+        flag = super().libmagic_flag()
+        if isinstance(self.data_type, NumericDataType) and self.data_type.unsigned:
+            flag |= FLAG_UNSIGNED
+        return flag
+
+    def libmagic_value_fields(self) -> Tuple[int, bytes, bytes]:
+        value_length, value = libmagic_value(self.data_type, self.constant)
+        return value_length, libmagic_string_flags(self.data_type), value
 
     def type_strength(self) -> int:
         return self.data_type.strength_term(self.constant)
@@ -2842,6 +3137,9 @@ class OffsetMatchTest(MagicTest):
         self.subtraction: int = subtraction
         self.modulo: int = modulo
 
+    def libmagic_type(self) -> str:
+        return "offset"
+
     def type_strength(self) -> int:
         """``offset`` is an eight-byte quantity (``file/src/apprentice.c:906-908``)."""
         return 8 * STRENGTH_MULT
@@ -2906,6 +3204,9 @@ class IndirectTest(MagicTest):
             p._type = TestType.BINARY
             p = p.parent
 
+    def libmagic_type(self) -> str:
+        return "indirect"
+
     def subtest_type(self) -> TestType:
         return TestType.BINARY
 
@@ -2951,6 +3252,9 @@ class NamedTest(MagicTest):
         self.name: str = name
         self.named_test = self
         self.used_by: Set[UseTest] = set()
+
+    def libmagic_type(self) -> str:
+        return "name"
 
     def subtest_type(self) -> TestType:
         return TestType.UNKNOWN
@@ -3010,6 +3314,9 @@ class UseTest(MagicTest):
         self.flip_endianness: bool = flip_endianness
         self.late_binding: bool = late_binding
         referenced_test.used_by.add(self)
+
+    def libmagic_type(self) -> str:
+        return "use"
 
     def subtest_type(self) -> TestType:
         return self.referenced_test.test_type
@@ -3248,6 +3555,9 @@ class CSVTest(MagicTest):
 
 
 class DefaultTest(MagicTest):
+    def libmagic_type(self) -> str:
+        return "default"
+
     def subtest_type(self) -> TestType:
         return TestType.UNKNOWN
 
@@ -3273,6 +3583,9 @@ class DefaultTest(MagicTest):
 
 
 class ClearTest(MagicTest):
+    def libmagic_type(self) -> str:
+        return "clear"
+
     def subtest_type(self) -> TestType:
         return TestType.UNKNOWN
 
@@ -3309,6 +3622,9 @@ class DERTest(MagicTest):
         super().__init__(offset=offset, mime=mime, extensions=extensions, message=message,
                          parent=parent, comments=comments)
         self.specification: DERSpecification = specification
+
+    def libmagic_type(self) -> str:
+        return "der"
 
     def type_strength(self) -> int:
         """One flat unit, whatever the specification says (``file/src/apprentice.c:1024-1026``)."""
@@ -3884,8 +4200,8 @@ class MagicMatcher:
         self._tests_by_mime: Dict[str, Set[MagicTest]] = defaultdict(set)
         self._tests_by_ext: Dict[str, Set[MagicTest]] = defaultdict(set)
         self._tests_that_can_be_indirect: Set[MagicTest] = set()
-        self._non_text_tests: Set[MagicTest] = set()
-        self._text_tests: Set[MagicTest] = set()
+        self._non_text_tests: Dict[MagicTest, None] = {}
+        self._text_tests: Dict[MagicTest, None] = {}
         self._dirty: bool = True
         for test in tests:
             self.add(test)
@@ -3906,14 +4222,16 @@ class MagicMatcher:
         return self._tests_that_can_be_indirect
 
     @property
-    def non_text_tests(self) -> Set[MagicTest]:
+    def non_text_tests(self) -> KeysView[MagicTest]:
+        """The level 0 tests of `MagicMatcher.match`'s binary pass, in the order it runs them."""
         self._reassign_test_types()
-        return self._non_text_tests
+        return self._non_text_tests.keys()
 
     @property
-    def text_tests(self) -> Set[MagicTest]:
+    def text_tests(self) -> KeysView[MagicTest]:
+        """The level 0 tests of `MagicMatcher.match`'s text pass, in the order it runs them."""
         self._reassign_test_types()
-        return self._text_tests
+        return self._text_tests.keys()
 
     def add(self, test: Union[MagicTest, Path], test_type: TestType = TestType.UNKNOWN) -> List[MagicTest]:
         if not isinstance(test, MagicTest):
@@ -3945,20 +4263,35 @@ class MagicMatcher:
 
         return [test]
 
+    def _sort_tests(self):
+        """Puts the level 0 tests in the order libmagic would run them.
+
+        libmagic sorts strongest first and settles a tie with `MagicTest.libmagic_sort_key`. A tie
+        that key cannot settle keeps the order the definitions were read in, which is the order
+        libmagic itself hands its entries to ``qsort``: by definition file name
+        (``file/src/apprentice.c:1593``) and then by line.
+        """
+        self._tests.sort(key=lambda test: (
+            "" if test.source_info is None else test.source_info.path.name,
+            0 if test.source_info is None else test.source_info.line
+        ))
+        self._tests.sort(key=lambda test: test.libmagic_sort_key(), reverse=True)
+
     def _reassign_test_types(self):
         if not self._dirty:
             return
         self._dirty = False
-        self._text_tests = set()
-        self._non_text_tests = set()
+        self._sort_tests()
+        self._text_tests = {}
+        self._non_text_tests = {}
         self._tests_that_can_be_indirect = set()
         self._tests_by_ext = defaultdict(set)
         self._tests_by_mime = defaultdict(set)
         for test in self._tests:
             if test.test_type == TestType.TEXT:
-                self._text_tests.add(test)
+                self._text_tests[test] = None
             else:
-                self._non_text_tests.add(test)
+                self._non_text_tests[test] = None
             if test.can_be_indirect:
                 self._tests_that_can_be_indirect.add(test)
             for mime in test.mimetypes:
@@ -3997,6 +4330,8 @@ class MagicMatcher:
         return MagicMatcher(tests | required_named_tests)
 
     def __iter__(self) -> Iterator[MagicTest]:
+        """Yields the level 0 tests in the order `MagicMatcher.match` runs them."""
+        self._reassign_test_types()
         return iter(self._tests)
 
     @property
@@ -4332,8 +4667,6 @@ class MagicMatcher:
             assert test.can_match_mime
             for ancestor in test.ancestors():
                 ancestor.can_be_indirect = True
-        # Sort tests by strength (descending) for proper priority matching like libmagic
-        zero_level_tests.sort(key=lambda t: t.compute_strength(), reverse=True)
         for test in zero_level_tests:
             matcher.add(test)
         return matcher
