@@ -347,7 +347,7 @@ class MagicTest(TestCase):
                         matches.add(actual)
                         print(f"\tActual:   {actual!r}")
                     if testfile.stem not in (
-                            "JW07022A.mp3", "gedcom", "cmd1", "cmd2", "cmd3", "cmd4", "jpeg-text", "jsonlines1",
+                            "JW07022A.mp3", "gedcom", "cmd1", "cmd2", "jpeg-text", "jsonlines1",
                             "multiple", "osm", "pnm1", "pnm2", "pnm3", "utf16xmlsvg"
                     ):
                         # The files we skip fail because there is a bug in our implementation that we have not yet fixed
