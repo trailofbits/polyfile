@@ -9,6 +9,7 @@ details about the file.
 
 """
 from abc import ABC, abstractmethod
+import codecs
 from collections import defaultdict
 import csv
 import functools
@@ -24,8 +25,8 @@ import struct
 import sys
 from time import gmtime, localtime, strftime
 from typing import (
-    Any, BinaryIO, Callable, Dict, Generic, Iterable, Iterator, List, NamedTuple, Optional, Set,
-    Tuple, Type, TypeVar, Union
+    Any, BinaryIO, Callable, Dict, FrozenSet, Generic, Iterable, Iterator, List, NamedTuple,
+    Optional, Set, Tuple, Type, TypeVar, Union
 )
 from uuid import UUID
 
@@ -3054,6 +3055,190 @@ def detect_text_encoding(data: bytes) -> Optional[str]:
     if ucs_encoding is not None:
         return ucs_encoding
     return _eight_bit_encoding(data)
+
+
+LIBMAGIC_ENCODING_NAMES: Dict[str, str] = {
+    "ascii": "ASCII",
+    "utf-8": "Unicode text, UTF-8",
+    "utf-16le": "Unicode text, UTF-16, little-endian",
+    "utf-16be": "Unicode text, UTF-16, big-endian",
+    "utf-32le": "Unicode text, UTF-32, little-endian",
+    "utf-32be": "Unicode text, UTF-32, big-endian",
+    "iso-8859-1": "ISO-8859",
+    "unknown-8bit": "Non-ISO extended-ASCII",
+}
+"""libmagic's name for each encoding `detect_text_encoding` reports, from ``src/encoding.c``."""
+
+MAX_LINE_LENGTH: int = 300
+"""libmagic's ``MAXLINELEN``: the longest line it considers sane (``src/ascmagic.c``)."""
+
+TEXT_ENCODING_MAX_BYTES: int = 64 * 1024
+"""libmagic's ``FILE_ENCODING_MAX``: how many bytes it decodes to describe text (``src/file.h``)."""
+
+_EIGHT_BIT_ENCODINGS: FrozenSet[str] = frozenset({"ascii", "iso-8859-1", "unknown-8bit"})
+
+_UCS_BOM_LENGTHS: Dict[str, int] = {
+    encoding: len(bom) for bom, encoding, _ in _UCS_BYTE_ORDER_MARKS
+}
+
+_LINE_TERMINATOR_PATTERN: Pattern[str] = re.compile("[\n\r\x85]")
+
+
+def _decode_text(data: bytes, encoding: str) -> str:
+    """Decodes the prefix of `data` that libmagic examines when it describes text.
+
+    libmagic decodes at most ``FILE_ENCODING_MAX`` bytes into the buffer that
+    ``file_ascmagic_with_encoding`` scans, so a line that only grows long past that point does not
+    count as a long line. Each eight bit encoding it names copies a byte's value straight into that
+    buffer, which is what decoding as Latin-1 does.
+
+    Args:
+        data: the bytes to decode.
+        encoding: the encoding `detect_text_encoding` named for `data`.
+
+    Returns:
+        The decoded characters, dropping any character the byte limit cut in half.
+    """
+    prefix = data[:TEXT_ENCODING_MAX_BYTES]
+    if encoding in _EIGHT_BIT_ENCODINGS:
+        return prefix.decode("latin-1")
+    prefix = prefix[_UCS_BOM_LENGTHS.get(encoding, 0):]
+    return codecs.getincrementaldecoder(encoding)().decode(prefix, final=False)
+
+
+def _longest_line(text: str) -> int:
+    """Measures the longest line of `text`, as libmagic's ``has_long_lines`` counter does.
+
+    Args:
+        text: the decoded characters to measure.
+
+    Returns:
+        The length of the longest line, or 0 when every line is at most `MAX_LINE_LENGTH`
+        characters long.
+    """
+    longest = 0
+    line_start = -1
+    for terminator in _LINE_TERMINATOR_PATTERN.finditer(text):
+        longest = max(longest, terminator.start() - 1 - line_start)
+        line_start = terminator.start()
+    longest = max(longest, len(text) - 1 - line_start)
+    if longest > MAX_LINE_LENGTH:
+        return longest
+    return 0
+
+
+class TextEncodingDescription:
+    """How libmagic describes a text file: its character encoding and the shape of its lines.
+
+    ``file_ascmagic_with_encoding`` in libmagic's ``src/ascmagic.c`` rewrites the tail of whatever
+    soft magic printed, appends the name of the character encoding, and then reports the file's
+    longest line, the line terminators it uses, and whether it holds escape or backspace
+    characters. `describe` applies that rewrite to one match's message.
+    """
+
+    def __init__(self, code: str, text: str):
+        """
+        Args:
+            code: libmagic's name for the encoding, such as ``ASCII``.
+            text: the decoded characters libmagic would scan.
+        """
+        self.code: str = code
+        self.crlf: int = text.count("\r\n")
+        self.lf: int = text.count("\n") - self.crlf
+        # libmagic counts a CR when it reads the character after it, so a CR that ends the buffer
+        # only counts if it is the only line terminator there is
+        ends_with_cr = text.endswith("\r")
+        self.cr: int = text.count("\r") - self.crlf - int(ends_with_cr)
+        if ends_with_cr and self.cr == 0 and self.crlf == 0:
+            self.cr = 1
+        self.nel: int = text.count("\x85")
+        self.longest_line: int = _longest_line(text)
+        self.has_escapes: bool = "\x1b" in text
+        self.has_overstriking: bool = "\b" in text
+
+    @classmethod
+    def detect(cls, data: bytes) -> Optional["TextEncodingDescription"]:
+        """Classifies `data` and measures the line shape libmagic would report for it.
+
+        Args:
+            data: the bytes to classify.
+
+        Returns:
+            The description, or None if `data` is not text.
+
+        Raises:
+            ValueError: if `detect_text_encoding` named an encoding that
+                `LIBMAGIC_ENCODING_NAMES` does not describe.
+        """
+        encoding = detect_text_encoding(data)
+        if encoding is None:
+            return None
+        if encoding not in LIBMAGIC_ENCODING_NAMES:
+            raise ValueError(f"there is no libmagic description for the text encoding "
+                             f"{encoding!r}; add one to LIBMAGIC_ENCODING_NAMES")
+        return cls(LIBMAGIC_ENCODING_NAMES[encoding], _decode_text(data, encoding))
+
+    def _splice(self, message: str) -> Tuple[str, bool]:
+        """Replaces a soft magic message's trailing ``text`` with the separator libmagic uses.
+
+        libmagic rewrites the tail of its output buffer with ``file_replace(ms, " text$", ", ")``,
+        falling back to ``" text executable$"`` and then to appending ``", "``, so
+        ``POSIX shell script text executable`` becomes ``POSIX shell script, `` and keeps its
+        ``executable`` to print after the encoding.
+
+        Args:
+            message: the message soft magic produced, which is empty if nothing matched.
+
+        Returns:
+            The rewritten message, and whether it named an executable.
+        """
+        if not message:
+            return "", False
+        elif message.endswith(" text"):
+            return f"{message[:-len(' text')]}, ", False
+        elif message.endswith(" text executable"):
+            return f"{message[:-len(' text executable')]}, ", True
+        return f"{message}, ", False
+
+    def _line_terminators(self) -> str:
+        """Names the line terminators the text uses.
+
+        libmagic reports terminators only when it finds one that is not LF, or when it finds none
+        at all, so a file with Unix line endings gets no clause.
+
+        Returns:
+            The clause to append, or the empty string when there is nothing to report.
+        """
+        present = [name for count, name in
+                   ((self.crlf, "CRLF"), (self.cr, "CR"), (self.lf, "LF"), (self.nel, "NEL"))
+                   if count]
+        if not present:
+            return ", with no line terminators"
+        elif present == ["LF"]:
+            return ""
+        return f", with {', '.join(present)} line terminators"
+
+    def describe(self, message: str) -> str:
+        """Appends this description to the message a match's soft magic tests produced.
+
+        Args:
+            message: the message soft magic produced, which is empty if nothing matched.
+
+        Returns:
+            The description libmagic reports for the file.
+        """
+        head, executable = self._splice(message)
+        description = f"{head}{self.code} text"
+        if executable:
+            description = f"{description} executable"
+        if self.longest_line:
+            description = f"{description}, with very long lines ({self.longest_line})"
+        description = f"{description}{self._line_terminators()}"
+        if self.has_escapes:
+            description = f"{description}, with escape sequences"
+        if self.has_overstriking:
+            description = f"{description}, with overstriking"
+        return description
 
 
 class PlainTextTest(MagicTest):

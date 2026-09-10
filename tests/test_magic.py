@@ -1008,3 +1008,122 @@ class UseTestSemanticsTest(TestCase):
         for match in MagicMatcher.DEFAULT_INSTANCE.match(testfile.read_bytes()):
             self.assertNotIn("EFI variable", str(match))
             self.assertNotIn("total size", str(match))
+
+
+class TextEncodingDescriptionTest(TestCase):
+    """Tests for the text description libmagic appends, reported in issue #3488.
+
+    Every string these tests expect is what `file -b` prints for the same input, checked against
+    libmagic 5.48 built from the `file` submodule.
+    """
+
+    def describe(self, data: bytes, message: str = "") -> str:
+        """Describes `data` the way libmagic describes a match on it.
+
+        Args:
+            data: The bytes to classify.
+            message: The message soft magic produced for `data`.
+
+        Returns:
+            The description libmagic reports.
+        """
+        description = polyfile.magic.TextEncodingDescription.detect(data)
+        self.assertIsNotNone(description, f"{data!r} was not classified as text")
+        return description.describe(message)
+
+    def test_a_message_with_no_text_suffix_gets_a_separator(self):
+        """Tests that a message that ends in neither suffix is joined with `, `.
+
+        This is the `file_printf(ms, ", ")` fallback at `file/src/ascmagic.c:243`, which is what
+        turns `OpenStreetMap XML data` into `OpenStreetMap XML data, ASCII text`.
+        """
+        self.assertEqual("Netpbm image data, greymap, ASCII text",
+                         self.describe(b"MARKED\n", "Netpbm image data, greymap"))
+
+    def test_encoding_names_match_libmagics_spelling(self):
+        """Tests that the encoding is named as libmagic names it, in libmagic's case.
+
+        PolyFile used to report `ascii text`, and reported chardet's guess rather than the
+        character class verdict, so a UTF-16 file came out as `UTF-16 text` instead of
+        `Unicode text, UTF-16, little-endian text`. The names are the `code` strings of
+        `file_encoding` (`file/src/encoding.c:107-172`).
+        """
+        for data, expected in (
+                (b"hello\n", "ASCII text"),
+                ("héllo wörld\n".encode(), "Unicode text, UTF-8 text"),
+                (b"\xff\xfe" + "hi\n".encode("utf-16-le"),
+                 "Unicode text, UTF-16, little-endian text"),
+                (b"\xfe\xff" + "hi\n".encode("utf-16-be"), "Unicode text, UTF-16, big-endian text"),
+                (b"caf\xe9\n", "ISO-8859 text"),
+                (b"text\x80\x9f\n", "Non-ISO extended-ASCII text")):
+            with self.subTest(data=data):
+                self.assertEqual(expected, self.describe(data))
+
+    def test_line_terminators_are_named(self):
+        """Tests the line-terminator clause, including the LF-only case that has none.
+
+        libmagic reports terminators only when it finds one that is not LF, or none at all
+        (`file/src/ascmagic.c:284-317`), so `a\\nb\\n` is plain `ASCII text` while `hello world`
+        is `ASCII text, with no line terminators`.
+        """
+        for data, expected in (
+                (b"hello world", "ASCII text, with no line terminators"),
+                (b"a\nb\n", "ASCII text"),
+                (b"a\r\nb\r\n", "ASCII text, with CRLF line terminators"),
+                (b"a\rb\r", "ASCII text, with CR line terminators"),
+                (b"a\x85b\x85", "ASCII text, with NEL line terminators"),
+                (b"a\rb\nc\n", "ASCII text, with CR, LF line terminators"),
+                (b"a\x85b\n", "ASCII text, with LF, NEL line terminators"),
+                (b"a\r\nb\rc\nd\x85", "ASCII text, with CRLF, CR, LF, NEL line terminators")):
+            with self.subTest(data=data):
+                self.assertEqual(expected, self.describe(data))
+
+    def test_a_trailing_cr_counts_only_when_nothing_else_does(self):
+        """Tests that a CR at the end of the buffer is counted the way libmagic counts it.
+
+        libmagic raises `n_cr` when it reads the character after a CR, so a CR that ends the
+        buffer is counted only by the `seen_cr && n_cr == 0 && n_crlf == 0` fixup at
+        `file/src/ascmagic.c:208-209`. `a\\r\\nb\\r` therefore reports CRLF alone, while
+        `a\\nb\\r` reports both CR and LF.
+        """
+        self.assertEqual("ASCII text, with CRLF line terminators", self.describe(b"a\r\nb\r"))
+        self.assertEqual("ASCII text, with CR, LF line terminators", self.describe(b"a\nb\r"))
+        self.assertEqual("ASCII text, with CR line terminators", self.describe(b"abc\r"))
+
+    def test_very_long_lines_are_measured(self):
+        """Tests the long-line clause and the length libmagic reports for it.
+
+        A line counts as long once it exceeds `MAXLINELEN`, which is 300 characters
+        (`file/src/ascmagic.c:49` and `:198-203`), and libmagic reports the length of the longest
+        one rather than the number of long lines.
+        """
+        self.assertEqual("ASCII text", self.describe(b"x" * 300 + b"\n"))
+        self.assertEqual("ASCII text, with very long lines (301)",
+                         self.describe(b"x" * 301 + b"\n"))
+        self.assertEqual("ASCII text, with very long lines (350)",
+                         self.describe(b"x" * 310 + b"\n" + b"y" * 350 + b"\n"))
+        self.assertEqual("ASCII text, with very long lines (400), with no line terminators",
+                         self.describe(b"x" * 400))
+
+    def test_only_the_first_64_kilobytes_are_measured(self):
+        """Tests that the description stops at libmagic's encoding limit.
+
+        libmagic decodes at most `FILE_ENCODING_MAX`, 64KiB, into the buffer it scans
+        (`file/src/file.h:525` and `src/encoding.c:98-99`), so a file whose first line runs past
+        that point reports a 65536 character line and no line terminators at all.
+        """
+        self.assertEqual("ASCII text, with very long lines (65536), with no line terminators",
+                         self.describe(b"a" * 70000 + b"\n" + b"b" * 400 + b"\n"))
+
+    def test_escape_sequences_and_overstriking_are_reported(self):
+        """Tests the escape and backspace clauses, and the order every clause appears in.
+
+        `file/src/ascmagic.c:274-324` prints the long-line clause, then the line terminators, then
+        `, with escape sequences` and `, with overstriking`.
+        """
+        self.assertEqual("ASCII text, with no line terminators, with escape sequences",
+                         self.describe(b"hello \x1b[31mworld"))
+        self.assertEqual("ASCII text, with overstriking", self.describe(b"he\bello\n"))
+        self.assertEqual("ASCII text, with very long lines (402), with CRLF line terminators, "
+                         "with escape sequences, with overstriking",
+                         self.describe(b"x" * 400 + b"\x1b\b\r\n"))
