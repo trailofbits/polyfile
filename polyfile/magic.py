@@ -73,6 +73,12 @@ MAGIC_DEFS: List[Path] = sorted([
 
 
 WHITESPACE: bytes = b" \r\t\n\v\f"
+# a whitespace byte of an `re.escape`-ed pattern, with or without the backslash that escaped it
+BLANK_IN_PATTERN: Pattern[bytes] = re.compile(rb"\\?[ \t\n\v\f\r]")
+# a wildcard string value ends at the first of these, per `file/src/softmagic.c:683-684`
+VALUE_TERMINATOR: Pattern[bytes] = re.compile(rb"[\0\r\n]")
+# `MAXstring`, the size of the buffer libmagic copies a string value into: `file/src/file.h:179`
+MAX_STRING_BYTES: int = 128
 ESCAPES = {
     "n": ord("\n"),
     "r": ord("\r"),
@@ -1361,28 +1367,49 @@ class StringTest(ABC):
 
 
 class StringWildcard(StringTest):
+    def value_end(self, data: bytes, max_bytes: Optional[int] = None) -> int:
+        """Finds the length of the value that libmagic would read from the head of `data`.
+
+        A wildcard value ends at the first null byte, carriage return, or line feed, whichever
+        comes first (``file/src/softmagic.c:683-684`` and ``909-910``).
+
+        Args:
+            data: The bytes at the offset being tested.
+            max_bytes: The most bytes to read, if the type or the buffer bounds it.
+
+        Returns:
+            The number of bytes of `data` that make up the value.
+        """
+        end = len(data) if max_bytes is None else min(max_bytes, len(data))
+        terminator = VALUE_TERMINATOR.search(data, 0, end)
+        if terminator is None:
+            return end
+        return terminator.start()
+
     def matches(self, data: bytes) -> DataTypeMatch:
         if self.num_bytes is None:
-            first_null = data.find(b"\0")
+            max_bytes = MAX_STRING_BYTES
         else:
-            first_null = data.find(b"\0", 0, self.num_bytes)
-            if first_null < 0:
-                return self.post_process(data[:self.num_bytes])
-        if first_null >= 0:
-            return self.post_process(data[:first_null])
-        else:
-            return self.post_process(data)
+            max_bytes = min(self.num_bytes, MAX_STRING_BYTES)
+        return self.post_process(data[:self.value_end(data, max_bytes)])
 
     def is_always_text(self) -> bool:
         return False
 
     def search(self, data: bytes) -> DataTypeMatch:
-        # `num_bytes` bounds the start offsets a search tries, not the extent of the value it
-        # yields, so a search always reads up to the first null byte
-        first_null = data.find(b"\0")
-        if first_null >= 0:
-            return self.post_process(data[:first_null])
-        return self.post_process(data)
+        """Reads the value that a `search` test reports.
+
+        `num_bytes` bounds the start offsets a search tries, not the extent of the value it
+        yields, and a search reads the buffer in place rather than copying it into libmagic's
+        128-byte value union (``file/src/softmagic.c:1389-1395``), so neither bound applies here.
+
+        Args:
+            data: The bytes at the offset being tested.
+
+        Returns:
+            The value, ending at the first null byte, carriage return, or line feed.
+        """
+        return self.post_process(data[:self.value_end(data)])
 
     def __str__(self):
         return "null-terminated string"
@@ -1475,13 +1502,20 @@ class StringMatch(StringTest):
         self.case_insensitive_upper: bool = case_insensitive_upper
         self.optional_blanks: bool = optional_blanks
         self.full_word_match: bool = full_word_match
-        if optional_blanks and compact_whitespace:
-            raise ValueError("Optional blanks `w` and compacting whitespace `W` cannot be selected at the same time")
         self._is_always_text: Optional[bool] = None
         self._pattern: Optional[re.Pattern] = None
         _ = self.pattern
 
     def pattern_string(self) -> bytes:
+        """Builds the regular expression that implements this test's string flags.
+
+        A definition may set both ``W`` (compact whitespace) and ``w`` (optional blanks);
+        ``polyfile/magic_defs/sgml`` does. libmagic keeps both bits and lets ``W`` win, because
+        ``file_strncmp`` tests it first (``file/src/softmagic.c:2103-2120``).
+
+        Returns:
+            The pattern to compile, with the flags folded into it.
+        """
         pattern = re.escape(self.string)
         if self.case_insensitive_lower and not self.case_insensitive_upper:
             # treat lower case letters as either lower or upper case
@@ -1522,7 +1556,7 @@ class StringMatch(StringTest):
                     pattern_bytes.extend(f"{{{count}}}".encode("utf-8"))
             pattern = bytes(pattern_bytes)
         elif self.optional_blanks:
-            pattern = pattern.replace(rb"\ ", rb"\ ?")
+            pattern = BLANK_IN_PATTERN.sub(rb"\\s*", pattern)
         if self.full_word_match:
             pattern = rb"\b" + pattern + rb"\b"
         return pattern
@@ -1622,6 +1656,7 @@ class StringType(DataType[StringTest]):
             case_insensitive_lower=self.case_insensitive_lower,
             case_insensitive_upper=self.case_insensitive_upper,
             compact_whitespace=self.compact_whitespace,
+            optional_blanks=self.optional_blanks,
             full_word_match=self.full_word_match,
             num_bytes=self.num_bytes
         )
@@ -1744,8 +1779,8 @@ class SearchType(StringType):
             repetitions=repetitions,
             case_insensitive_lower="c" in options,
             case_insensitive_upper="C" in options,
-            compact_whitespace="B" in options or "W" in options,
-            optional_blanks="b" in options or "w" in options,
+            compact_whitespace="W" in options,
+            optional_blanks="w" in options,
             full_word_match="f" in options,
             trim="T" in options,
             match_to_start="s" in options
@@ -1753,12 +1788,28 @@ class SearchType(StringType):
 
 
 class PascalStringType(DataType[StringTest]):
+    STRING_FLAGS: str = "CcTWwft"
+
     def __init__(
             self,
             byte_length: int = 1,
             endianness: Endianness = Endianness.BIG,
-            count_includes_length: bool = False
+            count_includes_length: bool = False,
+            string_flags: str = ""
     ):
+        """A length-prefixed string.
+
+        Args:
+            byte_length: The width of the length prefix, in bytes: 1, 2, or 4.
+            endianness: The byte order of a two- or four-byte length prefix.
+            count_includes_length: Whether the length prefix counts itself.
+            string_flags: The string modifier letters of the declaration, such as ``T``. libmagic
+                accepts them on ``pstring`` as it does on ``string``
+                (``file/src/apprentice.c:1943-2020``).
+
+        Raises:
+            ValueError: If `byte_length` or `endianness` is not one libmagic supports.
+        """
         if endianness != Endianness.BIG and endianness != Endianness.LITTLE:
             raise ValueError("Endianness must be either BIG or LITTLE")
         elif byte_length == 1:
@@ -1777,17 +1828,18 @@ class PascalStringType(DataType[StringTest]):
             raise ValueError("byte_length must be either 1, 2, or 4")
         if count_includes_length:
             modifier = f"{modifier}J"
-        super().__init__(f"pstring/{modifier}")
+        super().__init__(f"pstring/{modifier}{string_flags}")
         self.byte_length: int = byte_length
         self.endianness: Endianness = endianness
         self.count_includes_length: int = count_includes_length
+        self.string_type: StringType = StringType.parse(f"string/{string_flags}")
 
     def is_text(self, value: StringTest) -> bool:
         # TODO: See if Pascal strings should sometimes be forced to be text
         return False
 
     def parse_expected(self, specification: str) -> StringTest:
-        return StringTest.parse(specification)
+        return self.string_type.parse_expected(specification)
 
     def match(self, data: bytes, expected: StringTest) -> DataTypeMatch:
         if len(data) < self.byte_length:
@@ -1817,17 +1869,17 @@ class PascalStringType(DataType[StringTest]):
             m.raw_match = data[:self.byte_length + effective_len]
         return m
 
-    PSTRING_TYPE_FORMAT: Pattern[str] = re.compile(r"^pstring(/J?[BHhLl]?J?)?$")
+    PSTRING_TYPE_FORMAT: Pattern[str] = re.compile(r"^pstring(?P<opts>/[JBHhLlCcTWwft]*)?$")
 
     @classmethod
     def parse(cls, format_str: str) -> "PascalStringType":
         m = cls.PSTRING_TYPE_FORMAT.match(format_str)
         if not m:
             raise ValueError(f"Invalid pstring type declaration: {format_str!r}")
-        if m.group(1) is None:
-            options: Iterable[str] = ()
+        if m.group("opts") is None:
+            options: str = ""
         else:
-            options = m.group(1)
+            options = m.group("opts")
         if "H" in options:
             byte_length = 2
             endianness = Endianness.BIG
@@ -1846,7 +1898,8 @@ class PascalStringType(DataType[StringTest]):
         return PascalStringType(
             byte_length=byte_length,
             endianness=endianness,
-            count_includes_length="J" in options
+            count_includes_length="J" in options,
+            string_flags="".join(opt for opt in options if opt in cls.STRING_FLAGS)
         )
 
 
@@ -2329,22 +2382,38 @@ class ConstantMatchTest(MagicTest, Generic[T]):
 
     def matched_test(
             self, match: DataTypeMatch, absolute_offset: int, parent_match: Optional[TestResult]
-    ) -> "MatchedTest":
-        """Builds the result of a successful match of this test's data type.
+    ) -> MatchedTest:
+        """Records a successful match, with the relative base that libmagic would resolve against.
+
+        A data type that knows its own base reports it as `DataTypeMatch.relative_base`, and that
+        wins: the `regex` `s` flag uses it to resolve against the start of the match instead of its
+        end (`file/src/softmagic.c:959-963`).
+
+        Failing that, a relative (`&`) offset after a `string` test with an `=` relation resolves
+        against the declared length of the magic value rather than the number of bytes the match
+        consumed (`file/src/softmagic.c:904-905`). The two differ when the `w` flag matches fewer
+        blanks than the value declares. A `search` measures from where it found its value, which
+        PolyFile records as the extent it matched; libmagic adds the declared length there too, but
+        zeroes it for the `s` flag (`file/src/softmagic.c:966-968`), which PolyFile does not model
+        yet. A `pstring` carries its own length prefix, so neither rule takes this path.
 
         Args:
-            match: The match that the data type reported.
-            absolute_offset: The offset at which the data type was tested.
-            parent_match: The result of the parent test, if this test has one.
+            match: The match that this test's data type produced.
+            absolute_offset: The offset in the file at which the data type was applied.
+            parent_match: The result of the test that this one is nested under, if any.
 
         Returns:
-            The result, positioned at the match and carrying the relative base that the data type
-            asked for.
+            The result of the test, carrying a relative base when either rule applies.
         """
         result = MatchedTest(self, offset=absolute_offset + match.initial_offset,
                              length=len(match.raw_match), value=match.value, parent=parent_match)
+        declares_its_length = (isinstance(self.data_type, StringType)
+                               and not isinstance(self.data_type, SearchType)
+                               and isinstance(self.constant, StringMatch))
         if match.relative_base is not None:
             result.relative_base = absolute_offset + match.relative_base
+        elif declares_its_length:
+            result.relative_base = result.offset + len(self.constant.string)
         return result
 
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
