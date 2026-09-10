@@ -8,6 +8,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Callable, Iterator, List, Optional, Set, Tuple
 from unittest import TestCase
+from uuid import UUID
 
 # from polyfile import logger
 import polyfile.der
@@ -58,6 +59,21 @@ class MagicTest(TestCase):
         matcher = MagicMatcher.parse(*MAGIC_DEFS)
         print(f"# MIME Types:      {len(matcher.mimetypes)}")
         print(f"# File Extensions: {len(matcher.extensions)}")
+
+    def test_guid_data_types(self):
+        """libmagic 5.48 added `leguid` and `beguid` beside `guid`, differing only in byte order."""
+        data = bytes(range(16))
+        mixed_endian = UUID("03020100-0504-0706-0809-0a0b0c0d0e0f")
+        file_order = UUID("00010203-0405-0607-0809-0a0b0c0d0e0f")
+        for name, expected in (("guid", mixed_endian), ("leguid", mixed_endian),
+                               ("beguid", file_order)):
+            with self.subTest(data_type=name):
+                data_type = polyfile.magic.DataType.parse(name)
+                match = data_type.match(data, polyfile.magic.UUIDWildcard())
+                self.assertEqual(expected, match.value)
+                self.assertEqual(expected, data_type.match(data, expected).value)
+                self.assertIs(polyfile.magic.DataTypeMatch.INVALID,
+                              data_type.match(data, UUID(int=0)))
 
     def test_text_tests(self):
         matcher = MagicMatcher.parse(*MAGIC_DEFS)
