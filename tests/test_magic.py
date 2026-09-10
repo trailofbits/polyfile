@@ -2044,3 +2044,72 @@ class UCSTextBufferTest(TestCase):
             {str(match) for match in
              MagicMatcher.DEFAULT_INSTANCE.match(self.encode(document, "utf-16le"))}
         )
+
+
+class DataTypeNameTest(TestCase):
+    """Regression tests for the interning collision reported in issue #3515.
+
+    `DataType.parse` interns every type it builds in `polyfile.magic.TYPES_BY_NAME`, keyed on the
+    name the type builds for itself. A flag the name leaves out makes two declarations that differ
+    only by that flag share one instance, and whichever declaration parses first decides the flags
+    for both. `RegexType` left out `t` and `b`, and `StringType`'s no-flag shortcut left out `f`.
+    """
+
+    def test_every_flag_reaches_the_name(self):
+        """Tests that each flag letter of each type appears in the parsed type's name.
+
+        A missing letter is what makes two declarations collide, so this asserts the property the
+        collision violated rather than the pairs that happened to collide.
+        """
+        for declaration, flags in (("string", "WwCcTftb"), ("search/8", "WwCcTfbs"),
+                                   ("regex/8", "cslTtb")):
+            for flag in flags:
+                spec = f"{declaration}/{flag}"
+                with self.subTest(declaration=spec):
+                    self.assertIn(flag, DataType.parse(spec).name)
+
+    def test_declarations_that_differ_by_one_flag_are_distinct(self):
+        """Tests that adding a flag to a declaration yields a different interned type."""
+        for declaration, flags in (("string", "WwCcTftb"), ("search/8", "WwCcTfbs"),
+                                   ("regex/8", "cslTtb")):
+            plain = DataType.parse(declaration)
+            for flag in flags:
+                spec = f"{declaration}/{flag}"
+                with self.subTest(declaration=spec):
+                    self.assertIsNot(plain, DataType.parse(spec))
+
+    def test_a_name_that_drops_a_flag_is_rejected(self):
+        """Tests that a type whose name loses a flag raises instead of interning silently.
+
+        The failure this prevents is silent: no exception and no warning, just a type behaving as
+        though its flag were absent. `DataType.parse` now reparses the name it built and compares
+        the result, which is the check that would have caught both halves of issue #3515.
+        """
+        class ForgetfulStringType(StringType):
+            def declaration(self) -> str:
+                return "string"
+
+        DataType.parse("string")
+        try:
+            polyfile.magic.StringType = ForgetfulStringType
+            polyfile.magic.TYPES_BY_NAME.pop("string/f", None)
+            with self.assertRaises(ValueError):
+                DataType.parse("string/f")
+        finally:
+            polyfile.magic.StringType = StringType
+            polyfile.magic.TYPES_BY_NAME.pop("string/f", None)
+
+    def test_whole_word_match_survives_parsing(self):
+        """Tests that `string/f` is its own type and matches whole words only.
+
+        `StringType.__init__` left `full_word_match` out of the tuple that decides whether a
+        declaration carries any flag, so a declaration whose only flag was `f` took the bare name
+        `string` and shared the unflagged type's instance.
+        """
+        whole_word = DataType.parse("string/f")
+        self.assertIsNot(whole_word, DataType.parse("string"))
+        self.assertTrue(whole_word.full_word_match)
+        self.assertFalse(DataType.parse("string").full_word_match)
+        expected = whole_word.parse_expected("if")
+        self.assertTrue(whole_word.match(b"if x then", expected))
+        self.assertFalse(whole_word.match(b"iffy", expected))

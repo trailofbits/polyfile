@@ -1609,6 +1609,7 @@ class DataType(ABC, Generic[T]):
                 dt = GUIDType(endianness=Endianness.LITTLE)
         else:
             dt = NumericDataType.parse(fmt)
+        _check_name_spells_every_flag(fmt, dt)
         if dt.name in TYPES_BY_NAME:
             # Sometimes a data type will change its name based on modifiers.
             # For example, string and pstring will always include their modifiers after their name
@@ -1618,11 +1619,41 @@ class DataType(ABC, Generic[T]):
         TYPES_BY_NAME[fmt] = dt
         return dt
 
+    def behavior(self) -> Dict[str, Any]:
+        """Everything about this type that decides how it matches.
+
+        Returns:
+            Every attribute except the name, which is a rendering of the rest.
+        """
+        return {key: value for key, value in vars(self).items() if key != "name"}
+
     def __str__(self):
         return self.name
 
     def __repr__(self):
         return f"{self.__class__.__name__}({self.name})"
+
+
+def _check_name_spells_every_flag(fmt: str, data_type: DataType) -> None:
+    """Checks that a flag-bearing type's name records everything the type does.
+
+    `DataType.parse` interns a type under its name, so two declarations that differ only by a flag
+    the name leaves out share one instance and silently share its flags (issue #3515). A flag a
+    type reads but does not spell shows up here as a name that parses back into a different type.
+
+    Args:
+        fmt: The declaration `data_type` was parsed from.
+        data_type: The type that was parsed.
+
+    Raises:
+        ValueError: If `data_type.name` does not parse back into a type that behaves the same way.
+    """
+    if fmt == data_type.name or not isinstance(data_type, (StringType, RegexType)):
+        return
+    rebuilt = DataType.parse(data_type.name)
+    if type(rebuilt) is not type(data_type) or rebuilt.behavior() != data_type.behavior():
+        raise ValueError(f"{fmt!r} parsed to a type named {data_type.name!r}, but that name parses back as "
+                         f"{rebuilt!r}: the name leaves out something the declaration set")
 
 
 class UUIDWildcard:
@@ -2084,7 +2115,47 @@ class StringMatch(StringTest):
         return repr(self.string)
 
 
+def reject_pascal_string_flags(declaration: str, format_str: str, options: str) -> None:
+    """Raises if `options` carries a length modifier that only ``pstring`` accepts.
+
+    ``B``, ``H``, ``h``, ``L`` and ``J`` size a Pascal string's length prefix, and libmagic's flag
+    loop jumps to its error label for any other type (``file/src/apprentice.c:1983-2020``). ``l``
+    is the exception, because on a ``regex`` it means ``REGEX_LINE_COUNT``.
+
+    Args:
+        declaration: The word the type was declared with.
+        format_str: The whole declaration, for the error message.
+        options: The flag letters that followed it.
+
+    Raises:
+        ValueError: If `options` carries a modifier only ``pstring`` accepts.
+    """
+    invalid = "".join(sorted({opt for opt in options if opt in "BHhLJ"}))
+    if invalid:
+        raise ValueError(f"Invalid {declaration} type declaration: {format_str!r} carries the {invalid!r} "
+                         f"modifier(s), which libmagic accepts only on pstring")
+
+
 class StringType(DataType[StringTest]):
+    DECLARATION: str = "string"
+    """The word a definition writes to declare this type."""
+
+    FLAGS: Tuple[Tuple[str, str], ...] = (
+        ("W", "compact_whitespace"),
+        ("w", "optional_blanks"),
+        ("C", "case_insensitive_upper"),
+        ("c", "case_insensitive_lower"),
+        ("T", "trim"),
+        ("f", "full_word_match"),
+        ("t", "force_text"),
+        ("b", "force_binary"),
+    )
+    """Every flag this type can carry, in the order `DataType.name` spells them.
+
+    See the letters in ``file/src/file.h:415-431`` and the loop that reads them in
+    ``file/src/apprentice.c:1940-2028``.
+    """
+
     def __init__(
             self,
             case_insensitive_lower: bool = False,
@@ -2094,20 +2165,9 @@ class StringType(DataType[StringTest]):
             full_word_match: bool = False,
             trim: bool = False,
             force_text: bool = False,
+            force_binary: bool = False,
             num_bytes: Optional[int] = None
     ):
-        if not any((num_bytes is not None, case_insensitive_lower, case_insensitive_upper, compact_whitespace,
-                    optional_blanks, trim, force_text)):
-            name = "string"
-        else:
-            if num_bytes is not None:
-                name = f"{num_bytes}/"
-            else:
-                name = ""
-            name = f"string/{name}{['', 'W'][compact_whitespace]}{['', 'w'][optional_blanks]}"\
-                   f"{['', 'C'][case_insensitive_upper]}{['', 'c'][case_insensitive_lower]}"\
-                   f"{['', 'T'][trim]}{['', 'f'][full_word_match]}{['', 't'][force_text]}"
-        super().__init__(name)
         self.case_insensitive_lower: bool = case_insensitive_lower
         self.case_insensitive_upper: bool = case_insensitive_upper
         self.compact_whitespace: bool = compact_whitespace
@@ -2115,7 +2175,23 @@ class StringType(DataType[StringTest]):
         self.full_word_match: bool = full_word_match
         self.trim: bool = trim
         self.force_text: bool = force_text
+        self.force_binary: bool = force_binary
         self.num_bytes: Optional[int] = num_bytes
+        super().__init__(self.declaration())
+
+    def declaration(self) -> str:
+        """Rebuilds the declaration this type was parsed from, which is also its name.
+
+        Returns:
+            A string `DataType.parse` accepts and that spells every flag this type carries.
+        """
+        parts = [self.DECLARATION]
+        if self.num_bytes is not None:
+            parts.append(str(self.num_bytes))
+        flags = "".join(letter for letter, attribute in self.FLAGS if getattr(self, attribute))
+        if flags:
+            parts.append(flags)
+        return "/".join(parts)
 
     def is_text(self, value: StringTest) -> bool:
         return self.force_text
@@ -2159,13 +2235,8 @@ class StringType(DataType[StringTest]):
             num_bytes: Optional[int] = None
         else:
             num_bytes = int(m.group("numbytes"))
-        if m.group("opts") is None:
-            options: Iterable[str] = ()
-        else:
-            options = m.group("opts")
-        unsupported_options = {opt for opt in options if opt not in "/WwcCtbTf"}
-        if unsupported_options:
-            log.warning(f"{format_str!r} has invalid option(s) that will be ignored: {', '.join(unsupported_options)}")
+        options = m.group("opts") or ""
+        reject_pascal_string_flags(cls.DECLARATION, format_str, options)
         return StringType(
             case_insensitive_lower="c" in options,
             case_insensitive_upper="C" in options,
@@ -2174,11 +2245,15 @@ class StringType(DataType[StringTest]):
             full_word_match="f" in options,
             trim="T" in options,
             force_text="t" in options,
+            force_binary="b" in options,
             num_bytes=num_bytes
         )
 
 
 class SearchType(StringType):
+    DECLARATION: str = "search"
+    FLAGS: Tuple[Tuple[str, str], ...] = StringType.FLAGS + (("s", "match_to_start"),)
+
     def __init__(
             self,
             repetitions: Optional[int] = None,
@@ -2189,46 +2264,23 @@ class SearchType(StringType):
             match_to_start: bool = False,
             full_word_match: bool = False,
             trim: bool = False,
+            force_text: bool = False,
             force_binary: bool = False
     ):
         if repetitions is not None and repetitions <= 0:
             raise ValueError("repetitions must be either None or a positive integer")
+        self.match_to_start: bool = match_to_start
         super().__init__(
             case_insensitive_lower=case_insensitive_lower,
             case_insensitive_upper=case_insensitive_upper,
             compact_whitespace=compact_whitespace,
             optional_blanks=optional_blanks,
             full_word_match=full_word_match,
-            trim=trim
+            trim=trim,
+            force_text=force_text,
+            force_binary=force_binary,
+            num_bytes=repetitions
         )
-        self.num_bytes = repetitions
-        if repetitions is None:
-            rep_str = ""
-        else:
-            rep_str = f"/{repetitions}"
-        assert self.name.startswith("string")
-        self.name = f"search{rep_str}{self.name[6:]}"
-        self.match_to_start: bool = match_to_start
-        self.force_binary: bool = force_binary
-        if match_to_start:
-            self._name_flag("s", rep_str)
-        if force_binary:
-            self._name_flag("b", rep_str)
-
-    def _name_flag(self, flag: str, rep_str: str) -> None:
-        """Records `flag` in this type's name, opening the flag group if it is the first one.
-
-        `DataType.parse` keys its cache of parsed types on the name, so a flag left out of the
-        name would make a declaration that carries it share an instance with one that does not.
-
-        Args:
-            flag: The declaration letter of the flag.
-            rep_str: The repetition count as it appears in the name, or an empty string.
-        """
-        if self.name == f"search{rep_str}":
-            self.name = f"search{rep_str}/{flag}"
-        else:
-            self.name = f"{self.name}{flag}"
 
     @property
     def repetitions(self) -> Optional[int]:
@@ -2537,13 +2589,29 @@ class MagicRegex:
 
 
 class RegexType(DataType[MagicRegex]):
+    FLAGS: Tuple[Tuple[str, str], ...] = (
+        ("c", "case_insensitive"),
+        ("s", "match_to_start"),
+        ("l", "limit_lines"),
+        ("T", "trim"),
+        ("t", "force_text"),
+        ("b", "force_binary"),
+    )
+    """Every flag this type can carry, in the order `DataType.name` spells them.
+
+    ``l`` is ``CHAR_PSTRING_4_LE``, which libmagic reads as ``REGEX_LINE_COUNT`` on a regular
+    expression (``file/src/file.h:409`` and ``file/src/apprentice.c:2003-2012``).
+    """
+
     def __init__(
             self,
             length: Optional[int] = None,
             case_insensitive: bool = False,
             match_to_start: bool = False,
             limit_lines: bool = False,
-            trim: bool = False
+            trim: bool = False,
+            force_text: bool = False,
+            force_binary: bool = False
     ):
         if length is None:
             if limit_lines:
@@ -2555,17 +2623,40 @@ class RegexType(DataType[MagicRegex]):
         self.case_insensitive: bool = case_insensitive
         self.match_to_start: bool = match_to_start
         self.trim: bool = trim
-        super().__init__(f"regex/{self.length}{['', 'c'][case_insensitive]}{['', 's'][match_to_start]}"
-                         f"{['', 'l'][self.limit_lines]}{['', 'T'][self.trim]}")
+        self.force_text: bool = force_text
+        self.force_binary: bool = force_binary
+        super().__init__(self.declaration())
+
+    def declaration(self) -> str:
+        """Rebuilds the declaration this type was parsed from, which is also its name.
+
+        Returns:
+            A string `DataType.parse` accepts and that spells every flag this type carries.
+        """
+        flags = "".join(letter for letter, attribute in self.FLAGS if getattr(self, attribute))
+        return f"regex/{self.length}{flags}"
 
     DOLLAR_PATTERN = re.compile(rb"(^|[^\\])\$", re.MULTILINE)
 
     def is_text(self, value: MagicRegex) -> bool:
-        try:
-            _ = value.pattern.decode("ascii")
-            return True
-        except UnicodeDecodeError:
+        """Whether libmagic runs this regular expression in its text pass.
+
+        A declared ``b`` or ``t`` decides on its own, because ``set_test_type`` reads the string
+        flags and breaks out of the case before it reaches ``file_looks_utf8``
+        (``file/src/apprentice.c:1258-1283``). Otherwise the pattern itself decides, by the same
+        rule libmagic applies to a `search` value.
+
+        Args:
+            value: The parsed regular expression.
+
+        Returns:
+            True if libmagic classifies the test as a text test.
+        """
+        if self.force_binary:
             return False
+        elif self.force_text:
+            return True
+        return _looks_like_utf8(value.pattern)
 
     def strength_term(self, expected: MagicRegex) -> int:
         """One unit per literal character, capped the way a `search` is.
@@ -2636,11 +2727,8 @@ class RegexType(DataType[MagicRegex]):
         return DataTypeMatch.INVALID
 
     REGEX_TYPE_FORMAT: Pattern[str] = re.compile(
-        r"^regex(/(?P<length>\d+)?(?P<flags1>[cslTt]*)(/(?P<flags2>[cslTt]*))?(b\d*)?)?$"
+        r"^regex(/(?P<length>\d+)?(?P<flags1>[bcslTt]*)(/(?P<flags2>[bcslTt]*))?)?$"
     )
-    # NOTE: some specification files like `cad` use `regex/b`, which is undocumented, and it's unclear from the libmagic
-    #       source code whether it is simply ignored or if it has a purpose. We ignore it here.
-    # NOTE: the `t` flag (force text) is also supported but currently ignored as it's a hint for output formatting.
     # NOTE: flags can appear either after length directly (regex/31cs) or with a slash (regex/31/cs).
 
     @classmethod
@@ -2662,7 +2750,9 @@ class RegexType(DataType[MagicRegex]):
             case_insensitive="c" in options,
             match_to_start="s" in options,
             limit_lines="l" in options,
-            trim="T" in options
+            trim="T" in options,
+            force_text="t" in options,
+            force_binary="b" in options
         )
 
 
