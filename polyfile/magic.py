@@ -1885,6 +1885,10 @@ class RegexType(DataType[Pattern[bytes]]):
             return False
 
     def parse_expected(self, specification: str) -> Pattern[bytes]:
+        if specification.startswith("="):
+            # libmagic parses a leading `=` as the equality operator, not as part of the pattern
+            # (`file/src/apprentice.c:2383-2384`)
+            specification = specification[1:]
         # handle POSIX-style character classes:
         unescaped_spec = posix_to_python_re(unescape(specification))
         # convert '$' to '[\r$]'

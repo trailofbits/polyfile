@@ -13,7 +13,9 @@ from uuid import UUID
 # from polyfile import logger
 import polyfile.der
 import polyfile.magic
-from polyfile.magic import MagicMatcher, MAGIC_DEFS, Match, MatchContext, SearchType, TestResult
+from polyfile.magic import (
+    MagicMatcher, MAGIC_DEFS, Match, MatchContext, RegexType, SearchType, TestResult
+)
 
 
 # logger.setLevel(logger.TRACE)
@@ -503,3 +505,38 @@ class MagicMatchingRegressionTest(TestCase):
         self.assertEqual(8192, expected.num_bytes)
         self.assertTrue(search.match(b"." * 8000 + b"needle", expected))
         self.assertFalse(search.match(b"." * 9000 + b"needle", expected))
+
+
+class RegexSemanticsTest(TestCase):
+    """Regression tests for the `regex` data type reported in issue #3482."""
+
+    DATA: bytes = b"aa123bb"
+    """Test data whose only run of digits starts at offset 2 and ends at offset 5."""
+
+    @staticmethod
+    def messages(definition: str, data: bytes) -> Set[str]:
+        """Classifies `data` with a matcher built from a single magic definition.
+
+        Args:
+            definition: The contents of a libmagic definition file.
+            data: The bytes to classify.
+
+        Returns:
+            The message of every match.
+        """
+        with TemporaryDirectory() as tmp_dir:
+            path = Path(tmp_dir) / "regex_semantics"
+            path.write_text(definition)
+            matcher = MagicMatcher.parse(path)
+        return {str(match) for match in matcher.match(data)}
+
+    def test_regex_strips_the_equality_operator(self):
+        """A leading `=` used to compile into the pattern, so such a test could never match.
+
+        libmagic consumes the relation operator before it compiles the pattern
+        (`file/src/apprentice.c:2383-2384`). 40 `=`-prefixed regex tests ship in the definitions,
+        among them the `netpbm` chain that `file/tests/pnm2.testfile` exercises.
+        """
+        regex = RegexType.parse("regex")
+        self.assertEqual(b"^[0-9]{1,50}", regex.parse_expected("=\\^[0-9]{1,50}").pattern)
+        self.assertTrue(regex.match(self.DATA, regex.parse_expected("=[0-9]{1,3}")))
