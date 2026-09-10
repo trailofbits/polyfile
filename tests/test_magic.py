@@ -41,6 +41,46 @@ def tag_length_value(tag: int, value: bytes) -> bytes:
     return bytes((tag, len(value))) + value
 
 
+def corpus_matcher(test: str) -> MagicMatcher:
+    """Builds the matcher for one libmagic corpus test.
+
+    Upstream's runner loads every `<stem>*.magic` sidecar, joined with the path separator, and
+    falls back to the compiled definitions when a test ships none (`file/tests/Makefile.am`).
+
+    Args:
+        test: The stem shared by the test's `.testfile`, `.result` and sidecar files.
+
+    Returns:
+        A matcher parsed from the test's sidecars, or the default matcher when it has none.
+    """
+    sidecars = sorted(FILE_TEST_DIR.glob(f"{test}*.magic"))
+    if not sidecars:
+        return MagicMatcher.DEFAULT_INSTANCE
+    print(f"\tParsing custom match scripts: {', '.join(s.name for s in sidecars)}")
+    return MagicMatcher.parse(*sidecars)
+
+
+def corpus_flags(test: str) -> str:
+    """Reads the libmagic flags that produced a corpus test's expected result.
+
+    Upstream's runner appends the contents of `<stem>.flags` to the flags it hands to
+    `magic_open` (`file/tests/Makefile.am` and `file/tests/test.c`). `k` is `MAGIC_CONTINUE`,
+    which makes `file` report every match instead of only the strongest one, joining them with
+    `\\012- `. PolyFile always reports every match and never builds that join (issue #3491), so
+    the harness only reports the flags rather than emulating them.
+
+    Args:
+        test: The stem shared by the test's `.testfile`, `.result` and `.flags` files.
+
+    Returns:
+        The flag letters, or the empty string when the test ships no `.flags` file.
+    """
+    flags = FILE_TEST_DIR / f"{test}.flags"
+    if not flags.exists():
+        return ""
+    return flags.read_text().strip()
+
+
 class MagicTest(TestCase):
     _old_local_date: Optional[Callable[[int], str]] = None
 
@@ -310,8 +350,6 @@ class MagicTest(TestCase):
         self.assertTrue(FILE_TEST_DIR.exists(), "Make sure to run `git submodule init && git submodule update` in the "
                                                 "root of this repository.")
 
-        default_matcher = MagicMatcher.DEFAULT_INSTANCE
-
         tests = sorted([
             f.stem for f in FILE_TEST_DIR.glob("*.testfile")
         ])
@@ -324,15 +362,12 @@ class MagicTest(TestCase):
                 if not testfile.exists() or not result.exists():
                     continue
 
-                magicfile = FILE_TEST_DIR / f"{test}.magic"
-
                 print(f"Testing: {test}")
 
-                if magicfile.exists():
-                    print(f"\tParsing custom match script: {magicfile.stem}")
-                    matcher = MagicMatcher.parse(magicfile)
-                else:
-                    matcher = default_matcher
+                matcher = corpus_matcher(test)
+                flags = corpus_flags(test)
+                if flags:
+                    print(f"\tlibmagic flags: -{flags}")
 
                 with open(result, "r") as f:
                     expected = f.read()
