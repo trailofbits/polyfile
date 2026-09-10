@@ -181,6 +181,14 @@ class MyParser(Parser):
         )
 ```
 
+### Updating the libmagic Definitions
+
+`polyfile/magic_defs/` is a hand-maintained copy of `file/magic/Magdir/` from the `file` submodule.
+Nothing automates the copy, and one bundled definition carries a PolyFile-specific patch.
+
+See `docs/updating_libmagic_defs.md` for the procedure, including how to find local patches before
+you overwrite them.
+
 ### Adding Kaitai Struct Format
 1. Add the `.ksy` file to the `kaitai_struct_formats/` submodule (upstream, or a local commit)
 2. Map the MIME type in `polyfile.kaitaimatcher.KAITAI_MIME_MAPPING`

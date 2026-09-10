@@ -9,6 +9,7 @@ PolyFile has two primary components:
 ### Libmagic Pattern Matching DSL
 
 The majority of PolyFile’s matchers are automatically generated from [`libmagic`’s pattern definition library](../polyfile/magic_defs).
+That library is a copy of the `file` submodule's definitions; [updating it](updating_libmagic_defs.md) is a separate, manual procedure.
 
 `libmagic` has an esoteric, poorly documented domain-specific language (DSL) for specifying its matching signatures.
 You can read the minimal and—as we have discovered in our cleanroom implementation—_incomplete_ documentation by running
