@@ -20,30 +20,20 @@ FILE_PATH = FILE_DIR / "src" / "file"
 MAGIC_FILE_PATH = SCRIPT_DIR / "magic.mgc"
 
 KNOWN_BAD_FILES = {
-    "4789632eef115af5e901b30d220c6e1c",  # arj.bin
-                                         # `file` incorrectly classifies this as `text/plain`
-                                         # while PolyFile more correctly classifies it as application/octet-stream
     "79f509d30245f6c7574a1ace1696be1a",  # card.bin
-                                         # `file` incorrectly classifies this as `text/plain`
-                                         # while PolyFile more correctly classifies it as application/octet-stream
-    "cef57430e7dcc950f3582285f1307521",  # dex035.bin
-                                         # `file` incorrectly classifies this as `text/plain`
-                                         # while PolyFile more correctly classifies it as application/octet-stream
+                                         # `file` trims the trailing NULs before classifying the
+                                         # encoding, reads the rest as ISO-8859 text, and reports
+                                         # `text/plain`. PolyFile does not trim, so it reports
+                                         # `application/octet-stream`. See #3506
     "d1531b1622de54fe3a0187c3344600e9",  # elf.bin
-                                         # `file` incorrectly classifies this as `text/plain`
-                                         # while PolyFile more correctly classifies it as application/octet-stream
-    "c0f44879dc0d4eae7b3f0b3e801e373c",  # id3v2.bin
-                                         # `file` incorrectly classifies this as `text/plain`
-                                         # while PolyFile more correctly classifies it as application/octet-stream
-    "1d52f82b2a240cb618effe344bb1e579",  # jpg.bin
-                                         # `file` incorrectly classifies this as `text/plain`
-                                         # while PolyFile more correctly classifies it as application/octet-stream
-    "e9dd2797018cad79186e03e8c5aec8dc",  # png.bin
-                                         # `file` incorrectly classifies this as `text/plain`
-                                         # while PolyFile more correctly classifies it as application/octet-stream
+                                         # `file` reads this as International EBCDIC text and
+                                         # reports `text/plain`. PolyFile has no EBCDIC detection,
+                                         # so it reports `application/octet-stream`. See #3507
     "bdb7963176bdaa12a17d98db9cbf384b",  # make.py
-                                         # `file` correctly classifies this as `text/x-script.python`
-                                         # while PolyFile incorrectly classifies this as `text/plain` (investigating)
+                                         # `file` reports both `text/x-script.python` and
+                                         # `text/plain`. PolyFile reports only
+                                         # `text/x-script.python`, because it emits the plain text
+                                         # match only when no other test matched. See #3488
 }
 
 FILE_MIMETYPE_PATTERN = re.compile(rb"^(.*?:|-)\s*(?P<mime>[^/\s]+/[^/;\s]+)\s*(;.*?$|$)(?P<remainder>.*)",
