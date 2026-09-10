@@ -5,7 +5,7 @@
 PolyFile is a file analysis utility that identifies and maps the semantic and syntactic structure of files—including polyglots, chimeras, and "schizophrenic" files that are validly multiple types simultaneously.
 
 **Key capabilities:**
-- Pure-Python libmagic implementation (895 MIME types, from libmagic 5.48)
+- Pure-Python libmagic implementation (896 MIME types, from libmagic 5.48)
 - Recursive embedded file detection (like binwalk)
 - Parsers for PDF, ZIP, JPEG, iNES, and 183 Kaitai Struct formats
 - Interactive HTML hex viewer with structure mapping
