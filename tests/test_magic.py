@@ -503,3 +503,93 @@ class MagicMatchingRegressionTest(TestCase):
         self.assertEqual(8192, expected.num_bytes)
         self.assertTrue(search.match(b"." * 8000 + b"needle", expected))
         self.assertFalse(search.match(b"." * 9000 + b"needle", expected))
+
+
+class UseTestSemanticsTest(TestCase):
+    """Regression tests for the `use` test truth value reported in issue #3484."""
+
+    DESCRIBED_NAMED_LIST: str = "\n".join((
+        "0\tname\ttrailer",
+        ">4\tstring\tOK\t\\b, named list matched",
+        "",
+        "0\tstring\tHEAD",
+        ">0\tuse\ttrailer",
+        ">>0\tstring\tx\t\\b, continuation ran",
+        "",
+    ))
+    """A `use` whose named list prints a message when the input ends in `OK`."""
+
+    UNDESCRIBED_NAMED_LIST: str = "\n".join((
+        "0\tname\ttrailer",
+        ">4\tstring\tOK",
+        "",
+        "0\tstring\tHEAD",
+        ">0\tuse\ttrailer",
+        ">>0\tstring\tx\t\\b, continuation ran",
+        "",
+    ))
+    """The same definitions, with the named list's only entry left undescribed."""
+
+    @staticmethod
+    def messages(definitions: str, data: bytes) -> Set[str]:
+        """Matches `data` against ad-hoc definitions and collects the resulting messages.
+
+        Args:
+            definitions: The contents of a libmagic definition file, with tab separated columns.
+            data: The bytes to classify.
+
+        Returns:
+            The message of every match the definitions produce.
+        """
+        with TemporaryDirectory() as tmp_dir:
+            path = Path(tmp_dir) / "use_semantics"
+            path.write_text(definitions)
+            matcher = MagicMatcher.parse(path)
+            return {str(match) for match in matcher.match(data)}
+
+    def test_use_matches_when_the_named_list_matches(self):
+        """A `use` succeeds when its named list prints something, and its children then run.
+
+        `file -b -k -m <definitions>` reports both `, named list matched` and
+        `, continuation ran` for this input.
+        """
+        self.assertIn(
+            ", named list matched, continuation ran", self.messages(self.DESCRIBED_NAMED_LIST, b"HEADOK")
+        )
+
+    def test_use_fails_when_the_named_list_does_not_match(self):
+        """A `use` used to succeed even when its named list matched nothing.
+
+        The named list's only entry needs the input to end in `OK`, so nothing in it matches
+        `HEADNO`. libmagic returns the list's match count as the `use`'s truth value
+        (`file/src/softmagic.c:2429-2430`) and reports no match for this input, but PolyFile used
+        to run the `use`'s continuation lines anyway.
+        """
+        for message in self.messages(self.DESCRIBED_NAMED_LIST, b"HEADNO"):
+            self.assertNotIn("named list matched", message)
+            self.assertNotIn("continuation ran", message)
+
+    def test_use_fails_when_the_named_list_prints_nothing(self):
+        """An undescribed named test cannot on its own satisfy the `use` that referenced it.
+
+        libmagic raises `found_match` only for an entry with a non-empty description
+        (`file/src/softmagic.c:323` and `:439`), so neither the bare `0 name trailer` line nor the
+        undescribed entry beneath it counts. `file` reports no match for `HEADOK` against these
+        definitions, even though the same input matches once that entry carries a message.
+        """
+        for message in self.messages(self.UNDESCRIBED_NAMED_LIST, b"HEADOK"):
+            self.assertNotIn("continuation ran", message)
+
+    def test_efi_signature_list_is_not_a_false_positive(self):
+        """The `efi_sig_list` `use` used to report EFI matches for UTF-16 text.
+
+        `polyfile/magic_defs/efi:41-53` guards two `use efi_sig_list` entries behind zero-byte
+        tests that any UTF-16LE ASCII text passes, and relies on the named list's 19 `guid`
+        comparisons to reject. None of them match this file, and
+        `file -m file/magic/Magdir/efi` reports no EFI match for it.
+        """
+        testfile = FILE_TEST_DIR / "utf16xmlsvg.testfile"
+        self.assertTrue(testfile.exists(), "Make sure to run `git submodule init && git submodule update`")
+        for match in MagicMatcher.DEFAULT_INSTANCE.match(testfile.read_bytes()):
+            self.assertNotIn("EFI variable", str(match))
+            self.assertNotIn("total size", str(match))
