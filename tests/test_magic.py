@@ -579,3 +579,28 @@ class StringDataTypeTest(TestCase):
         sgml = SearchType.parse("search/4096/cWbt")
         self.assertTrue(sgml.compact_whitespace)
         self.assertFalse(sgml.optional_blanks)
+
+    def test_wildcard_string_stops_at_a_line_break(self):
+        """A wildcard value ran to the first null byte, so a `%s` leaked the rest of the file.
+
+        libmagic cuts it at the first carriage return or line feed
+        (`file/src/softmagic.c:683-684`) and reads at most `MAXstring` bytes
+        (`file/src/file.h:179`).
+        """
+        wildcard = StringType.parse("string").parse_expected("x")
+        self.assertEqual(b"first", wildcard.matches(b"first\nsecond").raw_match)
+        self.assertEqual(b"first", wildcard.matches(b"first\r\nsecond").raw_match)
+        self.assertEqual(b"first", wildcard.matches(b"first\0second").raw_match)
+        self.assertEqual(b"a" * 128, wildcard.matches(b"a" * 300).raw_match)
+
+    def test_gedcom_reports_one_version_and_not_four_lines(self):
+        """`magic_defs/scientific`'s `%s` reported four lines of `gedcom.testfile`.
+
+        `gedcom` still fails the corpus check because its message needs the encoding trailer
+        (trailofbits/polyfile#3488), so the corpus check does not pin what this fixes.
+        """
+        self.assertTrue(FILE_TEST_DIR.exists(),
+                        "Run `git submodule init && git submodule update` in the repository root.")
+        data = (FILE_TEST_DIR / "gedcom.testfile").read_bytes()
+        messages = {str(match) for match in MagicMatcher.DEFAULT_INSTANCE.match(data)}
+        self.assertEqual({"GEDCOM genealogy text version 5.5"}, messages)

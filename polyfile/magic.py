@@ -75,6 +75,10 @@ MAGIC_DEFS: List[Path] = sorted([
 WHITESPACE: bytes = b" \r\t\n\v\f"
 # a whitespace byte of an `re.escape`-ed pattern, with or without the backslash that escaped it
 BLANK_IN_PATTERN: Pattern[bytes] = re.compile(rb"\\?[ \t\n\v\f\r]")
+# a wildcard string value ends at the first of these, per `file/src/softmagic.c:683-684`
+VALUE_TERMINATOR: Pattern[bytes] = re.compile(rb"[\0\r\n]")
+# `MAXstring`, the size of the buffer libmagic copies a string value into: `file/src/file.h:179`
+MAX_STRING_BYTES: int = 128
 ESCAPES = {
     "n": ord("\n"),
     "r": ord("\r"),
@@ -1346,28 +1350,49 @@ class StringTest(ABC):
 
 
 class StringWildcard(StringTest):
+    def value_end(self, data: bytes, max_bytes: Optional[int] = None) -> int:
+        """Finds the length of the value that libmagic would read from the head of `data`.
+
+        A wildcard value ends at the first null byte, carriage return, or line feed, whichever
+        comes first (``file/src/softmagic.c:683-684`` and ``909-910``).
+
+        Args:
+            data: The bytes at the offset being tested.
+            max_bytes: The most bytes to read, if the type or the buffer bounds it.
+
+        Returns:
+            The number of bytes of `data` that make up the value.
+        """
+        end = len(data) if max_bytes is None else min(max_bytes, len(data))
+        terminator = VALUE_TERMINATOR.search(data, 0, end)
+        if terminator is None:
+            return end
+        return terminator.start()
+
     def matches(self, data: bytes) -> DataTypeMatch:
         if self.num_bytes is None:
-            first_null = data.find(b"\0")
+            max_bytes = MAX_STRING_BYTES
         else:
-            first_null = data.find(b"\0", 0, self.num_bytes)
-            if first_null < 0:
-                return self.post_process(data[:self.num_bytes])
-        if first_null >= 0:
-            return self.post_process(data[:first_null])
-        else:
-            return self.post_process(data)
+            max_bytes = min(self.num_bytes, MAX_STRING_BYTES)
+        return self.post_process(data[:self.value_end(data, max_bytes)])
 
     def is_always_text(self) -> bool:
         return False
 
     def search(self, data: bytes) -> DataTypeMatch:
-        # `num_bytes` bounds the start offsets a search tries, not the extent of the value it
-        # yields, so a search always reads up to the first null byte
-        first_null = data.find(b"\0")
-        if first_null >= 0:
-            return self.post_process(data[:first_null])
-        return self.post_process(data)
+        """Reads the value that a `search` test reports.
+
+        `num_bytes` bounds the start offsets a search tries, not the extent of the value it
+        yields, and a search reads the buffer in place rather than copying it into libmagic's
+        128-byte value union (``file/src/softmagic.c:1389-1395``), so neither bound applies here.
+
+        Args:
+            data: The bytes at the offset being tested.
+
+        Returns:
+            The value, ending at the first null byte, carriage return, or line feed.
+        """
+        return self.post_process(data[:self.value_end(data)])
 
     def __str__(self):
         return "null-terminated string"
