@@ -14,7 +14,8 @@ from uuid import UUID
 import polyfile.der
 import polyfile.magic
 from polyfile.magic import (
-    DataType, MagicMatcher, MAGIC_DEFS, Match, MatchContext, SearchType, StringType, TestResult
+    DataType, MagicMatcher, MAGIC_DEFS, Match, MatchContext, RegexType, SearchType, StringType,
+    TestResult
 )
 
 
@@ -348,7 +349,7 @@ class MagicTest(TestCase):
                         print(f"\tActual:   {actual!r}")
                     if testfile.stem not in (
                             "JW07022A.mp3", "gedcom", "cmd1", "cmd2", "jpeg-text", "jsonlines1",
-                            "multiple", "osm", "pnm1", "pnm2", "pnm3", "utf16xmlsvg"
+                            "multiple", "osm", "pnm1", "pnm3", "utf16xmlsvg"
                     ):
                         # The files we skip fail because there is a bug in our implementation that we have not yet fixed
                         if expected == "ASCII text" and expected not in matches:
@@ -505,6 +506,88 @@ class MagicMatchingRegressionTest(TestCase):
         self.assertEqual(8192, expected.num_bytes)
         self.assertTrue(search.match(b"." * 8000 + b"needle", expected))
         self.assertFalse(search.match(b"." * 9000 + b"needle", expected))
+
+
+class RegexSemanticsTest(TestCase):
+    """Regression tests for the `regex` data type reported in issue #3482."""
+
+    DATA: bytes = b"aa123bb"
+    """Test data whose only run of digits starts at offset 2 and ends at offset 5."""
+
+    @staticmethod
+    def relative_offset_definition(flags: str, follow_up: str) -> str:
+        """Builds a definition whose second test reads at `&0` after a regex match.
+
+        Args:
+            flags: The flags to append to the `regex` type, such as `/s`.
+            follow_up: The string that the second test expects to find at `&0`.
+
+        Returns:
+            The contents of a libmagic definition file.
+        """
+        return f"0\tregex{flags}\t=[0-9]{{1,3}}\tdigits\n>&0\tstring\t{follow_up}\tthen\n"
+
+    @staticmethod
+    def messages(definition: str, data: bytes) -> Set[str]:
+        """Classifies `data` with a matcher built from a single magic definition.
+
+        Args:
+            definition: The contents of a libmagic definition file.
+            data: The bytes to classify.
+
+        Returns:
+            The message of every match.
+        """
+        with TemporaryDirectory() as tmp_dir:
+            path = Path(tmp_dir) / "regex_semantics"
+            path.write_text(definition)
+            matcher = MagicMatcher.parse(path)
+        return {str(match) for match in matcher.match(data)}
+
+    def test_regex_strips_the_equality_operator(self):
+        """A leading `=` used to compile into the pattern, so such a test could never match.
+
+        libmagic consumes the relation operator before it compiles the pattern
+        (`file/src/apprentice.c:2383-2384`). 40 `=`-prefixed regex tests ship in the definitions,
+        among them the `netpbm` chain that `file/tests/pnm2.testfile` exercises.
+        """
+        regex = RegexType.parse("regex")
+        self.assertEqual(b"^[0-9]{1,50}", regex.parse_expected("=\\^[0-9]{1,50}").pattern)
+        self.assertTrue(regex.match(self.DATA, regex.parse_expected("=[0-9]{1,3}")))
+
+    def test_regex_reports_only_the_matched_extent(self):
+        """`%s` used to report every byte from offset 0 through the end of the match.
+
+        libmagic reports only the bytes between `rm_so` and `rm_eo`
+        (`file/src/softmagic.c:2413-2416`), and positions the match at `rm_so` rather than at the
+        offset the test ran at.
+        """
+        regex = RegexType.parse("regex")
+        match = regex.match(self.DATA, regex.parse_expected("=[0-9]{1,3}"))
+        self.assertEqual(b"123", match.raw_match)
+        self.assertEqual("123", match.value)
+        self.assertEqual(2, match.initial_offset)
+        self.assertEqual({"digits 123"},
+                         self.messages("0\tregex\t=[0-9]{1,3}\tdigits %s\n", self.DATA))
+
+    def test_regex_relative_offset_resolves_from_the_match_end(self):
+        """A `&` offset after a plain `regex` reads from the end of the match, at offset 5."""
+        self.assertEqual({"digits then"},
+                         self.messages(self.relative_offset_definition("", "bb"), self.DATA))
+        self.assertEqual({"digits"},
+                         self.messages(self.relative_offset_definition("", "123"), self.DATA))
+
+    def test_regex_s_relative_offset_resolves_from_the_match_start(self):
+        """The `s` flag was parsed and then never read, so `&` resolved from the match end.
+
+        `CHAR_REGEX_OFFSET_START` (`file/src/file.h:419`) makes a following relative offset
+        resolve from the start of the match, at offset 2 rather than offset 5
+        (`file/src/softmagic.c:959-963`).
+        """
+        self.assertEqual({"digits then"},
+                         self.messages(self.relative_offset_definition("/s", "123"), self.DATA))
+        self.assertEqual({"digits"},
+                         self.messages(self.relative_offset_definition("/s", "bb"), self.DATA))
 
 
 class StringDataTypeTest(TestCase):
