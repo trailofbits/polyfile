@@ -1097,15 +1097,32 @@ T = TypeVar("T")
 
 
 class DataTypeMatch:
+    """The portion of the tested data that a :class:`DataType` matched.
+
+    Attributes:
+        raw_match: The bytes that matched, or `None` if the data type did not match.
+        value: The value to interpolate into the message of the test that matched.
+        initial_offset: The offset of `raw_match` within the data that was tested.
+        relative_base: The offset within the tested data that a subsequent relative (`&`) offset
+            resolves against, or `None` to resolve against the end of `raw_match`.
+    """
+
     INVALID: "DataTypeMatch"
 
-    def __init__(self, raw_match: Optional[bytes] = None, value: Optional[Any] = None, initial_offset: int = 0):
+    def __init__(
+            self,
+            raw_match: Optional[bytes] = None,
+            value: Optional[Any] = None,
+            initial_offset: int = 0,
+            relative_base: Optional[int] = None
+    ):
         self.raw_match: Optional[bytes] = raw_match
         if value is None and raw_match is not None:
             self.value: Optional[bytes] = raw_match
         else:
             self.value = value
         self.initial_offset: int = initial_offset
+        self.relative_base: Optional[int] = relative_base
 
     def __bool__(self):
         return self.raw_match is not None
@@ -1885,6 +1902,10 @@ class RegexType(DataType[Pattern[bytes]]):
             return False
 
     def parse_expected(self, specification: str) -> Pattern[bytes]:
+        if specification.startswith("="):
+            # libmagic parses a leading `=` as the equality operator, not as part of the pattern
+            # (`file/src/apprentice.c:2383-2384`)
+            specification = specification[1:]
         # handle POSIX-style character classes:
         unescaped_spec = posix_to_python_re(unescape(specification))
         # convert '$' to '[\r$]'
@@ -1897,41 +1918,52 @@ class RegexType(DataType[Pattern[bytes]]):
         except re.error as e:
             raise ValueError(str(e))
 
+    def matched_extent(self, m: "re.Match[bytes]", subject_offset: int) -> DataTypeMatch:
+        """Builds the match that libmagic reports for a regular expression match.
+
+        libmagic reports only the bytes between `pmatch.rm_so` and `pmatch.rm_eo`, positioned at
+        `rm_so` (`file/src/softmagic.c:2413-2416`, printed at `file/src/softmagic.c:785-801`).
+
+        Args:
+            m: The regular expression match.
+            subject_offset: The offset of `m`'s subject within the data that was tested.
+
+        Returns:
+            A match covering only the matched bytes, positioned at the start of the match.
+        """
+        raw_match = m.group()
+        try:
+            value: Any = raw_match.decode("utf-8")
+        except UnicodeDecodeError:
+            value = raw_match
+        if self.trim:
+            value = value.strip()
+        start = subject_offset + m.start()
+        if self.match_to_start:
+            # the `s` flag resolves a subsequent relative offset from the start of the match rather
+            # than from its end (`CHAR_REGEX_OFFSET_START` in `file/src/file.h:419`, applied in
+            # `moffset`'s `FILE_REGEX` case at `file/src/softmagic.c:959-963`)
+            return DataTypeMatch(raw_match, value, initial_offset=start, relative_base=start)
+        return DataTypeMatch(raw_match, value, initial_offset=start)
+
     def match(self, data: bytes, expected: Pattern[bytes]) -> DataTypeMatch:
-        if self.limit_lines:
-            limit = self.length
-            offset = 0
-            byte_limit = 80 * self.length  # libmagic uses an implicit byte limit assuming 80 characters per line
-            while limit > 0:
-                limit -= 1
-                line_offset = data.find(b"\n", offset, byte_limit)
-                if line_offset < 0:
-                    return DataTypeMatch.INVALID
-                line = data[offset:line_offset]
-                m = expected.match(line)
-                if m:
-                    match = data[:offset + m.end()]
-                    try:
-                        value = match.decode("utf-8")
-                    except UnicodeDecodeError:
-                        value = match
-                    if self.trim:
-                        value = value.strip()
-                    return DataTypeMatch(match, value)
-                offset = line_offset + 1
-        else:
+        if not self.limit_lines:
             m = expected.search(data[:self.length])
-            if m:
-                match = data[:m.end()]
-                try:
-                    value = match.decode("utf-8")
-                except UnicodeDecodeError:
-                    value = match
-                if self.trim:
-                    value = value.strip()
-                return DataTypeMatch(match, value)
-            else:
+            if m is None:
                 return DataTypeMatch.INVALID
+            return self.matched_extent(m, 0)
+        offset = 0
+        # libmagic uses an implicit byte limit that assumes 80 characters per line
+        byte_limit = 80 * self.length
+        for _ in range(self.length):
+            line_offset = data.find(b"\n", offset, byte_limit)
+            if line_offset < 0:
+                return DataTypeMatch.INVALID
+            m = expected.match(data[offset:line_offset])
+            if m is not None:
+                return self.matched_extent(m, offset)
+            offset = line_offset + 1
+        return DataTypeMatch.INVALID
 
     REGEX_TYPE_FORMAT: Pattern[str] = re.compile(
         r"^regex(/(?P<length>\d+)?(?P<flags1>[cslTt]*)(/(?P<flags2>[cslTt]*))?(b\d*)?)?$"
@@ -2295,11 +2327,30 @@ class ConstantMatchTest(MagicTest, Generic[T]):
     def calculate_absolute_offset(self, data: bytes, parent_match: Optional[TestResult] = None) -> int:
         return self.offset.to_absolute(data, parent_match, self.data_type.allows_invalid_offsets(self.constant))
 
+    def matched_test(
+            self, match: DataTypeMatch, absolute_offset: int, parent_match: Optional[TestResult]
+    ) -> "MatchedTest":
+        """Builds the result of a successful match of this test's data type.
+
+        Args:
+            match: The match that the data type reported.
+            absolute_offset: The offset at which the data type was tested.
+            parent_match: The result of the parent test, if this test has one.
+
+        Returns:
+            The result, positioned at the match and carrying the relative base that the data type
+            asked for.
+        """
+        result = MatchedTest(self, offset=absolute_offset + match.initial_offset,
+                             length=len(match.raw_match), value=match.value, parent=parent_match)
+        if match.relative_base is not None:
+            result.relative_base = absolute_offset + match.relative_base
+        return result
+
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
         match = self.data_type.match(data[absolute_offset:], self.constant)
         if match:
-            return MatchedTest(self, offset=absolute_offset + match.initial_offset, length=len(match.raw_match),
-                               value=match.value, parent=parent_match)
+            return self.matched_test(match, absolute_offset, parent_match)
         else:
             return FailedTest(
                 self,
@@ -2317,8 +2368,7 @@ class ConstantMatchTest(MagicTest, Generic[T]):
             data_type = self.data_type
         match = data_type.match(data[absolute_offset:], self.constant)
         if match:
-            return MatchedTest(self, offset=absolute_offset + match.initial_offset, length=len(match.raw_match),
-                               value=match.value, parent=parent_match)
+            return self.matched_test(match, absolute_offset, parent_match)
         else:
             return FailedTest(
                 self,
