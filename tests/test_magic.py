@@ -33,10 +33,11 @@ KNOWN_FAILURES: Dict[str, int] = {
     #
     # This test ships two sidecars, which the harness loads, and a `.flags` of `k`. PolyFile
     # reports all four names as separate matches, each with its own text-encoding description, so
-    # what is left is the joined form: #3491 for the `\012- ` separator and #3477 for the strength
-    # order the parts appear in. Splitting the expected string on `\012- ` here instead would drop
-    # #3491 from that list.
-    "multiple": 3491,       # then #3477
+    # what is left is the joined form that #3491 covers: the `\012- ` separator, and one
+    # text-encoding description for the join rather than one per part. The order of the parts is
+    # already right, which `MatchOrderTest` checks directly. Splitting the expected string on
+    # `\012- ` here instead would drop #3491 from that list.
+    "multiple": 3491,
     # Text tests run against the raw bytes, so the SVG test never matches a UTF-16 file and
     # PolyFile reports only the text-encoding description.
     "utf16xmlsvg": 3489,
