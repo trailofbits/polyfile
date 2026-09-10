@@ -6,7 +6,7 @@ import time
 import zlib
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Callable, Iterator, List, Optional, Set, Tuple
+from typing import Callable, Dict, Iterator, List, Optional, Set, Tuple
 from unittest import TestCase
 from uuid import UUID
 
@@ -19,6 +19,30 @@ from polyfile.magic import MagicMatcher, MAGIC_DEFS, Match, MatchContext, Search
 # logger.setLevel(logger.TRACE)
 
 FILE_TEST_DIR: Path = Path(__file__).parent.parent / "file" / "tests"
+
+KNOWN_FAILURES: Dict[str, int] = {
+    # `test_file_corpus` asserts that each of these stems still fails, so fixing one of these bugs
+    # includes deleting its stems from this map in the same change. Each value is the first issue
+    # that has to be fixed for the stem to pass, and the trailing comment names what blocks it
+    # after that. Issue #3480 tracks the whole set.
+    "JW07022A.mp3": 3485,
+    "cmd1": 3483,           # then #3488 and #3490
+    "cmd2": 3483,           # then #3488 and #3490
+    "cmd3": 3483,
+    "cmd4": 3483,
+    "gedcom": 3483,         # then #3488
+    "jpeg-text": 3488,
+    "jsonlines1": 3486,
+    # Issue #3487 makes the harness load the two `multiple*.magic` sidecars, but the harness still
+    # cannot express the test's `k` flag, because PolyFile has no MAGIC_CONTINUE join.
+    "multiple": 3487,       # then #3491 and #3477
+    "osm": 3488,
+    "pnm1": 3482,           # then #3488
+    "pnm2": 3482,
+    "pnm3": 3482,           # then #3488
+    "utf16xmlsvg": 3484,    # then #3488 and #3489
+}
+"""Corpus stems that cannot pass yet, each mapped to the issue that has to be fixed first."""
 
 DER_CERTIFICATE: Path = Path(__file__).absolute().parent / "msjdbc.cer.gz"
 
@@ -79,6 +103,32 @@ def corpus_flags(test: str) -> str:
     if not flags.exists():
         return ""
     return flags.read_text().strip()
+
+
+def corpus_result_matches(expected: str, matches: Set[str]) -> bool:
+    """Reports whether PolyFile's matches include libmagic's expected description.
+
+    The comparison ignores case and trailing whitespace, and it works around two known
+    formatting differences between PolyFile and libmagic.
+
+    Args:
+        expected: The contents of the test's `.result` file.
+        matches: The description of every match PolyFile reported for the test file.
+
+    Returns:
+        True if one of `matches` corresponds to `expected`.
+    """
+    if expected == "ASCII text" and expected not in matches:
+        # PolyFile emits "ascii text" in lower case; part of issue #3488.
+        return expected.lower() in matches
+    expected = expected.rstrip().lower()
+    lowered = {match.rstrip().lower() for match in matches}
+    if "00000000" in expected and expected not in lowered:
+        # Technically correct, but PolyFile formats a zero as "0x000000"; part of issue #3488.
+        return expected.replace("00000000", "0x000000") in lowered
+    if expected.startswith("hancom hwp"):
+        return any(match.endswith(expected) for match in lowered)
+    return expected in lowered
 
 
 class MagicTest(TestCase):
@@ -350,52 +400,62 @@ class MagicTest(TestCase):
         self.assertTrue(FILE_TEST_DIR.exists(), "Make sure to run `git submodule init && git submodule update` in the "
                                                 "root of this repository.")
 
-        tests = sorted([
-            f.stem for f in FILE_TEST_DIR.glob("*.testfile")
-        ])
-
-        for test in tests:
+        for test in sorted(f.stem for f in FILE_TEST_DIR.glob("*.testfile")):
             with self.subTest(test=test):
-                testfile = FILE_TEST_DIR / f"{test}.testfile"
-                result = FILE_TEST_DIR / f"{test}.result"
+                self.check_corpus_test(test)
 
-                if not testfile.exists() or not result.exists():
-                    continue
+    def check_corpus_test(self, test: str):
+        """Runs one libmagic corpus test and asserts the verdict `KNOWN_FAILURES` calls for.
 
-                print(f"Testing: {test}")
+        Args:
+            test: The stem shared by the test's `.testfile`, `.result` and sidecar files.
+        """
+        testfile = FILE_TEST_DIR / f"{test}.testfile"
+        result = FILE_TEST_DIR / f"{test}.result"
 
-                matcher = corpus_matcher(test)
-                flags = corpus_flags(test)
-                if flags:
-                    print(f"\tlibmagic flags: -{flags}")
+        if not testfile.exists() or not result.exists():
+            return
 
-                with open(result, "r") as f:
-                    expected = f.read()
-                    print(f"\tExpected: {expected!r}")
+        print(f"Testing: {test}")
+        matcher = corpus_matcher(test)
+        flags = corpus_flags(test)
+        if flags:
+            print(f"\tlibmagic flags: -{flags}")
 
-                with open(testfile, "rb") as f:
-                    matches = set()
-                    for match in matcher.match(f.read()):
-                        actual = str(match)
-                        matches.add(actual)
-                        print(f"\tActual:   {actual!r}")
-                    if testfile.stem not in (
-                            "JW07022A.mp3", "gedcom", "cmd1", "cmd2", "cmd3", "cmd4", "jpeg-text", "jsonlines1",
-                            "multiple", "osm", "pnm1", "pnm2", "pnm3", "utf16xmlsvg"
-                    ):
-                        # The files we skip fail because there is a bug in our implementation that we have not yet fixed
-                        if expected == "ASCII text" and expected not in matches:
-                            self.assertIn(expected.lower(), matches)
-                        else:
-                            expected = expected.rstrip().lower()
-                            matches = [m.rstrip().lower() for m in matches]
-                            if "00000000" in expected and expected not in matches:
-                                # our output is technically correct but we output "0x000000" instead of "00000000"
-                                self.assertIn(expected.replace("00000000", "0x000000"), matches)
-                            elif expected.startswith("hancom hwp"):
-                                self.assertTrue(any(m.endswith(expected) for m in matches))
-                            else:
-                                self.assertIn(expected, matches)
+        expected = result.read_text()
+        print(f"\tExpected: {expected!r}")
+
+        with open(testfile, "rb") as f:
+            matches = {str(match) for match in matcher.match(f.read())}
+        for actual in sorted(matches):
+            print(f"\tActual:   {actual!r}")
+
+        self.assert_corpus_verdict(test, expected, matches, flags)
+
+    def assert_corpus_verdict(self, test: str, expected: str, matches: Set[str], flags: str):
+        """Asserts that a corpus test passes, or that it still fails if `KNOWN_FAILURES` maps it.
+
+        Args:
+            test: The stem of the corpus test.
+            expected: The contents of the test's `.result` file.
+            matches: The description of every match PolyFile reported for the test file.
+            flags: The libmagic flag letters from the test's `.flags` file, if it ships one.
+        """
+        matched = corpus_result_matches(expected, matches)
+        issue = KNOWN_FAILURES.get(test)
+        context = f" (libmagic ran with -{flags})" if flags else ""
+        if issue is None:
+            self.assertTrue(matched, (
+                f"{test} does not match libmagic{context}: expected {expected!r}, but PolyFile "
+                f"reported {sorted(matches)!r}. If this is a bug we have filed, add {test!r} to "
+                f"KNOWN_FAILURES in tests/test_magic.py, mapped to that issue number."
+            ))
+        else:
+            self.assertFalse(matched, (
+                f"{test} now matches libmagic{context}, so issue #{issue} looks fixed. Delete "
+                f"{test!r} from KNOWN_FAILURES in tests/test_magic.py so that this test keeps "
+                f"checking it, and close issue #{issue} if nothing else blocks it."
+            ))
 
 
 MATCH_TIMEOUT_SECONDS: int = 60
