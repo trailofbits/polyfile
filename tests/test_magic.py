@@ -31,13 +31,6 @@ KNOWN_FAILURES: Dict[str, int] = {
     # has to be fixed first, and the trailing comment names what blocks the stem after that.
     # Issue #3480 tracks the whole set.
     #
-    # This test ships two sidecars, which the harness loads, and a `.flags` of `k`. PolyFile
-    # reports all four names as separate matches, each with its own text-encoding description, so
-    # what is left is the joined form that #3491 covers: the `\012- ` separator, and one
-    # text-encoding description for the join rather than one per part. The order of the parts is
-    # already right, which `MatchOrderTest` checks directly. Splitting the expected string on
-    # `\012- ` here instead would drop #3491 from that list.
-    "multiple": 3491,
     # Text tests run against the raw bytes, so the SVG test never matches a UTF-16 file and
     # PolyFile reports only the text-encoding description.
     "utf16xmlsvg": 3489,
@@ -90,8 +83,8 @@ def corpus_flags(test: str) -> str:
     Upstream's runner appends the contents of `<stem>.flags` to the flags it hands to
     `magic_open` (`file/tests/Makefile.am` and `file/tests/test.c`). `k` is `MAGIC_CONTINUE`,
     which makes `file` report every match instead of only the strongest one, joining them with
-    `\\012- `. PolyFile always reports every match and never builds that join (issue #3491), so
-    the harness only reports the flags rather than emulating them.
+    `\\012- `. PolyFile always reports every match, so `check_corpus_test` renders that join with
+    `polyfile.magic.join_matches` for the tests whose flags ask for it.
 
     Args:
         test: The stem shared by the test's `.testfile`, `.result` and `.flags` files.
@@ -524,7 +517,10 @@ class MagicTest(TestCase):
         print(f"\tExpected: {expected!r}")
 
         with open(testfile, "rb") as f:
-            matches = {str(match) for match in matcher.match(f.read())}
+            reported = list(matcher.match(f.read()))
+        matches = {str(match) for match in reported}
+        if "k" in flags:
+            matches.add(polyfile.magic.join_matches(reported))
         for actual in sorted(matches):
             print(f"\tActual:   {actual!r}")
 
