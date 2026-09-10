@@ -540,3 +540,18 @@ class RegexSemanticsTest(TestCase):
         regex = RegexType.parse("regex")
         self.assertEqual(b"^[0-9]{1,50}", regex.parse_expected("=\\^[0-9]{1,50}").pattern)
         self.assertTrue(regex.match(self.DATA, regex.parse_expected("=[0-9]{1,3}")))
+
+    def test_regex_reports_only_the_matched_extent(self):
+        """`%s` used to report every byte from offset 0 through the end of the match.
+
+        libmagic reports only the bytes between `rm_so` and `rm_eo`
+        (`file/src/softmagic.c:2413-2416`), and positions the match at `rm_so` rather than at the
+        offset the test ran at.
+        """
+        regex = RegexType.parse("regex")
+        match = regex.match(self.DATA, regex.parse_expected("=[0-9]{1,3}"))
+        self.assertEqual(b"123", match.raw_match)
+        self.assertEqual("123", match.value)
+        self.assertEqual(2, match.initial_offset)
+        self.assertEqual({"digits 123"},
+                         self.messages("0\tregex\t=[0-9]{1,3}\tdigits %s\n", self.DATA))

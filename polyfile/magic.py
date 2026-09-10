@@ -1901,41 +1901,46 @@ class RegexType(DataType[Pattern[bytes]]):
         except re.error as e:
             raise ValueError(str(e))
 
+    def matched_extent(self, m: "re.Match[bytes]", subject_offset: int) -> DataTypeMatch:
+        """Builds the match that libmagic reports for a regular expression match.
+
+        libmagic reports only the bytes between `pmatch.rm_so` and `pmatch.rm_eo`, positioned at
+        `rm_so` (`file/src/softmagic.c:2413-2416`, printed at `file/src/softmagic.c:785-801`).
+
+        Args:
+            m: The regular expression match.
+            subject_offset: The offset of `m`'s subject within the data that was tested.
+
+        Returns:
+            A match covering only the matched bytes, positioned at the start of the match.
+        """
+        raw_match = m.group()
+        try:
+            value: Any = raw_match.decode("utf-8")
+        except UnicodeDecodeError:
+            value = raw_match
+        if self.trim:
+            value = value.strip()
+        return DataTypeMatch(raw_match, value, initial_offset=subject_offset + m.start())
+
     def match(self, data: bytes, expected: Pattern[bytes]) -> DataTypeMatch:
-        if self.limit_lines:
-            limit = self.length
-            offset = 0
-            byte_limit = 80 * self.length  # libmagic uses an implicit byte limit assuming 80 characters per line
-            while limit > 0:
-                limit -= 1
-                line_offset = data.find(b"\n", offset, byte_limit)
-                if line_offset < 0:
-                    return DataTypeMatch.INVALID
-                line = data[offset:line_offset]
-                m = expected.match(line)
-                if m:
-                    match = data[:offset + m.end()]
-                    try:
-                        value = match.decode("utf-8")
-                    except UnicodeDecodeError:
-                        value = match
-                    if self.trim:
-                        value = value.strip()
-                    return DataTypeMatch(match, value)
-                offset = line_offset + 1
-        else:
+        if not self.limit_lines:
             m = expected.search(data[:self.length])
-            if m:
-                match = data[:m.end()]
-                try:
-                    value = match.decode("utf-8")
-                except UnicodeDecodeError:
-                    value = match
-                if self.trim:
-                    value = value.strip()
-                return DataTypeMatch(match, value)
-            else:
+            if m is None:
                 return DataTypeMatch.INVALID
+            return self.matched_extent(m, 0)
+        offset = 0
+        # libmagic uses an implicit byte limit that assumes 80 characters per line
+        byte_limit = 80 * self.length
+        for _ in range(self.length):
+            line_offset = data.find(b"\n", offset, byte_limit)
+            if line_offset < 0:
+                return DataTypeMatch.INVALID
+            m = expected.match(data[offset:line_offset])
+            if m is not None:
+                return self.matched_extent(m, offset)
+            offset = line_offset + 1
+        return DataTypeMatch.INVALID
 
     REGEX_TYPE_FORMAT: Pattern[str] = re.compile(
         r"^regex(/(?P<length>\d+)?(?P<flags1>[cslTt]*)(/(?P<flags2>[cslTt]*))?(b\d*)?)?$"
