@@ -780,6 +780,61 @@ class MagicTest(TestCase):
         test = UnimplementedTest(offset=polyfile.magic.AbsoluteOffset(0), message="unimplemented")
         self.assertEqual([], list(test.match(b"any data at all")))
 
+    def test_an_empty_file_reports_empty(self):
+        """Tests that a zero-length buffer reports what `file` reports for one.
+
+        This is a regression test for trailofbits/polyfile#3566. Every level 0 test resolves an
+        absolute offset first, and offset 0 is out of bounds in a zero-length buffer, so the
+        `OctetStreamTest` fallback failed along with everything else and PolyFile printed nothing
+        at all. libmagic never reaches a test: `file_buffer` short-circuits `nb == 0` to the
+        description `empty` (`file/src/funcs.c:360-362`), and `file_fsmagic` reports
+        `inode/x-empty` off the size in `stat` (`file/src/fsmagic.c:406-411`).
+        """
+        matches = list(MagicMatcher.DEFAULT_INSTANCE.match(b""))
+        self.assertEqual(["empty"], [str(match) for match in matches])
+        self.assertEqual([{"inode/x-empty"}], [set(match.mimetypes) for match in matches])
+
+    def test_an_empty_file_runs_no_tests(self):
+        """Tests that the empty short-circuit sits above soft magic and the text classifier.
+
+        `file_buffer` jumps straight to its default description, past `file_encoding` and past
+        every builtin and soft magic test (`file/src/funcs.c:360-362`). Reporting `empty` from
+        the output layer instead would leave a hand-written negated test such as
+        `0 string !ABC found` matching a buffer libmagic never hands it.
+        """
+        with TemporaryDirectory() as tmp_dir:
+            definition = Path(tmp_dir) / "negated"
+            definition.write_text("0\tstring\t!ABC\tnegated matched\n")
+            matcher = MagicMatcher.parse(definition)
+        self.assertEqual({"negated matched"}, {str(match) for match in matcher.match(b"XYZ")})
+        self.assertEqual({"empty"}, {str(match) for match in matcher.match(b"")})
+
+    def test_an_empty_file_reports_empty_under_only_match_mime(self):
+        """Tests that `--format mime` reports the empty file's MIME type.
+
+        `MatchContext.only_match_mime` drops any test that cannot produce a MIME type, which is
+        the context `Analyzer.mime_types` and `Matcher.match` build, so the SBUD, JSON, HTML and
+        MIME outputs all read this path.
+        """
+        matches = list(MagicMatcher.DEFAULT_INSTANCE.match(MatchContext(b"", only_match_mime=True)))
+        self.assertEqual([{"inode/x-empty"}], [set(match.mimetypes) for match in matches])
+
+    def test_an_indirect_offset_at_the_end_of_the_file_reports_nothing(self):
+        """Tests that the empty short-circuit stays out of the indirect dispatch path.
+
+        An indirect test re-enters soft magic over the bytes after its offset
+        (`file/src/softmagic.c:1949-1977`) rather than classifying them, so an offset that lands
+        on the last byte plus one finds nothing. Reaching `MagicMatcher.match` there would append
+        the empty file's description to the parent match, and `file` reports `marker` for all
+        three buffers below.
+        """
+        with TemporaryDirectory() as tmp_dir:
+            definition = Path(tmp_dir) / "indirect_at_eof"
+            definition.write_text("2\tstring\tCD\tmarker\n>&0\tindirect\tx\n")
+            matcher = MagicMatcher.parse(definition)
+        self.assertEqual({"marker"}, {str(match) for match in matcher.match(b"ABCD")})
+        self.assertEqual({"marker"}, {str(match) for match in matcher.match(b"ABCDEF")})
+
     def test_corpus_comparison_is_exact_outside_two_allowances(self):
         """Tests that the corpus comparison is exact apart from its two documented allowances.
 

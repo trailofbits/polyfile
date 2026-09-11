@@ -104,6 +104,17 @@ class GeneratedHtmlTests(TestCase):
         self.assertIn('Every one of the 16 bytes is described by a match.', self.legend(html))
         self.assertNotIn('class="swatch undescribed"', html)
 
+    def test_an_empty_file_renders(self):
+        """The address gutter used to take the logarithm of the file's length.
+
+        This is a regression test for trailofbits/polyfile#3566. `math.log(0)` raises
+        `ValueError: expected a positive input`, so `--format html` aborted with a traceback on a
+        zero-length file rather than writing a viewer.
+        """
+        html = self.render(b'', [{**match(0, 0), 'type': 'inode/x-empty', 'name': 'inode/x-empty'}])
+        self.assertEqual([], self.emitted_regions(html))
+        self.assertIn('inode/x-empty', html)
+
     def test_the_style_the_viewer_applies_is_defined(self):
         html = self.render(bytes(16), [match(0, 16)])
         self.assertIn(".toggleClass('undescribed'", html)
