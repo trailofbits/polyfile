@@ -2426,6 +2426,23 @@ class SearchType(StringType):
             return 0
         return vallen * max(STRENGTH_MULT // vallen, 1)
 
+    def declared_length(self, expected: StringTest) -> int:
+        """Zero under the ``s`` flag, and the declared length of the value otherwise.
+
+        ``REGEX_OFFSET_START`` zeroes the length libmagic adds to where the search found its value,
+        so a following relative (`&`) offset resolves against the start of the match
+        (``file/src/softmagic.c:966-968``), the same rule `RegexType.matched_extent` applies.
+
+        Args:
+            expected: The parsed value this search looks for.
+
+        Returns:
+            The number of bytes to add to the offset the value was found at.
+        """
+        if self.match_to_start:
+            return 0
+        return super().declared_length(expected)
+
     def match(self, data: bytes, expected: StringTest) -> DataTypeMatch:
         return expected.search(data)
 
@@ -3388,8 +3405,9 @@ class ConstantMatchTest(MagicTest, Generic[T]):
         relation resolves against the declared length of the magic value rather than the number of
         bytes the match consumed (`file/src/softmagic.c:904-905` and `966-968`). The two differ
         when the `w` flag matches fewer blanks than the value declares. Both types measure that
-        length from where they found the value, which is where `MatchedTest.offset` already sits.
-        A `pstring` carries its own length prefix, so neither rule takes this path.
+        length from where they found the value, which is where `MatchedTest.offset` already sits,
+        and `SearchType.declared_length` zeroes it under the `s` flag. A `pstring` carries its own
+        length prefix, so neither rule takes this path.
 
         Args:
             match: The match that this test's data type produced.

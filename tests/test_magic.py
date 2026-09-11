@@ -1226,6 +1226,16 @@ class StringDataTypeTest(TestCase):
                 self.assertEqual({f"found {expected}, ASCII text, with no line terminators"},
                                  self.messages(definition, data))
 
+    def test_search_s_flag_resolves_from_the_start_of_the_match(self):
+        """`s` on a `search` was parsed but never applied, so `>&0` skipped the matched value.
+
+        `REGEX_OFFSET_START` zeroes the length libmagic adds to where the search found its value
+        (`file/src/softmagic.c:966-968`). Reading `xxABCD` reported `CD` instead of `ABCD`.
+        """
+        definition = "0\tsearch/16/ws\tA\\ B\tfound\n>&0\tstring\tx\t%s\n"
+        self.assertEqual({"found ABCD, ASCII text, with no line terminators"},
+                         self.messages(definition, b"xxABCD"))
+
     def test_wildcard_string_stops_at_a_line_break(self):
         """A wildcard value ran to the first null byte, so a `%s` leaked the rest of the file.
 
