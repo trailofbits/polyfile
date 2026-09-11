@@ -57,7 +57,7 @@ class KeyboardInterruptHandler:
 
 
 class FormatOutput:
-    valid_formats = ("mime", "html", "json", "sbud", "explain")
+    valid_formats = ("file", "mime", "html", "json", "sbud", "explain")
     default_format = "file"
 
     def __init__(self, output_format: Optional[str] = None, output_path: Optional[str] = None):
@@ -120,7 +120,7 @@ def main(argv=None):
                         help='the file to analyze; pass \'-\' or omit to read from STDIN')
 
     parser.add_argument('--format', '-r', type=FormatOutput, action="append", choices=[
-        FormatOutput(f) for f in FormatOutput.valid_formats + ("json",)
+        FormatOutput(f) for f in FormatOutput.valid_formats
     ], help=dedent("""PolyFile's output format
 
 Output formats are:
@@ -136,7 +136,7 @@ sbud ...... equivalent to 'json'
 
 Multiple formats can be output at once:
 
-    polyfile INPUT_FILE -f mime -f json
+    polyfile INPUT_FILE -r mime -r json
 
 Their output will be concatenated to STDOUT in the order that
 they occur in the arguments.
