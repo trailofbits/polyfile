@@ -98,8 +98,10 @@ def corpus_flags(test: str) -> str:
 def corpus_result_matches(expected: str, matches: Set[str]) -> bool:
     """Reports whether PolyFile's matches include libmagic's expected description.
 
-    The comparison ignores case and trailing whitespace, and it works around two known
-    formatting differences between PolyFile and libmagic.
+    Only trailing whitespace is ignored. Case is significant: libmagic's spelling of a
+    description is part of what the corpus pins, and every stem now reproduces it exactly. Two
+    stems need an allowance beyond an exact comparison, and each one is narrowed to the single
+    result it applies to.
 
     Args:
         expected: The contents of the test's `.result` file.
@@ -108,14 +110,22 @@ def corpus_result_matches(expected: str, matches: Set[str]) -> bool:
     Returns:
         True if one of `matches` corresponds to `expected`.
     """
-    expected = expected.rstrip().lower()
-    lowered = {match.rstrip().lower() for match in matches}
-    if "00000000" in expected and expected not in lowered:
+    expected = expected.rstrip()
+    reported = {match.rstrip() for match in matches}
+    if expected in reported:
+        return True
+    if "00000000" in expected:
         # Technically correct, but PolyFile formats a `%#8.8x` zero as "0x000000".
-        return expected.replace("00000000", "0x000000") in lowered
-    if expected.startswith("hancom hwp"):
-        return any(match.endswith(expected) for match in lowered)
-    return expected in lowered
+        return expected.replace("00000000", "0x000000") in reported
+    if expected == "Hancom HWP (Hangul Word Processor) file, version 5.0":
+        # libmagic prints this from its built-in compound-document reader, which runs ahead of
+        # soft magic and short-circuits it (`file/src/readcdf.c:633-646`). PolyFile has only the
+        # definitions' entry at `magic_defs/ole2compounddocs:269`, which nests the description
+        # under the OLE 2 header match, so the expected result is the tail of what PolyFile
+        # reports. Delete this once PolyFile can read compound documents: see
+        # https://github.com/trailofbits/polyfile/issues/3535.
+        return any(match.endswith(expected) for match in reported)
+    return False
 
 
 class MagicTest(TestCase):
@@ -487,6 +497,30 @@ class MagicTest(TestCase):
 
         test = UnimplementedTest(offset=polyfile.magic.AbsoluteOffset(0), message="unimplemented")
         self.assertEqual([], list(test.match(b"any data at all")))
+
+    def test_corpus_comparison_is_exact_outside_two_allowances(self):
+        """Tests that the corpus comparison is exact apart from its two documented allowances.
+
+        `corpus_result_matches` used to lower-case both sides and to accept a suffix match for
+        any result starting with `Hancom HWP`. The fold hid the class of divergence #3488 fixed,
+        where PolyFile reported `ascii text` for libmagic's `ASCII text`, and the broad suffix
+        rule weakened the two Hancom stems that do match exactly. Each allowance now applies to
+        one result, and only when the exact comparison has already failed.
+        """
+        hwp5 = "Hancom HWP (Hangul Word Processor) file, version 5.0"
+        ole2 = "OLE 2 Compound Document, v3.62, SecID 0x2, Mini FAT start sector 0x6"
+        uf2 = "UF2 firmware image, family ESP32-S2, base address 00000000, 4829 total blocks"
+        self.assertTrue(corpus_result_matches("ASCII text\n", {"data", "ASCII text"}))
+        self.assertFalse(corpus_result_matches("ASCII text", {"ascii text"}))
+        self.assertTrue(corpus_result_matches(hwp5, {f"{ole2} : {hwp5}"}))
+        self.assertFalse(corpus_result_matches(hwp5, {f"{ole2} : {hwp5.lower()}"}))
+        for hancom in ("Hancom HWP (Hangul Word Processor) file, version 3.0",
+                       "Hancom HWP (Hangul Word Processor) file, HWPX"):
+            with self.subTest(expected=hancom):
+                self.assertTrue(corpus_result_matches(hancom, {hancom}))
+                self.assertFalse(corpus_result_matches(hancom, {f"Zip archive : {hancom}"}))
+        self.assertTrue(corpus_result_matches(uf2, {uf2.replace("00000000", "0x000000")}))
+        self.assertFalse(corpus_result_matches(uf2, {"UF2 firmware image"}))
 
     def test_file_corpus(self):
         self.assertTrue(FILE_TEST_DIR.exists(), "Make sure to run `git submodule init && git submodule update` in the "
