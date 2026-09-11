@@ -4079,6 +4079,9 @@ _UCS_BYTE_ORDER_MARKS: Tuple[Tuple[bytes, str, int], ...] = (
     (b"\xfe\xff", "utf-16be", 2),
 )
 
+UTF8_BYTE_ORDER_MARK: bytes = b"\xef\xbb\xbf"
+"""The mark ``looks_utf8_with_BOM`` reads before it classifies what follows (``src/encoding.c``)."""
+
 
 def _only_contains(data: bytes, allowed: bytes) -> bool:
     return not data.translate(None, delete=allowed)
@@ -4092,6 +4095,26 @@ def _looks_like_utf8(data: bytes) -> bool:
     except UnicodeDecodeError:
         return False
     return True
+
+
+def _utf8_encoding(data: bytes) -> Optional[str]:
+    """Names the UTF-8 family `data` belongs to, as ``file_encoding``'s two UTF-8 tests do.
+
+    ``looks_utf8_with_BOM`` gives up unless more than the three bytes of the mark are present, so a
+    buffer holding nothing but the mark is plain UTF-8 whose one character is U+FEFF.
+
+    Args:
+        data: the bytes to classify.
+
+    Returns:
+        The name of the UTF-8 family, or None if `data` is not UTF-8.
+    """
+    body = data[len(UTF8_BYTE_ORDER_MARK):]
+    if data.startswith(UTF8_BYTE_ORDER_MARK) and body and _looks_like_utf8(body):
+        return "utf-8-sig"
+    elif _looks_like_utf8(data):
+        return "utf-8"
+    return None
 
 
 def _looks_like_ucs(data: bytes) -> Optional[str]:
@@ -4202,8 +4225,9 @@ def detect_text_encoding(data: bytes) -> Optional[str]:
         return None
     elif _only_contains(data, _ASCII_BYTES):
         return "ascii"
-    elif _looks_like_utf8(data):
-        return "utf-8"
+    utf8_encoding = _utf8_encoding(data)
+    if utf8_encoding is not None:
+        return utf8_encoding
     ucs_encoding = _looks_like_ucs(data)
     if ucs_encoding is not None:
         return ucs_encoding
@@ -4216,6 +4240,7 @@ def detect_text_encoding(data: bytes) -> Optional[str]:
 LIBMAGIC_ENCODING_NAMES: Dict[str, str] = {
     "ascii": "ASCII",
     "utf-8": "Unicode text, UTF-8",
+    "utf-8-sig": "Unicode text, UTF-8 (with BOM)",
     "utf-16le": "Unicode text, UTF-16, little-endian",
     "utf-16be": "Unicode text, UTF-16, big-endian",
     "utf-32le": "Unicode text, UTF-32, little-endian",
@@ -4252,7 +4277,9 @@ def _decode_text(data: bytes, encoding: str) -> str:
     count as a long line. Each eight bit encoding it names copies a byte's value straight into that
     buffer, which is what decoding as Latin-1 does. For an EBCDIC buffer it fills the buffer with
     the translation `EBCDIC_TO_ASCII` produces, the one whose character classes it counted, so the
-    line terminators and escape sequences it reports are the translated ones.
+    line terminators and escape sequences it reports are the translated ones. A byte order mark
+    never reaches that buffer: ``looks_utf8_with_BOM`` classifies the bytes after the mark, which is
+    what Python's ``utf-8-sig`` codec decodes, and the UCS tests start their loops past it.
 
     Args:
         data: the bytes to decode.
