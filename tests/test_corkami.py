@@ -17,10 +17,6 @@ FILE_PATH = FILE_DIR / "src" / "file"
 MAGIC_FILE_PATH = SCRIPT_DIR / "magic.mgc"
 
 KNOWN_BAD_FILES = {
-    "d1531b1622de54fe3a0187c3344600e9",  # elf.bin
-                                         # `file` reads this as International EBCDIC text and
-                                         # reports `text/plain`. PolyFile has no EBCDIC detection,
-                                         # so it reports `application/octet-stream`. See #3507
     "bdb7963176bdaa12a17d98db9cbf384b",  # make.py
                                          # `file` reports both `text/x-script.python` and
                                          # `text/plain`. PolyFile reports only
