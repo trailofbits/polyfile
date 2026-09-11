@@ -427,6 +427,77 @@ class MagicTest(TestCase):
         messages = self.messages(MagicMatcher.DEFAULT_INSTANCE, b"42")
         self.assertNotIn("JSON text data", messages)
 
+    def test_json_without_a_byte_order_mark_reports_only_json(self):
+        """Tests that plain UTF-8 JSON reports the single verdict libmagic reports.
+
+        ``file_is_json`` ends libmagic's run before soft magic, so ``file_ascmagic`` never
+        describes the encoding and `file` prints ``JSON text data`` alone. The text description
+        that `test_bom_prefixed_json_also_reports_unicode_text` expects must not leak into every
+        JSON file.
+        """
+        self.assertEqual({"JSON text data"}, self.messages(MagicMatcher.DEFAULT_INSTANCE, b'{"a": 1}'))
+
+    def test_bom_prefixed_json_also_reports_unicode_text(self):
+        """Tests that JSON in an encoding libmagic cannot read reports both verdicts.
+
+        This is a regression test for trailofbits/polyfile#3500. `parse_json` decodes with
+        `json.detect_encoding`, so PolyFile reads a byte order mark, UTF-16 and UTF-32 as JSON,
+        where ``file_is_json`` advances a byte pointer over the file's own bytes and rejects the
+        first byte outright (`file/src/is_json.c`). For the five buffers below, `file` reports only
+        the text encoding:
+
+        * ``Unicode text, UTF-8 (with BOM) text, with no line terminators``
+        * ``Unicode text, UTF-16, little-endian text, with no line terminators``
+        * ``Unicode text, UTF-16, big-endian text, with no line terminators``
+        * ``Unicode text, UTF-32, little-endian``
+        * ``Unicode text, UTF-32, big-endian``
+
+        PolyFile deliberately diverges and reports both, because a JSON document with a byte order
+        mark is JSON in practice and PolyFile reports every match rather than picking a winner.
+        RFC 8259 section 8.1 permits either reading. Before the fix the JSON match suppressed the
+        text description, so the answer `file` gives was lost.
+
+        PolyFile's UTF-8 description omits libmagic's ``(with BOM)`` clause, which is the separate
+        gap in `detect_text_encoding` tracked in trailofbits/polyfile#3537. The UTF-32 cases carry
+        no trailing clauses because their description comes from a soft magic definition in
+        `polyfile/magic_defs/` rather than from the text encoding machinery, which is also where
+        `file` gets it.
+        """
+        document = '{"a": 1}'
+        cases = (
+            ("utf-8-sig", b"\xef\xbb\xbf" + document.encode("utf-8"),
+             "Unicode text, UTF-8 text, with no line terminators"),
+            ("utf-16-le", f"\ufeff{document}".encode("utf-16-le"),
+             "Unicode text, UTF-16, little-endian text, with no line terminators"),
+            ("utf-16-be", f"\ufeff{document}".encode("utf-16-be"),
+             "Unicode text, UTF-16, big-endian text, with no line terminators"),
+            ("utf-32-le", f"\ufeff{document}".encode("utf-32-le"),
+             "Unicode text, UTF-32, little-endian"),
+            ("utf-32-be", f"\ufeff{document}".encode("utf-32-be"),
+             "Unicode text, UTF-32, big-endian"),
+        )
+        for encoding, data, description in cases:
+            with self.subTest(encoding=encoding):
+                messages = self.messages(MagicMatcher.DEFAULT_INSTANCE, data)
+                self.assertEqual({"JSON text data", description}, messages)
+
+    def test_bom_prefixed_newline_delimited_json_also_reports_unicode_text(self):
+        """Tests that newline-delimited JSON reports both verdicts under the same rule.
+
+        `NDJSONTest` inherits `JSONTest.diverges_from_libmagic`, so the two JSON test types stay
+        consistent: `file` reports ``Unicode text, UTF-8 (with BOM) text`` for the first buffer and
+        ``Unicode text, UTF-16, little-endian text`` for the second, and PolyFile reports its
+        NDJSON match alongside each description.
+        """
+        self.assertEqual(
+            {"New Line Delimited JSON text data", "Unicode text, UTF-8 text"},
+            self.messages(MagicMatcher.DEFAULT_INSTANCE, b"\xef\xbb\xbf{}\n{}\n")
+        )
+        self.assertEqual(
+            {"New Line Delimited JSON text data", "Unicode text, UTF-16, little-endian text"},
+            self.messages(MagicMatcher.DEFAULT_INSTANCE, "\ufeff{}\n{}\n".encode("utf-16-le"))
+        )
+
     def test_der_certificate(self):
         with gzip.open(DER_CERTIFICATE, "rb") as f:
             certificate = f.read()
