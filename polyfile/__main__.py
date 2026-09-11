@@ -176,9 +176,6 @@ then it will implicitly be printed to STDOUT.
                        help=dedent("""path to write an interactive HTML file for exploring the input;
 equivalent to `--format html --output HTML`"""))
     group.add_argument("--explain", action="store_true", help="equivalent to `--format explain")
-    # parser.add_argument('--try-all-offsets', '-a', action='store_true',
-    #                     help='Search for a file match at every possible offset; this can be very slow for larger '
-    #                     'files')
     group.add_argument('--only-match-mime', '-I', action='store_true',
                        help=dedent(""""just print out the matching MIME types for the file, one on each line;
 equivalent to `--format mime`"""))

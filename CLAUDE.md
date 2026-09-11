@@ -6,7 +6,10 @@ PolyFile is a file analysis utility that identifies and maps the semantic and sy
 
 **Key capabilities:**
 - Pure-Python libmagic implementation (896 MIME types, from libmagic 5.48)
-- Recursive embedded file detection (like binwalk)
+- Recursive embedded file detection: ZIP members, PDF streams, non-`Constant` `bytes` fields
+  re-matched by `structmatcher.py`, and matchers that `search` for their magic at any offset, such
+  as the relaxed ZIP matcher in `zipmatcher.py`. There is no binwalk-style scan of every offset;
+  #3532 tracks that.
 - Parsers for PDF, ZIP, JPEG, iNES, and 183 compiled Kaitai Struct formats (45 of the specifications
   are dispatched, covering 67 MIME types)
 - Interactive HTML hex viewer with structure mapping

@@ -209,12 +209,11 @@ def register_parser(*filetypes: str) -> Callable[[Union[Parser, ParserFunction]]
 
 
 class Matcher:
-    def __init__(self, try_all_offsets: bool = False, parse: bool = True, matcher: Optional[MagicMatcher] = None):
+    def __init__(self, parse: bool = True, matcher: Optional[MagicMatcher] = None):
         if matcher is None:
             self.magic_matcher: MagicMatcher = MagicMatcher.DEFAULT_INSTANCE
         else:
             self.magic_matcher = matcher
-        self.try_all_offsets: bool = try_all_offsets
         self.parse: bool = parse
 
     def handle_mimetype(
@@ -289,10 +288,9 @@ class Matcher:
 
 
 class Analyzer:
-    def __init__(self, path: Union[str, Path], try_all_offsets: bool = False, parse: bool = True,
+    def __init__(self, path: Union[str, Path], parse: bool = True,
                  magic_matcher: Optional[MagicMatcher] = None):
         self.path: Union[str, Path] = path
-        self.try_all_offsets: bool = try_all_offsets
         self.parse: bool = parse
         self._magic_matcher: Optional[MagicMatcher] = magic_matcher
         self._matcher: Optional[Matcher] = None
