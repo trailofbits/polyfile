@@ -1,6 +1,7 @@
 import base64
 import gzip
 import os
+import struct
 import subprocess
 import sys
 import time
@@ -188,6 +189,59 @@ class MagicTest(TestCase):
         for spec in ("(6.l+10)", "(6.L+10)", "(6+10)"):
             with self.subTest(offset=spec):
                 self.assertFalse(polyfile.magic.IndirectOffset.parse(spec).is_id3)
+
+    def test_untyped_indirect_offset_reads_in_host_byte_order(self):
+        """Tests that an indirect offset without a type character reads its field natively.
+
+        This is a regression test for trailofbits/polyfile#3499. libmagic leaves `in_type` at
+        `FILE_LONG` when a definition writes no type character (`file/src/apprentice.c:2154`),
+        and `FILE_LONG` is the four-byte integer in the host's byte order. PolyFile substituted
+        an explicit big-endian read, so every untyped offset parsed to `Endianness.BIG`.
+
+        The second half pins the resolution separately from the enum, because every host the
+        tests run on is little endian: an assertion on the resolved value alone would also hold
+        if the default were fixed to `Endianness.LITTLE` rather than to the host's order.
+        """
+        for spec in ("(6+10)", "(144)", "(0x38+0xcc)", "(&-4)"):
+            with self.subTest(offset=spec):
+                offset = polyfile.magic.IndirectOffset.parse(spec)
+                self.assertIs(polyfile.magic.Endianness.NATIVE, offset.endianness)
+                self.assertEqual("long", polyfile.magic.libmagic_indirect_type(offset))
+        field = b"\x00\x00\x01\x00"
+        offset = polyfile.magic.IndirectOffset.parse("(0)")
+        host_order = "<" if sys.byteorder == "little" else ">"
+        swapped_order = ">" if sys.byteorder == "little" else "<"
+        self.assertEqual(struct.unpack(f"{host_order}I", field)[0], offset.to_absolute(field, None))
+        self.assertNotEqual(struct.unpack(f"{swapped_order}I", field)[0],
+                            offset.to_absolute(field, None))
+
+    def test_untyped_indirect_offset_locates_pa_risc_dynamic_link_marker(self):
+        """Tests that `magic_defs/hp` resolves its untyped `>(144)` the way libmagic does.
+
+        This is a regression test for trailofbits/polyfile#3499. `hp` reaches a PA-RISC 1.1
+        executable's dynamic-link marker through `>(144) belong 0x054ef630`, an offset with no
+        type character. Reading the field big endian instead of natively inverts the verdict on
+        a little-endian host: PolyFile called the byte-swapped file dynamically linked and the
+        other one not, which is the opposite of what `file` reports for both.
+        """
+        def pa_risc_executable(offset_field: bytes) -> bytes:
+            data = bytearray(288)
+            data[0:4] = struct.pack(">I", 0x02100107)
+            data[96:100] = struct.pack(">I", 1)
+            data[144:148] = offset_field
+            data[256:260] = struct.pack(">I", 0x054EF630)
+            return bytes(data)
+
+        stored_little = pa_risc_executable(struct.pack("<I", 256))
+        stored_big = pa_risc_executable(struct.pack(">I", 256))
+        if sys.byteorder == "little":
+            resolves, misses = stored_little, stored_big
+        else:
+            resolves, misses = stored_big, stored_little
+        self.assertIn("PA-RISC1.1 executable dynamically linked - not stripped",
+                      {str(match) for match in MagicMatcher.DEFAULT_INSTANCE.match(resolves)})
+        self.assertIn("PA-RISC1.1 executable - not stripped",
+                      {str(match) for match in MagicMatcher.DEFAULT_INSTANCE.match(misses)})
 
     def test_id3v2_tag_locates_its_audio_frames(self):
         """Tests that an ID3v2 tag's indirect offset lands on the MPEG frame that follows it.
