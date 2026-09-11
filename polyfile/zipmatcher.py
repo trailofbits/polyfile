@@ -1,12 +1,12 @@
 from io import BytesIO
 from pathlib import Path
 from typing import Iterator, Optional
-from zipfile import ZipFile as PythonZip
+from zipfile import BadZipFile, ZipFile as PythonZip
 
 from .fileutils import ExactNamedTempfile, FileStream, Tempfile
 from .logger import StatusLogger
 from .magic import AbsoluteOffset, FailedTest, MagicMatcher, MagicTest, MatchedTest, TestResult, TestType
-from .polyfile import InvalidMatch, register_parser
+from .polyfile import InvalidMatch, Match, register_parser
 from .structmatcher import PolyFileStruct
 from .structs import ByteField, Constant, Endianness, StructError, UInt16, UInt32
 
@@ -191,6 +191,54 @@ class EndOfCentralDirectory(PolyFileStruct):
             return None
 
 
+def open_archive(
+        file_stream: FileStream, eocd: EndOfCentralDirectory, start: int
+) -> Optional[PythonZip]:
+    """Opens an archive with Python's zipfile module, so that its members can be decompressed.
+
+    Args:
+        file_stream: The stream containing the whole file, not only the archive.
+        eocd: The end of central directory record of the archive.
+        start: The byte offset of the first local file header of the archive.
+
+    Returns:
+        The open archive, or None if zipfile refuses to read it.
+    """
+    with file_stream.save_pos():
+        file_stream.seek(start)
+        zip_data = file_stream.read(eocd.start_offset + eocd.num_bytes - start)
+    with Tempfile(zip_data) as tmp:
+        try:
+            return PythonZip(tmp)
+        except BadZipFile as e:
+            log.warning(f"Could not read the members of the archive at byte offset {start}: {e!s}")
+            return None
+
+
+def member_data(
+        zf: Optional[PythonZip], fh: LocalFileHeader, match: Match, parent: Match
+) -> Optional[bytes]:
+    """Decompresses the member of an archive whose compressed data a match covers.
+
+    Args:
+        zf: The archive as zipfile reads it, or None if zipfile refused to read it.
+        fh: The local file header of the member.
+        match: A match for one of the fields of `fh`.
+        parent: The match that contains the archive.
+
+    Returns:
+        The decompressed contents of the member, or None if `match` covers another field or
+        the member cannot be decompressed.
+    """
+    if zf is None or match.name != "compressed_data" or match.parent.parent != parent:
+        return None
+    try:
+        return zf.read(fh.file_name.decode("utf-8"))
+    except Exception:
+        log.warning(f"Error decompressing file {fh.file_name!r} at byte offset {match.offset}")
+        return None
+
+
 @register_parser("application/zip")
 @register_parser("application/java-archive")
 def parse_zip(file_stream, parent):
@@ -199,26 +247,17 @@ def parse_zip(file_stream, parent):
         raise InvalidMatch()
     cds = list(eocd.central_directories(file_stream))
     fhs = list(cd.local_file_header(file_stream) for cd in cds)
-    zf: Optional[PythonZip] = None
+    zf = open_archive(file_stream, eocd, fhs[0].start_offset) if fhs else None
     for fh in fhs:
-        if zf is None:
-            with file_stream.save_pos():
-                file_stream.seek(fh.start_offset)
-                zip_data = file_stream.read(eocd.start_offset + eocd.num_bytes - fh.start_offset)
-                with Tempfile(zip_data) as tmp:
-                    zf = PythonZip(tmp)
         for match in fh.match(matcher=parent.matcher, parent=parent):
-            is_data = False
-            if match.name == "compressed_data" and match.parent.parent == parent:
-                try:
-                    match.decoded = zf.read(fh.file_name.decode("utf-8"))
-                    is_data = True
-                except Exception as e:
-                    log.warning(f"Error decompressing file {fh.file_name!r} at byte offset {match.offset}")
+            decoded = member_data(zf, fh, match, parent)
+            if decoded is None:
+                yield match
+                continue
+            match.decoded = decoded
             yield match
-            if is_data:
-                with Tempfile(match.decoded) as tmp:
-                    yield from parent.matcher.match(tmp, parent=match)
+            with Tempfile(decoded) as tmp:
+                yield from parent.matcher.match(tmp, parent=match)
     for cd in cds:
         yield from cd.match(matcher=parent.matcher, parent=parent)
     yield from eocd.match(matcher=parent.matcher, parent=parent)
