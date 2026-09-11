@@ -1336,6 +1336,49 @@ class StringDataTypeTest(TestCase):
                                  self.messages(definition, b"AB"))
                 self.assertEqual({"matched"}, self.messages(definition, b"A B"))
 
+    def test_a_search_value_longer_than_the_bytes_left_does_not_match(self):
+        """`search/4/w` reported `A\\ B` as found in `AB` and in `xAB`, which hold no room for it.
+
+        `SearchType.match` overrides `StringType.match`, so the guard
+        `test_a_value_longer_than_the_buffer_does_not_match` pins never reached a search. libmagic
+        bounds each candidate start offset of the search loop instead, breaking out of it as soon
+        as the value no longer fits: `if (slen + idx > ms->search.s_len)`
+        (`file/src/softmagic.c:2357-2361`).
+
+        The `s` flag does not enter the bound. It governs only where a following relative offset
+        resolves from (`file/src/softmagic.c:966-968`), which is why the check reads
+        `StringTest.value_length` rather than `SearchType.declared_length`, the one the flag zeroes.
+        As on the `string` side, `W` makes every declared blank consume at least one byte
+        (`file/src/softmagic.c:2102-2115`), so the `W` cases already passed and are kept to pin
+        that they stay that way. `file` 5.48 reports each of these four cases the same way under
+        every flag spelling below.
+        """
+        for flags in ("", "/w", "/ws", "/s", "/W", "/Ww"):
+            definition = f"0\tsearch/4{flags}\tA\\ B\tfound\n"
+            with self.subTest(flags=flags):
+                for data in (b"AB", b"xAB"):
+                    self.assertEqual({"ASCII text, with no line terminators"},
+                                     self.messages(definition, data), repr(data))
+                for data in (b"A B", b"xA B"):
+                    self.assertEqual({"found, ASCII text, with no line terminators"},
+                                     self.messages(definition, data), repr(data))
+
+    def test_a_search_bounds_each_start_offset_and_not_the_whole_test(self):
+        """A search still matches where its value fits, even when a later start offset would not.
+
+        libmagic rejects the candidate start offset rather than the test, so the offsets before the
+        one that overruns are still tried (`file/src/softmagic.c:2357-2361`). `A B` and `xAB` are
+        both three bytes long and both run against the same three-byte value, so any guard applied
+        once per test answers them identically: rejecting up front loses `A B`, and letting the
+        test through keeps the false positive on `xAB`. `file` 5.48 reports `found` for `A B` and
+        not for `xAB`.
+        """
+        definition = "0\tsearch/4/w\tA\\ B\tfound\n"
+        self.assertEqual({"found, ASCII text, with no line terminators"},
+                         self.messages(definition, b"A B"))
+        self.assertEqual({"ASCII text, with no line terminators"},
+                         self.messages(definition, b"xAB"))
+
     def test_a_two_byte_shebang_is_not_a_script(self):
         """`magic_defs/varied.script:8` declares the three bytes `#!\\ `, so `#!` alone is not it.
 
