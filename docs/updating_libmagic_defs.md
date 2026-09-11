@@ -4,8 +4,14 @@ PolyFile's libmagic matchers are generated from a copy of upstream's pattern lib
 [`polyfile/magic_defs`](../polyfile/magic_defs). That copy is kept in sync by hand with the
 [`file`](https://github.com/file/file) git submodule at `file/`. This page describes the procedure.
 
-Follow it whenever you bump the `file` submodule. Nothing automates the copy, and nothing in CI
-detects that the two have drifted.
+Follow it whenever you bump the `file` submodule. Nothing automates the copy, but
+[`tests/test_magic_defs_drift.py`](../tests/test_magic_defs_drift.py) checks the result. It fails
+when a definition goes missing, when one upstream has deleted stays behind, when a copy stops being
+byte-identical, and when a local patch gets reverted, so run it after each step below:
+
+```bash
+pytest tests/test_magic_defs_drift.py
+```
 
 ## What lives in `polyfile/magic_defs`
 
@@ -23,17 +29,23 @@ The directory holds a byte-for-byte copy of `file/magic/Magdir/`, plus five entr
 `COPYING`, `magic.mgc`, `__pycache__`, and dotfiles. Adding a file is enough to load it; there is no
 list of filenames to update.
 
+Those five entries are also the `POLYFILE_OWNED` set in the drift test, which rejects any other
+entry `Magdir` does not ship. If you add a sixth definition of PolyFile's own, add its name there
+too.
+
 `file/magic/Header`, `file/magic/Localstuff`, and `file/magic/Makefile.am` sit one level above
 `Magdir/`, so a `Magdir/` sync never sees them. PolyFile doesn't need any of them.
 
 ## Local patches
 
-A definition file copied from `Magdir` may still carry a PolyFile-specific patch. As of libmagic
-5.48 there is one: `c-lang` rewrites the C++ class regex to remove exponential backtracking, because
-libmagic matches with a POSIX engine and PolyFile matches with Python's `re`. See
-[#3411](https://github.com/trailofbits/polyfile/issues/3411).
+A definition file copied from `Magdir` may still carry a PolyFile-specific patch. `LOCAL_PATCHES` in
+[`tests/test_magic_defs_drift.py`](../tests/test_magic_defs_drift.py) is the list of them, and it is
+the one place that list lives. Each name maps to the issue that justifies the patch, and the test
+enforces the mapping in both directions: a definition that differs without an entry fails, and an
+entry whose file has gone back to matching upstream fails as a reverted patch.
 
-The sync overwrites these patches. Before you copy, list them:
+The sync overwrites these patches, so read the list before you copy. To confirm it is complete
+against the submodule commit you are moving away from:
 
 ```bash
 # Compare each definition against the Magdir of the *currently pinned* submodule commit.
@@ -45,7 +57,23 @@ for f in /tmp/old-magdir/*; do
 done
 ```
 
-Run this **before** moving the submodule, while `file` still points at the old commit.
+Run this **before** moving the submodule, while `file` still points at the old commit. It should
+print exactly the names in `LOCAL_PATCHES`.
+
+### Adding an allowlist entry
+
+Patch a definition only when PolyFile cannot match upstream's text as written, such as a regex that
+a POSIX engine runs in linear time and Python's `re` does not. Then:
+
+1. File an issue, or use the one that sent you here, explaining what the patch changes and why
+   upstream's text does not work. `c-lang` carries the rewrite from
+   [#3411](https://github.com/trailofbits/polyfile/issues/3411).
+2. Add one line to `LOCAL_PATCHES`, mapping the definition's file name to that issue's URL.
+3. Run `pytest tests/test_magic_defs_drift.py`. The entry fails until the patch is actually in the
+   file, which is the point: the allowlist records patches that exist, not intentions.
+
+Dropping a patch is the same in reverse. Restore the definition from `Magdir` and delete its line,
+in the same commit.
 
 ## Procedure
 
@@ -99,22 +127,12 @@ Run this **before** moving the submodule, while `file` still points at the old c
    Then verify the result:
 
    ```bash
-   # Prints only the locally patched files, and nothing else.
-   for f in file/magic/Magdir/*; do
-     cmp -s "$f" "polyfile/magic_defs/$(basename "$f")" \
-       || echo "DIFFERS: $(basename "$f")"
-   done
-
-   # The only extra entries are PolyFile's own. Prints nothing when the sync is correct.
-   diff <(ls file/magic/Magdir | sort) \
-        <(ls polyfile/magic_defs \
-            | grep -vx -e __init__.py -e __pycache__ -e COPYING \
-                       -e csv -e json -e polyfile_zip \
-            | sort)
+   pytest tests/test_magic_defs_drift.py
    ```
 
-   The first loop should print exactly the list step 2 produced. Anything else means the sync went
-   wrong, and a shorter list means a patch did not get re-applied.
+   This is the check to run after both step 4 and step 5. It reports a definition that the mirror
+   dropped, an entry upstream no longer ships, a copy that is not byte-identical, and a patch from
+   `LOCAL_PATCHES` that the mirror reverted. A failure names the file and what to do about it.
 
 6. Confirm your diff matches upstream's, which catches a botched exclude list:
 
@@ -131,6 +149,9 @@ Run this **before** moving the submodule, while `file` still points at the old c
 ## Testing the update
 
 ```bash
+# The copy itself: nothing missing, nothing stale, nothing silently modified
+pytest tests/test_magic_defs_drift.py
+
 # Definition parsing, the text test partition, and the upstream corpus
 pytest tests/test_magic.py
 
@@ -138,7 +159,8 @@ pytest tests/test_magic.py
 pytest tests
 ```
 
-Three tests do the work:
+`tests/test_magic_defs_drift.py` covers the copy, and three tests in `tests/test_magic.py` cover
+what the copy says:
 
 - `test_parsing` calls `MagicMatcher.parse(*MAGIC_DEFS)`. A DSL construct PolyFile doesn't implement
   raises `ValueError` or `NotImplementedError` here, prefixed with the definition file and line
@@ -196,8 +218,9 @@ for the second case across the tree with `grep -rn '^!:strength' polyfile/magic_
 `tests/test_corkami.py` then compares PolyFile against a `file` binary built from the submodule. It
 runs `autoreconf`, `./configure`, and `make`, so it needs a C toolchain and autotools. Note that it
 compiles its oracle from `file/magic/Magdir`, not from `polyfile/magic_defs`: if the two have
-drifted, the differential silently compares PolyFile against a different rule set than the one it is
-running.
+drifted, the differential compares PolyFile against a different rule set than the one it is running,
+and says nothing about it. `tests/test_magic_defs_drift.py` is what tells you, so read its result
+before you trust a corkami run.
 
 The build tree it leaves behind in `file/` is ignored by git, so `git status` reports the submodule
 clean even when `configure` and the binary predate the release you just checked out. `make` normally
