@@ -594,7 +594,7 @@ class IndirectOffset(Offset):
         self.signed: bool = signed
         self.post_process: Callable[[int], int] = post_process
         self.is_id3: bool = is_id3
-        if self.endianness != Endianness.LITTLE and self.endianness != endianness.BIG:
+        if self.endianness not in (Endianness.NATIVE, Endianness.LITTLE, Endianness.BIG):
             raise ValueError(f"Invalid endianness: {endianness!r}")
         elif num_bytes not in (1, 2, 4, 8, IndirectOffset.OctalIndirectOffset):
             raise ValueError(f"Invalid number of bytes: {num_bytes}")
@@ -625,9 +625,7 @@ class IndirectOffset(Offset):
         fmt = IndirectOffset.STRUCT_FORMATS[self.num_bytes]
         if self.signed:
             fmt = fmt.lower()
-        if self.endianness == Endianness.LITTLE:
-            return f"<{fmt}"
-        return f">{fmt}"
+        return f"{self.endianness.value}{fmt}"
 
     def to_absolute(self, data: bytes, last_match: Optional[TestResult], allow_invalid: bool = False) -> int:
         if self.num_bytes == IndirectOffset.OctalIndirectOffset:
@@ -685,8 +683,9 @@ class IndirectOffset(Offset):
 
         The type character selects the width and byte order of the field to read, following
         libmagic's `parse_type` in `src/apprentice.c`: `l`/`L` are four-byte integers, `i`/`I`
-        are four-byte ID3v2 synchsafe integers, and an absent type defaults to a four-byte
-        integer. A lowercase character means little endian and an uppercase one big endian.
+        are four-byte ID3v2 synchsafe integers, and an absent type defaults to `FILE_LONG`, the
+        four-byte integer in the host's byte order (`src/apprentice.c:2154`). A lowercase
+        character means little endian and an uppercase one big endian.
 
         Args:
             offset: The parenthesized text of the offset, including its surrounding parentheses.
@@ -703,8 +702,9 @@ class IndirectOffset(Offset):
             raise ValueError(f"Invalid indirect offset: {offset!r}")
         t = m.group("type")
         if t is None:
-            t = "L"
-        if t == "m":
+            endianness = Endianness.NATIVE
+            t = "l"
+        elif t == "m":
             raise NotImplementedError("TODO: Add support for middle endianness")
         elif t.islower():
             endianness = Endianness.LITTLE
@@ -738,12 +738,15 @@ class IndirectOffset(Offset):
 INDIRECT_OFFSET_TYPES: Dict[Tuple[int, Endianness], str] = {
     (1, Endianness.LITTLE): "byte", (1, Endianness.BIG): "byte",
     (2, Endianness.LITTLE): "leshort", (2, Endianness.BIG): "beshort",
+    (4, Endianness.NATIVE): "long",
     (4, Endianness.LITTLE): "lelong", (4, Endianness.BIG): "belong",
     (8, Endianness.LITTLE): "lequad", (8, Endianness.BIG): "bequad",
 }
 """The type libmagic reads an indirect offset through, by width and byte order.
 
-See the character it comes from in ``file/src/apprentice.c:2158-2215``.
+See the character it comes from in ``file/src/apprentice.c:2158-2215``. An offset written
+without a type character keeps the ``FILE_LONG`` default from ``file/src/apprentice.c:2154``,
+which reads four bytes in the host's byte order.
 """
 
 
