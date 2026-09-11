@@ -14,6 +14,7 @@ from uuid import UUID
 # from polyfile import logger
 import polyfile.der
 import polyfile.magic
+from polyfile.http.matcher import HTTP_11_MIME_TYPE
 from polyfile.magic import (
     DataType, MagicMatcher, MAGIC_DEFS, Match, MatchContext, RegexType, SearchType, StringType,
     TestResult
@@ -728,6 +729,21 @@ class MagicMatchingRegressionTest(TestCase):
         source = b"class Foo {\n\tint x;\n};\n"
         self.assertIn("text/x-c++", self.mimetypes(matcher, source))
         self.assertNotIn("text/x-c++", self.mimetypes(matcher, source.replace(b"\n", b"\r\n")))
+
+    def test_http_11_test_terminates(self):
+        """A run of carriage returns used to backtrack cubically in PolyFile's HTTP 1.1 test."""
+        self.match_in_subprocess(b"\r" * 8192)
+
+    def test_http_11_test_semantics(self):
+        """The rewritten HTTP 1.1 test accepts and rejects the same requests as before."""
+        matcher = MagicMatcher.DEFAULT_INSTANCE
+        self.assertIn(HTTP_11_MIME_TYPE, self.mimetypes(matcher, b"GET /x HTTP/1.1\r\nHost: h\r\n"))
+        self.assertIn(HTTP_11_MIME_TYPE, self.mimetypes(matcher, b"junk\nPOST / \t HTTP/1.1 \n"))
+        # the pattern anchors on the end of a line, not on the end of the data
+        self.assertIn(HTTP_11_MIME_TYPE, self.mimetypes(matcher, b"PUT / HTTP/1.1\nbody\n"))
+        self.assertNotIn(HTTP_11_MIME_TYPE, self.mimetypes(matcher, b"GET /x HTTP/1.1 y\r\n"))
+        self.assertNotIn(HTTP_11_MIME_TYPE, self.mimetypes(matcher, b"GET /xHTTP/1.1\r\n"))
+        self.assertNotIn(HTTP_11_MIME_TYPE, self.mimetypes(matcher, b"\r" * 32))
 
     def test_match_results_are_lazy(self):
         """Reading one result used to drain the whole result iterator."""
