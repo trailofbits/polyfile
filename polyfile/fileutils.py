@@ -151,6 +151,9 @@ class FileStream(IO):
         self.close_on_exit = close_on_exit
         self._entries = 0
         self._root = None
+        # a stream that is handed in keeps whatever position it was left at, and every caller
+        # that passes `start` means to read the region beginning there
+        self.seek(0)
 
     def __len__(self):
         return self._length
