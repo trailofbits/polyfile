@@ -4073,6 +4073,43 @@ def _eight_bit_encoding(data: bytes) -> Optional[str]:
         return "unknown-8bit"
 
 
+EBCDIC_TO_ASCII: bytes = bytes.fromhex(
+    "000102039c09867f978d8e0b0c0d0e0f"
+    "101112139d8508871819928f1c1d1e1f"
+    "80818283840a171b88898a8b8c050607"
+    "909116939495960498999a9b14159e1a"
+    "20a0a1a2a3a4a5a6a7a8d52e3c282b7c"
+    "26a9aaabacadaeafb0b121242a293b7e"
+    "2d2fb2b3b4b5b6b7b8b9cb2c255f3e3f"
+    "babbbcbdbebfc0c1c2603a2340273d22"
+    "c3616263646566676869c4c5c6c7c8c9"
+    "ca6a6b6c6d6e6f7071725ecccdcecfd0"
+    "d1e5737475767778797ad2d3d45bd6d7"
+    "d8d9dadbdcdddedfe0e1e2e3e45de6e7"
+    "7b414243444546474849e8e9eaebeced"
+    "7d4a4b4c4d4e4f505152eeeff0f1f2f3"
+    "5c9f535455565758595af4f5f6f7f8f9"
+    "30313233343536373839fafbfcfdfeff"
+)
+"""libmagic's ``ebcdic_to_ascii`` table, one row of the C literal per line (``src/encoding.c``).
+
+The table comes from the rationale for ``dd(1)`` in draft 11.2 of POSIX P1003.2 and matches no one
+EBCDIC variant exactly. libmagic explains why a single table still identifies EBCDIC text: the five
+documented variants disagree only over ``|``, ``!``, ``~``, ``^``, ``[`` and ``]``, and all of them
+treat ``0x00``-``0x3F`` as control characters, ``0x41`` as a nonbreaking space, and the rest as
+printing characters. Its code page 1047 table sits behind ``#ifdef notdef`` and never runs.
+"""
+
+
+def _ebcdic_encoding(data: bytes) -> Optional[str]:
+    translated = data.translate(EBCDIC_TO_ASCII)
+    if _only_contains(translated, _ASCII_BYTES):
+        return "ebcdic"
+    elif _only_contains(translated, _ISO_8859_BYTES):
+        return "ebcdic-international"
+    return None
+
+
 def _trim_trailing_nuls(data: bytes) -> bytes:
     """The prefix of `data` that libmagic classifies, with its trailing NUL padding removed.
 
@@ -4105,6 +4142,9 @@ def detect_text_encoding(data: bytes) -> Optional[str]:
     rather than the file's own bytes, so text that a fixed record size or a block boundary padded
     out with NULs still counts as text.
 
+    EBCDIC comes last because most EBCDIC buffers are also valid eight bit buffers, so testing for
+    it any earlier would report ordinary ISO-8859 text as EBCDIC.
+
     Args:
         data: the bytes to classify.
 
@@ -4121,7 +4161,10 @@ def detect_text_encoding(data: bytes) -> Optional[str]:
     ucs_encoding = _looks_like_ucs(data)
     if ucs_encoding is not None:
         return ucs_encoding
-    return _eight_bit_encoding(data)
+    eight_bit_encoding = _eight_bit_encoding(data)
+    if eight_bit_encoding is not None:
+        return eight_bit_encoding
+    return _ebcdic_encoding(data)
 
 
 LIBMAGIC_ENCODING_NAMES: Dict[str, str] = {
@@ -4133,6 +4176,8 @@ LIBMAGIC_ENCODING_NAMES: Dict[str, str] = {
     "utf-32be": "Unicode text, UTF-32, big-endian",
     "iso-8859-1": "ISO-8859",
     "unknown-8bit": "Non-ISO extended-ASCII",
+    "ebcdic": "EBCDIC",
+    "ebcdic-international": "International EBCDIC",
 }
 """libmagic's name for each encoding `detect_text_encoding` reports, from ``src/encoding.c``."""
 
@@ -4143,6 +4188,8 @@ TEXT_ENCODING_MAX_BYTES: int = 64 * 1024
 """libmagic's ``FILE_ENCODING_MAX``: how many bytes it decodes to describe text (``src/file.h``)."""
 
 _EIGHT_BIT_ENCODINGS: FrozenSet[str] = frozenset({"ascii", "iso-8859-1", "unknown-8bit"})
+
+_EBCDIC_ENCODINGS: FrozenSet[str] = frozenset({"ebcdic", "ebcdic-international"})
 
 _UCS_BOM_LENGTHS: Dict[str, int] = {
     encoding: len(bom) for bom, encoding, _ in _UCS_BYTE_ORDER_MARKS
@@ -4157,7 +4204,9 @@ def _decode_text(data: bytes, encoding: str) -> str:
     libmagic decodes at most ``FILE_ENCODING_MAX`` bytes into the buffer that
     ``file_ascmagic_with_encoding`` scans, so a line that only grows long past that point does not
     count as a long line. Each eight bit encoding it names copies a byte's value straight into that
-    buffer, which is what decoding as Latin-1 does.
+    buffer, which is what decoding as Latin-1 does. For an EBCDIC buffer it fills the buffer with
+    the translation `EBCDIC_TO_ASCII` produces, the one whose character classes it counted, so the
+    line terminators and escape sequences it reports are the translated ones.
 
     Args:
         data: the bytes to decode.
@@ -4167,7 +4216,9 @@ def _decode_text(data: bytes, encoding: str) -> str:
         The decoded characters, dropping any character the byte limit cut in half.
     """
     prefix = data[:TEXT_ENCODING_MAX_BYTES]
-    if encoding in _EIGHT_BIT_ENCODINGS:
+    if encoding in _EBCDIC_ENCODINGS:
+        return prefix.translate(EBCDIC_TO_ASCII).decode("latin-1")
+    elif encoding in _EIGHT_BIT_ENCODINGS:
         return prefix.decode("latin-1")
     prefix = prefix[_UCS_BOM_LENGTHS.get(encoding, 0):]
     return codecs.getincrementaldecoder(encoding)().decode(prefix, final=False)
