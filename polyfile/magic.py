@@ -2777,10 +2777,11 @@ class RegexType(DataType[MagicRegex]):
     def parse_expected(self, specification: str) -> MagicRegex:
         negated = specification.startswith("!")
         if negated:
-            # libmagic consumes a leading `!` as the relation operator rather than compiling it
-            # as part of the regular expression (`file/src/apprentice.c:2389-2391`).
+            # libmagic reads exactly one relational operator off the front of the value and
+            # compiles everything after it, so the `=` of a `!=` belongs to the pattern rather
+            # than being a second operator to strip (`file/src/apprentice.c:2383-2393`)
             specification = specification[1:]
-        if specification.startswith("="):
+        elif specification.startswith("="):
             # libmagic parses a leading `=` as the equality operator, not as part of the pattern
             # (`file/src/apprentice.c:2383-2384`)
             specification = specification[1:]

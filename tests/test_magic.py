@@ -751,12 +751,34 @@ class RegexSemanticsTest(TestCase):
 
         self.assertEqual(b"^[^Cc \t].*$", expected.pattern)
         self.assertEqual("!", regex.relation(expected))
-        self.assertEqual(expected.pattern, regex.parse_expected(r"!=\^[^Cc\ \t].*$").pattern)
         self.assertFalse(regex.match(b"program\n", expected))
         self.assertTrue(regex.match(b"C comment\n", expected))
         self.assertEqual({"FORTRAN program, ASCII text"},
                          self.messages("0\tregex/100l\t!\\^[^Cc\\ \\t].*$\tFORTRAN program\n",
                                        b"C comment\n"))
+
+    def test_regex_reads_only_one_relational_operator(self):
+        """`!=foo` is the `!` relation over the pattern `=foo`, not a negated `foo`.
+
+        libmagic reads one operator off the front of the value and compiles the rest
+        (`file/src/apprentice.c:2383-2393`), so the `=` of a `!=` is a literal character of the
+        pattern. Stripping both made `!=abc` reject an input that libmagic accepts. The expected
+        column below is what `file -b` reports for each definition and input.
+        """
+        for specification, expected_pattern, accepted, rejected in (
+                ("abc", b"abc", (b"abc\n", b"=abc\n"), (b"zzz\n",)),
+                ("=abc", b"abc", (b"abc\n", b"=abc\n"), (b"zzz\n",)),
+                ("!abc", b"abc", (b"zzz\n",), (b"abc\n", b"=abc\n")),
+                ("!=abc", b"=abc", (b"abc\n", b"zzz\n"), (b"=abc\n",)),
+        ):
+            with self.subTest(specification=specification):
+                regex = RegexType.parse("regex")
+                self.assertEqual(expected_pattern, regex.parse_expected(specification).pattern)
+                definition = f"0\tregex\t{specification}\tHIT\n"
+                for data in accepted:
+                    self.assertIn("HIT", " ".join(self.messages(definition, data)), repr(data))
+                for data in rejected:
+                    self.assertNotIn("HIT", " ".join(self.messages(definition, data)), repr(data))
 
     def test_regex_reports_only_the_matched_extent(self):
         """`%s` used to report every byte from offset 0 through the end of the match.
