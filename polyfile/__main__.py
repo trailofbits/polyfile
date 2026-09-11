@@ -173,7 +173,7 @@ then it will implicitly be printed to STDOUT.
     group.add_argument('--list', '-l', action='store_true',
                        help='list the supported filetypes for the `--filetype` argument and exit')
     group.add_argument('--html', '-t', action="append",
-                       help=dedent("""path to write an interactive HTML file for exploring the PDF;
+                       help=dedent("""path to write an interactive HTML file for exploring the input;
 equivalent to `--format html --output HTML`"""))
     group.add_argument("--explain", action="store_true", help="equivalent to `--format explain")
     # parser.add_argument('--try-all-offsets', '-a', action='store_true',

@@ -85,7 +85,7 @@ You can run PolyFile with the debugger enabled using the `-db` option.
 PolyFile has a cleanroom, [pure Python implementation of the libmagic file classifier](#libmagic-implementation), and supports all 896 MIME types that it can identify.
 
 It currently has support for parsing and semantically mapping the following formats:
-* PDF, using an instrumented version of [Didier Stevens' public domain, permissive, forensic parser](https://blog.didierstevens.com/programs/pdf-tools/)
+* PDF, using [pdfminer.six](https://github.com/pdfminer/pdfminer.six) to decode objects and streams
 * ZIP, including recursive identification of all ZIP contents
 * JPEG/JFIF, using its [Kaitai Struct grammar](https://formats.kaitai.io/jpeg/index.html)
 * [iNES](https://wiki.nesdev.com/w/index.php/INES)

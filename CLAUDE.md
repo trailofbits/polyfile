@@ -7,7 +7,8 @@ PolyFile is a file analysis utility that identifies and maps the semantic and sy
 **Key capabilities:**
 - Pure-Python libmagic implementation (896 MIME types, from libmagic 5.48)
 - Recursive embedded file detection (like binwalk)
-- Parsers for PDF, ZIP, JPEG, iNES, and 183 compiled Kaitai Struct formats (44 mapped to MIME types)
+- Parsers for PDF, ZIP, JPEG, iNES, and 183 compiled Kaitai Struct formats (45 of the specifications
+  are dispatched, covering 67 MIME types)
 - Interactive HTML hex viewer with structure mapping
 - Drop-in replacement for Unix `file` command
 
@@ -19,16 +20,23 @@ Part of the [ALAN Parsers Project](https://github.com/trailofbits/polyfile#the-a
 
 **Matchers** classify file types. Two types:
 - libmagic DSL matchers (defined in `polyfile/magic_defs/`)
-- Python matchers (classes extending `Matcher`)
+- Python matchers (classes extending `MagicTest`, such as `zipmatcher.RelaxedJarMatcher`)
 
-**Parsers** create AST representations of file structure. Registered via decorator:
+**Parsers** create AST representations of file structure. A parser written as a function is
+registered with the `register_parser` decorator:
 ```python
 from polyfile import register_parser
 
-@register_parser("application/pdf")
-def parse_pdf(file_stream, match):
-    # Return parsed structure
+@register_parser("application/zip")
+def parse_zip(file_stream, parent):
     ...
+```
+
+`register_parser` wraps whatever it receives in a function wrapper, so it takes a function, not a
+class. Register a `Parser` subclass by adding an instance to `PARSERS`, which is what
+`polyfile/__init__.py` does for PDF, through `_LazyPDFParser`, to defer the `pdfminer` import:
+```python
+PARSERS["application/pdf"].add(_LazyPDFParser())
 ```
 
 ### Key Modules
@@ -183,34 +191,46 @@ tests/
 
 ### Adding a Custom Matcher (Python)
 ```python
-from polyfile import Matcher, Match
+from typing import Optional
 
-class MyMatcher(Matcher):
-    def match(self, data: bytes) -> Match | None:
-        if data.startswith(b'MAGIC'):
-            return Match(
-                mime_type="application/x-myformat",
-                name="My Format",
-                offset=0,
-                length=len(data)
-            )
-        return None
+from polyfile.magic import AbsoluteOffset, FailedTest, MagicMatcher, MagicTest, MatchedTest, TestResult, TestType
+
+
+class MyMatcher(MagicTest):
+    def __init__(self):
+        super().__init__(
+            offset=AbsoluteOffset(0),
+            mime="application/x-myformat",
+            extensions=("myformat",),
+            message="My Format"
+        )
+
+    def subtest_type(self) -> TestType:
+        return TestType.BINARY
+
+    def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
+        if data.startswith(b"MAGIC"):
+            return MatchedTest(self, value=data, offset=0, length=len(data))
+        return FailedTest(self, offset=0, message="the file does not start with MAGIC")
+
+
+MagicMatcher.DEFAULT_INSTANCE.add(MyMatcher())
 ```
 
 ### Adding a Custom Parser
 ```python
-from polyfile import register_parser, Parser, Submatch
+from polyfile import register_parser, Submatch
+
 
 @register_parser("application/x-myformat")
-class MyParser(Parser):
-    def parse(self, file_stream, match) -> Iterator[Submatch]:
-        # Yield Submatch objects representing structure
-        yield Submatch(
-            name="header",
-            start=0,
-            length=8,
-            value=file_stream.read(8)
-        )
+def parse_myformat(file_stream, parent):
+    yield Submatch(
+        name="header",
+        match_obj=file_stream.read(8),
+        relative_offset=0,
+        length=8,
+        parent=parent
+    )
 ```
 
 ### Updating the libmagic Definitions
