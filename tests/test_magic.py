@@ -2070,17 +2070,16 @@ class UCSTextBufferTest(TestCase):
         CSV match libmagic does not report.
 
         The `JSON text data` this expects for the UTF-16 document is a separate divergence that
-        predates the decoding: `JSONTest` reads the bytes through `json.loads`, which sniffs a
-        UTF-16 byte order mark, and `file_is_json` does not. It stands in for the encoding
-        description because `MagicMatcher.match` reports the plain text match only when no other
-        test matched.
+        predates the decoding: `parse_json` reads the bytes through `json.detect_encoding`, which
+        sniffs a UTF-16 byte order mark, and `file_is_json` does not. PolyFile reports the encoding
+        description alongside it, which is the decision recorded in trailofbits/polyfile#3500.
         """
         document = '{"a": 1, "b": 2}\n'
         self.assertIn("CSV text (excel dialect)", {
             str(match) for match in MagicMatcher.DEFAULT_INSTANCE.match(document.encode("utf-8"))
         })
         self.assertEqual(
-            {"JSON text data"},
+            {"JSON text data", "Unicode text, UTF-16, little-endian text"},
             {str(match) for match in
              MagicMatcher.DEFAULT_INSTANCE.match(self.encode(document, "utf-16le"))}
         )
