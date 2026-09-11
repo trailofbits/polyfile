@@ -152,32 +152,38 @@ def unescape(to_unescape: Union[str, bytes]) -> bytes:
 
 
 class TestResult(ABC):
+    """The result of running one test, and the chain of tests that led to it.
+
+    `child_matched` is libmagic's ``ms->c.li[cont_level].got_match``: whether a continuation of
+    this test has already matched. A ``default`` fires only when it is unset, and a ``clear``
+    unsets it (``file/src/softmagic.c:418-428``). libmagic holds one flag per continuation level
+    and zeroes it on every descent into a level (``file/src/softmagic.c:346`` and ``:487``, through
+    ``file_check_mem`` at ``file/src/funcs.c:640-660``); the entries of a level are exactly the
+    continuations of one parent entry, so PolyFile holds the flag on the parent's result.
+
+    Any match raises its parent's flag, whatever its description says: libmagic gates only printing
+    and ``found_match`` on a non-empty description (``file/src/softmagic.c:432-440``), never
+    ``got_match``. Two kinds of result are excluded. A ``use`` raises the flag only when the named
+    list it ran printed something, which is what its ``magiccheck`` reports
+    (``file/src/softmagic.c:2429-2430``), so `UseTest._match` raises it itself. A ``name`` raises
+    nothing, because libmagic saves and restores the whole level array around a named list's run
+    (``file/src/softmagic.c:2013`` and ``:2033``), so what that list matches cannot reach the level
+    the ``use`` sits on.
+    """
+
     def __init__(self, test: "MagicTest", offset: int, parent: Optional["TestResult"] = None):
         self.test: MagicTest = test
         self.offset: int = offset
         self.parent: Optional["TestResult"] = parent
+        self.child_matched: bool = False
         if parent is not None and bool(self):
             assert self.test.named_test is self.test or parent.test.level == self.test.level - 1
-            if not isinstance(self.test, UseTest):
+            if not isinstance(self.test, (NamedTest, UseTest)):
                 parent.child_matched = True
-        self._child_matched: bool = False
 
     @abstractmethod
     def explain(self, writer: ANSIWriter, file: Streamable):
         raise NotImplementedError()
-
-    @property
-    def child_matched(self) -> bool:
-        return self._child_matched
-
-    @child_matched.setter
-    def child_matched(self, did_match: bool):
-        if did_match and isinstance(self.test, NamedTest):
-            assert isinstance(self.parent.test, UseTest)
-            self.parent.child_matched = True
-            if self.parent.parent is not None:
-                self.parent.parent.child_matched = True
-        self._child_matched = did_match
 
     def __hash__(self):
         return hash((self.test, self.offset))
@@ -2760,9 +2766,26 @@ class RegexType(DataType[MagicRegex]):
             return DataTypeMatch(raw_match, value, initial_offset=start, relative_base=start)
         return DataTypeMatch(raw_match, value, initial_offset=start)
 
+    def subject(self, data: bytes) -> bytes:
+        """The bytes libmagic hands to ``regexec``, given the file's bytes from this test's offset.
+
+        libmagic copies at most `length` bytes of the region and then terminates the copy by
+        overwriting its last byte with a NUL (``file/src/softmagic.c:2393-2405``). It passes the
+        result as a C string, so the pattern never sees the final byte of the region, and never
+        sees anything past a NUL that was already in it.
+
+        Args:
+            data: The file's bytes from the offset this test runs at.
+
+        Returns:
+            The bytes to match the pattern against.
+        """
+        region = data[:self.length]
+        return region[:-1].partition(b"\0")[0]
+
     def match(self, data: bytes, expected: MagicRegex) -> DataTypeMatch:
         if not self.limit_lines:
-            m = expected.search(data[:self.length])
+            m = expected.search(self.subject(data))
             if m is None:
                 return DataTypeMatch.INVALID
             return self.matched_extent(m, 0)
@@ -3542,6 +3565,10 @@ class UseTest(MagicTest):
         )
         if not matched:
             return
+        if parent_match is not None:
+            # a `use` that succeeded counts as a match at its level, so a later `default` there
+            # does not fire (`file/src/softmagic.c:424-428`)
+            parent_match.child_matched = True
         yield use_match
         for named_result in named_results:
             if not context.only_match_mime or named_result.test.mime is not None:
@@ -3789,11 +3816,17 @@ class ClearTest(MagicTest):
         return "x"
 
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> MatchedTest:
-        if parent_match is None:
-            return MatchedTest(self, offset=absolute_offset, length=0, value=None)
-        else:
+        """Matches unconditionally, having unset the parent's `TestResult.child_matched`.
+
+        The flag is unset after building the result, because building it raises the flag the way
+        any other match would. libmagic reaches the same place from the other direction: the
+        ``FILE_CLEAR`` arm of ``file/src/softmagic.c:422-428`` zeroes ``got_match`` instead of
+        taking the arm that would raise it.
+        """
+        result = MatchedTest(self, offset=absolute_offset, length=0, parent=parent_match, value=None)
+        if parent_match is not None:
             parent_match.child_matched = False
-            return MatchedTest(self, offset=absolute_offset, length=0, parent=parent_match, value=None)
+        return result
 
     def test_flip_endianness(
             self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]
