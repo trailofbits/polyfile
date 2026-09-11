@@ -960,9 +960,39 @@ class Comment:
 
 
 class TestType(IntFlag):
+    """The soft magic passes a level 0 test runs in.
+
+    libmagic runs soft magic twice, once over the file's bytes in ``BINTEST`` mode
+    (``file/src/funcs.c:482``) and once over the decoded text buffer in ``TEXTTEST`` mode
+    (``file/src/ascmagic.c:161-162``), and an entry can belong to either pass or to both.
+    """
+
     UNKNOWN = 0
     BINARY = 1
     TEXT = 2
+    BOTH = BINARY | TEXT
+
+
+def declared_passes(force_text: bool, force_binary: bool) -> TestType:
+    """The passes a definition's ``b`` and ``t`` flags name.
+
+    ``set_test_type`` sets ``BINTEST`` for ``b`` and ``TEXTTEST`` for ``t`` and then stops, so a
+    declaration that carries both belongs to both passes and one that carries neither leaves the
+    choice to its type (``file/src/apprentice.c:1258-1266``).
+
+    Args:
+        force_text: Whether the declaration carried ``t``.
+        force_binary: Whether the declaration carried ``b``.
+
+    Returns:
+        The passes the flags name, or `TestType.UNKNOWN` if they name none.
+    """
+    passes = TestType.UNKNOWN
+    if force_binary:
+        passes |= TestType.BINARY
+    if force_text:
+        passes |= TestType.TEXT
+    return passes
 
 
 class MagicTest(ABC):
@@ -1031,27 +1061,33 @@ class MagicTest(ABC):
     def message(self, new_value: Message):
         self._message = new_value
 
+    def declared_test_type(self) -> TestType:
+        """The passes this test's own declaration named, if it named any.
+
+        Returns:
+            `TestType.UNKNOWN`, unless the declaration carried a ``b`` or a ``t`` flag.
+        """
+        return TestType.UNKNOWN
+
     @property
     def test_type(self) -> TestType:
+        """The soft magic passes `MagicMatcher.match` runs this test in.
+
+        libmagic decides from the level 0 line alone. ``set_text_binary`` hands ``set_test_type``
+        one entry per top-level test, and ``set_test_type`` reads that entry's own ``str_flags``
+        and ``type`` (``file/src/apprentice.c:1200-1284`` and ``1423-1453``); a subtest never
+        changes the answer. `subtest_type` reports exactly that decision. `IndirectTest` is the
+        one deliberate exception: it forces every ancestor to binary, because an indirect test can
+        dispatch any other test.
+
+        Returns:
+            The passes this test belongs to.
+        """
         if self._type == TestType.UNKNOWN:
             if hasattr(self, "__calculating_test_type") and getattr(self, "__calculating_test_type"):
                 return TestType.UNKNOWN
             setattr(self, "__calculating_test_type", True)
-            if self.can_be_indirect:
-                # indirect tests can execute any other (binary) test, so classify ourselves as binary
-                self._type = TestType.BINARY
-            else:
-                if any(bool(child.test_type & TestType.BINARY) for child in self.children):
-                    self._type = TestType.BINARY
-                else:
-                    self._type = self.subtest_type()
-                    if (self._type == TestType.UNKNOWN and self.children) or bool(self._type & TestType.TEXT):
-                        # A pattern is considered to be a text test when all its patterns are text patterns;
-                        # otherwise, it is considered to be a binary pattern.
-                        if all(bool(child.test_type & TestType.TEXT) for child in self.children):
-                            self._type = TestType.TEXT
-                        else:
-                            self._type = TestType.UNKNOWN
+            self._type = self.subtest_type()
             delattr(self, "__calculating_test_type")
         return self._type
 
@@ -1076,10 +1112,9 @@ class MagicTest(ABC):
         binary soft magic pass printed nothing, so it lands on whatever the ``TEXTTEST`` soft magic
         pass printed (``src/funcs.c`` and ``src/ascmagic.c``). ``set_test_type`` in
         ``src/apprentice.c`` decides which pass a definition runs in from the type and flags of its
-        level 0 test alone, and that is what `subtest_type` reports. `test_type`, which chooses the
-        pass PolyFile itself runs the test in, cannot answer this: it reports a group with any
-        binary subtest as binary, which is why libmagic describes the encoding of
-        ``file/tests/pnm1.testfile`` while PolyFile matches it in its binary pass.
+        level 0 test alone, and that is what `subtest_type` reports. `test_type` answers from the
+        same place, except where `IndirectTest` has forced an ancestor to binary, so reading
+        `subtest_type` keeps the question about libmagic rather than about PolyFile's own pass.
 
         Returns:
             True if libmagic would append the description to this test's message.
@@ -1367,9 +1402,9 @@ class MagicTest(ABC):
             writer.write(self.message, color=ANSIColor.BLUE, bold=True)
         if self.level == 0:
             if self.test_type & TestType.BINARY:
-                writer.write(f" \uF5BB BINARY TEST", color=ANSIColor.BLUE)
-            elif self.test_type & TestType.TEXT:
-                writer.write(f" \uF5B9 ASCII TEST", color=ANSIColor.BLUE)
+                writer.write(" \uF5BB BINARY TEST", color=ANSIColor.BLUE)
+            if self.test_type & TestType.TEXT:
+                writer.write(" \uF5B9 ASCII TEST", color=ANSIColor.BLUE)
         writer.write(pre_mime_text)
         if self.mime is not None:
             writer.write(f"\n  {indent}!:mime ", dim=True)
@@ -1574,9 +1609,31 @@ class DataType(ABC, Generic[T]):
         """
         return "="
 
-    @abstractmethod
-    def is_text(self, value: T) -> bool:
-        raise NotImplementedError()
+    def declared_test_types(self) -> TestType:
+        """The passes this type's declaration named outright, if it named any.
+
+        Returns:
+            `TestType.UNKNOWN`, unless the declaration carried a ``b`` or a ``t``.
+        """
+        return TestType.UNKNOWN
+
+    def test_types(self, expected: T) -> TestType:
+        """The soft magic passes libmagic runs a level 0 test of this type in.
+
+        ``set_test_type`` assigns ``BINTEST`` to every type that reads a fixed width of bytes, and
+        to a string type that names no pass of its own, which the comment there calls a
+        compatibility choice (``file/src/apprentice.c:1200-1284``).
+
+        Args:
+            expected: The value the test compares against.
+
+        Returns:
+            The passes the test belongs to.
+        """
+        declared = self.declared_test_types()
+        if declared != TestType.UNKNOWN:
+            return declared
+        return TestType.BINARY
 
     @abstractmethod
     def parse_expected(self, specification: str) -> T:
@@ -1615,6 +1672,7 @@ class DataType(ABC, Generic[T]):
                 dt = GUIDType(endianness=Endianness.LITTLE)
         else:
             dt = NumericDataType.parse(fmt)
+        _check_name_spells_every_flag(fmt, dt)
         if dt.name in TYPES_BY_NAME:
             # Sometimes a data type will change its name based on modifiers.
             # For example, string and pstring will always include their modifiers after their name
@@ -1624,11 +1682,41 @@ class DataType(ABC, Generic[T]):
         TYPES_BY_NAME[fmt] = dt
         return dt
 
+    def behavior(self) -> Dict[str, Any]:
+        """Everything about this type that decides how it matches.
+
+        Returns:
+            Every attribute except the name, which is a rendering of the rest.
+        """
+        return {key: value for key, value in vars(self).items() if key != "name"}
+
     def __str__(self):
         return self.name
 
     def __repr__(self):
         return f"{self.__class__.__name__}({self.name})"
+
+
+def _check_name_spells_every_flag(fmt: str, data_type: DataType) -> None:
+    """Checks that a flag-bearing type's name records everything the type does.
+
+    `DataType.parse` interns a type under its name, so two declarations that differ only by a flag
+    the name leaves out share one instance and silently share its flags (issue #3515). A flag a
+    type reads but does not spell shows up here as a name that parses back into a different type.
+
+    Args:
+        fmt: The declaration `data_type` was parsed from.
+        data_type: The type that was parsed.
+
+    Raises:
+        ValueError: If `data_type.name` does not parse back into a type that behaves the same way.
+    """
+    if fmt == data_type.name or not isinstance(data_type, (StringType, RegexType)):
+        return
+    rebuilt = DataType.parse(data_type.name)
+    if type(rebuilt) is not type(data_type) or rebuilt.behavior() != data_type.behavior():
+        raise ValueError(f"{fmt!r} parsed to a type named {data_type.name!r}, but that name parses back as "
+                         f"{rebuilt!r}: the name leaves out something the declaration set")
 
 
 class UUIDWildcard:
@@ -1647,9 +1735,6 @@ class GUIDType(DataType[Union[UUID, UUIDWildcard]]):
         else:
             raise ValueError(f"GUIDs only support big and little endianness, not {endianness!r}")
         self.endianness: Endianness = endianness
-
-    def is_text(self, value: Union[UUID, UUIDWildcard]) -> bool:
-        return False
 
     def strength_term(self, expected: Union[UUID, UUIDWildcard]) -> int:
         """A GUID is sized like the sixteen-byte integer it is (``file/src/apprentice.c:912-915``)."""
@@ -1692,9 +1777,6 @@ class UTF16Type(DataType[bytes]):
         super().__init__(name)
         self.endianness: Endianness = endianness
         self.num_bytes: Optional[int] = num_bytes
-
-    def is_text(self, value: bytes) -> bool:
-        return True
 
     def strength_term(self, expected: bytes) -> int:
         """Half of what the same value would score as a `string` (``file/src/apprentice.c:1003``).
@@ -2090,7 +2172,47 @@ class StringMatch(StringTest):
         return repr(self.string)
 
 
+def reject_pascal_string_flags(declaration: str, format_str: str, options: str) -> None:
+    """Raises if `options` carries a length modifier that only ``pstring`` accepts.
+
+    ``B``, ``H``, ``h``, ``L`` and ``J`` size a Pascal string's length prefix, and libmagic's flag
+    loop jumps to its error label for any other type (``file/src/apprentice.c:1983-2020``). ``l``
+    is the exception, because on a ``regex`` it means ``REGEX_LINE_COUNT``.
+
+    Args:
+        declaration: The word the type was declared with.
+        format_str: The whole declaration, for the error message.
+        options: The flag letters that followed it.
+
+    Raises:
+        ValueError: If `options` carries a modifier only ``pstring`` accepts.
+    """
+    invalid = "".join(sorted({opt for opt in options if opt in "BHhLJ"}))
+    if invalid:
+        raise ValueError(f"Invalid {declaration} type declaration: {format_str!r} carries the {invalid!r} "
+                         f"modifier(s), which libmagic accepts only on pstring")
+
+
 class StringType(DataType[StringTest]):
+    DECLARATION: str = "string"
+    """The word a definition writes to declare this type."""
+
+    FLAGS: Tuple[Tuple[str, str], ...] = (
+        ("W", "compact_whitespace"),
+        ("w", "optional_blanks"),
+        ("C", "case_insensitive_upper"),
+        ("c", "case_insensitive_lower"),
+        ("T", "trim"),
+        ("f", "full_word_match"),
+        ("t", "force_text"),
+        ("b", "force_binary"),
+    )
+    """Every flag this type can carry, in the order `DataType.name` spells them.
+
+    See the letters in ``file/src/file.h:415-431`` and the loop that reads them in
+    ``file/src/apprentice.c:1940-2028``.
+    """
+
     def __init__(
             self,
             case_insensitive_lower: bool = False,
@@ -2100,20 +2222,9 @@ class StringType(DataType[StringTest]):
             full_word_match: bool = False,
             trim: bool = False,
             force_text: bool = False,
+            force_binary: bool = False,
             num_bytes: Optional[int] = None
     ):
-        if not any((num_bytes is not None, case_insensitive_lower, case_insensitive_upper, compact_whitespace,
-                    optional_blanks, trim, force_text)):
-            name = "string"
-        else:
-            if num_bytes is not None:
-                name = f"{num_bytes}/"
-            else:
-                name = ""
-            name = f"string/{name}{['', 'W'][compact_whitespace]}{['', 'w'][optional_blanks]}"\
-                   f"{['', 'C'][case_insensitive_upper]}{['', 'c'][case_insensitive_lower]}"\
-                   f"{['', 'T'][trim]}{['', 'f'][full_word_match]}{['', 't'][force_text]}"
-        super().__init__(name)
         self.case_insensitive_lower: bool = case_insensitive_lower
         self.case_insensitive_upper: bool = case_insensitive_upper
         self.compact_whitespace: bool = compact_whitespace
@@ -2121,10 +2232,26 @@ class StringType(DataType[StringTest]):
         self.full_word_match: bool = full_word_match
         self.trim: bool = trim
         self.force_text: bool = force_text
+        self.force_binary: bool = force_binary
         self.num_bytes: Optional[int] = num_bytes
+        super().__init__(self.declaration())
 
-    def is_text(self, value: StringTest) -> bool:
-        return self.force_text
+    def declaration(self) -> str:
+        """Rebuilds the declaration this type was parsed from, which is also its name.
+
+        Returns:
+            A string `DataType.parse` accepts and that spells every flag this type carries.
+        """
+        parts = [self.DECLARATION]
+        if self.num_bytes is not None:
+            parts.append(str(self.num_bytes))
+        flags = "".join(letter for letter, attribute in self.FLAGS if getattr(self, attribute))
+        if flags:
+            parts.append(flags)
+        return "/".join(parts)
+
+    def declared_test_types(self) -> TestType:
+        return declared_passes(self.force_text, self.force_binary)
 
     def strength_term(self, expected: StringTest) -> int:
         """One unit per byte of the value, the dominant term for most definitions.
@@ -2165,13 +2292,8 @@ class StringType(DataType[StringTest]):
             num_bytes: Optional[int] = None
         else:
             num_bytes = int(m.group("numbytes"))
-        if m.group("opts") is None:
-            options: Iterable[str] = ()
-        else:
-            options = m.group("opts")
-        unsupported_options = {opt for opt in options if opt not in "/WwcCtbTf"}
-        if unsupported_options:
-            log.warning(f"{format_str!r} has invalid option(s) that will be ignored: {', '.join(unsupported_options)}")
+        options = m.group("opts") or ""
+        reject_pascal_string_flags(cls.DECLARATION, format_str, options)
         return StringType(
             case_insensitive_lower="c" in options,
             case_insensitive_upper="C" in options,
@@ -2180,11 +2302,15 @@ class StringType(DataType[StringTest]):
             full_word_match="f" in options,
             trim="T" in options,
             force_text="t" in options,
+            force_binary="b" in options,
             num_bytes=num_bytes
         )
 
 
 class SearchType(StringType):
+    DECLARATION: str = "search"
+    FLAGS: Tuple[Tuple[str, str], ...] = StringType.FLAGS + (("s", "match_to_start"),)
+
     def __init__(
             self,
             repetitions: Optional[int] = None,
@@ -2195,46 +2321,23 @@ class SearchType(StringType):
             match_to_start: bool = False,
             full_word_match: bool = False,
             trim: bool = False,
+            force_text: bool = False,
             force_binary: bool = False
     ):
         if repetitions is not None and repetitions <= 0:
             raise ValueError("repetitions must be either None or a positive integer")
+        self.match_to_start: bool = match_to_start
         super().__init__(
             case_insensitive_lower=case_insensitive_lower,
             case_insensitive_upper=case_insensitive_upper,
             compact_whitespace=compact_whitespace,
             optional_blanks=optional_blanks,
             full_word_match=full_word_match,
-            trim=trim
+            trim=trim,
+            force_text=force_text,
+            force_binary=force_binary,
+            num_bytes=repetitions
         )
-        self.num_bytes = repetitions
-        if repetitions is None:
-            rep_str = ""
-        else:
-            rep_str = f"/{repetitions}"
-        assert self.name.startswith("string")
-        self.name = f"search{rep_str}{self.name[6:]}"
-        self.match_to_start: bool = match_to_start
-        self.force_binary: bool = force_binary
-        if match_to_start:
-            self._name_flag("s", rep_str)
-        if force_binary:
-            self._name_flag("b", rep_str)
-
-    def _name_flag(self, flag: str, rep_str: str) -> None:
-        """Records `flag` in this type's name, opening the flag group if it is the first one.
-
-        `DataType.parse` keys its cache of parsed types on the name, so a flag left out of the
-        name would make a declaration that carries it share an instance with one that does not.
-
-        Args:
-            flag: The declaration letter of the flag.
-            rep_str: The repetition count as it appears in the name, or an empty string.
-        """
-        if self.name == f"search{rep_str}":
-            self.name = f"search{rep_str}/{flag}"
-        else:
-            self.name = f"{self.name}{flag}"
 
     @property
     def repetitions(self) -> Optional[int]:
@@ -2246,22 +2349,25 @@ class SearchType(StringType):
         """
         return self.num_bytes
 
-    def is_text(self, value: StringTest) -> bool:
-        """Whether libmagic runs a search for `value` in its text pass.
+    def test_types(self, expected: StringTest) -> TestType:
+        """The passes libmagic runs a search for `expected` in.
 
-        An explicit ``b`` flag decides on its own: ``set_test_type`` sets ``BINTEST`` from the
-        declared string flags and breaks out of the case before it ever reaches
-        ``file_looks_utf8`` (``file/src/apprentice.c:1258-1283``).
+        A declared ``b`` or ``t`` decides on its own: ``set_test_type`` reads the string flags and
+        breaks out of the case before it ever reaches ``file_looks_utf8``
+        (``file/src/apprentice.c:1258-1283``). Otherwise the value itself decides.
 
         Args:
-            value: The parsed value the search looks for.
+            expected: The parsed value the search looks for.
 
         Returns:
-            True if libmagic classifies the search as a text test.
+            The passes the search belongs to.
         """
-        if self.force_binary:
-            return False
-        return value.is_always_text()
+        declared = self.declared_test_types()
+        if declared != TestType.UNKNOWN:
+            return declared
+        elif expected.is_always_text():
+            return TestType.TEXT
+        return TestType.BINARY
 
     def strength_term(self, expected: StringTest) -> int:
         """Far less than a `string` of the same length, because a search roams the buffer.
@@ -2283,9 +2389,9 @@ class SearchType(StringType):
         r"((/(?P<repetitions1>(0[xX][\dA-Fa-f]+|\d+)))(/(?P<flags1>[BbCctTWwsf]*)?)?|"
         r"/((?P<flags2>[BbCctTWwsf]*)/?)?(?P<repetitions2>(0[xX][\dA-Fa-f]+|\d+)))$"
     )
-    # NOTE: some specification files like `ber` use `search/b64`, which is undocumented. We treat that equivalent to
-    #       the compliant `search/b/64`.
-    # TODO: Figure out if this is correct.
+    # NOTE: `ber` writes `search/b64`, which the documentation does not describe. libmagic reads the
+    #       digits of a string declaration as the repetition count and every letter as a flag
+    #       (`file/src/apprentice.c:1940-1956`), so that is `search/64` with `b` set.
 
     @classmethod
     def parse(cls, format_str: str) -> "SearchType":
@@ -2303,10 +2409,8 @@ class SearchType(StringType):
             flags = m.group("flags2")
         else:
             raise ValueError(f"Invalid search type declaration: {format_str!r}")
-        if flags is None:
-            options: Iterable[str] = ()
-        else:
-            options = flags
+        options = flags or ""
+        reject_pascal_string_flags(cls.DECLARATION, format_str, options)
         return SearchType(
             repetitions=repetitions,
             case_insensitive_lower="c" in options,
@@ -2316,6 +2420,7 @@ class SearchType(StringType):
             full_word_match="f" in options,
             trim="T" in options,
             match_to_start="s" in options,
+            force_text="t" in options,
             force_binary="b" in options
         )
 
@@ -2366,10 +2471,6 @@ class PascalStringType(DataType[StringTest]):
         self.endianness: Endianness = endianness
         self.count_includes_length: int = count_includes_length
         self.string_type: StringType = StringType.parse(f"string/{string_flags}")
-
-    def is_text(self, value: StringTest) -> bool:
-        # TODO: See if Pascal strings should sometimes be forced to be text
-        return False
 
     def strength_term(self, expected: StringTest) -> int:
         """Scored like a `string`, counting the length prefix as part of the value.
@@ -2543,13 +2644,29 @@ class MagicRegex:
 
 
 class RegexType(DataType[MagicRegex]):
+    FLAGS: Tuple[Tuple[str, str], ...] = (
+        ("c", "case_insensitive"),
+        ("s", "match_to_start"),
+        ("l", "limit_lines"),
+        ("T", "trim"),
+        ("t", "force_text"),
+        ("b", "force_binary"),
+    )
+    """Every flag this type can carry, in the order `DataType.name` spells them.
+
+    ``l`` is ``CHAR_PSTRING_4_LE``, which libmagic reads as ``REGEX_LINE_COUNT`` on a regular
+    expression (``file/src/file.h:409`` and ``file/src/apprentice.c:2003-2012``).
+    """
+
     def __init__(
             self,
             length: Optional[int] = None,
             case_insensitive: bool = False,
             match_to_start: bool = False,
             limit_lines: bool = False,
-            trim: bool = False
+            trim: bool = False,
+            force_text: bool = False,
+            force_binary: bool = False
     ):
         if length is None:
             if limit_lines:
@@ -2561,17 +2678,44 @@ class RegexType(DataType[MagicRegex]):
         self.case_insensitive: bool = case_insensitive
         self.match_to_start: bool = match_to_start
         self.trim: bool = trim
-        super().__init__(f"regex/{self.length}{['', 'c'][case_insensitive]}{['', 's'][match_to_start]}"
-                         f"{['', 'l'][self.limit_lines]}{['', 'T'][self.trim]}")
+        self.force_text: bool = force_text
+        self.force_binary: bool = force_binary
+        super().__init__(self.declaration())
+
+    def declaration(self) -> str:
+        """Rebuilds the declaration this type was parsed from, which is also its name.
+
+        Returns:
+            A string `DataType.parse` accepts and that spells every flag this type carries.
+        """
+        flags = "".join(letter for letter, attribute in self.FLAGS if getattr(self, attribute))
+        return f"regex/{self.length}{flags}"
 
     DOLLAR_PATTERN = re.compile(rb"(^|[^\\])\$", re.MULTILINE)
 
-    def is_text(self, value: MagicRegex) -> bool:
-        try:
-            _ = value.pattern.decode("ascii")
-            return True
-        except UnicodeDecodeError:
-            return False
+    def declared_test_types(self) -> TestType:
+        return declared_passes(self.force_text, self.force_binary)
+
+    def test_types(self, expected: MagicRegex) -> TestType:
+        """The passes libmagic runs this regular expression in.
+
+        A declared ``b`` or ``t`` decides on its own, because ``set_test_type`` reads the string
+        flags and breaks out of the case before it reaches ``file_looks_utf8``
+        (``file/src/apprentice.c:1258-1283``). Otherwise the pattern itself decides, by the same
+        rule libmagic applies to a `search` value.
+
+        Args:
+            expected: The parsed regular expression.
+
+        Returns:
+            The passes the test belongs to.
+        """
+        declared = self.declared_test_types()
+        if declared != TestType.UNKNOWN:
+            return declared
+        elif _looks_like_utf8(expected.pattern):
+            return TestType.TEXT
+        return TestType.BINARY
 
     def strength_term(self, expected: MagicRegex) -> int:
         """One unit per literal character, capped the way a `search` is.
@@ -2659,11 +2803,8 @@ class RegexType(DataType[MagicRegex]):
         return DataTypeMatch.INVALID
 
     REGEX_TYPE_FORMAT: Pattern[str] = re.compile(
-        r"^regex(/(?P<length>\d+)?(?P<flags1>[cslTt]*)(/(?P<flags2>[cslTt]*))?(b\d*)?)?$"
+        r"^regex(/(?P<length>\d+)?(?P<flags1>[bcslTt]*)(/(?P<flags2>[bcslTt]*))?)?$"
     )
-    # NOTE: some specification files like `cad` use `regex/b`, which is undocumented, and it's unclear from the libmagic
-    #       source code whether it is simply ignored or if it has a purpose. We ignore it here.
-    # NOTE: the `t` flag (force text) is also supported but currently ignored as it's a hint for output formatting.
     # NOTE: flags can appear either after length directly (regex/31cs) or with a slash (regex/31/cs).
 
     @classmethod
@@ -2685,7 +2826,9 @@ class RegexType(DataType[MagicRegex]):
             case_insensitive="c" in options,
             match_to_start="s" in options,
             limit_lines="l" in options,
-            trim="T" in options
+            trim="T" in options,
+            force_text="t" in options,
+            force_binary="b" in options
         )
 
 
@@ -2894,9 +3037,6 @@ class NumericDataType(DataType[NumericValue]):
         self.preprocess: Callable[[int], int] = preprocess
         if self.endianness == Endianness.PDP and self.base_type.num_bytes != 4:
             raise ValueError(f"PDP endianness can only be used with four byte base types, not {self.base_type}")
-
-    def is_text(self, value: NumericValue) -> bool:
-        return False
 
     def strength_term(self, expected: NumericValue) -> int:
         """One unit per byte the type reads (``file/src/apprentice.c:975-996``)."""
@@ -3121,10 +3261,10 @@ class ConstantMatchTest(MagicTest, Generic[T]):
         return self.data_type.relation(self.constant)
 
     def subtest_type(self) -> TestType:
-        if self.data_type.is_text(self.constant):
-            return TestType.TEXT
-        else:
-            return TestType.BINARY
+        return self.data_type.test_types(self.constant)
+
+    def declared_test_type(self) -> TestType:
+        return self.data_type.declared_test_types()
 
     def calculate_absolute_offset(self, data: bytes, parent_match: Optional[TestResult] = None) -> int:
         return self.offset.to_absolute(data, parent_match, self.data_type.allows_invalid_offsets(self.constant))
@@ -3272,6 +3412,8 @@ class IndirectTest(MagicTest):
         self.relative: bool = relative
         self.can_match_mime = True
         self.can_be_indirect = True
+        # an indirect test can dispatch any other test, so PolyFile keeps the whole group in the
+        # binary pass rather than letting a level 0 flag hand it the decoded text buffer
         self._type = TestType.BINARY
         p = parent
         while p is not None:
@@ -4458,9 +4600,10 @@ class MagicMatcher:
         self._tests_by_ext = defaultdict(set)
         self._tests_by_mime = defaultdict(set)
         for test in self._tests:
-            if test.test_type == TestType.TEXT:
+            test_type = test.test_type
+            if test_type & TestType.TEXT:
                 self._text_tests[test] = None
-            else:
+            if test_type & TestType.BINARY or test_type == TestType.UNKNOWN:
                 self._non_text_tests[test] = None
             if test.can_be_indirect:
                 self._tests_that_can_be_indirect.add(test)
@@ -4521,20 +4664,21 @@ class MagicMatcher:
             text_encoding: Optional[TextEncodingDescription],
             description: str,
             file_context: Optional[MatchContext] = None
-    ) -> Iterator[Match]:
+    ) -> Iterator[Tuple[MagicTest, Match]]:
         """Yields a match for each of `tests` that matches `context`.
 
         Args:
             tests: the level 0 tests to run.
             context: the buffer to run them against.
-            text_encoding: the description of `context`'s text encoding, or None if it is not text.
+            text_encoding: the description libmagic appends to a match from this pass, or None if
+                this pass appends none.
             description: the label for the progress log.
             file_context: the buffer holding the file's own bytes, when `context` is a rendering of
                 them. A check `MagicTest.precedes_soft_magic` names runs against this instead.
 
         Yields:
-            One match per test that matched, carrying `text_encoding` if libmagic would append it
-            to that test's message.
+            The test and its match, for each test that matched, carrying `text_encoding` if
+            libmagic would append it to that test's message.
         """
         for test in log.range(tests, desc=description, unit=" tests", delay=1.0):
             if file_context is not None and test.precedes_soft_magic:
@@ -4547,7 +4691,29 @@ class MagicMatcher:
             if m and (not test_context.only_match_mime or any(t is not None for t in m.mimetypes)):
                 if test.appends_text_encoding:
                     m.text_encoding = text_encoding
-                yield m
+                yield test, m
+
+    def binary_pass_tests(self, looks_text: bool) -> Iterable[MagicTest]:
+        """The level 0 tests `MagicMatcher.match` runs over the file's own bytes.
+
+        ``softmagic`` skips an entry whose declared string flags are exactly ``STRING_BINTEST``
+        when the buffer looks like text (``file/src/softmagic.c:249-253``). That is what keeps
+        libmagic from reporting the binary half of a definition that spells one shebang twice, as
+        ``magic_defs/varied.script`` does. An entry that declares both flags is not skipped,
+        because the test is for one bit and not the other.
+
+        Args:
+            looks_text: Whether `TextEncodingDescription.detect` recognized the buffer as text,
+                which is the ``looks_text`` ``file_buffer`` hands ``file_softmagic``
+                (``file/src/funcs.c:314-317`` and ``482``).
+
+        Returns:
+            The tests to run, in the order `MagicMatcher.match` runs them.
+        """
+        if not looks_text:
+            return self.non_text_tests
+        return [test for test in self.non_text_tests
+                if test.declared_test_type() != TestType.BINARY]
 
     def match(self, to_match: Union[bytes, BinaryIO, str, Path, MatchContext]) -> Iterator[Match]:
         if isinstance(to_match, bytes):
@@ -4556,7 +4722,13 @@ class MagicMatcher:
             to_match = MatchContext.load(to_match)
         text_encoding = TextEncodingDescription.detect(to_match.data)
         yielded = False
-        for m in self._run_tests(self.non_text_tests, to_match, text_encoding, "binary matching"):
+        matched_on_the_files_bytes: Set[MagicTest] = set()
+        # only the text pass carries the encoding description: `file_ascmagic` prints it, and
+        # `file_buffer` reaches `file_ascmagic` only once binary soft magic has printed nothing
+        # (`file/src/funcs.c:479-503`)
+        for test, m in self._run_tests(self.binary_pass_tests(text_encoding is not None),
+                                       to_match, None, "binary matching"):
+            matched_on_the_files_bytes.add(test)
             yield m
             yielded = True
         # is this a plain text file?
@@ -4568,8 +4740,9 @@ class MagicMatcher:
             # this is a text file, so try all of the textual tests, against the buffer libmagic
             # hands them rather than against the file's bytes
             text_context = to_match.text_test_context(text_encoding.encoding)
-            for m in self._run_tests(self.text_tests, text_context, text_encoding, "text matching",
-                                     file_context=to_match):
+            text_tests = [test for test in self.text_tests if test not in matched_on_the_files_bytes]
+            for _, m in self._run_tests(text_tests, text_context, text_encoding, "text matching",
+                                        file_context=to_match):
                 yield m
                 yielded = True
         if not yielded:

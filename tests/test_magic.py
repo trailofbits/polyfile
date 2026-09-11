@@ -204,79 +204,79 @@ class MagicTest(TestCase):
 
     def test_text_tests(self):
         matcher = MagicMatcher.parse(*MAGIC_DEFS)
-        self.assertEqual(len(matcher.text_tests & matcher.non_text_tests), 0)
         for test in matcher.text_tests:
-            self.assertEqual(test.test_type, polyfile.magic.TestType.TEXT)
+            self.assertTrue(test.test_type & polyfile.magic.TestType.TEXT)
         for test in matcher.non_text_tests:
-            self.assertNotEqual(test.test_type, polyfile.magic.TestType.TEXT)
+            self.assertTrue(test.test_type & polyfile.magic.TestType.BINARY
+                            or test.test_type == polyfile.magic.TestType.UNKNOWN)
+        # the three entries in both passes declare both the `b` and the `t` flag; see
+        # PassSelectionTest.test_the_shipped_both_flag_entries_are_in_both_passes
+        self.assertEqual(3, len(set(matcher.text_tests) & set(matcher.non_text_tests)))
         num_text_tests = len(matcher.text_tests)
         # expected_text_tests = repr({
         #         f"{test.source_info.path.name}:{test.source_info.line}"
         #         for test in matcher.text_tests if test.source_info is not None
         # })
         expected_text_tests = {
-            'a2ml:38', 'a2ml:44', 'andrew:30', 'android:221', 'apple:6', 'archive:583',
-            'assembler:11', 'assembler:13', 'assembler:15', 'assembler:17', 'assembler:5',
-            'assembler:7', 'assembler:9', 'audio:645', 'audio:648', 'bioinformatics:156',
-            'c-lang:10', 'c-lang:103', 'c-lang:107', 'c-lang:111', 'c-lang:22', 'c-lang:25',
-            'c-lang:29', 'c-lang:32', 'c-lang:35', 'c-lang:38', 'c-lang:41', 'c-lang:44',
-            'c-lang:47', 'c-lang:50', 'c-lang:59', 'c-lang:64', 'c-lang:68', 'c-lang:72',
-            'c-lang:77', 'c-lang:8', 'c-lang:81', 'c-lang:85', 'c-lang:89', 'c-lang:95', 'cad:317',
-            'cad:365', 'cddb:12', 'clojure:23', 'clojure:26', 'clojure:29', 'commands:101',
-            'commands:104', 'commands:106', 'commands:111', 'commands:113', 'commands:115',
-            'commands:118', 'commands:121', 'commands:123', 'commands:125', 'commands:128',
-            'commands:131', 'commands:133', 'commands:138', 'commands:14', 'commands:140',
-            'commands:146', 'commands:148', 'commands:150', 'commands:152', 'commands:164',
-            'commands:167', 'commands:169', 'commands:171', 'commands:174', 'commands:18',
-            'commands:191', 'commands:213', 'commands:23', 'commands:231', 'commands:232',
-            'commands:233', 'commands:25', 'commands:27', 'commands:29', 'commands:34',
-            'commands:36', 'commands:38', 'commands:40', 'commands:43', 'commands:45',
-            'commands:47', 'commands:49', 'commands:51', 'commands:53', 'commands:55',
-            'commands:57', 'commands:59', 'commands:61', 'commands:64', 'commands:66',
-            'commands:68', 'commands:7', 'commands:70', 'commands:72', 'commands:74', 'commands:76',
-            'commands:80', 'commands:83', 'commands:87', 'commands:91', 'commands:95',
-            'commands:99', 'csv:6', 'ctags:6', 'database:900', 'diff:13', 'diff:25', 'diff:35',
-            'diff:41', 'diff:48', 'fonts:132', 'fonts:6', 'forth:10', 'forth:16', 'fortran:6',
-            'games:248', 'games:411', 'games:412', 'gentoo:44', 'gimp:14', 'gimp:7', 'gnu:170',
-            'images:2364', 'images:2657', 'inform:9', 'java:19', 'java:49', 'java:51',
-            'javascript:10', 'javascript:12', 'javascript:14', 'javascript:16', 'javascript:22',
-            'javascript:26', 'javascript:30', 'javascript:34', 'javascript:38', 'javascript:42',
-            'javascript:46', 'javascript:50', 'javascript:54', 'javascript:6', 'javascript:60',
-            'javascript:8', 'json:12', 'json:6', 'k9:28', 'kde:10', 'kde:6', 'kde:8', 'lex:10',
-            'lex:12', 'linux:366', 'linux:369', 'linux:370', 'linux:54', 'linux:938', 'lisp:16',
-            'lisp:18', 'lisp:20', 'lisp:22', 'lisp:24', 'lisp:26', 'lisp:77', 'lua:11', 'lua:13',
-            'lua:15', 'lua:17', 'lua:9', 'm4:5', 'm4:8', 'magic:8', 'mail.news:11', 'mail.news:13',
-            'mail.news:15', 'mail.news:17', 'mail.news:19', 'mail.news:21', 'mail.news:23',
-            'mail.news:25', 'mail.news:27', 'mail.news:29', 'mail.news:31', 'mail.news:33',
-            'mail.news:35', 'mail.news:49', 'mail.news:7', 'mail.news:9', 'make:15', 'make:19',
-            'make:6', 'mathematica:21', 'misctools:104', 'misctools:6', 'misctools:99', 'msdos:26',
-            'msdos:28', 'msx:79', 'nim-lang:7', 'pascal:5', 'perl:10', 'perl:12', 'perl:14',
-            'perl:16', 'perl:18', 'perl:20', 'perl:22', 'perl:24', 'perl:36', 'perl:40', 'perl:47',
-            'perl:48', 'perl:49', 'perl:50', 'perl:51', 'perl:52', 'perl:53', 'perl:54', 'perl:8',
-            'psl:9', 'python:250', 'python:253', 'python:256', 'python:262', 'python:271',
-            'python:277', 'python:295', 'python:303', 'python:309', 'python:9', 'qt:13',
-            'revision:7', 'ringdove:12', 'ringdove:13', 'ringdove:14', 'ringdove:15', 'ringdove:16',
-            'ringdove:17', 'ringdove:18', 'ringdove:19', 'ringdove:20', 'ringdove:21',
-            'ringdove:22', 'ringdove:25', 'ringdove:26', 'ringdove:27', 'ringdove:28',
-            'ringdove:29', 'ringdove:32', 'ringdove:6', 'ringdove:7', 'ringdove:8', 'ringdove:9',
-            'rst:5', 'ruby:12', 'ruby:15', 'ruby:18', 'ruby:25', 'ruby:31', 'ruby:37', 'ruby:44',
-            'ruby:50', 'ruby:9', 'securitycerts:4', 'securitycerts:5', 'sgml:102', 'sgml:105',
-            'sgml:108', 'sgml:111', 'sgml:115', 'sgml:121', 'sgml:128', 'sgml:131', 'sgml:134',
-            'sgml:140', 'sgml:146', 'sgml:152', 'sgml:153', 'sgml:154', 'sgml:160', 'sgml:161',
-            'sgml:162', 'sgml:17', 'sgml:57', 'sgml:6', 'sgml:62', 'sgml:64', 'sgml:66', 'sgml:78',
-            'sgml:81', 'sgml:84', 'sgml:87', 'sgml:90', 'sgml:93', 'sgml:96', 'sgml:99', 'sisu:11',
-            'sisu:14', 'sisu:17', 'sisu:5', 'sisu:8', 'sketch:6', 'softquad:26', 'subtitle:19',
-            'subtitle:25', 'tcl:11', 'tcl:13', 'tcl:15', 'tcl:17', 'tcl:19', 'tcl:21', 'tcl:25',
-            'tcl:28', 'tcl:7', 'tcl:9', 'terminfo:49', 'tex:107', 'tex:108', 'tex:109', 'tex:110',
-            'tex:111', 'tex:112', 'tex:113', 'tex:114', 'tex:115', 'tex:116', 'tex:117', 'tex:119',
-            'tex:121', 'tex:123', 'tex:125', 'tex:127', 'tex:133', 'tex:135', 'tex:137', 'tex:139',
-            'tex:141', 'tex:143', 'tex:145', 'tex:147', 'tex:149', 'tex:151', 'tex:153', 'tex:155',
-            'tex:157', 'tex:159', 'tex:22', 'tex:23', 'tex:24', 'tex:25', 'tex:26', 'tex:27',
-            'tex:28', 'tex:29', 'tex:30', 'tex:31', 'tex:32', 'tex:33', 'tex:34', 'tex:61',
-            'tex:64', 'tex:67', 'tex:70', 'tex:73', 'tex:76', 'tex:79', 'tex:82', 'tex:85',
-            'tex:88', 'tex:92', 'tex:95', 'tex:96', 'tex:97', 'tex:98', 'tex:99', 'troff:12',
-            'troff:15', 'troff:18', 'troff:23', 'troff:26', 'troff:31', 'troff:9', 'uuencode:18',
-            'uuencode:22', 'uuencode:26', 'windows:1064', 'windows:457',
+            'a2ml:38', 'a2ml:44', 'algol68:12', 'algol68:14', 'algol68:16', 'algol68:18', 'algol68:9',
+            'andrew:30', 'android:221', 'apple:6', 'archive:583', 'assembler:11', 'assembler:13',
+            'assembler:15', 'assembler:17', 'assembler:5', 'assembler:7', 'assembler:9', 'audio:645',
+            'audio:648', 'bioinformatics:113', 'bioinformatics:156', 'c-lang:10', 'c-lang:103', 'c-lang:107',
+            'c-lang:111', 'c-lang:15', 'c-lang:22', 'c-lang:25', 'c-lang:29', 'c-lang:32', 'c-lang:35',
+            'c-lang:38', 'c-lang:41', 'c-lang:44', 'c-lang:47', 'c-lang:50', 'c-lang:59', 'c-lang:64',
+            'c-lang:68', 'c-lang:72', 'c-lang:77', 'c-lang:8', 'c-lang:81', 'c-lang:85', 'c-lang:89',
+            'c-lang:95', 'cddb:12', 'clojure:23', 'clojure:26', 'clojure:29', 'commands:101', 'commands:104',
+            'commands:106', 'commands:111', 'commands:113', 'commands:115', 'commands:118', 'commands:121',
+            'commands:123', 'commands:125', 'commands:128', 'commands:131', 'commands:133', 'commands:138',
+            'commands:14', 'commands:140', 'commands:146', 'commands:148', 'commands:150', 'commands:152',
+            'commands:164', 'commands:167', 'commands:169', 'commands:171', 'commands:174', 'commands:18',
+            'commands:191', 'commands:213', 'commands:23', 'commands:231', 'commands:232', 'commands:233',
+            'commands:25', 'commands:27', 'commands:29', 'commands:34', 'commands:36', 'commands:38',
+            'commands:40', 'commands:43', 'commands:45', 'commands:47', 'commands:49', 'commands:51',
+            'commands:53', 'commands:55', 'commands:57', 'commands:59', 'commands:61', 'commands:64',
+            'commands:66', 'commands:68', 'commands:7', 'commands:70', 'commands:72', 'commands:74',
+            'commands:76', 'commands:80', 'commands:83', 'commands:87', 'commands:91', 'commands:95',
+            'commands:99', 'csv:6', 'ctags:6', 'database:900', 'diff:114', 'diff:13', 'diff:25', 'diff:35',
+            'diff:41', 'diff:48', 'fonts:132', 'fonts:6', 'forth:10', 'forth:16', 'fortran:6', 'frame:71',
+            'games:180', 'games:248', 'games:411', 'games:412', 'gentoo:44', 'gentoo:49', 'gimp:14', 'gimp:7',
+            'gnu:170', 'images:196', 'images:210', 'images:219', 'images:2364', 'images:2657', 'images:666',
+            'inform:9', 'java:19', 'java:49', 'java:51', 'javascript:10', 'javascript:12', 'javascript:14',
+            'javascript:16', 'javascript:22', 'javascript:26', 'javascript:30', 'javascript:34',
+            'javascript:38', 'javascript:42', 'javascript:46', 'javascript:50', 'javascript:54', 'javascript:6',
+            'javascript:60', 'javascript:8', 'json:12', 'json:6', 'k9:28', 'kde:10', 'kde:6', 'kde:8', 'kml:9',
+            'lex:10', 'lex:12', 'lex:7', 'linux:366', 'linux:369', 'linux:370', 'linux:54', 'linux:938',
+            'lisp:16', 'lisp:18', 'lisp:20', 'lisp:22', 'lisp:24', 'lisp:26', 'lisp:77', 'lua:11', 'lua:13',
+            'lua:15', 'lua:17', 'lua:9', 'm4:5', 'm4:8', 'macintosh:14', 'magic:8', 'mail.news:11',
+            'mail.news:13', 'mail.news:15', 'mail.news:17', 'mail.news:19', 'mail.news:21', 'mail.news:23',
+            'mail.news:25', 'mail.news:27', 'mail.news:29', 'mail.news:31', 'mail.news:33', 'mail.news:35',
+            'mail.news:49', 'mail.news:7', 'mail.news:9', 'make:15', 'make:19', 'make:6', 'mathematica:21',
+            'mime:6', 'mime:8', 'misctools:104', 'misctools:6', 'misctools:99', 'msdos:26', 'msdos:28',
+            'msdos:9', 'msx:79', 'mup:13', 'nim-lang:7', 'os2:204', 'os2:9', 'pascal:5', 'pdf:45', 'perl:10',
+            'perl:12', 'perl:14', 'perl:16', 'perl:18', 'perl:20', 'perl:22', 'perl:24', 'perl:36', 'perl:40',
+            'perl:47', 'perl:48', 'perl:49', 'perl:50', 'perl:51', 'perl:52', 'perl:53', 'perl:54', 'perl:8',
+            'psl:9', 'python:250', 'python:253', 'python:256', 'python:262', 'python:271', 'python:277',
+            'python:295', 'python:303', 'python:309', 'python:9', 'qt:13', 'revision:7', 'ringdove:12',
+            'ringdove:13', 'ringdove:14', 'ringdove:15', 'ringdove:16', 'ringdove:17', 'ringdove:18',
+            'ringdove:19', 'ringdove:20', 'ringdove:21', 'ringdove:22', 'ringdove:25', 'ringdove:26',
+            'ringdove:27', 'ringdove:28', 'ringdove:29', 'ringdove:32', 'ringdove:6', 'ringdove:7',
+            'ringdove:8', 'ringdove:9', 'rst:5', 'ruby:12', 'ruby:15', 'ruby:18', 'ruby:25', 'ruby:31',
+            'ruby:37', 'ruby:44', 'ruby:50', 'ruby:9', 'scientific:71', 'securitycerts:4', 'securitycerts:5',
+            'sgi:137', 'sgml:102', 'sgml:105', 'sgml:108', 'sgml:111', 'sgml:115', 'sgml:121', 'sgml:128',
+            'sgml:131', 'sgml:134', 'sgml:140', 'sgml:146', 'sgml:152', 'sgml:153', 'sgml:154', 'sgml:160',
+            'sgml:161', 'sgml:162', 'sgml:17', 'sgml:21', 'sgml:57', 'sgml:6', 'sgml:62', 'sgml:64', 'sgml:66',
+            'sgml:74', 'sgml:78', 'sgml:81', 'sgml:84', 'sgml:87', 'sgml:90', 'sgml:93', 'sgml:96', 'sgml:99',
+            'sisu:11', 'sisu:14', 'sisu:17', 'sisu:5', 'sisu:8', 'sketch:6', 'softquad:26', 'sosi:30',
+            'subtitle:19', 'subtitle:25', 'subtitle:32', 'tcl:11', 'tcl:13', 'tcl:15', 'tcl:17', 'tcl:19',
+            'tcl:21', 'tcl:25', 'tcl:28', 'tcl:7', 'tcl:9', 'terminfo:49', 'tex:107', 'tex:108', 'tex:109',
+            'tex:110', 'tex:111', 'tex:112', 'tex:113', 'tex:114', 'tex:115', 'tex:116', 'tex:117', 'tex:119',
+            'tex:121', 'tex:123', 'tex:125', 'tex:127', 'tex:133', 'tex:135', 'tex:137', 'tex:139', 'tex:141',
+            'tex:143', 'tex:145', 'tex:147', 'tex:149', 'tex:151', 'tex:153', 'tex:155', 'tex:157', 'tex:159',
+            'tex:22', 'tex:23', 'tex:24', 'tex:25', 'tex:26', 'tex:27', 'tex:28', 'tex:29', 'tex:30', 'tex:31',
+            'tex:32', 'tex:33', 'tex:34', 'tex:61', 'tex:64', 'tex:67', 'tex:70', 'tex:73', 'tex:76', 'tex:79',
+            'tex:82', 'tex:85', 'tex:88', 'tex:92', 'tex:95', 'tex:96', 'tex:97', 'tex:98', 'tex:99',
+            'troff:12', 'troff:15', 'troff:18', 'troff:23', 'troff:26', 'troff:31', 'troff:9', 'uuencode:11',
+            'uuencode:18', 'uuencode:22', 'uuencode:26', 'varied.script:18', 'varied.script:27',
+            'varied.script:8', 'windows:1313', 'windows:650', 'xwindows:39',
         }
         if num_text_tests > len(expected_text_tests):
             actual_text_tests = {
@@ -295,6 +295,10 @@ class MagicTest(TestCase):
                     history |= set(new_tests)
                     queue.extend(reversed(new_tests))
         self.assertEqual(num_text_tests, len(expected_text_tests))
+        self.assertEqual(expected_text_tests, {
+            f"{test.source_info.path.name}:{test.source_info.line}"
+            for test in matcher.text_tests if test.source_info is not None
+        })
 
     def test_only_matching(self):
         matcher = MagicMatcher.parse(*MAGIC_DEFS)
@@ -2044,6 +2048,333 @@ class UCSTextBufferTest(TestCase):
             {str(match) for match in
              MagicMatcher.DEFAULT_INSTANCE.match(self.encode(document, "utf-16le"))}
         )
+
+
+class DataTypeNameTest(TestCase):
+    """Regression tests for the interning collision reported in issue #3515.
+
+    `DataType.parse` interns every type it builds in `polyfile.magic.TYPES_BY_NAME`, keyed on the
+    name the type builds for itself. A flag the name leaves out makes two declarations that differ
+    only by that flag share one instance, and whichever declaration parses first decides the flags
+    for both. `RegexType` left out `t` and `b`, and `StringType`'s no-flag shortcut left out `f`.
+    """
+
+    def test_every_flag_reaches_the_name(self):
+        """Tests that each flag letter of each type appears in the parsed type's name.
+
+        A missing letter is what makes two declarations collide, so this asserts the property the
+        collision violated rather than the pairs that happened to collide.
+        """
+        for declaration, flags in (("string", "WwCcTftb"), ("search/8", "WwCcTftbs"),
+                                   ("regex/8", "cslTtb")):
+            for flag in flags:
+                spec = f"{declaration}/{flag}"
+                with self.subTest(declaration=spec):
+                    self.assertIn(flag, DataType.parse(spec).name)
+
+    def test_declarations_that_differ_by_one_flag_are_distinct(self):
+        """Tests that adding a flag to a declaration yields a different interned type."""
+        for declaration, flags in (("string", "WwCcTftb"), ("search/8", "WwCcTftbs"),
+                                   ("regex/8", "cslTtb")):
+            plain = DataType.parse(declaration)
+            for flag in flags:
+                spec = f"{declaration}/{flag}"
+                with self.subTest(declaration=spec):
+                    self.assertIsNot(plain, DataType.parse(spec))
+
+    def test_a_name_that_drops_a_flag_is_rejected(self):
+        """Tests that a type whose name loses a flag raises instead of interning silently.
+
+        The failure this prevents is silent: no exception and no warning, just a type behaving as
+        though its flag were absent. `DataType.parse` now reparses the name it built and compares
+        the result, which is the check that would have caught both halves of issue #3515.
+        """
+        class ForgetfulStringType(StringType):
+            def declaration(self) -> str:
+                return "string"
+
+        DataType.parse("string")
+        try:
+            polyfile.magic.StringType = ForgetfulStringType
+            polyfile.magic.TYPES_BY_NAME.pop("string/f", None)
+            with self.assertRaises(ValueError):
+                DataType.parse("string/f")
+        finally:
+            polyfile.magic.StringType = StringType
+            polyfile.magic.TYPES_BY_NAME.pop("string/f", None)
+
+    def test_whole_word_match_survives_parsing(self):
+        """Tests that `string/f` is its own type and matches whole words only.
+
+        `StringType.__init__` left `full_word_match` out of the tuple that decides whether a
+        declaration carries any flag, so a declaration whose only flag was `f` took the bare name
+        `string` and shared the unflagged type's instance.
+        """
+        whole_word = DataType.parse("string/f")
+        self.assertIsNot(whole_word, DataType.parse("string"))
+        self.assertTrue(whole_word.full_word_match)
+        self.assertFalse(DataType.parse("string").full_word_match)
+        expected = whole_word.parse_expected("if")
+        self.assertTrue(whole_word.match(b"if x then", expected))
+        self.assertFalse(whole_word.match(b"iffy", expected))
+
+
+class SearchFlagTableTest(TestCase):
+    """Regression tests for the `search` flag table reported in issue #3478.
+
+    libmagic reads the string flags of a `search` in one loop shared with `string`, `pstring` and
+    `regex` (`file/src/apprentice.c:1940-2028`), and the letters are defined in
+    `file/src/file.h:415-431`. `SearchType.parse` read `B` as compact whitespace, read `b` as
+    optional blanks, and dropped `t` altogether.
+    """
+
+    FLAGS: Tuple[Tuple[str, str], ...] = (
+        ("W", "compact_whitespace"),
+        ("w", "optional_blanks"),
+        ("c", "case_insensitive_lower"),
+        ("C", "case_insensitive_upper"),
+        ("T", "trim"),
+        ("f", "full_word_match"),
+        ("s", "match_to_start"),
+        ("t", "force_text"),
+        ("b", "force_binary"),
+    )
+    """Each flag a `search` accepts, paired with the behavior libmagic gives it."""
+
+    def test_each_flag_sets_only_its_own_behavior(self):
+        """Tests that every letter maps to the one behavior libmagic gives it.
+
+        `b` set `optional_blanks`, which made a `search` tolerate whitespace libmagic requires to
+        match exactly, so PolyFile reported matches libmagic does not.
+        """
+        for letter, attribute in self.FLAGS:
+            with self.subTest(flag=letter):
+                flagged = SearchType.parse(f"search/8/{letter}")
+                for _, other in self.FLAGS:
+                    self.assertEqual(other == attribute, getattr(flagged, other), other)
+
+    def test_the_pascal_string_length_flag_is_rejected(self):
+        """Tests that `B` raises rather than passing for compact whitespace.
+
+        `B` is `CHAR_PSTRING_1_BE`, and libmagic's flag loop jumps to its error label for any type
+        but `pstring` (`file/src/apprentice.c:1983-1986`). Reading it as `W` would have let a
+        `search/B` silently compact the whitespace of its value.
+        """
+        for declaration in ("search/8/B", "string/B"):
+            with self.subTest(declaration=declaration):
+                with self.assertRaises(ValueError):
+                    DataType.parse(declaration)
+        self.assertEqual(1, DataType.parse("pstring/B").byte_length)
+
+    def test_flags_may_precede_an_undocumented_repetition_count(self):
+        """Tests that `ber`'s `search/b64` is `search/64` with the binary flag set.
+
+        libmagic reads the digits of a string declaration as the repetition count and each letter
+        as a flag, in one loop, so the two orders mean the same thing.
+        """
+        self.assertIs(DataType.parse("search/b64"), DataType.parse("search/64/b"))
+        self.assertEqual(64, DataType.parse("search/b64").repetitions)
+
+
+class PassSelectionTest(TestCase):
+    """Regression tests for the pass selection defect reported in issue #3490.
+
+    libmagic decides which of its two soft magic passes a definition belongs to in
+    `set_test_type`, from the type and the `b`/`t` string flags of the entry's level 0 line alone
+    (`file/src/apprentice.c:1200-1284`). `set_text_binary` hands it one entry per top-level test
+    (`file/src/apprentice.c:1423-1453`), so a subtest never changes the answer. PolyFile derived
+    the classification from a test's children instead, which put both halves of a text/binary
+    definition pair in the binary pass.
+    """
+
+    @staticmethod
+    def passes(definition: str) -> polyfile.magic.TestType:
+        """The passes PolyFile runs the one level 0 test of `definition` in.
+
+        Args:
+            definition: The text of a magic definition file, with tab-separated columns.
+
+        Returns:
+            The passes the test landed in.
+        """
+        with TemporaryDirectory() as tmp_dir:
+            magic_file = Path(tmp_dir) / "test.magic"
+            magic_file.write_text(definition)
+            matcher = MagicMatcher.parse(magic_file)
+            text, binary = list(matcher.text_tests), list(matcher.non_text_tests)
+        assert len(set(text) | set(binary)) == 1, "expected exactly one level 0 test"
+        found = polyfile.magic.TestType.UNKNOWN
+        if text:
+            found |= polyfile.magic.TestType.TEXT
+        if binary:
+            found |= polyfile.magic.TestType.BINARY
+        return found
+
+    def test_a_text_flag_outranks_a_binary_subtest(self):
+        """Tests that `t` on the level 0 line wins over a binary subtest under it.
+
+        `magic_defs/varied.script:8` is `string/wt` with a `string/T` subtest, and its `string/wb`
+        twin sits four lines below. PolyFile put both in the binary pass, so
+        `file/tests/cmd1.testfile` reported the binary variant as well as the text one.
+        """
+        definition = "0\tstring/wt\t#!\\ \ta\n>&-1\tstring/T\tx\t%s script text executable\n"
+        self.assertEqual(polyfile.magic.TestType.TEXT, self.passes(definition))
+
+    def test_a_binary_flag_outranks_a_text_subtest(self):
+        """Tests that `b` on the level 0 line wins over an all-text group.
+
+        `magic_defs/varied.script:12` is the binary half of the same pair.
+        """
+        definition = "0\tstring/wb\t#!\\ \ta\n>&-1\tstring/T\tx\t%s script executable\n"
+        self.assertEqual(polyfile.magic.TestType.BINARY, self.passes(definition))
+
+    def test_a_subtest_never_adds_a_pass(self):
+        """Tests that a numeric subtest does not drag a text entry into the binary pass.
+
+        `file -l -m` over a definition of `0 string/t XY` with a `>2 belong 0` subtest lists it
+        under `Text patterns` only, because `set_text_binary` calls `set_test_type` once per
+        top-level entry and never for a continuation line.
+        """
+        definition = "0\tstring/t\tXY\tflagged text\n>2\tbelong\t0\t\\b, zero\n"
+        self.assertEqual(polyfile.magic.TestType.TEXT, self.passes(definition))
+        definition = "0\tsearch/1\tPQ\tunflagged search\n>2\tbelong\t0\t\\b, zero\n"
+        self.assertEqual(polyfile.magic.TestType.TEXT, self.passes(definition))
+
+    def test_an_unflagged_entry_belongs_to_exactly_one_pass(self):
+        """Tests the fallbacks `set_test_type` reaches when no flag names a pass.
+
+        A `string` takes the binary pass whatever its value, which the comment there calls a
+        compatibility choice; a `search` or a `regex` takes the pass its own value looks like,
+        by `file_looks_utf8`.
+        """
+        for definition, expected in (
+                ("0\tstring\tTU\tplain string\n", polyfile.magic.TestType.BINARY),
+                ("0\tregex/1024\tab+c\tunflagged regex\n", polyfile.magic.TestType.TEXT),
+                ("0\tsearch/1\ta\\x00b\tnull byte\n", polyfile.magic.TestType.BINARY),
+                ("0\tlestring16\tVersion=\tsixteen bit\n", polyfile.magic.TestType.BINARY),
+        ):
+            with self.subTest(definition=definition):
+                self.assertEqual(expected, self.passes(definition))
+
+    def test_both_flags_belong_to_both_passes(self):
+        """Tests that an entry carrying `b` and `t` runs in both passes.
+
+        `softmagic` skips an entry only when exactly one of the two bits is set and it is the
+        wrong one (`file/src/softmagic.c:249-253`), and `set_test_type` sets both bits from both
+        flags, so `magic_defs/sgml:6`, `sgml:17` and `sgml:74` are listed under `Binary patterns`
+        and under `Text patterns` by `file -l`. `TestType` could not express that.
+        """
+        self.assertEqual(polyfile.magic.TestType.BOTH,
+                         self.passes("0\tstring/bt\tRS\tboth flags\n"))
+        self.assertEqual(polyfile.magic.TestType.BOTH,
+                         self.passes("0\tsearch/4096/cWbt\t\\<!doctype\\ svg\tSVG XML document\n"))
+
+    def test_the_shipped_both_flag_entries_are_in_both_passes(self):
+        """Tests that the three shipped `b`-and-`t` entries reach both passes."""
+        matcher = MagicMatcher.parse(*MAGIC_DEFS)
+        in_both = {
+            f"{test.source_info.path.name}:{test.source_info.line}"
+            for test in set(matcher.text_tests) & set(matcher.non_text_tests)
+            if test.source_info is not None
+        }
+        self.assertEqual({"sgml:6", "sgml:17", "sgml:74"}, in_both)
+
+
+class PassGateTest(TestCase):
+    """Regression tests for the missing pass gate reported in issue #3490.
+
+    `softmagic` skips an entry when the buffer looks like text and the entry declares only
+    `STRING_BINTEST`, and when it does not and the entry declares only `STRING_TEXTTEST`
+    (`file/src/softmagic.c:249-253`). PolyFile ran every non-text test against every input, so a
+    definition that spells one shebang twice reported both spellings.
+    """
+
+    @staticmethod
+    def messages(definition: str, data: bytes) -> Set[str]:
+        """Runs a single magic definition against `data`.
+
+        Args:
+            definition: The text of a magic definition file, with tab-separated columns.
+            data: The bytes to classify.
+
+        Returns:
+            The message of every match.
+        """
+        with TemporaryDirectory() as tmp_dir:
+            magic_file = Path(tmp_dir) / "test.magic"
+            magic_file.write_text(definition)
+            return {str(match) for match in MagicMatcher.parse(magic_file).match(data)}
+
+    def test_a_binary_flagged_entry_skips_a_text_buffer(self):
+        """Tests that `b` keeps an entry from running against a buffer that looks like text."""
+        definition = "0\tstring/b\tMARK\tbinary only\n"
+        self.assertNotIn("binary only", self.messages(definition, b"MARK and then some text\n"))
+        self.assertIn("binary only", self.messages(definition, b"MARK\x00\x01\x02\xff"))
+
+    def test_a_text_flagged_entry_skips_a_binary_buffer(self):
+        """Tests that `t` keeps an entry from running against a buffer that is not text.
+
+        The entry never reaches the text pass, because `file_buffer` runs `file_ascmagic` only for
+        a buffer `file_encoding` recognized (`file/src/funcs.c:495-503`).
+        """
+        definition = "0\tstring/t\tMARK\ttext only\n"
+        self.assertNotIn("text only", self.messages(definition, b"MARK\x00\x01\x02\xff"))
+        self.assertIn("text only, ASCII text",
+                      self.messages(definition, b"MARK and then some text\n"))
+
+    def test_an_unflagged_entry_runs_against_both_kinds_of_buffer(self):
+        """Tests that an entry naming no pass is never skipped for the pass it landed in.
+
+        The gate reads the declared flags, not the pass the entry was sorted into, because
+        `softmagic` tests `m->str_flags` rather than `m->flag`.
+        """
+        definition = "0\tstring\tMARK\tno flags\n"
+        self.assertIn("no flags", self.messages(definition, b"MARK\x00\x01\x02\xff"))
+        self.assertIn("no flags", self.messages(definition, b"MARK and then some text\n"))
+
+    def test_a_both_flagged_entry_runs_against_both_kinds_of_buffer(self):
+        """Tests that `b` and `t` together survive the gate in either direction.
+
+        `softmagic`'s skip fires only when exactly one of the two bits is set, so an entry that
+        sets both is never skipped. It must still report one match per buffer and not two, because
+        libmagic stops after its binary pass prints something.
+        """
+        definition = "0\tstring/bt\tMARK\tboth flags\n"
+        for data in (b"MARK\x00\x01\x02\xff", b"MARK and then some text\n"):
+            with self.subTest(data=data):
+                self.assertEqual({"both flags"}, self.messages(definition, data))
+
+    def test_a_script_reports_only_libmagics_variant(self):
+        """Tests that `file/tests/cmd1.testfile` no longer reports a binary variant.
+
+        `magic_defs/varied.script` spells one shebang twice, `string/wt` at line 8 and
+        `string/wb` at line 12. PolyFile reported `a /usr/bin/cmd1 script executable (binary
+        data)` alongside the correct message; `file -b` reports only the one asserted here.
+        """
+        self.assertTrue(FILE_TEST_DIR.exists(),
+                        "Run `git submodule init && git submodule update` in the repository root.")
+        for stem in ("cmd1", "cmd2"):
+            with self.subTest(stem=stem):
+                data = (FILE_TEST_DIR / f"{stem}.testfile").read_bytes()
+                messages = {str(m) for m in MagicMatcher.DEFAULT_INSTANCE.match(data)}
+                self.assertEqual({f"a /usr/bin/{stem} script, ASCII text executable"}, messages)
+
+    def test_an_ascii_svg_is_not_described(self):
+        """Tests that an SVG matched on the file's own bytes gains no encoding description.
+
+        `magic_defs/sgml:6` declares both flags, so it runs in both passes. libmagic's binary pass
+        matches it on the file's bytes and `checkdone` stops before `file_ascmagic`
+        (`file/src/funcs.c:479-503`), so `file -b` reports a bare `SVG Scalable Vector Graphics
+        image`. The same definition matched on the decoded buffer does gain the description, which
+        is what `file/tests/utf16xmlsvg.testfile` expects.
+        """
+        svg = b'<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg"><rect/></svg>\n'
+        messages = {str(m) for m in MagicMatcher.DEFAULT_INSTANCE.match(svg)}
+        self.assertIn("SVG Scalable Vector Graphics image", messages)
+        self.assertNotIn("SVG Scalable Vector Graphics image, ASCII text", messages)
+        utf16 = b"\xff\xfe" + svg.decode("utf-8").encode("utf-16le")
+        self.assertIn("SVG Scalable Vector Graphics image, Unicode text, UTF-16, little-endian text",
+                      {str(m) for m in MagicMatcher.DEFAULT_INSTANCE.match(utf16)})
 
 
 class DefaultTestSemanticsTest(TestCase):
