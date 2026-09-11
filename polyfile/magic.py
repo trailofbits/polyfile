@@ -2293,6 +2293,21 @@ class StringType(DataType[StringTest]):
     def relation(self, expected: StringTest) -> str:
         return expected.relation
 
+    def declared_length(self, expected: StringTest) -> int:
+        """The bytes a following relative (`&`) offset counts from the start of the match.
+
+        This is libmagic's ``m->vallen``, the length the magic value declares rather than the
+        length the match consumed; the ``w`` flag lets the two differ
+        (``file/src/softmagic.c:904-905``).
+
+        Args:
+            expected: The parsed value this type looks for.
+
+        Returns:
+            The number of bytes to add to the offset the value was found at.
+        """
+        return expected.value_length
+
     def allows_invalid_offsets(self, expected: StringTest) -> bool:
         return isinstance(expected, NegatedStringTest)
 
@@ -2410,6 +2425,23 @@ class SearchType(StringType):
         if vallen == 0:
             return 0
         return vallen * max(STRENGTH_MULT // vallen, 1)
+
+    def declared_length(self, expected: StringTest) -> int:
+        """Zero under the ``s`` flag, and the declared length of the value otherwise.
+
+        ``REGEX_OFFSET_START`` zeroes the length libmagic adds to where the search found its value,
+        so a following relative (`&`) offset resolves against the start of the match
+        (``file/src/softmagic.c:966-968``), the same rule `RegexType.matched_extent` applies.
+
+        Args:
+            expected: The parsed value this search looks for.
+
+        Returns:
+            The number of bytes to add to the offset the value was found at.
+        """
+        if self.match_to_start:
+            return 0
+        return super().declared_length(expected)
 
     def match(self, data: bytes, expected: StringTest) -> DataTypeMatch:
         return expected.search(data)
@@ -3369,13 +3401,13 @@ class ConstantMatchTest(MagicTest, Generic[T]):
         wins: the `regex` `s` flag uses it to resolve against the start of the match instead of its
         end (`file/src/softmagic.c:959-963`).
 
-        Failing that, a relative (`&`) offset after a `string` test with an `=` relation resolves
-        against the declared length of the magic value rather than the number of bytes the match
-        consumed (`file/src/softmagic.c:904-905`). The two differ when the `w` flag matches fewer
-        blanks than the value declares. A `search` measures from where it found its value, which
-        PolyFile records as the extent it matched; libmagic adds the declared length there too, but
-        zeroes it for the `s` flag (`file/src/softmagic.c:966-968`), which PolyFile does not model
-        yet. A `pstring` carries its own length prefix, so neither rule takes this path.
+        Failing that, a relative (`&`) offset after a `string` or a `search` test with an `=`
+        relation resolves against the declared length of the magic value rather than the number of
+        bytes the match consumed (`file/src/softmagic.c:904-905` and `966-968`). The two differ
+        when the `w` flag matches fewer blanks than the value declares. Both types measure that
+        length from where they found the value, which is where `MatchedTest.offset` already sits,
+        and `SearchType.declared_length` zeroes it under the `s` flag. A `pstring` carries its own
+        length prefix, so neither rule takes this path.
 
         Args:
             match: The match that this test's data type produced.
@@ -3387,13 +3419,10 @@ class ConstantMatchTest(MagicTest, Generic[T]):
         """
         result = MatchedTest(self, offset=absolute_offset + match.initial_offset,
                              length=len(match.raw_match), value=match.value, parent=parent_match)
-        declares_its_length = (isinstance(self.data_type, StringType)
-                               and not isinstance(self.data_type, SearchType)
-                               and isinstance(self.constant, StringMatch))
         if match.relative_base is not None:
             result.relative_base = absolute_offset + match.relative_base
-        elif declares_its_length:
-            result.relative_base = result.offset + len(self.constant.string)
+        elif isinstance(self.data_type, StringType) and isinstance(self.constant, StringMatch):
+            result.relative_base = result.offset + self.data_type.declared_length(self.constant)
         return result
 
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
