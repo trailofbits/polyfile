@@ -2324,6 +2324,23 @@ class StringType(DataType[StringTest]):
         )
 
     def match(self, data: bytes, expected: StringTest) -> DataTypeMatch:
+        """Applies this test, refusing a value that declares more bytes than the buffer holds.
+
+        libmagic bounds-checks the declared length before it evaluates a string-family test, with
+        ``offset_oob(nbytes, offset, m->vallen)`` (``file/src/softmagic.c:1936-1942``). The check
+        is observable only when a flag lets a value consume fewer bytes than it declares, which is
+        what ``w`` does: it turns each declared blank into an optional one
+        (``file/src/softmagic.c:2116-2121``).
+
+        Args:
+            data: The bytes at the offset being tested.
+            expected: The parsed value this type looks for.
+
+        Returns:
+            The match, or `DataTypeMatch.INVALID` if the buffer is shorter than the value.
+        """
+        if len(data) < expected.value_length:
+            return DataTypeMatch.INVALID
         return expected.matches(data)
 
     STRING_TYPE_FORMAT: Pattern[str] = re.compile(r"^u?string(/(?P<numbytes>\d+))?(?P<opts>/[BbCctTWwf]*)?$")

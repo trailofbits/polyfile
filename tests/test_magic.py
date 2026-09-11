@@ -1235,14 +1235,16 @@ class StringDataTypeTest(TestCase):
         """`w` was rendered as one optional literal space, so a tab or a run of blanks failed.
 
         libmagic consumes a run of any whitespace, of any length including none, wherever the magic
-        value holds a blank (`file/src/softmagic.c:2116-2120`).
+        value holds a blank (`file/src/softmagic.c:2116-2120`). The cases that consume no blank at
+        all carry a trailing byte, because a value never matches a buffer shorter than the length
+        it declares; `test_a_value_longer_than_the_buffer_does_not_match` covers that rule.
         """
         blanks = StringType.parse("string/w")
         space_in_value = blanks.parse_expected("A\\ B")
-        for data in (b"AB", b"A B", b"A  B", b"A\tB", b"A \t B"):
+        for data in (b"ABx", b"A B", b"A  B", b"A\tB", b"A \t B"):
             self.assertTrue(blanks.match(data, space_in_value), repr(data))
         self.assertFalse(blanks.match(b"AxB", space_in_value))
-        self.assertTrue(blanks.match(b"AB", blanks.parse_expected("A\\tB")))
+        self.assertTrue(blanks.match(b"ABx", blanks.parse_expected("A\\tB")))
 
     def test_compact_whitespace_wins_over_optional_blanks(self):
         """`StringMatch` raised when a definition set both `W` and `w`, as `magic_defs/sgml` does.
@@ -1315,6 +1317,37 @@ class StringDataTypeTest(TestCase):
         definition = "0\tsearch/16/ws\tA\\ B\tfound\n>&0\tstring\tx\t%s\n"
         self.assertEqual({"found ABCD, ASCII text, with no line terminators"},
                          self.messages(definition, b"xxABCD"))
+
+    def test_a_value_longer_than_the_buffer_does_not_match(self):
+        """`A\\ B` matched the two bytes `AB` under `w`, because nothing checked the declared length.
+
+        libmagic bounds-checks the declared length of the value against the bytes left in the
+        buffer before it evaluates a string-family test, in
+        `offset_oob(nbytes, offset, m->vallen)` (`file/src/softmagic.c:1936-1942`), so a
+        three-byte value never matches a two-byte file.
+
+        Only `w` made this reachable, because it is the one flag that lets a value consume fewer
+        bytes than it declares. Under `W` every declared blank still consumes at least one byte
+        (`file/src/softmagic.c:2102-2115`), so the `W` and `Ww` cases here already passed; they
+        are kept to pin that `W` stays unaffected.
+        """
+        for flags in ("", "/w", "/W", "/Ww"):
+            definition = f"0\tstring{flags}\tA\\ B\tmatched\n"
+            with self.subTest(flags=flags):
+                self.assertEqual({"ASCII text, with no line terminators"},
+                                 self.messages(definition, b"AB"))
+                self.assertEqual({"matched"}, self.messages(definition, b"A B"))
+
+    def test_a_two_byte_shebang_is_not_a_script(self):
+        """`magic_defs/varied.script:8` declares the three bytes `#!\\ `, so `#!` alone is not it.
+
+        `w` let the two-byte file match the three-byte value, and the shipped definition reported
+        `a  script` for it. `file` 5.48 reports `ASCII text, with no line terminators`.
+        """
+        self.assertEqual({"ASCII text, with no line terminators"},
+                         {str(match) for match in MagicMatcher.DEFAULT_INSTANCE.match(b"#!")})
+        self.assertEqual({"a /bin/sh script, ASCII text executable, with no line terminators"},
+                         {str(match) for match in MagicMatcher.DEFAULT_INSTANCE.match(b"#!/bin/sh")})
 
     def test_wildcard_string_stops_at_a_line_break(self):
         """A wildcard value ran to the first null byte, so a `%s` leaked the rest of the file.
