@@ -1360,7 +1360,7 @@ def parse_xref_row(row, row_start: int, matcher: Matcher, parent: Match, pdf_hea
         parent=parent
     )
     yield ret
-    yield from parse_object(ret, matcher=matcher, parent=ret, pdf_header_offset=pdf_header_offset)
+    yield from parse_object(pos, matcher=matcher, parent=ret, pdf_header_offset=pdf_header_offset)
     ret = Submatch(
         "Generation",
         b"",
@@ -1369,7 +1369,8 @@ def parse_xref_row(row, row_start: int, matcher: Matcher, parent: Match, pdf_hea
         parent=parent
     )
     yield ret
-    yield from parse_object(ret, matcher=matcher, parent=ret, pdf_header_offset=pdf_header_offset)
+    yield from parse_object(gen_no, matcher=matcher, parent=ret,
+                            pdf_header_offset=pdf_header_offset)
 
 
 # Note: PDF parser is registered lazily in __init__.py to defer pdfminer import
