@@ -171,7 +171,9 @@ Three things have to hold, and `tests/test_kaitai.py` checks all of them:
    and nothing reports an error. Check the key against `polyfile --list`.
 2. **The generated parser must be importable.** kaitai-struct-compiler 0.11 does not escape Python
    reserved words used as identifiers, nor backslashes in the docstrings it copies from a
-   specification's `doc:` key, so a handful of generated parsers are not valid Python.
+   specification's `doc:` key, so `polyfile.kaitai.compiler._fix_reserved_keywords()` rewrites both
+   at generation time. `TestGeneratedParsers` fails if a parser reaches the package that Python
+   still cannot read.
 3. **Parsing a real file must yield more than a root node.** `StructNode.explore` walks only a
    specification's `seq:` fields, never its `instances:`, so a specification that keeps its content
    in `instances:` produces an empty tree. Add a sample to `TestKaitaiParsing` to prove otherwise.

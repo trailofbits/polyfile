@@ -86,9 +86,18 @@ There is no `setup.py`. `pyproject.toml` selects `build_backend.py`, an in-tree 
 that regenerates the Kaitai parsers for wheel, sdist and editable builds.
 
 ### Linting
+
+Both passes lint the same targets. Only the second excludes the auto-generated Kaitai parsers:
+generated code never satisfies the style and complexity checks, but it must still be valid Python,
+and `E9` covers `E999`.
+
 ```bash
-# Run flake8 (excludes auto-generated kaitai parsers)
-uv run flake8 polyfile polymerge build_backend.py compile_kaitai_parsers.py \
+# Blocking: syntax errors and undefined names, including the generated parsers
+uv run flake8 polyfile polymerge tests build_backend.py compile_kaitai_parsers.py \
+    --count --select=E9,F63,F7,F82 --show-source --statistics
+
+# Advisory: style and complexity
+uv run flake8 polyfile polymerge tests build_backend.py compile_kaitai_parsers.py \
     --max-complexity=10 --max-line-length=127 --exclude=polyfile/kaitai/parsers
 ```
 
@@ -111,8 +120,12 @@ uvx pip-audit
 ### Pre-Commit Checklist
 Run all checks before committing changes:
 ```bash
-# Lint
-uv run flake8 polyfile polymerge build_backend.py compile_kaitai_parsers.py \
+# Lint (blocking)
+uv run flake8 polyfile polymerge tests build_backend.py compile_kaitai_parsers.py \
+    --count --select=E9,F63,F7,F82 --show-source --statistics
+
+# Lint (advisory)
+uv run flake8 polyfile polymerge tests build_backend.py compile_kaitai_parsers.py \
     --max-complexity=10 --max-line-length=127 --exclude=polyfile/kaitai/parsers
 
 # Security audit (checks for vulnerable dependencies)
@@ -256,8 +269,9 @@ from an excluded spec reaches the package, or if `MANIFEST.in` drifts from the a
 
 ### Gotchas
 - `polyfile/kaitai/parsers/` is auto-generated—never edit manually
-- Four generated parsers (`wmf`, `regf`, `openpgp_message`, `sudoers_ts`) are invalid Python:
-  kaitai-struct-compiler 0.11 escapes neither Python reserved words nor docstring backslashes
+- kaitai-struct-compiler 0.11 escapes neither Python reserved words used as identifiers nor the
+  backslashes in the docstrings it copies from a spec, so `polyfile/kaitai/compiler.py`
+  post-processes everything it generates in `_fix_reserved_keywords()`
 - `archive/rar.ksy` loops forever on RAR5, so it is deliberately unmapped
 - Java is required only when the parsers must be recompiled; installing from a published sdist
   or wheel reuses the generated ones

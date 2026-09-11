@@ -55,9 +55,9 @@ KAITAI_MIME_MAPPING: Dict[str, str] = {
     # Only ICC v4 profiles parse; the spec validates the version field, so v2 profiles raise a
     # KaitaiStructError and fall through to the next parser.
     "application/vnd.iccprofile": "image/icc_4.ksy",
-    # image/wmf is unmapped because polyfile/kaitai/parsers/wmf.py is not valid Python:
-    # kaitai-struct-compiler 0.11 does not escape Python reserved words, so the spec's `not` enum
-    # member compiles to `not = 6` at line 32. See TestGeneratedParsers in tests/test_kaitai.py.
+    # Only placeable metafiles parse; the spec's first field is the Aldus placeable header, so a
+    # bare META_HEADER file raises a KaitaiStructError.
+    "image/wmf": "image/wmf.ksy",
 
     # Audio and video
     "audio/midi": "media/standard_midi_file.ksy",
