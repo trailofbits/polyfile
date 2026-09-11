@@ -19,7 +19,7 @@ class SudoersTs(KaitaiStruct):
     """
 
     class TsType(IntEnum):
-        global = 1
+        global_ = 1
         tty = 2
         ppid = 3
         lockexcl = 4

@@ -29,7 +29,7 @@ class Wmf(KaitaiStruct):
         masknotpen = 3
         notcopypen = 4
         maskpennot = 5
-        not = 6
+        not_ = 6
         xorpen = 7
         notmaskpen = 8
         maskpen = 9

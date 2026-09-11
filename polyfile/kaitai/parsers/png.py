@@ -3,8 +3,8 @@
 
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
-from polyfile.kaitai.parsers import exif
 from polyfile.kaitai.parsers import icc_4
+from polyfile.kaitai.parsers import exif
 from enum import IntEnum
 import collections
 import zlib

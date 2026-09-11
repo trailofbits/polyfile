@@ -11,7 +11,7 @@ if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
     raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class Regf(KaitaiStruct):
-    """This spec allows to parse files used by Microsoft Windows family of
+    r"""This spec allows to parse files used by Microsoft Windows family of
     operating systems to store parts of its "registry". "Registry" is a
     hierarchical database that is used to store system settings (global
     configuration, per-user, per-application configuration, etc).
