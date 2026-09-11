@@ -11,7 +11,7 @@ if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
     raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class Uf2(KaitaiStruct):
-    """UF2 is a file format, developed by Microsoft for PXT (also known as
+    r"""UF2 is a file format, developed by Microsoft for PXT (also known as
     Microsoft MakeCode), that is particularly suitable for flashing
     microcontrollers over MSC (Mass Storage Class; aka removable flash drive).
     

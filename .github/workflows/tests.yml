@@ -44,9 +44,12 @@ jobs:
       uses: trailofbits/gh-action-pip-audit@1220774d901786e6f652ae159f7b6bc8fea6d266 # v1.1.0
     - name: Lint with flake8
       run: |
-        # stop the build if there are Python syntax errors or undefined names
-        flake8 polyfile polymerge tests build_backend.py compile_kaitai_parsers.py --exclude polyfile/kaitai/parsers --count --select=E9,F63,F7,F82 --show-source --statistics
-        # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
+        # Stop the build if there are Python syntax errors or undefined names. This pass covers
+        # polyfile/kaitai/parsers deliberately: E9 includes E999, so it is what catches a
+        # generated parser that kaitai-struct-compiler emitted as invalid Python.
+        flake8 polyfile polymerge tests build_backend.py compile_kaitai_parsers.py --count --select=E9,F63,F7,F82 --show-source --statistics
+        # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide. Generated
+        # code will never satisfy the style and complexity checks, so it stays excluded here.
         flake8 polyfile polymerge tests build_backend.py compile_kaitai_parsers.py --exclude polyfile/kaitai/parsers --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
     - name: Test with pytest
       run: |

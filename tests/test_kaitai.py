@@ -5,9 +5,10 @@ import pickle
 import signal
 import struct
 from tempfile import NamedTemporaryFile, TemporaryDirectory
-from typing import Tuple
+from typing import Optional, Tuple
 from unittest import skipUnless, TestCase
 from urllib.error import URLError
+import warnings
 import zipfile
 
 from kaitaistruct import KaitaiStructError
@@ -87,43 +88,31 @@ class TestKaitaiMimeMapping(TestCase):
 
 
 class TestGeneratedParsers(TestCase):
-    """Guards against mapping a ``.ksy`` whose generated Python cannot even be imported."""
+    """Guards against shipping a generated parser that Python cannot read.
 
-    # kaitai-struct-compiler 0.11 neither escapes Python reserved words used as identifiers nor
-    # escapes backslashes in the docstrings it copies from a spec's `doc:` key, so these four
-    # generated parsers are not valid Python and cannot be mapped:
-    #
-    #     wmf.py:32               `not = 6`     (enum member)
-    #     sudoers_ts.py:22        `global = 1`  (enum member)
-    #     openpgp_message.py:816  `self.class`  (sequence field)
-    #     regf.py:14              an unescaped `\N` in a docstring
-    KNOWN_UNCOMPILABLE = {
-        "openpgp_message.py",
-        "regf.py",
-        "sudoers_ts.py",
-        "wmf.py",
-    }
+    kaitai-struct-compiler 0.11 escapes neither the reserved words a specification uses as
+    identifiers nor the backslashes in the documentation it copies from a ``doc:`` key, so
+    :func:`polyfile.kaitai.compiler._fix_reserved_keywords` post-processes everything it
+    generates. Without that pass four parsers raise a ``SyntaxError`` when they are imported
+    (``wmf.py``, ``sudoers_ts.py``, ``openpgp_message.py``, and ``regf.py``) and three more raise
+    a ``SyntaxWarning``, which is what this test fails on.
+    """
 
     @staticmethod
-    def compiles(path: Path) -> bool:
-        try:
-            compile(path.read_text(encoding="utf-8"), str(path), "exec")
-        except (SyntaxError, ValueError):
-            return False
-        return True
+    def compile_error(path: Path) -> Optional[str]:
+        """Returns why Python rejects a generated parser, or :const:`None` if it accepts it."""
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", SyntaxWarning)
+            try:
+                compile(path.read_text(encoding="utf-8"), str(path), "exec")
+            except (SyntaxError, SyntaxWarning, ValueError) as e:
+                return str(e)
+        return None
 
     def test_generated_parsers_compile(self):
         for path in sorted(PARSER_DIR.glob("*.py")):
-            if path.name in self.KNOWN_UNCOMPILABLE:
-                continue
             with self.subTest(parser=path.name):
-                self.assertTrue(self.compiles(path))
-
-    def test_known_uncompilable_parsers_still_fail(self):
-        """Prune ``KNOWN_UNCOMPILABLE`` once upstream fixes a parser, then consider mapping it."""
-        for name in sorted(self.KNOWN_UNCOMPILABLE):
-            with self.subTest(parser=name):
-                self.assertFalse(self.compiles(PARSER_DIR / name))
+                self.assertIsNone(self.compile_error(path))
 
 
 class TestKaitaiParsing(TestCase):
@@ -182,6 +171,13 @@ class TestKaitaiParsing(TestCase):
             ),
             "media/creative_voice_file.ksy": (
                 b"Creative Voice File\x1a" + struct.pack("<HHH", 26, 0x010A, 0x1129) + b"\x00"
+            ),
+            # An Aldus placeable header, a META_HEADER, and a single META_EOF record.
+            "image/wmf.ksy": (
+                b"\xd7\xcd\xc6\x9a\x00\x00" + struct.pack("<hhhhH", 0, 0, 100, 100, 96)
+                + bytes(4) + struct.pack("<H", 0)
+                + struct.pack("<HHHIHIH", 1, 9, 0x0300, 12, 0, 3, 0)
+                + struct.pack("<IH", 3, 0)
             ),
             "serialization/python_pickle.ksy": pickle.dumps({"polyfile": [1, 2, 3]}),
             "serialization/asn1/asn1_der.ksy": gzip.decompress(DER_CERTIFICATE.read_bytes()),

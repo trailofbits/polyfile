@@ -11,7 +11,7 @@ if getattr(kaitaistruct, 'API_VERSION', (0, 9)) < (0, 11):
     raise Exception("Incompatible Kaitai Struct Python API: 0.11 or later is required, but you have %s" % (kaitaistruct.__version__))
 
 class WindowsEvtLog(KaitaiStruct):
-    """EVT files are Windows Event Log files written by older Windows
+    r"""EVT files are Windows Event Log files written by older Windows
     operating systems (2000, XP, 2003). They are used as binary log
     files by several major Windows subsystems and
     applications. Typically, several of them can be found in

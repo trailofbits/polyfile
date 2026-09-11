@@ -3,8 +3,8 @@
 
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
-from polyfile.kaitai.parsers import some_ip_sd_entries
 from polyfile.kaitai.parsers import some_ip_sd_options
+from polyfile.kaitai.parsers import some_ip_sd_entries
 import collections
 
 
