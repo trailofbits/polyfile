@@ -171,6 +171,9 @@ class FileStream(IO):
     def name(self):
         return self._name
 
+    def __str__(self):
+        return str(self._name)
+
     @property
     def root(self):
         if self._root is None:

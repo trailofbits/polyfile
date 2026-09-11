@@ -285,7 +285,7 @@ class Matcher:
                     if mimetype in matched_mimetypes:
                         continue
                     matched_mimetypes.add(mimetype)
-                    yield from self.handle_mimetype(mimetype, result, context.data, file_stream, parent)
+                    yield from self.handle_mimetype(mimetype, result, context.data, f, parent)
 
 
 class Analyzer:
