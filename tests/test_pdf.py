@@ -1,11 +1,55 @@
 """
 Unit tests for PDF parsing functionality, particularly edge cases with empty lists
-and malformed dictionary values that were causing crashes (issue #12).
+and malformed dictionary values that were causing crashes (issue #12), and the byte-provenance
+guards that keep a malformed PDF from truncating the match tree (issue #3464).
 """
+import base64
+import logging
 import unittest
+from tempfile import NamedTemporaryFile
+from typing import List, Tuple
 from unittest.mock import MagicMock, patch
 from polyfile.pdf import PDFList, parse_object, PDFDict
-from polyfile.polyfile import Match
+from polyfile.polyfile import Match, Matcher
+
+
+WELL_FORMED_PDF: bytes = base64.b64decode(
+    "JVBERi0xLjcKMSAwIG9iago8PCAvVHlwZSAvQ2F0YWxvZyAvUGFnZXMgMiAwIFIgPj4KZW5k"
+    "b2JqCjIgMCBvYmoKPDwgL1R5cGUgL1BhZ2VzIC9LaWRzIFtdIC9Db3VudCAwID4+CmVuZG9i"
+    "agp4cmVmCjAgMwowMDAwMDAwMDAwIDY1NTM1IGYgCjAwMDAwMDAwMDkgMDAwMDAgbiAKMDAw"
+    "MDAwMDA1OCAwMDAwMCBuIAp0cmFpbGVyCjw8IC9TaXplIDMgL1Jvb3QgMSAwIFIgPj4Kc3Rh"
+    "cnR4cmVmCjExMAolJUVPRgo="
+)
+"""A two-object PDF with a correct cross-reference table, used as the control."""
+
+EMPTY_TRAILER_PDF: bytes = base64.b64decode(
+    "JVBERi0xLjcKMSAwIG9iago8PCAvVHlwZSAvQ2F0YWxvZyAvUGFnZXMgMiAwIFIgPj4KZW5k"
+    "b2JqCjIgMCBvYmoKPDwgL1R5cGUgL1BhZ2VzIC9LaWRzIFtdIC9Db3VudCAwID4+CmVuZG9i"
+    "agp4cmVmCjAgMwowMDAwMDAwMDAwIDY1NTM1IGYgCjAwMDAwMDAwMDkgMDAwMDAgbiAKMDAw"
+    "MDAwMDA1OCAwMDAwMCBuIAp0cmFpbGVyCjw8Pj4Kc3RhcnR4cmVmCjExMAolJUVPRgo="
+)
+"""`WELL_FORMED_PDF` with an empty trailer, so pdfminer finds no `/Root`."""
+
+RECONSTRUCTED_XREF_PDF: bytes = base64.b64decode(
+    "JVBERi0xLjcKMSAwIG9iago8PCAvVHlwZSAvQ2F0YWxvZyAvUGFnZXMgMiAwIFIgPj4KZW5k"
+    "b2JqCjIgMCBvYmoKPDwgL1R5cGUgL1BhZ2VzIC9LaWRzIFtdIC9Db3VudCAwID4+CmVuZG9i"
+    "agp4cmVmCjAgMwowMDAwMDAwMDAwIDY1NTM1IGYgCjAwMDAwMDAwMDkgMDAwMDAgbiAKMDAw"
+    "MDAwMDA1OCAwMDAwMCBuIAp0cmFpbGVyCjw8IC9TaXplIDMgL1Jvb3QgMSAwIFIgPj4Kc3Rh"
+    "cnR4cmVmCjAKJSVFT0YK"
+)
+"""`WELL_FORMED_PDF` with a `startxref` of 0, so pdfminer rebuilds the table with
+`PDFXRefFallback`."""
+
+INTEGER_KEY_PDF: bytes = base64.b64decode(
+    "JVBERi0xLjcKMSAwIG9iago8PCAvVHlwZSAvQ2F0YWxvZyAvUGFnZXMgMiAwIFIgL0JhZCAz"
+    "IDAgUiA+PgplbmRvYmoKMiAwIG9iago8PCAvVHlwZSAvUGFnZXMgL0tpZHMgW10gL0NvdW50"
+    "IDAgPj4KZW5kb2JqCjMgMCBvYmoKPDwgNDIgKHZhbHVlKSA+PgplbmRvYmoKeHJlZgowIDQK"
+    "MDAwMDAwMDAwMCA2NTUzNSBmIAowMDAwMDAwMDA5IDAwMDAwIG4gCjAwMDAwMDAwNjkgMDAw"
+    "MDAgbiAKMDAwMDAwMDEyMSAwMDAwMCBuIAp0cmFpbGVyCjw8IC9TaXplIDQgL1Jvb3QgMSAw"
+    "IFIgPj4Kc3RhcnR4cmVmCjE1MwolJUVPRgo="
+)
+"""A PDF whose object 3 is `<< 42 (value) >>`; pdfminer names that key with `literal_name`,
+which returns a plain `str` for a key that is not a literal."""
 
 
 class TestPDFList(unittest.TestCase):
@@ -192,6 +236,123 @@ class TestPDFDictionaryParsing(unittest.TestCase):
         # Should have processed both key-value pairs
         # (at minimum: dict_obj, 2x KeyValuePair, 2x Key, 2x Value)
         self.assertGreater(len(results), 5)
+
+
+class CapturedWarnings(logging.Handler):
+    """Collects the warnings PolyFile's loggers emit while a file is matched."""
+
+    def __init__(self):
+        super().__init__(level=logging.WARNING)
+        self.records: List[logging.LogRecord] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        self.records.append(record)
+
+    def messages(self, logger_name: str) -> List[str]:
+        """Returns the messages one logger emitted.
+
+        Args:
+            logger_name: The name the logger was created with, such as "PDF".
+
+        Returns:
+            Every warning that logger emitted, in the order it emitted them.
+        """
+        return [r.getMessage() for r in self.records if r.name == logger_name]
+
+
+class TestMalformedPDFMatchTree(unittest.TestCase):
+    """Regression tests for the byte-provenance guards in issue #3464.
+
+    `Matcher.handle_mimetype` catches every exception a parser raises and logs a warning, so an
+    unguarded dereference never reaches the user as a traceback: it abandons the rest of the match
+    tree instead. These tests therefore assert on the tree and on the warnings, not on exceptions.
+    """
+
+    def match(self, data: bytes) -> Tuple[List[str], CapturedWarnings]:
+        """Runs the full matcher over a PDF held in memory.
+
+        Args:
+            data: The contents of the PDF to match.
+
+        Returns:
+            The name of every match, in the order PolyFile produced them, and the warnings that
+            were logged while it did.
+        """
+        handler = CapturedWarnings()
+        root = logging.getLogger()
+        previous_level = root.level
+        root.addHandler(handler)
+        root.setLevel(logging.WARNING)
+        try:
+            with NamedTemporaryFile(suffix=".pdf") as f:
+                f.write(data)
+                f.flush()
+                return [m.name for m in Matcher(parse=True).match(f.name)], handler
+        finally:
+            root.removeHandler(handler)
+            root.setLevel(previous_level)
+
+    def assertParserFinished(self, warnings: CapturedWarnings):
+        """Asserts that no parser abandoned its match tree part way through."""
+        aborted = [m for m in warnings.messages("polyfile") if "raised an exception" in m]
+        self.assertEqual([], aborted)
+
+    def test_well_formed_pdf_is_mapped_completely(self):
+        """Every structure of an undamaged PDF is mapped, with nothing logged."""
+        names, warnings = self.match(WELL_FORMED_PDF)
+        self.assertParserFinished(warnings)
+        self.assertEqual([], warnings.messages("PDF"))
+        self.assertEqual(2, names.count("PDFObject"))
+        self.assertEqual(1, names.count("Trailer"))
+        self.assertEqual(1, names.count("XRefTable"))
+        self.assertEqual(2, names.count("XRefRow"))
+
+    def test_empty_trailer_still_maps_the_xref_table(self):
+        """An empty trailer no longer costs the cross-reference table.
+
+        `min()` over the trailer's keys raised `ValueError: min() arg is an empty sequence`, which
+        abandoned the match tree before any of the `XRefTable` submatches were produced.
+        """
+        names, warnings = self.match(EMPTY_TRAILER_PDF)
+        self.assertParserFinished(warnings)
+        self.assertEqual(2, names.count("PDFObject"))
+        self.assertEqual(0, names.count("Trailer"))
+        self.assertEqual(1, names.count("XRefTable"))
+        self.assertEqual(2, names.count("XRefRow"))
+
+    def test_reconstructed_xref_rows_are_skipped(self):
+        """A rebuilt cross-reference table is reported, not fatal.
+
+        `PDFXRefFallback` stores plain integer positions, so `c.pdf_offset` raised
+        `AttributeError: 'int' object has no attribute 'pdf_offset'` and discarded the rest of
+        the match tree.
+        """
+        names, warnings = self.match(RECONSTRUCTED_XREF_PDF)
+        self.assertParserFinished(warnings)
+        self.assertEqual(2, names.count("PDFObject"))
+        self.assertEqual(1, names.count("Trailer"))
+        self.assertEqual(0, names.count("XRefTable"))
+        skipped = [m for m in warnings.messages("PDF") if "PDFXRefFallback" in m]
+        self.assertEqual(1, len(skipped))
+        self.assertIn("Skipping 2 rows", skipped[0])
+
+    def test_dictionary_key_without_provenance_is_skipped(self):
+        """One unmappable dictionary key costs that key, not the rest of the file.
+
+        `key.pdf_offset` raised `AttributeError: 'str' object has no attribute 'pdf_offset'` for a
+        key that pdfminer named with `literal_name`, which abandoned the match tree before the
+        trailer and the cross-reference table were mapped.
+        """
+        names, warnings = self.match(INTEGER_KEY_PDF)
+        self.assertParserFinished(warnings)
+        self.assertEqual(3, names.count("PDFObject"))
+        self.assertEqual(1, names.count("Trailer"))
+        self.assertEqual(1, names.count("XRefTable"))
+        self.assertEqual(3, names.count("XRefRow"))
+        self.assertEqual(
+            ["Skipping PDF dictionary key '42' because it has no byte provenance"],
+            warnings.messages("PDF")
+        )
 
 
 if __name__ == '__main__':
