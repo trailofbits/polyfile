@@ -680,16 +680,14 @@ class MagicTest(TestCase):
         RFC 8259 section 8.1 permits either reading. Before the fix the JSON match suppressed the
         text description, so the answer `file` gives was lost.
 
-        PolyFile's UTF-8 description omits libmagic's ``(with BOM)`` clause, which is the separate
-        gap in `detect_text_encoding` tracked in trailofbits/polyfile#3537. The UTF-32 cases carry
-        no trailing clauses because their description comes from a soft magic definition in
-        `polyfile/magic_defs/` rather than from the text encoding machinery, which is also where
-        `file` gets it.
+        The UTF-32 cases carry no trailing clauses because their description comes from a soft
+        magic definition in `polyfile/magic_defs/` rather than from the text encoding machinery,
+        which is also where `file` gets it.
         """
         document = '{"a": 1}'
         cases = (
             ("utf-8-sig", b"\xef\xbb\xbf" + document.encode("utf-8"),
-             "Unicode text, UTF-8 text, with no line terminators"),
+             "Unicode text, UTF-8 (with BOM) text, with no line terminators"),
             ("utf-16-le", f"\ufeff{document}".encode("utf-16-le"),
              "Unicode text, UTF-16, little-endian text, with no line terminators"),
             ("utf-16-be", f"\ufeff{document}".encode("utf-16-be"),
@@ -713,7 +711,7 @@ class MagicTest(TestCase):
         NDJSON match alongside each description.
         """
         self.assertEqual(
-            {"New Line Delimited JSON text data", "Unicode text, UTF-8 text"},
+            {"New Line Delimited JSON text data", "Unicode text, UTF-8 (with BOM) text"},
             self.messages(MagicMatcher.DEFAULT_INSTANCE, b"\xef\xbb\xbf{}\n{}\n")
         )
         self.assertEqual(
@@ -1959,10 +1957,49 @@ class TextEncodingDescriptionTest(TestCase):
                 (b"\xff\xfe" + "hi\n".encode("utf-16-le"),
                  "Unicode text, UTF-16, little-endian text"),
                 (b"\xfe\xff" + "hi\n".encode("utf-16-be"), "Unicode text, UTF-16, big-endian text"),
+                (b"\xef\xbb\xbfhello\n", "Unicode text, UTF-8 (with BOM) text"),
                 (b"caf\xe9\n", "ISO-8859 text"),
                 (b"text\x80\x9f\n", "Non-ISO extended-ASCII text")):
             with self.subTest(data=data):
                 self.assertEqual(expected, self.describe(data))
+
+    def test_a_utf8_byte_order_mark_is_named(self):
+        """Tests the ``(with BOM)`` clause and the two inputs that do not earn it.
+
+        `file_encoding` tries `looks_utf8_with_BOM` ahead of `file_looks_utf8` and names what it
+        finds `Unicode text, UTF-8 (with BOM)` (`file/src/encoding.c:117-123`). PolyFile had no
+        case for the mark, so every marked file came out as `Unicode text, UTF-8 text`
+        (trailofbits/polyfile#3537).
+
+        `looks_utf8_with_BOM` gives up unless there are more than three bytes, so a buffer holding
+        nothing but the mark is plain UTF-8 whose one character is U+FEFF, and a mark at any offset
+        but zero is not a mark at all.
+        """
+        for data, expected in (
+                (b"\xef\xbb\xbfa", "Unicode text, UTF-8 (with BOM) text, with no line terminators"),
+                (b"\xef\xbb\xbfa\r\nb\r\n",
+                 "Unicode text, UTF-8 (with BOM) text, with CRLF line terminators"),
+                ("﻿café\n".encode(), "Unicode text, UTF-8 (with BOM) text"),
+                (b"\xef\xbb\xbfa\x1bb\n",
+                 "Unicode text, UTF-8 (with BOM) text, with escape sequences"),
+                (b"\xef\xbb\xbf", "Unicode text, UTF-8 text, with no line terminators"),
+                ("a﻿b\n".encode(), "Unicode text, UTF-8 text")):
+            with self.subTest(data=data):
+                self.assertEqual(expected, self.describe(data))
+
+    def test_the_byte_order_mark_is_not_measured_as_a_character(self):
+        """Tests that the mark counts towards neither the longest line nor the encoding name.
+
+        `looks_utf8_with_BOM` classifies the bytes after the mark, so the mark never reaches the
+        buffer `file_ascmagic_with_encoding` measures and a 300-character line stays short. Keeping
+        the mark as U+FEFF makes it the 301st character and produces
+        `with very long lines (301)`, which `file` prints for neither buffer below.
+        """
+        for length, expected in ((300, "Unicode text, UTF-8 (with BOM) text"),
+                                 (301, "Unicode text, UTF-8 (with BOM) text, "
+                                       "with very long lines (301)")):
+            with self.subTest(length=length):
+                self.assertEqual(expected, self.describe(b"\xef\xbb\xbf" + b"a" * length + b"\n"))
 
     def test_line_terminators_are_named(self):
         """Tests the line-terminator clause, including the LF-only case that has none.
