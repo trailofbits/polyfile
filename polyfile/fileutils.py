@@ -110,6 +110,19 @@ class FileStream(IO):
             mode: str = "rb",
             close_on_exit: Optional[bool] = None
     ):
+        """Presents a region of a file or stream as a stream in its own right.
+
+        Args:
+            path_or_stream: The bytes to read. A path is opened, `bytes` are wrapped in a
+                `BytesIO`, and an already-open stream is wrapped in place.
+            start: The offset within `path_or_stream` at which this stream begins.
+            length: How many bytes this stream holds, counted from `start` rather than from the
+                beginning of `path_or_stream`, and clamped to the bytes that remain after
+                `start`. Defaults to all of them.
+            mode: The mode to open `path_or_stream` with, when it is a path.
+            close_on_exit: Whether leaving this stream's context closes the underlying stream,
+                defaulting to True for a path this opened and False for a stream it was handed.
+        """
         if isinstance(path_or_stream, Path):
             path_or_stream = str(path_or_stream)
         if isinstance(path_or_stream, str):
@@ -126,24 +139,21 @@ class FileStream(IO):
                 raise ValueError('FileStream can only wrap streams that are readable')
             self._stream = path_or_stream
         if isinstance(path_or_stream, FileStream):
-            if length is None:
-                self._length = len(path_or_stream) - start
-            else:
-                self._length = min(length, len(path_or_stream))
+            stream_length = len(path_or_stream)
+        elif isinstance(path_or_stream, BytesIO):
+            orig_pos = path_or_stream.tell()
+            path_or_stream.seek(0, SEEK_END)
+            try:
+                stream_length = path_or_stream.tell()
+            finally:
+                path_or_stream.seek(orig_pos)
         else:
-            if isinstance(path_or_stream, BytesIO):
-                orig_pos = path_or_stream.tell()
-                path_or_stream.seek(0, SEEK_END)
-                try:
-                    filesize = path_or_stream.tell()
-                finally:
-                    path_or_stream.seek(orig_pos)
-            else:
-                filesize = os.path.getsize(self._stream.name)
-            if length is None:
-                self._length = filesize - start
-            else:
-                self._length = min(filesize, length) - start
+            stream_length = os.path.getsize(self._stream.name)
+        remaining = max(stream_length - start, 0)
+        if length is None:
+            self._length = remaining
+        else:
+            self._length = min(length, remaining)
         if close_on_exit is None:
             close_on_exit = False
         self._name = self._stream.name
