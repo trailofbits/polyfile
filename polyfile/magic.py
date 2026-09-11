@@ -4955,16 +4955,29 @@ class MagicMatcher:
     }
 
     @staticmethod
-    def parse_strength(specification: bytes, current_test: MagicTest):
+    def parse_strength(
+            specification: bytes, current_test: MagicTest, def_file: Union[str, Path],
+            line_number: int
+    ):
         """Records a ``!:strength`` factor on the entry that the directive applies to.
 
         libmagic assigns the factor to ``me->mp[0]``, the level-0 test of the entry, whatever depth
         the directive appears at, and keeps the first factor an entry declares
         (``file/src/apprentice.c:2470-2497``). A ``name`` entry rejects the directive outright.
 
+        The factor is the first whitespace-delimited token after the operator, because libmagic
+        reads it with ``strtoul`` and then requires whatever follows the digits to be whitespace
+        (``file/src/apprentice.c:2507-2517``). That is what makes a trailing comment harmless,
+        as on ``magic_defs/ctf:23``.
+
         Args:
             specification: The rest of the line after ``!:strength``.
             current_test: The most recently parsed test, which locates the entry.
+            def_file: The definition file the directive came from.
+            line_number: The line the directive is on.
+
+        Raises:
+            ValueError: If the directive carries no factor, or one that is not an integer.
         """
         entry = current_test
         while entry.parent is not None:
@@ -4980,9 +4993,10 @@ class MagicMatcher:
         else:
             factor_str = spec[1:].strip()
         try:
-            entry.strength_factor = int(factor_str)
-        except ValueError:
-            return
+            entry.strength_factor = int(factor_str.split(maxsplit=1)[0])
+        except (IndexError, ValueError):
+            raise ValueError(f"{def_file!s} line {line_number}: Invalid strength factor "
+                             f"{factor_str!r}")
         entry.strength_op = op
 
     @staticmethod
@@ -5017,7 +5031,9 @@ class MagicMatcher:
                     continue
                 elif raw_line.startswith(b"!:strength"):
                     if current_test is not None:
-                        MagicMatcher.parse_strength(raw_line[10:], current_test)
+                        MagicMatcher.parse_strength(
+                            raw_line[10:], current_test, def_file, line_number
+                        )
                     continue
                 try:
                     line = raw_line.decode("utf-8")
