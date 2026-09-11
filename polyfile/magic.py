@@ -362,6 +362,15 @@ which of `MagicMatcher.match`'s two passes a test belongs to.
 STRING_DEFAULT_RANGE: int = 100
 """The ``str_range`` libmagic gives a ``search`` that declared none (``file/src/file.h:433``)."""
 
+REGEX_MAX: int = 8192
+"""``FILE_REGEX_MAX``, the hard ceiling libmagic puts on a regular expression's search region.
+
+``file/src/apprentice.c:573`` seeds ``ms->regex_max`` with it and ``file/src/softmagic.c:1421-1422``
+clamps the region to it, so a test that asks for more than 8KiB silently gets 8KiB. ``regex/128l``
+asks for 10240 bytes and is one of the shipped definitions this bites.
+"""
+
+
 STRING_FLAG_BITS: Tuple[Tuple[str, int], ...] = (
     ("compact_whitespace", 0x0001),
     ("optional_blanks", 0x0002),
@@ -2636,11 +2645,46 @@ class MagicRegex:
     def search(self, data: bytes) -> Optional["re.Match[bytes]"]:
         return self.compiled.search(data)
 
-    def match(self, data: bytes) -> Optional["re.Match[bytes]"]:
-        return self.compiled.match(data)
-
     def __str__(self):
         return self.pattern.decode("utf-8", errors="replace")
+
+
+def line_region_length(region: bytes, line_count: int) -> int:
+    """How many bytes of `region` fall within its first `line_count` lines.
+
+    ``file/src/softmagic.c:1424-1440`` walks forward one line terminator at a time and stops once
+    it has stepped over `line_count` of them. Three details of that walk are load bearing: it looks
+    for a ``\\r`` only when no ``\\n`` remains anywhere ahead, it leaves the terminator out of the
+    region when the terminator is the region's own last byte, and it resumes each search one byte
+    past the line it just took, so a terminator sitting in that position is passed over. Running
+    out of terminators before `line_count` of them widens the region back to all of `region`.
+
+    libmagic also steps over a ``\\r\\n`` pair as one terminator, which this leaves out because the
+    step cannot be reached: the ``\\r`` search runs only once no ``\\n`` remains ahead, and a pair
+    needs one.
+
+    Args:
+        region: The bytes the byte budget already limited the test to.
+        line_count: The number of lines the ``l`` flag allows; zero imposes no limit.
+
+    Returns:
+        The number of bytes of `region` that the test may search.
+    """
+    end = len(region)
+    last = end
+    lines = line_count
+    position = 0
+    while lines and position < end:
+        found = region.find(b"\n", position, end)
+        if found < 0:
+            found = region.find(b"\r", position, end)
+        if found < 0:
+            break
+        position = found + 1 if found < end - 1 and region[found] == 0x0A else found
+        last = position
+        lines -= 1
+        position += 1
+    return end if lines else last
 
 
 class RegexType(DataType[MagicRegex]):
@@ -2766,13 +2810,38 @@ class RegexType(DataType[MagicRegex]):
             return DataTypeMatch(raw_match, value, initial_offset=start, relative_base=start)
         return DataTypeMatch(raw_match, value, initial_offset=start)
 
+    def region(self, data: bytes) -> bytes:
+        """The bytes of `data` this test is allowed to look at, before it is NUL-terminated.
+
+        ``mcopy`` budgets the region in bytes: `length` of them, or, under the ``l`` flag, `length`
+        lines of an assumed 80 bytes each. A budget of zero means the rest of the file. Either way
+        the budget is clamped to what the file has left and then to `REGEX_MAX`
+        (``file/src/softmagic.c:1411-1422``). The ``l`` flag then cuts the region back to whole
+        lines (``file/src/softmagic.c:1424-1440``).
+
+        Args:
+            data: The file's bytes from the offset this test runs at.
+
+        Returns:
+            The region libmagic copies for ``regexec``.
+        """
+        byte_budget = self.length * 80 if self.limit_lines else self.length
+        if byte_budget == 0 or byte_budget > len(data):
+            byte_budget = len(data)
+        region = data[:min(byte_budget, REGEX_MAX)]
+        if self.limit_lines:
+            return region[:line_region_length(region, self.length)]
+        return region
+
     def subject(self, data: bytes) -> bytes:
         """The bytes libmagic hands to ``regexec``, given the file's bytes from this test's offset.
 
-        libmagic copies at most `length` bytes of the region and then terminates the copy by
+        libmagic copies the region `RegexType.region` picks out, then terminates the copy by
         overwriting its last byte with a NUL (``file/src/softmagic.c:2393-2405``). It passes the
         result as a C string, so the pattern never sees the final byte of the region, and never
-        sees anything past a NUL that was already in it.
+        sees anything past a NUL that was already in it. The ``l`` flag narrows the region rather
+        than the copy, so under it the byte the NUL claims is the last byte of the last allowed
+        line.
 
         Args:
             data: The file's bytes from the offset this test runs at.
@@ -2780,27 +2849,13 @@ class RegexType(DataType[MagicRegex]):
         Returns:
             The bytes to match the pattern against.
         """
-        region = data[:self.length]
-        return region[:-1].partition(b"\0")[0]
+        return self.region(data)[:-1].partition(b"\0")[0]
 
     def match(self, data: bytes, expected: MagicRegex) -> DataTypeMatch:
-        if not self.limit_lines:
-            m = expected.search(self.subject(data))
-            if m is None:
-                return DataTypeMatch.INVALID
-            return self.matched_extent(m, 0)
-        offset = 0
-        # libmagic uses an implicit byte limit that assumes 80 characters per line
-        byte_limit = 80 * self.length
-        for _ in range(self.length):
-            line_offset = data.find(b"\n", offset, byte_limit)
-            if line_offset < 0:
-                return DataTypeMatch.INVALID
-            m = expected.match(data[offset:line_offset])
-            if m is not None:
-                return self.matched_extent(m, offset)
-            offset = line_offset + 1
-        return DataTypeMatch.INVALID
+        m = expected.search(self.subject(data))
+        if m is None:
+            return DataTypeMatch.INVALID
+        return self.matched_extent(m, 0)
 
     REGEX_TYPE_FORMAT: Pattern[str] = re.compile(
         r"^regex(/(?P<length>\d+)?(?P<flags1>[bcslTt]*)(/(?P<flags2>[bcslTt]*))?)?$"

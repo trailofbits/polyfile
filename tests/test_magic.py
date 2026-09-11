@@ -2586,3 +2586,134 @@ class RegexSubjectTest(TestCase):
         matches = [str(match) for match in MagicMatcher.DEFAULT_INSTANCE.match(testfile.read_bytes())]
         self.assertNotIn("Microsoft OOXML", matches)
         self.assertEqual("Hancom HWP (Hangul Word Processor) file, HWPX", matches[0])
+
+
+class RegexLineLimitTest(TestCase):
+    """Regression tests for the `l` flag on a `regex` test, reported in issue #3525.
+
+    `l` bounds how much buffer the test may scan, expressed in lines. `mcopy` narrows the region
+    to whole lines and clamps it to `FILE_REGEX_MAX` (`file/src/softmagic.c:1411-1440`), and
+    `magiccheck` then runs one `regexec` over the whole region. The compile is
+    `REG_EXTENDED | REG_NEWLINE | REGEX_ICASE(m)` (`file/src/softmagic.c:2160`), where
+    `REG_NEWLINE` does not depend on the flag, so `^` and `$` match at line boundaries and `.`
+    stops at one whether or not `l` is set.
+
+    PolyFile split the region on newlines and called `Pattern.match` on each line instead, which
+    anchored every pattern to a line start, and which reached `regexec`'s subject through neither
+    `RegexType.subject` nor the byte clamp, so neither the NUL rule that issue #3517 fixed nor
+    `FILE_REGEX_MAX` applied under `l`.
+
+    Every verdict these tests assert is what `file -b -k` reports for the same definition and
+    input, checked against libmagic 5.48 built from the `file` submodule.
+    """
+
+    UNANCHORED: str = "0\tregex/4l\t=beta\tfound\n"
+    """Looks for `beta` anywhere within the first four lines."""
+
+    @staticmethod
+    def found(definitions: str, data: bytes) -> bool:
+        """Reports whether the `found` message of the definition's `regex` test appears.
+
+        Args:
+            definitions: The contents of a libmagic definition file, with tab separated columns.
+            data: The bytes to classify.
+
+        Returns:
+            True if some match carries the `found` message.
+        """
+        with TemporaryDirectory() as tmp_dir:
+            path = Path(tmp_dir) / "regex_line_limit"
+            path.write_text(definitions)
+            return any("found" in str(match) for match in MagicMatcher.parse(path).match(data))
+
+    def test_a_pattern_matches_part_way_into_a_line(self):
+        """`beta` three characters into line two used to be missed, because `l` anchored.
+
+        This is the reproducer from issue #3525. 31 of the 40 shipped `regex/...l` tests carry a
+        pattern that does not begin with `^`, so each of them could only match at a line start.
+        """
+        self.assertTrue(self.found(self.UNANCHORED, b"alpha\nxxbeta\ngamma\n"))
+
+    def test_the_line_count_still_bounds_the_scan(self):
+        """Widening the scan must not reach past the declared number of lines."""
+        self.assertTrue(self.found(self.UNANCHORED, b"a\nb\nc\nxxbeta\ne\n"))
+        self.assertFalse(self.found(self.UNANCHORED, b"a\nb\nc\nd\nxxbeta\n"))
+
+    def test_a_crlf_pair_counts_as_one_line_break(self):
+        """Counting the `\\r` of a `\\r\\n` pair as a line of its own would halve the budget.
+
+        `mcopy` finds the `\\n` and steps past it (`file/src/softmagic.c:1433-1436`), so the four
+        lines this input is allowed reach the one that holds `beta`.
+        """
+        self.assertTrue(self.found(self.UNANCHORED, b"a\r\nb\r\nc\r\nxxbeta\r\ne\r\n"))
+
+    def test_a_caret_still_anchors_at_a_line_start(self):
+        """`REG_NEWLINE` makes `^` match at a line start and nowhere else."""
+        anchored = "0\tregex/4l\t=^beta\tfound\n"
+        self.assertTrue(self.found(anchored, b"alpha\nbeta\ngamma\n"))
+        self.assertFalse(self.found(anchored, b"alpha\nxxbeta\ngamma\n"))
+
+    def test_a_dollar_still_matches_at_a_line_end(self):
+        """`REG_NEWLINE` makes `$` match before a newline, not only at the end of the region."""
+        at_line_end = "0\tregex/4l\t=beta$\tfound\n"
+        self.assertTrue(self.found(at_line_end, b"alphabeta\nxx\nyy\nzz\n"))
+        self.assertFalse(self.found(at_line_end, b"alpha\nbetaxx\nyy\nzz\n"))
+
+    def test_a_dot_does_not_cross_a_newline(self):
+        """One `regexec` over a multi-line region must still not let `.` span the lines."""
+        spanning = "0\tregex/4l\t=beta.gamma\tfound\n"
+        self.assertFalse(self.found(spanning, b"beta\ngamma\nzz\nyy\n"))
+        self.assertTrue(self.found(spanning, b"betaXgamma\nzz\nyy\nww\n"))
+
+    def test_the_region_still_stops_at_a_nul(self):
+        """Issue #3517's NUL rule never applied under `l`, because `l` skipped `subject`.
+
+        Both inputs hold a NUL, so both are binary and the `b` flag puts the test in the pass that
+        runs on them (`file/src/softmagic.c:249-253`). Only the NUL that precedes `beta` hides it.
+        """
+        binary = "0\tregex/4lb\t=beta\tfound\n"
+        self.assertTrue(self.found(binary, b"xxbeta\nzz\x00\nyy\nww\n"))
+        self.assertFalse(self.found(binary, b"xx\x00beta\nzz\nyy\nww\n"))
+
+    def test_the_region_still_loses_its_last_byte(self):
+        """A file with no line terminator at all is scanned whole, and so loses its last byte.
+
+        `magiccheck` overwrites the region's last byte with the NUL that terminates its copy, so
+        `beta` at the very end of the file is out of reach and `betaZ` is not. PolyFile used to
+        report no match either way, because its per-line loop gave up on finding no newline.
+        """
+        self.assertFalse(self.found(self.UNANCHORED, b"xxbeta"))
+        self.assertTrue(self.found(self.UNANCHORED, b"xxbetaZ"))
+
+    def test_the_walk_passes_over_a_terminator_it_lands_on(self):
+        """The line walk resumes one byte past the line it just took, skipping a blank line.
+
+        `mcopy` steps past the terminator and then the `for` increment steps again
+        (`file/src/softmagic.c:1433-1437`), so a terminator sitting in that second position is not
+        counted. Four blank-separated lines therefore cost three of the four the budget allows,
+        and `beta` is still in reach; a budget of two runs out before it.
+        """
+        self.assertTrue(self.found(self.UNANCHORED, b"a\n\n\n\nxxbeta\n"))
+        self.assertFalse(self.found("0\tregex/2l\t=beta\tfound\n", b"a\n\n\n\nxxbeta\n"))
+
+    def test_running_out_of_lines_widens_the_region(self):
+        """An unterminated last line is searched, rather than dropped.
+
+        Running out of terminators before the line count is reached puts the region back to the
+        whole byte budget (`file/src/softmagic.c:1438-1439`). With a budget of three lines this
+        input runs out and its unterminated tail is searched; with a budget of two the budget is
+        spent on the two terminated lines and the tail is left out.
+        """
+        self.assertTrue(self.found("0\tregex/3l\t=beta\tfound\n", b"a\nb\nxxbetaZ"))
+        self.assertFalse(self.found("0\tregex/2l\t=beta\tfound\n", b"a\nb\nxxbetaZ"))
+
+    def test_a_line_budget_over_8_kib_is_clamped(self):
+        """`regex/128l` asks for 10240 bytes and gets 8192, which PolyFile did not model.
+
+        `bytecnt` is `linecnt * 80` clamped to `ms->regex_max`, which `apprentice.c:573` seeds
+        with `FILE_REGEX_MAX` (`file/src/softmagic.c:1417-1422`). 19 shipped definitions declare
+        `regex/128l`, so a long first line used to let them match bytes libmagic cannot reach.
+        """
+        clamped = "0\tregex/128l\t=beta\tfound\n"
+        self.assertTrue(self.found(clamped, b"a" * 8000 + b"beta" + b"a" * 2000))
+        self.assertFalse(self.found(clamped, b"a" * 9000 + b"beta" + b"a" * 2000))
