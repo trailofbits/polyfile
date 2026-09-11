@@ -1,6 +1,7 @@
 import base64
 import gzip
 import os
+import struct
 import subprocess
 import sys
 import zlib
@@ -147,6 +148,19 @@ class MagicTest(TestCase):
         print(f"# MIME Types:      {len(matcher.mimetypes)}")
         print(f"# File Extensions: {len(matcher.extensions)}")
 
+    def test_an_undecodable_definition_line_is_reported(self):
+        """A definition line that is not valid UTF-8 used to be skipped without a word.
+
+        `MagicMatcher._parse_file` dropped the test and moved on, so a mis-encoded definition file
+        lost entries invisibly. This is the sibling swallow trailofbits/polyfile#3476 reports
+        beside the discarded `!:strength` factor. No shipped definition triggers it.
+        """
+        with TemporaryDirectory() as tmp_dir:
+            magic_file = Path(tmp_dir) / "undecodable"
+            magic_file.write_bytes(b"0\tstring\tabcd\tvalid\n0\tstring\tcaf\xe9\tlatin-1\n")
+            with self.assertRaisesRegex(ValueError, "line 2: .*utf-8"):
+                MagicMatcher.parse(magic_file)
+
     def test_guid_data_types(self):
         """libmagic 5.48 added `leguid` and `beguid` beside `guid`, differing only in byte order."""
         data = bytes(range(16))
@@ -198,6 +212,59 @@ class MagicTest(TestCase):
         for spec in ("(6.l+10)", "(6.L+10)", "(6+10)"):
             with self.subTest(offset=spec):
                 self.assertFalse(polyfile.magic.IndirectOffset.parse(spec).is_id3)
+
+    def test_untyped_indirect_offset_reads_in_host_byte_order(self):
+        """Tests that an indirect offset without a type character reads its field natively.
+
+        This is a regression test for trailofbits/polyfile#3499. libmagic leaves `in_type` at
+        `FILE_LONG` when a definition writes no type character (`file/src/apprentice.c:2154`),
+        and `FILE_LONG` is the four-byte integer in the host's byte order. PolyFile substituted
+        an explicit big-endian read, so every untyped offset parsed to `Endianness.BIG`.
+
+        The second half pins the resolution separately from the enum, because every host the
+        tests run on is little endian: an assertion on the resolved value alone would also hold
+        if the default were fixed to `Endianness.LITTLE` rather than to the host's order.
+        """
+        for spec in ("(6+10)", "(144)", "(0x38+0xcc)", "(&-4)"):
+            with self.subTest(offset=spec):
+                offset = polyfile.magic.IndirectOffset.parse(spec)
+                self.assertIs(polyfile.magic.Endianness.NATIVE, offset.endianness)
+                self.assertEqual("long", polyfile.magic.libmagic_indirect_type(offset))
+        field = b"\x00\x00\x01\x00"
+        offset = polyfile.magic.IndirectOffset.parse("(0)")
+        host_order = "<" if sys.byteorder == "little" else ">"
+        swapped_order = ">" if sys.byteorder == "little" else "<"
+        self.assertEqual(struct.unpack(f"{host_order}I", field)[0], offset.to_absolute(field, None))
+        self.assertNotEqual(struct.unpack(f"{swapped_order}I", field)[0],
+                            offset.to_absolute(field, None))
+
+    def test_untyped_indirect_offset_locates_pa_risc_dynamic_link_marker(self):
+        """Tests that `magic_defs/hp` resolves its untyped `>(144)` the way libmagic does.
+
+        This is a regression test for trailofbits/polyfile#3499. `hp` reaches a PA-RISC 1.1
+        executable's dynamic-link marker through `>(144) belong 0x054ef630`, an offset with no
+        type character. Reading the field big endian instead of natively inverts the verdict on
+        a little-endian host: PolyFile called the byte-swapped file dynamically linked and the
+        other one not, which is the opposite of what `file` reports for both.
+        """
+        def pa_risc_executable(offset_field: bytes) -> bytes:
+            data = bytearray(288)
+            data[0:4] = struct.pack(">I", 0x02100107)
+            data[96:100] = struct.pack(">I", 1)
+            data[144:148] = offset_field
+            data[256:260] = struct.pack(">I", 0x054EF630)
+            return bytes(data)
+
+        stored_little = pa_risc_executable(struct.pack("<I", 256))
+        stored_big = pa_risc_executable(struct.pack(">I", 256))
+        if sys.byteorder == "little":
+            resolves, misses = stored_little, stored_big
+        else:
+            resolves, misses = stored_big, stored_little
+        self.assertIn("PA-RISC1.1 executable dynamically linked - not stripped",
+                      {str(match) for match in MagicMatcher.DEFAULT_INSTANCE.match(resolves)})
+        self.assertIn("PA-RISC1.1 executable - not stripped",
+                      {str(match) for match in MagicMatcher.DEFAULT_INSTANCE.match(misses)})
 
     def test_id3v2_tag_locates_its_audio_frames(self):
         """Tests that an ID3v2 tag's indirect offset lands on the MPEG frame that follows it.
@@ -374,6 +441,72 @@ class MagicTest(TestCase):
         }
         self.assertIn("text/plain", mimetypes)
 
+    def test_nul_padded_text_is_text(self):
+        """Tests that trailing NUL padding does not make text binary.
+
+        This is a regression test for trailofbits/polyfile#3506. `file_ascmagic` trims the
+        trailing NULs before it calls `file_encoding` (`file/src/ascmagic.c`), so the padding a
+        fixed record size, a string table, or a block boundary leaves behind does not reach the
+        character class check. Without the trim the NULs fail `_only_contains`, PolyFile reports
+        no encoding, and `MagicMatcher.match` falls through to `application/octet-stream`.
+        """
+        padded = (
+            (b"\xde\xca\xff\xed" + b"\x00" * 4, "iso-8859-1"),
+            (b"padded record" + b"\x00" * 2, "ascii"),
+            (b"a record.\n" + b"\x00" * 502, "ascii"),
+            ("café naïve\n".encode("latin-1") + b"\x00" * 4, "iso-8859-1"),
+        )
+        for data, expected_encoding in padded:
+            with self.subTest(data=data[:16]):
+                self.assertEqual(expected_encoding, polyfile.magic.detect_text_encoding(data))
+                mimetypes = {
+                    mimetype
+                    for match in MagicMatcher.DEFAULT_INSTANCE.match(data)
+                    for mimetype in match.mimetypes
+                }
+                self.assertIn("text/plain", mimetypes)
+
+    def test_nul_padding_does_not_lengthen_a_line(self):
+        """Tests that the padding counts towards neither the encoding nor the longest line.
+
+        This is a regression test for trailofbits/polyfile#3506. `file_ascmagic` hands the same
+        trimmed buffer to `file_encoding` and to `file_ascmagic_with_encoding`, so 400 NULs after
+        an eleven character line leave `file` reporting `ASCII text, with no line terminators`.
+        Classifying the trimmed buffer but measuring the untrimmed one adds `with very long
+        lines`, because the padding runs past `MAXLINELEN`.
+        """
+        description = polyfile.magic.TextEncodingDescription.detect(b"hello world" + b"\x00" * 400)
+        self.assertIsNotNone(description)
+        self.assertEqual("ASCII text, with no line terminators", description.describe(""))
+
+    def test_an_even_buffer_that_trims_odd_keeps_a_nul(self):
+        """Tests the odd byte adjustment libmagic applies after it trims the trailing NULs.
+
+        This is a regression test for trailofbits/polyfile#3506. `file_ascmagic` puts one byte
+        back when the trim ends on an odd offset and the buffer was evenly sized, so that UTF-16LE
+        text keeps its last character (`file/src/ascmagic.c`). The byte it restores is a NUL,
+        which belongs to no text character class, so `file` reports `data` for `abc\\0` and
+        `ASCII text` for `abc\\0\\0`. Trimming without the adjustment reports text for both.
+        """
+        self.assertIsNone(polyfile.magic.detect_text_encoding(b"abc\x00"))
+        self.assertIsNone(polyfile.magic.detect_text_encoding(b"The quick brown fox.\n"
+                                                              + b"\x00" * 491))
+        self.assertEqual("ascii", polyfile.magic.detect_text_encoding(b"abc\x00\x00"))
+
+    def test_the_odd_byte_adjustment_keeps_the_last_utf_16le_character(self):
+        """Tests that UTF-16LE text does not lose its last character to the NUL trim.
+
+        This is a regression test for trailofbits/polyfile#3506. The low byte of an ASCII
+        character in UTF-16LE is followed by a NUL, so trimming alone drops it: the trailing LF of
+        `hi\\n` disappears and PolyFile appends `, with no line terminators` where `file` appends
+        nothing. The odd byte adjustment restores the NUL and with it the character.
+        """
+        data = b"\xff\xfe" + "hi\n".encode("utf-16le")
+        description = polyfile.magic.TextEncodingDescription.detect(data)
+        self.assertIsNotNone(description)
+        self.assertEqual(1, description.lf)
+        self.assertEqual("Unicode text, UTF-16, little-endian text", description.describe(""))
+
     @staticmethod
     def messages(matcher: MagicMatcher, data: bytes) -> Set[str]:
         return {str(match) for match in matcher.match(data)}
@@ -436,6 +569,77 @@ class MagicTest(TestCase):
         """
         messages = self.messages(MagicMatcher.DEFAULT_INSTANCE, b"42")
         self.assertNotIn("JSON text data", messages)
+
+    def test_json_without_a_byte_order_mark_reports_only_json(self):
+        """Tests that plain UTF-8 JSON reports the single verdict libmagic reports.
+
+        ``file_is_json`` ends libmagic's run before soft magic, so ``file_ascmagic`` never
+        describes the encoding and `file` prints ``JSON text data`` alone. The text description
+        that `test_bom_prefixed_json_also_reports_unicode_text` expects must not leak into every
+        JSON file.
+        """
+        self.assertEqual({"JSON text data"}, self.messages(MagicMatcher.DEFAULT_INSTANCE, b'{"a": 1}'))
+
+    def test_bom_prefixed_json_also_reports_unicode_text(self):
+        """Tests that JSON in an encoding libmagic cannot read reports both verdicts.
+
+        This is a regression test for trailofbits/polyfile#3500. `parse_json` decodes with
+        `json.detect_encoding`, so PolyFile reads a byte order mark, UTF-16 and UTF-32 as JSON,
+        where ``file_is_json`` advances a byte pointer over the file's own bytes and rejects the
+        first byte outright (`file/src/is_json.c`). For the five buffers below, `file` reports only
+        the text encoding:
+
+        * ``Unicode text, UTF-8 (with BOM) text, with no line terminators``
+        * ``Unicode text, UTF-16, little-endian text, with no line terminators``
+        * ``Unicode text, UTF-16, big-endian text, with no line terminators``
+        * ``Unicode text, UTF-32, little-endian``
+        * ``Unicode text, UTF-32, big-endian``
+
+        PolyFile deliberately diverges and reports both, because a JSON document with a byte order
+        mark is JSON in practice and PolyFile reports every match rather than picking a winner.
+        RFC 8259 section 8.1 permits either reading. Before the fix the JSON match suppressed the
+        text description, so the answer `file` gives was lost.
+
+        PolyFile's UTF-8 description omits libmagic's ``(with BOM)`` clause, which is the separate
+        gap in `detect_text_encoding` tracked in trailofbits/polyfile#3537. The UTF-32 cases carry
+        no trailing clauses because their description comes from a soft magic definition in
+        `polyfile/magic_defs/` rather than from the text encoding machinery, which is also where
+        `file` gets it.
+        """
+        document = '{"a": 1}'
+        cases = (
+            ("utf-8-sig", b"\xef\xbb\xbf" + document.encode("utf-8"),
+             "Unicode text, UTF-8 text, with no line terminators"),
+            ("utf-16-le", f"\ufeff{document}".encode("utf-16-le"),
+             "Unicode text, UTF-16, little-endian text, with no line terminators"),
+            ("utf-16-be", f"\ufeff{document}".encode("utf-16-be"),
+             "Unicode text, UTF-16, big-endian text, with no line terminators"),
+            ("utf-32-le", f"\ufeff{document}".encode("utf-32-le"),
+             "Unicode text, UTF-32, little-endian"),
+            ("utf-32-be", f"\ufeff{document}".encode("utf-32-be"),
+             "Unicode text, UTF-32, big-endian"),
+        )
+        for encoding, data, description in cases:
+            with self.subTest(encoding=encoding):
+                messages = self.messages(MagicMatcher.DEFAULT_INSTANCE, data)
+                self.assertEqual({"JSON text data", description}, messages)
+
+    def test_bom_prefixed_newline_delimited_json_also_reports_unicode_text(self):
+        """Tests that newline-delimited JSON reports both verdicts under the same rule.
+
+        `NDJSONTest` inherits `JSONTest.diverges_from_libmagic`, so the two JSON test types stay
+        consistent: `file` reports ``Unicode text, UTF-8 (with BOM) text`` for the first buffer and
+        ``Unicode text, UTF-16, little-endian text`` for the second, and PolyFile reports its
+        NDJSON match alongside each description.
+        """
+        self.assertEqual(
+            {"New Line Delimited JSON text data", "Unicode text, UTF-8 text"},
+            self.messages(MagicMatcher.DEFAULT_INSTANCE, b"\xef\xbb\xbf{}\n{}\n")
+        )
+        self.assertEqual(
+            {"New Line Delimited JSON text data", "Unicode text, UTF-16, little-endian text"},
+            self.messages(MagicMatcher.DEFAULT_INSTANCE, "\ufeff{}\n{}\n".encode("utf-16-le"))
+        )
 
     def test_der_certificate(self):
         with gzip.open(DER_CERTIFICATE, "rb") as f:
@@ -1465,6 +1669,54 @@ class TestStrengthTest(TestCase):
         definition = "0\tstring/wt\t#!\\ \ta\n>&-1\tstring/T\tx\t%s script text executable\n!:strength / 3\n"
         self.assertEqual(20, self.strength(definition))
 
+    def test_a_comment_after_the_factor_leaves_the_factor_alone(self):
+        """A trailing comment used to discard the factor, and the operator with it.
+
+        `int()` was handed the comment along with the digits, raised, and the exception was
+        dropped by a bare `except ValueError`. libmagic reads the factor with `strtoul` and asks
+        only that whatever follows the digits be whitespace (`file/src/apprentice.c:2507-2517`),
+        which is why the comment is harmless there. Both the branch that reads an operator and
+        the one that does not take the first whitespace-delimited token.
+        """
+        test = self.only_test("0\tstring\tabcd\tdesc\n!:strength + 15\t\t# beat the others\n")
+        self.assertEqual(polyfile.magic.StrengthOp.PLUS, test.strength_op)
+        self.assertEqual(15, test.strength_factor)
+        self.assertEqual(85, test.compute_strength())
+        self.assertEqual(23, self.strength("0\tstring\tabcd\tdesc\n!:strength / 3  # comment\n"))
+        self.assertEqual(85, self.strength("0\tstring\tabcd\tdesc\n!:strength 15\t# no op\n"))
+
+    def test_the_shipped_ctf_entry_scores_what_libmagic_scores(self):
+        """`magic_defs/ctf:23` is the one shipped directive with a trailing comment.
+
+        `file -l` reports `Strength = 105@22` for it: the 20 baseline, 70 for the seven-byte
+        value, 10 for the `=` relation, and the 5 the directive adds. PolyFile scored 100 while
+        the factor was being discarded, and this was the last entry whose strength disagreed with
+        `file -l`.
+        """
+        instance = MagicMatcher.DEFAULT_INSTANCE
+        ctf = [
+            test for test in instance.text_tests | instance.non_text_tests
+            if test.source_info is not None and test.source_info.path.name == "ctf"
+            and test.source_info.line == 22
+        ]
+        self.assertEqual(1, len(ctf), "the CTF plain text metadata entry moved")
+        self.assertEqual(polyfile.magic.StrengthOp.PLUS, ctf[0].strength_op)
+        self.assertEqual(5, ctf[0].strength_factor)
+        self.assertEqual(105, ctf[0].compute_strength())
+
+    def test_a_factor_that_is_not_an_integer_is_reported(self):
+        """A factor that still does not parse is a malformed definition, not something to ignore.
+
+        `MagicMatcher._parse_file` names the file and the line for every other malformed line, so
+        this one does too, rather than keeping a test whose declared strength went missing.
+        libmagic rejects the last of these as well: its `strtoul` stops at the `#`, and the
+        character after the digits is not whitespace.
+        """
+        for spec in ("+five", "+", "5#nospace"):
+            with self.subTest(spec=spec):
+                with self.assertRaisesRegex(ValueError, "line 2: Invalid strength factor"):
+                    self.strength(f"0\tstring\tabcd\tdesc\n!:strength {spec}\n")
+
     def test_multiple_magic_sidecars_match_libmagic(self):
         """`file/tests/multiple.testfile` needs its four matches in descending strength order.
 
@@ -2168,17 +2420,16 @@ class UCSTextBufferTest(TestCase):
         CSV match libmagic does not report.
 
         The `JSON text data` this expects for the UTF-16 document is a separate divergence that
-        predates the decoding: `JSONTest` reads the bytes through `json.loads`, which sniffs a
-        UTF-16 byte order mark, and `file_is_json` does not. It stands in for the encoding
-        description because `MagicMatcher.match` reports the plain text match only when no other
-        test matched.
+        predates the decoding: `parse_json` reads the bytes through `json.detect_encoding`, which
+        sniffs a UTF-16 byte order mark, and `file_is_json` does not. PolyFile reports the encoding
+        description alongside it, which is the decision recorded in trailofbits/polyfile#3500.
         """
         document = '{"a": 1, "b": 2}\n'
         self.assertIn("CSV text (excel dialect)", {
             str(match) for match in MagicMatcher.DEFAULT_INSTANCE.match(document.encode("utf-8"))
         })
         self.assertEqual(
-            {"JSON text data"},
+            {"JSON text data", "Unicode text, UTF-16, little-endian text"},
             {str(match) for match in
              MagicMatcher.DEFAULT_INSTANCE.match(self.encode(document, "utf-16le"))}
         )

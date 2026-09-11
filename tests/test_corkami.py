@@ -17,11 +17,6 @@ FILE_PATH = FILE_DIR / "src" / "file"
 MAGIC_FILE_PATH = SCRIPT_DIR / "magic.mgc"
 
 KNOWN_BAD_FILES = {
-    "79f509d30245f6c7574a1ace1696be1a",  # card.bin
-                                         # `file` trims the trailing NULs before classifying the
-                                         # encoding, reads the rest as ISO-8859 text, and reports
-                                         # `text/plain`. PolyFile does not trim, so it reports
-                                         # `application/octet-stream`. See #3506
     "d1531b1622de54fe3a0187c3344600e9",  # elf.bin
                                          # `file` reads this as International EBCDIC text and
                                          # reports `text/plain`. PolyFile has no EBCDIC detection,

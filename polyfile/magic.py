@@ -594,7 +594,7 @@ class IndirectOffset(Offset):
         self.signed: bool = signed
         self.post_process: Callable[[int], int] = post_process
         self.is_id3: bool = is_id3
-        if self.endianness != Endianness.LITTLE and self.endianness != endianness.BIG:
+        if self.endianness not in (Endianness.NATIVE, Endianness.LITTLE, Endianness.BIG):
             raise ValueError(f"Invalid endianness: {endianness!r}")
         elif num_bytes not in (1, 2, 4, 8, IndirectOffset.OctalIndirectOffset):
             raise ValueError(f"Invalid number of bytes: {num_bytes}")
@@ -625,9 +625,7 @@ class IndirectOffset(Offset):
         fmt = IndirectOffset.STRUCT_FORMATS[self.num_bytes]
         if self.signed:
             fmt = fmt.lower()
-        if self.endianness == Endianness.LITTLE:
-            return f"<{fmt}"
-        return f">{fmt}"
+        return f"{self.endianness.value}{fmt}"
 
     def to_absolute(self, data: bytes, last_match: Optional[TestResult], allow_invalid: bool = False) -> int:
         if self.num_bytes == IndirectOffset.OctalIndirectOffset:
@@ -685,8 +683,9 @@ class IndirectOffset(Offset):
 
         The type character selects the width and byte order of the field to read, following
         libmagic's `parse_type` in `src/apprentice.c`: `l`/`L` are four-byte integers, `i`/`I`
-        are four-byte ID3v2 synchsafe integers, and an absent type defaults to a four-byte
-        integer. A lowercase character means little endian and an uppercase one big endian.
+        are four-byte ID3v2 synchsafe integers, and an absent type defaults to `FILE_LONG`, the
+        four-byte integer in the host's byte order (`src/apprentice.c:2154`). A lowercase
+        character means little endian and an uppercase one big endian.
 
         Args:
             offset: The parenthesized text of the offset, including its surrounding parentheses.
@@ -703,8 +702,9 @@ class IndirectOffset(Offset):
             raise ValueError(f"Invalid indirect offset: {offset!r}")
         t = m.group("type")
         if t is None:
-            t = "L"
-        if t == "m":
+            endianness = Endianness.NATIVE
+            t = "l"
+        elif t == "m":
             raise NotImplementedError("TODO: Add support for middle endianness")
         elif t.islower():
             endianness = Endianness.LITTLE
@@ -738,12 +738,15 @@ class IndirectOffset(Offset):
 INDIRECT_OFFSET_TYPES: Dict[Tuple[int, Endianness], str] = {
     (1, Endianness.LITTLE): "byte", (1, Endianness.BIG): "byte",
     (2, Endianness.LITTLE): "leshort", (2, Endianness.BIG): "beshort",
+    (4, Endianness.NATIVE): "long",
     (4, Endianness.LITTLE): "lelong", (4, Endianness.BIG): "belong",
     (8, Endianness.LITTLE): "lequad", (8, Endianness.BIG): "bequad",
 }
 """The type libmagic reads an indirect offset through, by width and byte order.
 
-See the character it comes from in ``file/src/apprentice.c:2158-2215``.
+See the character it comes from in ``file/src/apprentice.c:2158-2215``. An offset written
+without a type character keeps the ``FILE_LONG`` default from ``file/src/apprentice.c:2154``,
+which reads four bytes in the host's byte order.
 """
 
 
@@ -1129,6 +1132,24 @@ class MagicTest(ABC):
             True if libmagic would append the description to this test's message.
         """
         return not self.precedes_soft_magic and bool(self.subtest_type() & TestType.TEXT)
+
+    def diverges_from_libmagic(self, data: bytes) -> bool:
+        """Whether this test matches `data` where libmagic's own copy of the check does not.
+
+        A check `precedes_soft_magic` names ends libmagic's run as soon as it matches, so
+        ``file_buffer`` never reaches ``file_ascmagic`` and never describes the text encoding.
+        Where PolyFile's version of such a check accepts a buffer libmagic's version rejects,
+        libmagic takes no such short circuit: its run continues, and ``file_ascmagic`` describes
+        the file. `MagicMatcher.match` reports that description alongside the match, so neither
+        verdict is lost.
+
+        Args:
+            data: the file's own bytes.
+
+        Returns:
+            False, because a check that reads the same bytes reaches the same verdict.
+        """
+        return False
 
     @test_type.setter
     def test_type(self, value: TestType):
@@ -3709,6 +3730,11 @@ def parse_json(raw: bytes) -> ParsedJSON:
     * If more data follows the first value, it is newline-delimited JSON as long as the next byte
       equals the first byte of the first value and a second value parses there. libmagic stops
       after that second value, so trailing garbage does not disqualify the buffer.
+    * The encoding is the one `json.detect_encoding` names, so a byte order mark, UTF-16 and
+      UTF-32 all parse. libmagic reads raw bytes and reports such a document as Unicode text
+      instead. RFC 8259 section 8.1 permits either reading, and PolyFile reports every match
+      rather than picking a winner, so `JSONTest.diverges_from_libmagic` keeps libmagic's answer
+      alongside this one.
 
     Args:
         raw: the bytes to parse, starting at the first byte of the candidate JSON value.
@@ -3764,6 +3790,22 @@ class JSONTest(MagicTest):
 
     def subtest_type(self) -> TestType:
         return TestType.TEXT
+
+    def diverges_from_libmagic(self, data: bytes) -> bool:
+        """``file_is_json`` walks raw bytes, so an encoding it cannot read is not JSON to it.
+
+        It advances a byte pointer over the file's own bytes and rejects the first byte outright
+        (``file/src/is_json.c:421-455``), so UTF-8 with a byte order mark, UTF-16 and UTF-32 are
+        all non-JSON to libmagic, which reports them as Unicode text. `parse_json` decodes with
+        `json.detect_encoding`, which reads every one of them.
+
+        Args:
+            data: the file's own bytes.
+
+        Returns:
+            True if `data` is in an encoding libmagic's byte-level parser cannot read.
+        """
+        return json.detect_encoding(data) != "utf-8"
 
     @property
     def precedes_soft_magic(self) -> bool:
@@ -4031,13 +4073,37 @@ def _eight_bit_encoding(data: bytes) -> Optional[str]:
         return "unknown-8bit"
 
 
+def _trim_trailing_nuls(data: bytes) -> bytes:
+    """The prefix of `data` that libmagic classifies, with its trailing NUL padding removed.
+
+    ``file_ascmagic`` strips the trailing NULs before it calls ``file_encoding``, leaving at least
+    one byte, and then puts one byte back when the trim ends on an odd offset and the buffer was
+    evenly sized, so that UTF-16LE text keeps its last character (``trim_nuls`` and
+    ``file_ascmagic`` in ``file/src/ascmagic.c``). The byte it puts back is itself a NUL, which
+    belongs to no text character class, so evenly sized ASCII that trims to an odd length is
+    binary to libmagic.
+
+    Args:
+        data: the bytes to trim.
+
+    Returns:
+        The prefix of `data` libmagic classifies.
+    """
+    trimmed = max(len(data.rstrip(b"\0")), 1)
+    if trimmed % 2 == 1 and len(data) % 2 == 0:
+        trimmed += 1
+    return data[:trimmed]
+
+
 def detect_text_encoding(data: bytes) -> Optional[str]:
     """Decides whether `data` is text, and names the character encoding family it belongs to.
 
     This mirrors ``file_encoding`` in libmagic's ``src/encoding.c``: membership in a text
     encoding is decided by character class alone, with no statistical inference. Every byte in
     ``0xA0``-``0xFF`` is a printable ISO-8859 character, so a buffer of ASCII with a handful of
-    accented characters is text.
+    accented characters is text. libmagic classifies the buffer `_trim_trailing_nuls` prepares
+    rather than the file's own bytes, so text that a fixed record size or a block boundary padded
+    out with NULs still counts as text.
 
     Args:
         data: the bytes to classify.
@@ -4045,6 +4111,7 @@ def detect_text_encoding(data: bytes) -> Optional[str]:
     Returns:
         The name of the encoding family, or None if `data` belongs to no text character class.
     """
+    data = _trim_trailing_nuls(data)
     if len(data) < 2:
         return None
     elif _only_contains(data, _ASCII_BYTES):
@@ -4167,6 +4234,10 @@ class TextEncodingDescription:
     def detect(cls, data: bytes) -> Optional["TextEncodingDescription"]:
         """Classifies `data` and measures the line shape libmagic would report for it.
 
+        ``file_ascmagic`` hands the same trimmed buffer to ``file_encoding`` and to
+        ``file_ascmagic_with_encoding``, so NUL padding counts towards neither the encoding nor the
+        longest line.
+
         Args:
             data: the bytes to classify.
 
@@ -4177,10 +4248,11 @@ class TextEncodingDescription:
             ValueError: if `detect_text_encoding` named an encoding that
                 `LIBMAGIC_ENCODING_NAMES` does not describe.
         """
-        encoding = detect_text_encoding(data)
+        buffer = _trim_trailing_nuls(data)
+        encoding = detect_text_encoding(buffer)
         if encoding is None:
             return None
-        return cls(encoding, _decode_text(data, encoding))
+        return cls(encoding, _decode_text(buffer, encoding))
 
     def _splice(self, message: str) -> Tuple[str, bool]:
         """Replaces a soft magic message's trailing ``text`` with the separator libmagic uses.
@@ -4811,10 +4883,18 @@ class MagicMatcher:
             # hands them rather than against the file's bytes
             text_context = to_match.text_test_context(text_encoding.encoding)
             text_tests = [test for test in self.text_tests if test not in matched_on_the_files_bytes]
-            for _, m in self._run_tests(text_tests, text_context, text_encoding, "text matching",
-                                        file_context=to_match):
+            # a match that carries the encoding description already reports it, and so does a
+            # binary pass match, which is where `file_buffer` stops before `file_ascmagic`
+            described = bool(matched_on_the_files_bytes)
+            diverged = False
+            for test, m in self._run_tests(text_tests, text_context, text_encoding, "text matching",
+                                           file_context=to_match):
+                described = described or m.text_encoding is not None
+                diverged = diverged or test.diverges_from_libmagic(to_match.data)
                 yield m
                 yielded = True
+            if diverged and not described:
+                yield text_matcher
         if not yielded:
             if is_text:
                 yield text_matcher
@@ -4955,16 +5035,29 @@ class MagicMatcher:
     }
 
     @staticmethod
-    def parse_strength(specification: bytes, current_test: MagicTest):
+    def parse_strength(
+            specification: bytes, current_test: MagicTest, def_file: Union[str, Path],
+            line_number: int
+    ):
         """Records a ``!:strength`` factor on the entry that the directive applies to.
 
         libmagic assigns the factor to ``me->mp[0]``, the level-0 test of the entry, whatever depth
         the directive appears at, and keeps the first factor an entry declares
         (``file/src/apprentice.c:2470-2497``). A ``name`` entry rejects the directive outright.
 
+        The factor is the first whitespace-delimited token after the operator, because libmagic
+        reads it with ``strtoul`` and then requires whatever follows the digits to be whitespace
+        (``file/src/apprentice.c:2507-2517``). That is what makes a trailing comment harmless,
+        as on ``magic_defs/ctf:23``.
+
         Args:
             specification: The rest of the line after ``!:strength``.
             current_test: The most recently parsed test, which locates the entry.
+            def_file: The definition file the directive came from.
+            line_number: The line the directive is on.
+
+        Raises:
+            ValueError: If the directive carries no factor, or one that is not an integer.
         """
         entry = current_test
         while entry.parent is not None:
@@ -4980,9 +5073,10 @@ class MagicMatcher:
         else:
             factor_str = spec[1:].strip()
         try:
-            entry.strength_factor = int(factor_str)
-        except ValueError:
-            return
+            entry.strength_factor = int(factor_str.split(maxsplit=1)[0])
+        except (IndexError, ValueError):
+            raise ValueError(f"{def_file!s} line {line_number}: Invalid strength factor "
+                             f"{factor_str!r}")
         entry.strength_op = op
 
     @staticmethod
@@ -5017,12 +5111,14 @@ class MagicMatcher:
                     continue
                 elif raw_line.startswith(b"!:strength"):
                     if current_test is not None:
-                        MagicMatcher.parse_strength(raw_line[10:], current_test)
+                        MagicMatcher.parse_strength(
+                            raw_line[10:], current_test, def_file, line_number
+                        )
                     continue
                 try:
                     line = raw_line.decode("utf-8")
-                except UnicodeDecodeError:
-                    continue
+                except UnicodeDecodeError as e:
+                    raise ValueError(f"{def_file!s} line {line_number}: {e!s}")
                 test = MagicMatcher.parse_test(line, def_file, line_number, current_test, matcher)
                 if test is not None:
                     if test.mime is not None:
