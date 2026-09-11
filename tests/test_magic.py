@@ -1213,6 +1213,19 @@ class StringDataTypeTest(TestCase):
         self.assertEqual({"version 5.5, ASCII text"},
                          self.messages(definition, b"xxx VERS 5.5\nnext line\n"))
 
+    def test_search_relative_base_is_the_declared_length(self):
+        """`>&0` under a `search/w` read from the bytes the match consumed, not the value's length.
+
+        libmagic adds the declared length of the magic value to where the search found it
+        (`file/src/softmagic.c:966-968`), so `A\\ B` counts three bytes wherever it matches, even
+        where the `w` flag lets it consume two. Reading `xxABCD` reported `CD` instead of `D`.
+        """
+        definition = "0\tsearch/16/w\tA\\ B\tfound\n>&0\tstring\tx\t%s\n"
+        for data, expected in ((b"xxABCD", "D"), (b"xxA BCD", "CD"), (b"xxA \tBCD", "BCD")):
+            with self.subTest(data=data):
+                self.assertEqual({f"found {expected}, ASCII text, with no line terminators"},
+                                 self.messages(definition, data))
+
     def test_wildcard_string_stops_at_a_line_break(self):
         """A wildcard value ran to the first null byte, so a `%s` leaked the rest of the file.
 
