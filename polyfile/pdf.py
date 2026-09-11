@@ -1,5 +1,5 @@
 import sys
-from typing import Callable, Dict, Iterator, List, Optional, Type, TypeVar, Union
+from typing import Callable, Dict, Iterator, List, Optional, Tuple, Type, TypeVar, Union
 import zlib
 
 from pdfminer.ascii85 import ascii85decode, asciihexdecode
@@ -826,6 +826,106 @@ class RawPDFStream:
         return getattr(self._file_stream, item)
 
 
+def has_provenance(obj) -> bool:
+    """Reports whether a parsed object records where it came from in the file.
+
+    Every submatch PolyFile emits is positioned from the `pdf_offset` and `pdf_bytes` that this
+    module's instrumented token types carry. pdfminer hands back plain `int`, `str`, `list` and
+    `dict` objects on several of its recovery paths, and those cannot be mapped.
+
+    Args:
+        obj: Any object pdfminer produced while parsing.
+
+    Returns:
+        True if `obj` carries both byte-provenance attributes.
+    """
+    return hasattr(obj, "pdf_offset") and hasattr(obj, "pdf_bytes")
+
+
+def dict_value_with_provenance(dict_obj: "PDFDict", key, value):
+    """Resolves one PDF dictionary value to something that can be positioned in the file.
+
+    A value pdfminer returned as a plain list is reloaded as a `PDFList`, which recovers the
+    provenance of its members, and the dictionary is updated so that it stays self-consistent.
+
+    Args:
+        dict_obj: The dictionary that `key` belongs to.
+        key: The key whose value is being resolved, used only for logging.
+        value: The value to resolve.
+
+    Returns:
+        The value with byte provenance, or None when it has to be skipped.
+    """
+    if has_provenance(value):
+        return value
+    if not isinstance(value, list):
+        log.warning(f"Skipping unexpected PDF dictionary value {value!r} for key {key}")
+        return None
+    if not value:
+        log.debug(f"Skipping empty list value for key {key}")
+        return None
+    try:
+        value = PDFList.load(value)
+    except ValueError as e:
+        log.warning(f"Skipping malformed list value for key {key}: {e}")
+        return None
+    dict_obj[key] = value
+    return value
+
+
+def parse_dict(obj: "PDFDict", matcher: Matcher, parent: Optional[Match], pdf_header_offset: int):
+    """Yields the submatches that map a PDF dictionary and each of its key/value pairs.
+
+    Keys and values that carry no byte provenance are logged and skipped, so one unmappable
+    entry costs that entry rather than the rest of the match tree.
+
+    Args:
+        obj: The dictionary to map.
+        matcher: The matcher to use when recursing into values.
+        parent: The match that the dictionary is nested in.
+        pdf_header_offset: The offset of `%PDF` within the file being parsed.
+    """
+    dict_obj = Submatch(
+        "PDFDictionary",
+        '',
+        relative_offset=obj.pdf_offset - (parent.offset - pdf_header_offset),
+        length=obj.pdf_bytes - 1,
+        parent=parent
+    )
+    yield dict_obj
+    for key, value in obj.items():
+        value = dict_value_with_provenance(obj, key, value)
+        if value is None:
+            continue
+        if not has_provenance(key):
+            log.warning(f"Skipping PDF dictionary key {key!r} because it has no byte provenance")
+            continue
+        pair = Submatch(
+            "KeyValuePair",
+            '',
+            relative_offset=key.pdf_offset - (dict_obj.offset - pdf_header_offset) - 1,
+            length=value.pdf_offset + value.pdf_bytes - key.pdf_offset,
+            parent=dict_obj
+        )
+        yield pair
+        yield Submatch(
+            "Key",
+            key,
+            relative_offset=0,
+            length=key.pdf_bytes + 1,
+            parent=pair
+        )
+        value_match = Submatch(
+            "Value",
+            value,
+            relative_offset=value.pdf_offset - key.pdf_offset,
+            length=value.pdf_bytes,
+            parent=pair
+        )
+        yield value_match
+        yield from parse_object(value, matcher=matcher, parent=value_match, pdf_header_offset=pdf_header_offset)
+
+
 def parse_object(obj, matcher: Matcher, parent: Optional[Match] = None, pdf_header_offset: int = 0):
     if isinstance(obj, PDFStreamFilter):
         filter_obj = Submatch(
@@ -868,57 +968,7 @@ def parse_object(obj, matcher: Matcher, parent: Optional[Match] = None, pdf_head
         for item in obj:
             yield from parse_object(item, matcher=matcher, parent=list_obj, pdf_header_offset=pdf_header_offset)
     elif isinstance(obj, PDFDict):
-        dict_obj = Submatch(
-            "PDFDictionary",
-            '',
-            relative_offset=obj.pdf_offset - (parent.offset - pdf_header_offset),
-            length=obj.pdf_bytes - 1,
-            parent=parent
-        )
-        yield dict_obj
-        for key, value in obj.items():
-            if not hasattr(value, "pdf_offset") or not hasattr(value, "pdf_bytes"):
-                if isinstance(value, list):
-                    if not value:
-                        # Empty list - skip it as there's no data to parse
-                        log.debug(f"Skipping empty list value for key {key}")
-                        continue
-                    try:
-                        value = PDFList.load(value)
-                        # Keep the dictionary self-consistent
-                        obj[key] = value
-                    except ValueError as e:
-                        # Skip malformed list values instead of crashing
-                        log.warning(f"Skipping malformed list value for key {key}: {e}")
-                        continue
-                else:
-                    # Unexpected value type - log warning and skip instead of raising error
-                    log.warning(f"Skipping unexpected PDF dictionary value {value!r} for key {key}")
-                    continue
-            pair = Submatch(
-                "KeyValuePair",
-                '',
-                relative_offset=key.pdf_offset - (dict_obj.offset - pdf_header_offset) - 1,
-                length=value.pdf_offset + value.pdf_bytes - key.pdf_offset,
-                parent=dict_obj
-            )
-            yield pair
-            yield Submatch(
-                "Key",
-                key,
-                relative_offset=0,
-                length=key.pdf_bytes + 1,
-                parent=pair
-            )
-            value_match = Submatch(
-                "Value",
-                value,
-                relative_offset=value.pdf_offset - key.pdf_offset,
-                length=value.pdf_bytes,
-                parent=pair
-            )
-            yield value_match
-            yield from parse_object(value, matcher=matcher, parent=value_match, pdf_header_offset=pdf_header_offset)
+        yield from parse_dict(obj, matcher=matcher, parent=parent, pdf_header_offset=pdf_header_offset)
     elif isinstance(obj, PDFDeciphered):
         deciphered = Submatch(
             "PDFDeciphered",
@@ -958,7 +1008,7 @@ def parse_object(obj, matcher: Matcher, parent: Optional[Match] = None, pdf_head
         # recursively match against the deflated contents
         with Tempfile(obj) as f:
             yield from matcher.match(f, parent=match)
-    elif hasattr(obj, "pdf_offset") and hasattr(obj, "pdf_bytes"):
+    elif has_provenance(obj):
         yield Submatch(
             obj.__class__.__name__,
             obj,
@@ -1163,6 +1213,165 @@ def pdf_obj_parser(file_stream, obj, objid: int, parent: Match, pdf_header_offse
     log.clear_status()
 
 
+def parse_trailer(trailer, matcher: Matcher, parent: Match, pdf_header_offset: int):
+    """Yields the submatches that map a cross-reference section's trailer dictionary.
+
+    `InstrumentedPDFDocument` recovers from a missing `/Root` by patching `PDFXRef.get_trailer`,
+    and a PDF damaged enough to need that recovery usually reaches here with a trailer that is
+    empty or whose entries pdfminer rebuilt without byte provenance. Those entries are logged and
+    skipped so that the cross-reference table after them is still mapped.
+
+    Args:
+        trailer: The dictionary returned by `PDFBaseXRef.get_trailer`.
+        matcher: The matcher to use when recursing into values.
+        parent: The match that the trailer is nested in.
+        pdf_header_offset: The offset of `%PDF` within the file being parsed.
+    """
+    pairs = [(k, v) for k, v in trailer.items() if has_provenance(k) and has_provenance(v)]
+    if len(pairs) < len(trailer):
+        log.warning(f"Skipping {len(trailer) - len(pairs)} PDF trailer entries that have no byte provenance")
+    if not pairs:
+        log.debug("Skipping a PDF trailer that maps to no bytes in the file")
+        return
+    trailer_start = min(k.pdf_offset for k, _ in pairs)
+    trailer_end = max(v.pdf_offset + v.pdf_bytes for _, v in pairs)
+    t = Submatch(
+        "Trailer",
+        b"",
+        relative_offset=trailer_start,
+        length=trailer_end - trailer_start,
+        parent=parent
+    )
+    yield t
+    for k, v in pairs:
+        kvp = Submatch(
+            "KeyValuePair",
+            b"",
+            relative_offset=k.pdf_offset - trailer_start,
+            length=v.pdf_offset + v.pdf_bytes - k.pdf_offset,
+            parent=t
+        )
+        yield kvp
+        yield Submatch(
+            "Key",
+            k,
+            relative_offset=k.pdf_offset - k.pdf_offset,
+            length=k.pdf_bytes,
+            parent=kvp
+        )
+        value_match = Submatch(
+            "Value",
+            b"",
+            relative_offset=v.pdf_offset - k.pdf_offset,
+            length=v.pdf_bytes,
+            parent=kvp
+        )
+        yield value_match
+        yield from parse_object(v, matcher=matcher, parent=value_match, pdf_header_offset=pdf_header_offset)
+
+
+def xref_row_span(row) -> Optional[Tuple[int, int]]:
+    """Measures the bytes that one cross-reference row occupies in the file.
+
+    Args:
+        row: An object ID, position, and generation number triple from `PDFXRef.offsets`.
+
+    Returns:
+        The row's start and end offsets, or None when any of its cells has no byte provenance.
+    """
+    _, pos, gen_no = row
+    if not has_provenance(pos) or not has_provenance(gen_no):
+        return None
+    cells = [c for c in row if c is not None]
+    if not all(has_provenance(c) for c in cells):
+        return None
+    return min(c.pdf_offset for c in cells), max(c.pdf_offset + c.pdf_bytes for c in cells)
+
+
+def parse_xref(xref: PDFXRef, matcher: Matcher, parent: Match, pdf_header_offset: int):
+    """Yields the submatches that map a cross-reference table and each of its rows.
+
+    `PDFXRefFallback` subclasses `PDFXRef` but reconstructs the table with its own `load`, which
+    stores plain integer positions instead of the instrumented tokens that this module's
+    `load_xref` produces. Its rows therefore map to nothing and are logged and skipped.
+
+    Args:
+        xref: The cross-reference table to map.
+        matcher: The matcher to use when recursing into cells.
+        parent: The match that the table is nested in.
+        pdf_header_offset: The offset of `%PDF` within the file being parsed.
+    """
+    rows = [(row, span) for row in xref.offsets.values() if (span := xref_row_span(row)) is not None]
+    if len(rows) < len(xref.offsets):
+        log.warning(f"Skipping {len(xref.offsets) - len(rows)} rows of a {xref.__class__.__name__} "
+                    "cross-reference table that have no byte provenance")
+    if not rows:
+        log.debug("Skipping a PDF cross-reference table that maps to no bytes in the file")
+        return
+    xref_start = min(start for _, (start, _) in rows)
+    xref_end = max(end for _, (_, end) in rows)
+    x = Submatch(
+        "XRefTable",
+        b"",
+        relative_offset=xref_start,
+        length=xref_end - xref_start,
+        parent=parent
+    )
+    yield x
+    for row, (row_start, row_end) in rows:
+        row_match = Submatch(
+            "XRefRow",
+            b"",
+            relative_offset=row_start - xref_start,
+            length=row_end - row_start,
+            parent=x
+        )
+        yield row_match
+        yield from parse_xref_row(row, row_start, matcher=matcher, parent=row_match,
+                                  pdf_header_offset=pdf_header_offset)
+
+
+def parse_xref_row(row, row_start: int, matcher: Matcher, parent: Match, pdf_header_offset: int):
+    """Yields the submatches that map the cells of one cross-reference row.
+
+    Args:
+        row: An object ID, position, and generation number triple from `PDFXRef.offsets`.
+        row_start: The offset of the row within the file.
+        matcher: The matcher to use when recursing into cells.
+        parent: The match that the row is nested in.
+        pdf_header_offset: The offset of `%PDF` within the file being parsed.
+    """
+    obj_id, pos, gen_no = row
+    if obj_id is not None:
+        ret = Submatch(
+            "ObjectID",
+            b"",
+            relative_offset=obj_id.pdf_offset - row_start,
+            length=obj_id.pdf_bytes,
+            parent=parent
+        )
+        yield ret
+        yield from parse_object(obj_id, matcher=matcher, parent=ret, pdf_header_offset=pdf_header_offset)
+    ret = Submatch(
+        "Position",
+        b"",
+        relative_offset=pos.pdf_offset - row_start,
+        length=pos.pdf_bytes,
+        parent=parent
+    )
+    yield ret
+    yield from parse_object(ret, matcher=matcher, parent=ret, pdf_header_offset=pdf_header_offset)
+    ret = Submatch(
+        "Generation",
+        b"",
+        relative_offset=gen_no.pdf_offset - row_start,
+        length=gen_no.pdf_bytes,
+        parent=parent
+    )
+    yield ret
+    yield from parse_object(ret, matcher=matcher, parent=ret, pdf_header_offset=pdf_header_offset)
+
+
 # Note: PDF parser is registered lazily in __init__.py to defer pdfminer import
 def pdf_parser(file_stream, parent: Match):
     # pdfminer expects %PDF to be at byte offset zero in the file
@@ -1201,100 +1410,16 @@ def pdf_parser(file_stream, parent: Match):
                     continue
                 yielded.add((obj.objid, obj.genno))
             else:
-                if objid in yielded or not hasattr(obj, "pdf_offset") or not hasattr(obj, "pdf_bytes"):
+                if objid in yielded or not has_provenance(obj):
                     continue
                 yielded.add(objid)
             yield from pdf_obj_parser(file_stream, obj, objid, parent, pdf_header_offset=pdf_header_offset)
 
         trailer = xref.get_trailer()
         if trailer is not None:
-            trailer_start = min(k.pdf_offset for k in trailer.keys())
-            trailer_end = max(v.pdf_offset + v.pdf_bytes for v in trailer.values())
-            t = Submatch(
-                "Trailer",
-                b"",
-                relative_offset=trailer_start,
-                length=trailer_end - trailer_start,
-                parent=parent
-            )
-            yield t
-            for k, v in trailer.items():
-                kvp = Submatch(
-                    "KeyValuePair",
-                    b"",
-                    relative_offset=k.pdf_offset - trailer_start,
-                    length=v.pdf_offset + v.pdf_bytes - k.pdf_offset,
-                    parent=t
-                )
-                yield kvp
-                yield Submatch(
-                    "Key",
-                    k,
-                    relative_offset=k.pdf_offset - k.pdf_offset,
-                    length=k.pdf_bytes,
-                    parent=kvp
-                )
-                value_match = Submatch(
-                    "Value",
-                    b"",
-                    relative_offset=v.pdf_offset - k.pdf_offset,
-                    length=v.pdf_bytes,
-                    parent=kvp
-                )
-                yield value_match
-                yield from parse_object(v, matcher=parent.matcher, parent=value_match,
-                                        pdf_header_offset=pdf_header_offset)
+            yield from parse_trailer(trailer, matcher=parent.matcher, parent=parent,
+                                     pdf_header_offset=pdf_header_offset)
 
-        if not isinstance(xref, PDFXRef):
-            continue
-
-        xref_start = min(min(c.pdf_offset for c in row if c is not None) for row in xref.offsets.values())
-        xref_end = max(max(c.pdf_offset + c.pdf_bytes for c in row if c is not None) for row in xref.offsets.values())
-        x = Submatch(
-            "XRefTable",
-            b"",
-            relative_offset=xref_start,
-            length=xref_end - xref_start,
-            parent=parent
-        )
-        yield x
-        for row in xref.offsets.values():
-            row_start = min(c.pdf_offset for c in row if c is not None)
-            row_end = max(c.pdf_offset + c.pdf_bytes for c in row if c is not None)
-            row_match = Submatch(
-                "XRefRow",
-                b"",
-                relative_offset=row_start - xref_start,
-                length=row_end - row_start,
-                parent=x
-            )
-            yield row_match
-            obj_id, pos, gen_no = row
-            if obj_id is not None:
-                ret = Submatch(
-                    "ObjectID",
-                    b"",
-                    relative_offset=obj_id.pdf_offset - row_start,
-                    length=obj_id.pdf_bytes,
-                    parent=row_match
-                )
-                yield ret
-                yield from parse_object(obj_id, matcher=parent.matcher, parent=ret, pdf_header_offset=pdf_header_offset)
-            ret = Submatch(
-                "Position",
-                b"",
-                relative_offset=pos.pdf_offset - row_start,
-                length=pos.pdf_bytes,
-                parent=row_match
-            )
-            yield ret
-            yield from parse_object(ret, matcher=parent.matcher, parent=ret, pdf_header_offset=pdf_header_offset)
-            ret = Submatch(
-                "Generation",
-                b"",
-                relative_offset=gen_no.pdf_offset - row_start,
-                length=gen_no.pdf_bytes,
-                parent=row_match
-            )
-            yield ret
-            yield from parse_object(ret, matcher=parent.matcher, parent=ret, pdf_header_offset=pdf_header_offset)
+        if isinstance(xref, PDFXRef):
+            yield from parse_xref(xref, matcher=parent.matcher, parent=parent,
+                                  pdf_header_offset=pdf_header_offset)
