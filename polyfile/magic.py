@@ -1895,6 +1895,7 @@ class StringTest(ABC):
               case_insensitive_upper: bool = False,
               optional_blanks: bool = False,
               full_word_match: bool = False,
+              has_string_flags: bool = False,
               num_bytes: Optional[int] = None) -> "StringTest":
         if specification.strip() == "x":
             return StringWildcard(trim=trim, compact_whitespace=compact_whitespace, num_bytes=num_bytes)
@@ -1922,6 +1923,7 @@ class StringTest(ABC):
                 case_insensitive_upper=case_insensitive_upper,
                 optional_blanks=optional_blanks,
                 full_word_match=full_word_match,
+                has_string_flags=has_string_flags,
                 num_bytes=num_bytes
             )
         if negate:
@@ -2075,6 +2077,7 @@ class StringMatch(StringTest):
                  case_insensitive_upper: bool = False,
                  optional_blanks: bool = False,
                  full_word_match: bool = False,
+                 has_string_flags: bool = False,
                  num_bytes: Optional[int] = None
     ):
         super().__init__(trim=trim, compact_whitespace=compact_whitespace, num_bytes=num_bytes)
@@ -2084,6 +2087,7 @@ class StringMatch(StringTest):
         self.case_insensitive_upper: bool = case_insensitive_upper
         self.optional_blanks: bool = optional_blanks
         self.full_word_match: bool = full_word_match
+        self.has_string_flags: bool = has_string_flags
         self._is_always_text: Optional[bool] = None
         self._pattern: Optional[re.Pattern] = None
         _ = self.pattern
@@ -2186,17 +2190,43 @@ class StringMatch(StringTest):
             return self.post_process(bytes(m.group(0)))
         return DataTypeMatch.INVALID
 
+    def last_start_offset(self, buffer_length: int) -> int:
+        """The greatest offset into the buffer at which libmagic still tries this value.
+
+        ``magiccheck`` implements a search twice, and the two implementations differ by one
+        offset. The loop runs ``idx`` over ``[0, m->str_range)``, so the last offset it tries is
+        ``str_range - 1`` (``file/src/softmagic.c:2355-2368``). The ``memmem`` fast path ahead of
+        it runs only when ``m->str_flags == 0`` and searches a window of ``m->str_range + slen``
+        bytes (``file/src/softmagic.c:2334-2353``), where a value of ``slen`` bytes can still start
+        at ``str_range``. Every modifier letter a search accepts sets a ``str_flags`` bit
+        (``file/src/apprentice.c:1952-1978``), so a single flag of any kind costs the search its
+        last start offset.
+
+        Args:
+            buffer_length: The number of bytes at the offset being tested.
+
+        Returns:
+            The last candidate start offset, which is the end of the buffer for a search that
+            declared no range.
+        """
+        if self.num_bytes is None:
+            return buffer_length
+        elif self.has_string_flags:
+            return self.num_bytes - 1
+        return self.num_bytes
+
     def search(self, data: bytes) -> DataTypeMatch:
         """Finds the first start offset at which this value matches.
 
         libmagic bounds every candidate start offset of a search, not only the start of the test:
         it abandons the remaining offsets as soon as the declared length of the value no longer
         fits in what is left of the buffer (``file/src/softmagic.c:2357-2361``). The leftmost match
-        is the one libmagic takes, so a leftmost match that starts past that bound rules out every
-        later offset too.
+        is the one libmagic takes, so a leftmost match that starts past either bound rules out
+        every later offset too.
 
-        The bound is observable only when a flag lets a value consume fewer bytes than it declares,
-        which is what ``w`` does (``file/src/softmagic.c:2116-2121``).
+        Both bounds are on where a match starts rather than on where it ends, because ``W`` and
+        ``w`` both let a value consume more bytes than it declares, by matching a run of blanks of
+        any length against one declared blank (``file/src/softmagic.c:2102-2121``).
 
         Args:
             data: The bytes at the offset being tested.
@@ -2204,14 +2234,9 @@ class StringMatch(StringTest):
         Returns:
             The match, or `DataTypeMatch.INVALID` if no start offset that fits the value matches.
         """
-        if self.num_bytes is None:
-            end_pos = len(data)
-        else:
-            # libmagic tries `num_bytes` successive start offsets, so the window it reads is that
-            # many bytes plus the length of the string it is looking for
-            end_pos = min(len(data), self.num_bytes + len(self.string))
-        m = self.pattern.search(data, 0, end_pos)
-        if m is None or m.start() + self.value_length > len(data):
+        m = self.pattern.search(data)
+        if (m is None or m.start() > self.last_start_offset(len(data))
+                or m.start() + self.value_length > len(data)):
             return DataTypeMatch.INVALID
         return self.post_process(bytes(m.group(0)), initial_offset=m.start())
 
@@ -2328,6 +2353,20 @@ class StringType(DataType[StringTest]):
     def allows_invalid_offsets(self, expected: StringTest) -> bool:
         return isinstance(expected, NegatedStringTest)
 
+    @property
+    def has_string_flags(self) -> bool:
+        """Whether this declaration sets any bit of libmagic's ``str_flags``.
+
+        `FLAGS` names every modifier letter this type accepts, and each one sets a bit of the word
+        (``file/src/apprentice.c:1952-1978``). The word being zero is what lets a search take the
+        ``memmem`` fast path, whose window reaches one start offset further than the loop
+        (``file/src/softmagic.c:2334``).
+
+        Returns:
+            True if the declaration carried at least one modifier letter.
+        """
+        return any(getattr(self, attribute) for _, attribute in self.FLAGS)
+
     def parse_expected(self, specification: str) -> StringTest:
         return StringTest.parse(
             specification,
@@ -2337,6 +2376,7 @@ class StringType(DataType[StringTest]):
             compact_whitespace=self.compact_whitespace,
             optional_blanks=self.optional_blanks,
             full_word_match=self.full_word_match,
+            has_string_flags=self.has_string_flags,
             num_bytes=self.num_bytes
         )
 
