@@ -29,11 +29,11 @@ Add an entry only alongside the issue explaining why the patch has to exist, and
 change that drops the patch. Anything not listed here has to be a byte-for-byte copy of upstream.
 """
 
-PENDING_PATCHES: FrozenSet[str] = frozenset({"gentoo"})
+PENDING_PATCHES: FrozenSet[str] = frozenset()
 """Allowlist entries whose patch is still in review, so the bundled file still matches upstream.
 
-The pull request for #3473 rewrites the `gentoo-manifest` regex. Until it merges, `gentoo` is an
-ordinary copy, and holding it to the allowlist would fail. Delete the name once that pull request
+Naming an entry here disarms the allowlist check for it, which lets a `LOCAL_PATCHES` entry land
+before the pull request that patches the definition does. Delete the name once that pull request
 merges; `test_shared_definitions_are_byte_identical` fails with that instruction the moment the
 patch lands, so the allowlist cannot stay disarmed by accident.
 """

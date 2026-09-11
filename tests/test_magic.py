@@ -4,7 +4,6 @@ import os
 import struct
 import subprocess
 import sys
-import time
 import zlib
 from itertools import chain
 from pathlib import Path
@@ -16,6 +15,7 @@ from uuid import UUID
 # from polyfile import logger
 import polyfile.der
 import polyfile.magic
+from polyfile.http.matcher import HTTP_11_MIME_TYPE
 from polyfile.magic import (
     DataType, MagicMatcher, MAGIC_DEFS, Match, MatchContext, RegexType, SearchType, StringType,
     TestResult
@@ -793,18 +793,30 @@ class MagicTest(TestCase):
 
 MATCH_TIMEOUT_SECONDS: int = 60
 
+MATCH_BUDGET_SECONDS: float = 5.0
+"""The seconds a classification may take before `match_in_subprocess` fails the test.
+
+Every input these tests classify takes well under a tenth of a second once its definition is fixed,
+and tens of seconds or more while it is broken, so the budget is loose enough to survive a loaded
+runner and still separate the two.
+"""
+
 MATCH_SCRIPT: str = """
 import sys
+import time
 from polyfile.magic import MagicMatcher
 with open(sys.argv[1], "rb") as f:
     data = f.read()
-for match in MagicMatcher.DEFAULT_INSTANCE.match(data):
+matcher = MagicMatcher.DEFAULT_INSTANCE
+started = time.monotonic()
+for match in matcher.match(data):
     _ = set(match.mimetypes)
+print(f"elapsed {time.monotonic() - started}")
 """
 
 
 class MagicMatchingRegressionTest(TestCase):
-    """Regression tests for the matching hang reported in issue #3411."""
+    """Regression tests for the matching hangs reported in issues #3411, #3473, and #3527."""
 
     # This header uses CRLF line endings, so the `}` that closes the class is never the last
     # character on a line and the `c-lang` C++ class test can never succeed. Reduced from the
@@ -862,46 +874,98 @@ class MagicMatchingRegressionTest(TestCase):
 
         return Match(MagicMatcher.DEFAULT_INSTANCE, MatchContext(b""), results()), produced
 
-    def match_in_subprocess(self, data: bytes, timeout: int = MATCH_TIMEOUT_SECONDS) -> float:
-        """Matches `data` in a subprocess, so that a hang fails the test instead of stalling CI.
+    def definition_matcher(self, name: str) -> MagicMatcher:
+        """Builds a matcher from one shipped definition file, so that only its tests can match.
+
+        Args:
+            name: The file name in `polyfile/magic_defs`.
+
+        Returns:
+            A matcher holding just that file's tests.
+        """
+        for magic_def in MAGIC_DEFS:
+            if magic_def.name == name:
+                return MagicMatcher.parse(magic_def)
+        self.fail(f"Could not find the {name} definitions")
+
+    def match_in_subprocess(self, data: bytes, budget: float = MATCH_BUDGET_SECONDS) -> float:
+        """Matches `data` in a subprocess and fails unless the match fits in `budget` seconds.
+
+        The subprocess keeps a hang from stalling CI, and it times the match alone, so the budget
+        does not have to cover interpreter startup or building the default matcher.
 
         Args:
             data: The bytes to hand to the default matcher.
-            timeout: The number of seconds to wait before failing the test.
+            budget: The number of seconds the match may take.
 
         Returns:
-            The wall-clock seconds the subprocess took.
+            The seconds the match took.
         """
         with TemporaryDirectory() as tmp_dir:
             input_path = Path(tmp_dir) / "input"
             input_path.write_bytes(data)
             command = [sys.executable, "-c", MATCH_SCRIPT, str(input_path)]
-            started = time.monotonic()
             try:
-                subprocess.run(command, capture_output=True, check=True, timeout=timeout)
+                run = subprocess.run(command, capture_output=True, check=True,
+                                     timeout=MATCH_TIMEOUT_SECONDS)
             except subprocess.TimeoutExpired:
-                self.fail(f"Matching {len(data)} bytes took longer than {timeout} seconds")
+                self.fail(f"Matching {len(data)} bytes did not finish within "
+                          f"{MATCH_TIMEOUT_SECONDS} seconds")
             except subprocess.CalledProcessError as e:
                 error = e.stderr.decode("utf-8", "replace")
                 self.fail(f"Matching {len(data)} bytes failed: {error}")
-            return time.monotonic() - started
+        reported = [line for line in run.stdout.split(b"\n") if line.startswith(b"elapsed ")]
+        self.assertTrue(reported, f"The matching subprocess reported no time: {run.stdout!r}")
+        elapsed = float(reported[-1].split()[1])
+        self.assertLessEqual(elapsed, budget, (
+            f"Matching {len(data)} bytes took {elapsed:.3f} seconds, over the {budget} second "
+            f"budget"
+        ))
+        return elapsed
 
     def test_cpp_class_test_terminates(self):
         """Matching a C++ header used to backtrack exponentially in the `c-lang` class test."""
-        elapsed = self.match_in_subprocess(self.CRLF_CPP_HEADER)
-        print(f"Matched {len(self.CRLF_CPP_HEADER)} bytes in {elapsed:.3f} seconds")
+        self.match_in_subprocess(self.CRLF_CPP_HEADER)
 
     def test_cpp_class_test_semantics(self):
         """The rewritten `c-lang` class test accepts and rejects the same sources as before."""
-        for magic_def in MAGIC_DEFS:
-            if magic_def.name == "c-lang":
-                break
-        else:
-            self.fail("Could not find the c-lang definitions")
-        matcher = MagicMatcher.parse(magic_def)
+        matcher = self.definition_matcher("c-lang")
         source = b"class Foo {\n\tint x;\n};\n"
         self.assertIn("text/x-c++", self.mimetypes(matcher, source))
         self.assertNotIn("text/x-c++", self.mimetypes(matcher, source.replace(b"\n", b"\r\n")))
+
+    def test_http_11_test_terminates(self):
+        """A run of carriage returns used to backtrack cubically in PolyFile's HTTP 1.1 test."""
+        self.match_in_subprocess(b"\r" * 8192)
+
+    def test_http_11_test_semantics(self):
+        """The rewritten HTTP 1.1 test accepts and rejects the same requests as before."""
+        matcher = MagicMatcher.DEFAULT_INSTANCE
+        self.assertIn(HTTP_11_MIME_TYPE, self.mimetypes(matcher, b"GET /x HTTP/1.1\r\nHost: h\r\n"))
+        self.assertIn(HTTP_11_MIME_TYPE, self.mimetypes(matcher, b"junk\nPOST / \t HTTP/1.1 \n"))
+        # the pattern anchors on the end of a line, not on the end of the data
+        self.assertIn(HTTP_11_MIME_TYPE, self.mimetypes(matcher, b"PUT / HTTP/1.1\nbody\n"))
+        self.assertNotIn(HTTP_11_MIME_TYPE, self.mimetypes(matcher, b"GET /x HTTP/1.1 y\r\n"))
+        self.assertNotIn(HTTP_11_MIME_TYPE, self.mimetypes(matcher, b"GET /xHTTP/1.1\r\n"))
+        self.assertNotIn(HTTP_11_MIME_TYPE, self.mimetypes(matcher, b"\r" * 32))
+
+    def test_gentoo_manifest_test_terminates(self):
+        """Whitespace after a Manifest tag used to backtrack quartically in `gentoo`."""
+        self.match_in_subprocess(b"DIST " + b" " * 500 + b"\n")
+
+    def test_gentoo_manifest_test_semantics(self):
+        """The rewritten `gentoo-manifest` test accepts and rejects the same lines as before."""
+        matcher = self.definition_matcher("gentoo")
+        mime = "application/vnd.gentoo.manifest"
+        entry = b"DIST foo-1.0.tar.gz 12345 BLAKE2B " + b"0123456789abcdef" * 4 + b"\n"
+        self.assertIn(mime, self.mimetypes(matcher, entry))
+        # `[[:print:]]` holds a space, so upstream's pattern also accepts a file name made only of
+        # whitespace, and the rewrite keeps accepting it
+        self.assertIn(mime, self.mimetypes(matcher, b"DIST   1 a " + b"0" * 32 + b"\n"))
+        self.assertNotIn(mime, self.mimetypes(matcher, b"DIST \t1 a " + b"0" * 32 + b"\n"))
+        self.assertNotIn(mime, self.mimetypes(matcher, entry.replace(b" 12345", b" x12345")))
+        self.assertNotIn(mime, self.mimetypes(matcher, b"DIST foo 1 BLAKE2B " + b"0" * 31 + b"\n"))
+        self.assertNotIn(mime, self.mimetypes(matcher, b"DIST " + b" " * 500 + b"\n"))
 
     def test_match_results_are_lazy(self):
         """Reading one result used to drain the whole result iterator."""

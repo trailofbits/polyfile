@@ -35,7 +35,7 @@
 # <tag> <filename> <size> <hash-name> <hash-value>...
 # (<tag>'s already been matched prior to calling)
 0	name	gentoo-manifest
->&0	regex	[[:space:]]+[[:print:]]+[[:space:]]+[[:digit:]]+[[:space:]]+[[:alnum:]]+[[:space:]]+[[:xdigit:]]{32}	Gentoo Manifest (GLEP 74)
+>&0	regex	(?<![[:space:]])([[:space:]]+[[:graph:]]([[:print:]]*[[:graph:]])?|[[:space:]][\t\n\v\f\r]*\040)[[:space:]]+[[:digit:]]+[[:space:]]+[[:alnum:]]+[[:space:]]+[[:xdigit:]]{32}	Gentoo Manifest (GLEP 74)
 !:mime	application/vnd.gentoo.manifest
 
 # Summary: Gentoo ebuild and eclass files

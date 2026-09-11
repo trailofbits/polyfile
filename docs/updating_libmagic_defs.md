@@ -67,7 +67,8 @@ a POSIX engine runs in linear time and Python's `re` does not. Then:
 
 1. File an issue, or use the one that sent you here, explaining what the patch changes and why
    upstream's text does not work. `c-lang` carries the rewrite from
-   [#3411](https://github.com/trailofbits/polyfile/issues/3411).
+   [#3411](https://github.com/trailofbits/polyfile/issues/3411), and `gentoo` the one from
+   [#3473](https://github.com/trailofbits/polyfile/issues/3473).
 2. Add one line to `LOCAL_PATCHES`, mapping the definition's file name to that issue's URL.
 3. Run `pytest tests/test_magic_defs_drift.py`. The entry fails until the patch is actually in the
    file, which is the point: the allowlist records patches that exist, not intentions.

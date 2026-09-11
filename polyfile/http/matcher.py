@@ -12,8 +12,17 @@ HTTP_MIME_TYPE: str = "message/x-http"
 HTTP_11_MIME_TYPE: str = f"{HTTP_MIME_TYPE}; version=1.1"
 
 
-# Register a magic matcher for HTTP 1.1 headers:
-with ExactNamedTempfile(b"""0 regex/s [^\\\\n]*?\\\\s+HTTP/1.1\\\\s*$ HTTP 1.1
+# Register a magic matcher for HTTP 1.1 headers.
+#
+# The pattern reads "a line whose last whitespace-separated token is HTTP/1.1". A carriage return
+# satisfies both `[^\n]` and `\s`, so without the anchor and the lookbehind a run of them splits
+# between the two quantifiers in quadratically many ways, and Python's backtracking engine tries
+# every one (issue #3527). `\^` keeps the search from restarting inside a line it has already
+# rejected, and `(?<!\s)` pins `\s+` to the whole whitespace run. Neither changes which byte ranges
+# the pattern matches: a match that starts mid-line can always be extended left to the line start,
+# and a split that leaves whitespace at the end of `[^\n]*?` is reached earlier by the shorter one
+# that gives that whitespace to `\s+`.
+with ExactNamedTempfile(b"""0 regex/s \\^[^\\\\n]*?(?<!\\\\s)\\\\s+HTTP/1.1\\\\s*$ HTTP 1.1
 !:mime """ + HTTP_11_MIME_TYPE.encode("utf-8") + b"""
 >0 string GET GET request header
 >0 string POST POST request header
