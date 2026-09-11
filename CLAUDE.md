@@ -216,7 +216,14 @@ class MyParser(Parser):
 ### Updating the libmagic Definitions
 
 `polyfile/magic_defs/` is a hand-maintained copy of `file/magic/Magdir/` from the `file` submodule.
-Nothing automates the copy, and one bundled definition carries a PolyFile-specific patch.
+Nothing automates the copy, and two bundled definitions carry PolyFile-specific patches: `c-lang`
+(#3411) and `gentoo` (#3473). Both rewrite a regular expression that backtracks superlinearly in
+Python's `re` but is safe for libmagic's POSIX engine; #3547 tracks fixing that at the engine level,
+which would let both patches be reverted.
+
+`tests/test_magic_defs_drift.py` enforces the copy. It fails when a bundled definition drifts from
+upstream, when upstream ships one PolyFile does not, and when a patch listed in its `LOCAL_PATCHES`
+allowlist has been reverted by a mirroring copy.
 
 See `docs/updating_libmagic_defs.md` for the procedure, including how to find local patches before
 you overwrite them.
