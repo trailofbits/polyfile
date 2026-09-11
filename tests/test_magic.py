@@ -1336,6 +1336,65 @@ class StringDataTypeTest(TestCase):
                                  self.messages(definition, b"AB"))
                 self.assertEqual({"matched"}, self.messages(definition, b"A B"))
 
+    def test_a_negated_value_longer_than_the_buffer_still_matches(self):
+        r"""The bound added for issue #3504 rejected `!ABC` against `ZZ`, which `file` matches.
+
+        A failed bounds check rejects the test rather than the file, and libmagic carries a
+        negated test through it: `mget` returns 0 and `match` sets `flush = m->reln != '!'`
+        (`file/src/softmagic.c:279-282`), so `!` inverts the rejection into a match the same way
+        it inverts a value that is present but different.
+
+        The `w` case pins the order of the two steps. libmagic checks the bound before it
+        evaluates anything, so `string/w !A\ B` matches the two bytes `AB` even though the value
+        it negates does fit them once `w` makes the declared blank optional; evaluating the
+        wrapped test first and negating the outcome would report no match. `file` 5.48 reports
+        `found` for every case here.
+        """
+        for definition, data in (
+            ("0\tstring\t!ABC\tfound\n", b"ZZ"),
+            ("0\tstring\t!ABC\tfound\n", b"Z"),
+            ("0\tstring\t!ABC\tfound\n", b"\x00\x01"),
+            ("0\tstring/w\t!A\\ B\tfound\n", b"AB"),
+        ):
+            with self.subTest(definition=definition, data=data):
+                self.assertEqual({"found"}, self.messages(definition, data))
+
+    def test_only_a_negated_test_survives_the_short_buffer_bound(self):
+        """Every relation but `!` still fails the bound, which is what `flush = m->reln != '!'` says.
+
+        `NegatedStringTest` and `StringLengthTest` both reach the bound in `StringType.match`, and
+        only the first of them is declared with `!`. `>ABC` and `<ABC` are chosen so that the
+        comparison would succeed on the bytes that are there, which is how this tells the bound
+        apart from the comparison. A wildcard reads no value at all, so libmagic gives it a
+        `m->vallen` of 0 (`file/src/apprentice.c:2409`) and the bound never applies to it.
+
+        `file` 5.48 reports `found` only for the wildcard and the negated test below.
+        """
+        text = "ASCII text, with no line terminators"
+        for definition, data, expected in (
+            ("0\tstring\t>ABC\tfound\n", b"ZZ", {text}),
+            ("0\tstring\t<ABC\tfound\n", b"AA", {text}),
+            ("0\tstring\tABC\tfound\n", b"ZZ", {text}),
+            ("0\tstring\tx\tfound\n", b"ZZ", {"found"}),
+            ("0\tstring\t!ABC\tfound\n", b"ZZ", {"found"}),
+        ):
+            with self.subTest(definition=definition, data=data):
+                self.assertEqual(expected, self.messages(definition, data))
+
+    def test_a_negated_search_is_not_bounded_by_the_string_guard(self):
+        """`SearchType.match` overrides `StringType.match`, so its bound lives in `StringMatch.search`.
+
+        A negated search already matched a buffer too short for its value before the `string` bound
+        arrived, and it has to keep doing so: the search-side bound rejects a start offset inside
+        `StringMatch.search` (`file/src/softmagic.c:2357-2361`), which leaves the wrapped test
+        failing and the negation reporting a match. `file` 5.48 reports `found` for both.
+        """
+        definition = "0\tsearch/4\t!ABC\tfound\n"
+        for data in (b"ZZ", b"ZZZZ"):
+            with self.subTest(data=data):
+                self.assertEqual({"found, ASCII text, with no line terminators"},
+                                 self.messages(definition, data))
+
     def test_a_search_value_longer_than_the_bytes_left_does_not_match(self):
         """`search/4/w` reported `A\\ B` as found in `AB` and in `xAB`, which hold no room for it.
 
