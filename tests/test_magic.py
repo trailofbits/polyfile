@@ -364,6 +364,72 @@ class MagicTest(TestCase):
         }
         self.assertIn("text/plain", mimetypes)
 
+    def test_nul_padded_text_is_text(self):
+        """Tests that trailing NUL padding does not make text binary.
+
+        This is a regression test for trailofbits/polyfile#3506. `file_ascmagic` trims the
+        trailing NULs before it calls `file_encoding` (`file/src/ascmagic.c`), so the padding a
+        fixed record size, a string table, or a block boundary leaves behind does not reach the
+        character class check. Without the trim the NULs fail `_only_contains`, PolyFile reports
+        no encoding, and `MagicMatcher.match` falls through to `application/octet-stream`.
+        """
+        padded = (
+            (b"\xde\xca\xff\xed" + b"\x00" * 4, "iso-8859-1"),
+            (b"padded record" + b"\x00" * 2, "ascii"),
+            (b"a record.\n" + b"\x00" * 502, "ascii"),
+            ("café naïve\n".encode("latin-1") + b"\x00" * 4, "iso-8859-1"),
+        )
+        for data, expected_encoding in padded:
+            with self.subTest(data=data[:16]):
+                self.assertEqual(expected_encoding, polyfile.magic.detect_text_encoding(data))
+                mimetypes = {
+                    mimetype
+                    for match in MagicMatcher.DEFAULT_INSTANCE.match(data)
+                    for mimetype in match.mimetypes
+                }
+                self.assertIn("text/plain", mimetypes)
+
+    def test_nul_padding_does_not_lengthen_a_line(self):
+        """Tests that the padding counts towards neither the encoding nor the longest line.
+
+        This is a regression test for trailofbits/polyfile#3506. `file_ascmagic` hands the same
+        trimmed buffer to `file_encoding` and to `file_ascmagic_with_encoding`, so 400 NULs after
+        an eleven character line leave `file` reporting `ASCII text, with no line terminators`.
+        Classifying the trimmed buffer but measuring the untrimmed one adds `with very long
+        lines`, because the padding runs past `MAXLINELEN`.
+        """
+        description = polyfile.magic.TextEncodingDescription.detect(b"hello world" + b"\x00" * 400)
+        self.assertIsNotNone(description)
+        self.assertEqual("ASCII text, with no line terminators", description.describe(""))
+
+    def test_an_even_buffer_that_trims_odd_keeps_a_nul(self):
+        """Tests the odd byte adjustment libmagic applies after it trims the trailing NULs.
+
+        This is a regression test for trailofbits/polyfile#3506. `file_ascmagic` puts one byte
+        back when the trim ends on an odd offset and the buffer was evenly sized, so that UTF-16LE
+        text keeps its last character (`file/src/ascmagic.c`). The byte it restores is a NUL,
+        which belongs to no text character class, so `file` reports `data` for `abc\\0` and
+        `ASCII text` for `abc\\0\\0`. Trimming without the adjustment reports text for both.
+        """
+        self.assertIsNone(polyfile.magic.detect_text_encoding(b"abc\x00"))
+        self.assertIsNone(polyfile.magic.detect_text_encoding(b"The quick brown fox.\n"
+                                                              + b"\x00" * 491))
+        self.assertEqual("ascii", polyfile.magic.detect_text_encoding(b"abc\x00\x00"))
+
+    def test_the_odd_byte_adjustment_keeps_the_last_utf_16le_character(self):
+        """Tests that UTF-16LE text does not lose its last character to the NUL trim.
+
+        This is a regression test for trailofbits/polyfile#3506. The low byte of an ASCII
+        character in UTF-16LE is followed by a NUL, so trimming alone drops it: the trailing LF of
+        `hi\\n` disappears and PolyFile appends `, with no line terminators` where `file` appends
+        nothing. The odd byte adjustment restores the NUL and with it the character.
+        """
+        data = b"\xff\xfe" + "hi\n".encode("utf-16le")
+        description = polyfile.magic.TextEncodingDescription.detect(data)
+        self.assertIsNotNone(description)
+        self.assertEqual(1, description.lf)
+        self.assertEqual("Unicode text, UTF-16, little-endian text", description.describe(""))
+
     @staticmethod
     def messages(matcher: MagicMatcher, data: bytes) -> Set[str]:
         return {str(match) for match in matcher.match(data)}
