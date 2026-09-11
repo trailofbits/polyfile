@@ -1133,6 +1133,24 @@ class MagicTest(ABC):
         """
         return not self.precedes_soft_magic and bool(self.subtest_type() & TestType.TEXT)
 
+    def diverges_from_libmagic(self, data: bytes) -> bool:
+        """Whether this test matches `data` where libmagic's own copy of the check does not.
+
+        A check `precedes_soft_magic` names ends libmagic's run as soon as it matches, so
+        ``file_buffer`` never reaches ``file_ascmagic`` and never describes the text encoding.
+        Where PolyFile's version of such a check accepts a buffer libmagic's version rejects,
+        libmagic takes no such short circuit: its run continues, and ``file_ascmagic`` describes
+        the file. `MagicMatcher.match` reports that description alongside the match, so neither
+        verdict is lost.
+
+        Args:
+            data: the file's own bytes.
+
+        Returns:
+            False, because a check that reads the same bytes reaches the same verdict.
+        """
+        return False
+
     @test_type.setter
     def test_type(self, value: TestType):
         if self._type != TestType.UNKNOWN:
@@ -3712,6 +3730,11 @@ def parse_json(raw: bytes) -> ParsedJSON:
     * If more data follows the first value, it is newline-delimited JSON as long as the next byte
       equals the first byte of the first value and a second value parses there. libmagic stops
       after that second value, so trailing garbage does not disqualify the buffer.
+    * The encoding is the one `json.detect_encoding` names, so a byte order mark, UTF-16 and
+      UTF-32 all parse. libmagic reads raw bytes and reports such a document as Unicode text
+      instead. RFC 8259 section 8.1 permits either reading, and PolyFile reports every match
+      rather than picking a winner, so `JSONTest.diverges_from_libmagic` keeps libmagic's answer
+      alongside this one.
 
     Args:
         raw: the bytes to parse, starting at the first byte of the candidate JSON value.
@@ -3767,6 +3790,22 @@ class JSONTest(MagicTest):
 
     def subtest_type(self) -> TestType:
         return TestType.TEXT
+
+    def diverges_from_libmagic(self, data: bytes) -> bool:
+        """``file_is_json`` walks raw bytes, so an encoding it cannot read is not JSON to it.
+
+        It advances a byte pointer over the file's own bytes and rejects the first byte outright
+        (``file/src/is_json.c:421-455``), so UTF-8 with a byte order mark, UTF-16 and UTF-32 are
+        all non-JSON to libmagic, which reports them as Unicode text. `parse_json` decodes with
+        `json.detect_encoding`, which reads every one of them.
+
+        Args:
+            data: the file's own bytes.
+
+        Returns:
+            True if `data` is in an encoding libmagic's byte-level parser cannot read.
+        """
+        return json.detect_encoding(data) != "utf-8"
 
     @property
     def precedes_soft_magic(self) -> bool:
@@ -4844,10 +4883,18 @@ class MagicMatcher:
             # hands them rather than against the file's bytes
             text_context = to_match.text_test_context(text_encoding.encoding)
             text_tests = [test for test in self.text_tests if test not in matched_on_the_files_bytes]
-            for _, m in self._run_tests(text_tests, text_context, text_encoding, "text matching",
-                                        file_context=to_match):
+            # a match that carries the encoding description already reports it, and so does a
+            # binary pass match, which is where `file_buffer` stops before `file_ascmagic`
+            described = bool(matched_on_the_files_bytes)
+            diverged = False
+            for test, m in self._run_tests(text_tests, text_context, text_encoding, "text matching",
+                                           file_context=to_match):
+                described = described or m.text_encoding is not None
+                diverged = diverged or test.diverges_from_libmagic(to_match.data)
                 yield m
                 yielded = True
+            if diverged and not described:
+                yield text_matcher
         if not yielded:
             if is_text:
                 yield text_matcher
