@@ -86,6 +86,9 @@ def generate(file_path, sbud):
     matches = assign_ids(sbud)
 
     input_bytes = sbud['length']
+    # the hex viewer's column header is indented by the width of its address gutter, and an empty
+    # file has no address to print
+    address_digits = math.ceil(math.log(input_bytes, 16)) if input_bytes > 0 else 0
     regions = undescribed_regions(matches, input_bytes)
     undescribed_bytes = sum(size for _, size in regions)
     with open(file_path, 'rb') as input_file:
@@ -171,7 +174,7 @@ def generate(file_path, sbud):
             matches=matches,
             input_file=input_file,
             input_bytes=input_bytes,
-            math=math,
+            address_digits=address_digits,
             read_unicode=ReadUnicode(),
             mime_type=mime_type,
             decoded_matches=decoded_matches,
