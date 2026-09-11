@@ -2628,12 +2628,13 @@ class MagicRegex:
     scan, so the count is one lower per class unless it is taken first.
     """
 
-    def __init__(self, specification: bytes, flags: int = 0):
+    def __init__(self, specification: bytes, flags: int = 0, negated: bool = False):
         """Compiles `specification`, counting its literals before the POSIX rewrite.
 
         Args:
             specification: The unescaped pattern, as libmagic would hold it.
             flags: The regular expression flags to compile with.
+            negated: Whether the definition uses libmagic's ``!`` relation.
 
         Raises:
             re.error: If `specification` is not a valid regular expression.
@@ -2641,6 +2642,7 @@ class MagicRegex:
         self.literal_count: int = nonmagic(specification)
         self.pattern: bytes = posix_to_python_re(specification)
         self.compiled: Pattern[bytes] = re.compile(self.pattern, flags)
+        self.negated: bool = negated
 
     def search(self, data: bytes) -> Optional["re.Match[bytes]"]:
         return self.compiled.search(data)
@@ -2769,8 +2771,17 @@ class RegexType(DataType[MagicRegex]):
         literals = expected.literal_count
         return literals * max(STRENGTH_MULT // literals, 1)
 
+    def relation(self, expected: MagicRegex) -> str:
+        return "!" if expected.negated else "="
+
     def parse_expected(self, specification: str) -> MagicRegex:
-        if specification.startswith("="):
+        negated = specification.startswith("!")
+        if negated:
+            # libmagic reads exactly one relational operator off the front of the value and
+            # compiles everything after it, so the `=` of a `!=` belongs to the pattern rather
+            # than being a second operator to strip (`file/src/apprentice.c:2383-2393`)
+            specification = specification[1:]
+        elif specification.startswith("="):
             # libmagic parses a leading `=` as the equality operator, not as part of the pattern
             # (`file/src/apprentice.c:2383-2384`)
             specification = specification[1:]
@@ -2778,7 +2789,7 @@ class RegexType(DataType[MagicRegex]):
         if self.case_insensitive:
             flags |= re.IGNORECASE
         try:
-            return MagicRegex(unescape(specification), flags)
+            return MagicRegex(unescape(specification), flags, negated=negated)
         except re.error as e:
             raise ValueError(str(e))
 
@@ -2853,6 +2864,10 @@ class RegexType(DataType[MagicRegex]):
 
     def match(self, data: bytes, expected: MagicRegex) -> DataTypeMatch:
         m = expected.search(self.subject(data))
+        if expected.negated:
+            # the `!` relation inverts the verdict, and a negated test reports no matched bytes
+            # because nothing matched
+            return DataTypeMatch.INVALID if m is not None else DataTypeMatch(b"", "")
         if m is None:
             return DataTypeMatch.INVALID
         return self.matched_extent(m, 0)
