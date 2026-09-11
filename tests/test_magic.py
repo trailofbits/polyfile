@@ -148,6 +148,19 @@ class MagicTest(TestCase):
         print(f"# MIME Types:      {len(matcher.mimetypes)}")
         print(f"# File Extensions: {len(matcher.extensions)}")
 
+    def test_an_undecodable_definition_line_is_reported(self):
+        """A definition line that is not valid UTF-8 used to be skipped without a word.
+
+        `MagicMatcher._parse_file` dropped the test and moved on, so a mis-encoded definition file
+        lost entries invisibly. This is the sibling swallow trailofbits/polyfile#3476 reports
+        beside the discarded `!:strength` factor. No shipped definition triggers it.
+        """
+        with TemporaryDirectory() as tmp_dir:
+            magic_file = Path(tmp_dir) / "undecodable"
+            magic_file.write_bytes(b"0\tstring\tabcd\tvalid\n0\tstring\tcaf\xe9\tlatin-1\n")
+            with self.assertRaisesRegex(ValueError, "line 2: .*utf-8"):
+                MagicMatcher.parse(magic_file)
+
     def test_guid_data_types(self):
         """libmagic 5.48 added `leguid` and `beguid` beside `guid`, differing only in byte order."""
         data = bytes(range(16))
@@ -1520,6 +1533,54 @@ class TestStrengthTest(TestCase):
         """
         definition = "0\tstring/wt\t#!\\ \ta\n>&-1\tstring/T\tx\t%s script text executable\n!:strength / 3\n"
         self.assertEqual(20, self.strength(definition))
+
+    def test_a_comment_after_the_factor_leaves_the_factor_alone(self):
+        """A trailing comment used to discard the factor, and the operator with it.
+
+        `int()` was handed the comment along with the digits, raised, and the exception was
+        dropped by a bare `except ValueError`. libmagic reads the factor with `strtoul` and asks
+        only that whatever follows the digits be whitespace (`file/src/apprentice.c:2507-2517`),
+        which is why the comment is harmless there. Both the branch that reads an operator and
+        the one that does not take the first whitespace-delimited token.
+        """
+        test = self.only_test("0\tstring\tabcd\tdesc\n!:strength + 15\t\t# beat the others\n")
+        self.assertEqual(polyfile.magic.StrengthOp.PLUS, test.strength_op)
+        self.assertEqual(15, test.strength_factor)
+        self.assertEqual(85, test.compute_strength())
+        self.assertEqual(23, self.strength("0\tstring\tabcd\tdesc\n!:strength / 3  # comment\n"))
+        self.assertEqual(85, self.strength("0\tstring\tabcd\tdesc\n!:strength 15\t# no op\n"))
+
+    def test_the_shipped_ctf_entry_scores_what_libmagic_scores(self):
+        """`magic_defs/ctf:23` is the one shipped directive with a trailing comment.
+
+        `file -l` reports `Strength = 105@22` for it: the 20 baseline, 70 for the seven-byte
+        value, 10 for the `=` relation, and the 5 the directive adds. PolyFile scored 100 while
+        the factor was being discarded, and this was the last entry whose strength disagreed with
+        `file -l`.
+        """
+        instance = MagicMatcher.DEFAULT_INSTANCE
+        ctf = [
+            test for test in instance.text_tests | instance.non_text_tests
+            if test.source_info is not None and test.source_info.path.name == "ctf"
+            and test.source_info.line == 22
+        ]
+        self.assertEqual(1, len(ctf), "the CTF plain text metadata entry moved")
+        self.assertEqual(polyfile.magic.StrengthOp.PLUS, ctf[0].strength_op)
+        self.assertEqual(5, ctf[0].strength_factor)
+        self.assertEqual(105, ctf[0].compute_strength())
+
+    def test_a_factor_that_is_not_an_integer_is_reported(self):
+        """A factor that still does not parse is a malformed definition, not something to ignore.
+
+        `MagicMatcher._parse_file` names the file and the line for every other malformed line, so
+        this one does too, rather than keeping a test whose declared strength went missing.
+        libmagic rejects the last of these as well: its `strtoul` stops at the `#`, and the
+        character after the digits is not whitespace.
+        """
+        for spec in ("+five", "+", "5#nospace"):
+            with self.subTest(spec=spec):
+                with self.assertRaisesRegex(ValueError, "line 2: Invalid strength factor"):
+                    self.strength(f"0\tstring\tabcd\tdesc\n!:strength {spec}\n")
 
     def test_multiple_magic_sidecars_match_libmagic(self):
         """`file/tests/multiple.testfile` needs its four matches in descending strength order.
