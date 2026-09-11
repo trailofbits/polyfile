@@ -5037,8 +5037,8 @@ class MagicMatcher:
                     continue
                 try:
                     line = raw_line.decode("utf-8")
-                except UnicodeDecodeError:
-                    continue
+                except UnicodeDecodeError as e:
+                    raise ValueError(f"{def_file!s} line {line_number}: {e!s}")
                 test = MagicMatcher.parse_test(line, def_file, line_number, current_test, matcher)
                 if test is not None:
                     if test.mime is not None:

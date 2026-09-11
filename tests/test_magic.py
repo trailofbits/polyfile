@@ -137,6 +137,19 @@ class MagicTest(TestCase):
         print(f"# MIME Types:      {len(matcher.mimetypes)}")
         print(f"# File Extensions: {len(matcher.extensions)}")
 
+    def test_an_undecodable_definition_line_is_reported(self):
+        """A definition line that is not valid UTF-8 used to be skipped without a word.
+
+        `MagicMatcher._parse_file` dropped the test and moved on, so a mis-encoded definition file
+        lost entries invisibly. This is the sibling swallow trailofbits/polyfile#3476 reports
+        beside the discarded `!:strength` factor. No shipped definition triggers it.
+        """
+        with TemporaryDirectory() as tmp_dir:
+            magic_file = Path(tmp_dir) / "undecodable"
+            magic_file.write_bytes(b"0\tstring\tabcd\tvalid\n0\tstring\tcaf\xe9\tlatin-1\n")
+            with self.assertRaisesRegex(ValueError, "line 2: .*utf-8"):
+                MagicMatcher.parse(magic_file)
+
     def test_guid_data_types(self):
         """libmagic 5.48 added `leguid` and `beguid` beside `guid`, differing only in byte order."""
         data = bytes(range(16))
