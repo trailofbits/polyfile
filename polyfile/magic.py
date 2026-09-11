@@ -1879,6 +1879,23 @@ class StringTest(ABC):
     def matches(self, data: bytes) -> DataTypeMatch:
         raise NotImplementedError()
 
+    def out_of_bounds_match(self, data: bytes) -> DataTypeMatch:
+        """The result libmagic reports when the buffer is too short to hold this test's value.
+
+        ``mget`` returns 0 without evaluating the test once
+        ``offset_oob(nbytes, offset, m->vallen)`` rejects it, and ``match`` keeps the test alive
+        only under the ``!`` relation: ``flush = m->reln != '!'``
+        (``file/src/softmagic.c:279-282``). This is the same rule
+        `DataType.allows_invalid_offsets` reports for an offset that lands past the buffer.
+
+        Args:
+            data: The bytes at the offset being tested.
+
+        Returns:
+            `DataTypeMatch.INVALID`, because every relation but ``!`` fails the bounds check.
+        """
+        return DataTypeMatch.INVALID
+
     @abstractmethod
     def is_always_text(self) -> bool:
         raise NotImplementedError()
@@ -2001,6 +2018,22 @@ class NegatedStringTest(StringWildcard):
             return super().matches(data)
         else:
             return DataTypeMatch.INVALID
+
+    def out_of_bounds_match(self, data: bytes) -> DataTypeMatch:
+        r"""Matches without reading the value, which is what ``flush = m->reln != '!'`` leaves.
+
+        libmagic never evaluates the wrapped test in this case, so a flag that lets a value
+        consume fewer bytes than it declares cannot rescue it: ``w`` turns each declared blank
+        into an optional one (``file/src/softmagic.c:2116-2121``), yet ``string/w !A\ B`` still
+        matches the two bytes ``AB`` that its three-byte value does not fit in.
+
+        Args:
+            data: The bytes at the offset being tested.
+
+        Returns:
+            The value a negated test reports whenever the test it wraps fails.
+        """
+        return super().matches(data)
 
     def search(self, data: bytes) -> DataTypeMatch:
         result = self.parent.search(data)
@@ -2349,15 +2382,19 @@ class StringType(DataType[StringTest]):
         what ``w`` does: it turns each declared blank into an optional one
         (``file/src/softmagic.c:2116-2121``).
 
+        A failed bounds check rejects the test rather than the file, and a negated test inverts
+        that rejection into a match, so `StringTest.out_of_bounds_match` answers for it.
+
         Args:
             data: The bytes at the offset being tested.
             expected: The parsed value this type looks for.
 
         Returns:
-            The match, or `DataTypeMatch.INVALID` if the buffer is shorter than the value.
+            The match, or what `expected` reports out of bounds if the buffer is shorter than the
+            value.
         """
         if len(data) < expected.value_length:
-            return DataTypeMatch.INVALID
+            return expected.out_of_bounds_match(data)
         return expected.matches(data)
 
     STRING_TYPE_FORMAT: Pattern[str] = re.compile(r"^u?string(/(?P<numbytes>\d+))?(?P<opts>/[BbCctTWwf]*)?$")
