@@ -507,6 +507,86 @@ class MagicTest(TestCase):
         self.assertEqual(1, description.lf)
         self.assertEqual("Unicode text, UTF-16, little-endian text", description.describe(""))
 
+    def test_ebcdic_to_ascii_table(self):
+        """Tests the properties libmagic's `ebcdic_to_ascii` comment names for its table.
+
+        The comment at `file/src/encoding.c` records what every EBCDIC variant agrees on: codes
+        0x00 through 0x3F are control characters, 0x41 is a nonbreaking space, and the rest are
+        printing characters. Checking those alongside the letter and digit runs catches a
+        transcription error in the 256 byte table that the end to end cases might still classify
+        correctly.
+        """
+        table = polyfile.magic.EBCDIC_TO_ASCII
+        self.assertEqual(256, len(table))
+        self.assertEqual(0x20, table[0x40])
+        self.assertEqual(0xA0, table[0x41])
+        for ebcdic, ascii_start in ((0x81, "a"), (0x91, "j"), (0xC1, "A"), (0xD1, "J")):
+            for offset in range(9):
+                self.assertEqual(ord(ascii_start) + offset, table[ebcdic + offset],
+                                 f"EBCDIC {ebcdic + offset:#04x}")
+        for offset in range(8):
+            self.assertEqual(ord("s") + offset, table[0xA2 + offset])
+            self.assertEqual(ord("S") + offset, table[0xE2 + offset])
+        for digit in range(10):
+            self.assertEqual(ord("0") + digit, table[0xF0 + digit])
+
+    def test_ebcdic_text_is_not_binary(self):
+        """Tests that a buffer only EBCDIC makes sense of is text rather than binary.
+
+        This is a regression test for trailofbits/polyfile#3507. `file_encoding` translates the
+        buffer through `ebcdic_to_ascii` and re-tests it once the ASCII, UTF-8, UCS and eight bit
+        families have all failed (`file/src/encoding.c`). `detect_text_encoding` stopped at the
+        eight bit families, so it reported no encoding for these buffers and `MagicMatcher.match`
+        fell through to `application/octet-stream`.
+
+        The first three buffers hold an EBCDIC double quote (0x7F) or tab (0x05), both of which
+        belong to no text character class in their own right, which is what keeps them out of the
+        eight bit families. The last is the corkami corpus file `pocs-master/mocks/elf.bin`.
+        """
+        ebcdic = (
+            (b"\x7f\xc3\xe4\xe2\xe3\xd6\xd4\xc5\xd9\x7f\x6b\x7f\xc2\xc1\xd3\xc1\xd5"
+             b"\xc3\xc5\x7f\x25", "ebcdic", "EBCDIC text"),
+            (b"\xd5\xc1\xd4\xc5\x05\xe5\xc1\xd3\xe4\xc5\x25", "ebcdic", "EBCDIC text"),
+            (b"\x7f\x83\x81\x86\xcb\x7f\x25", "ebcdic-international",
+             "International EBCDIC text"),
+            (b"\x7fELF", "ebcdic-international",
+             "International EBCDIC text, with no line terminators"),
+        )
+        for data, expected_encoding, expected_description in ebcdic:
+            with self.subTest(data=data):
+                self.assertEqual(expected_encoding, polyfile.magic.detect_text_encoding(data))
+                description = polyfile.magic.TextEncodingDescription.detect(data)
+                self.assertIsNotNone(description)
+                self.assertEqual(expected_description, description.describe(""))
+                mimetypes = {
+                    mimetype
+                    for match in MagicMatcher.DEFAULT_INSTANCE.match(
+                        polyfile.magic.MatchContext(data, only_match_mime=True))
+                    for mimetype in match.mimetypes
+                }
+                self.assertEqual({"text/plain"}, mimetypes)
+
+    def test_eight_bit_text_is_not_reclassified_as_ebcdic(self):
+        """Tests that the EBCDIC branch runs last, where `file_encoding` runs it.
+
+        This is a regression test for trailofbits/polyfile#3507. Most EBCDIC buffers are also
+        valid eight bit buffers, so the two families overlap and only the order separates them:
+        `file_encoding` reaches `from_ebcdic` in the `else` of the chain that `looks_latin1` and
+        `looks_extended` come earlier in (`file/src/encoding.c`). Testing for EBCDIC any sooner
+        reports ordinary ISO-8859 and extended-ASCII text as EBCDIC, and each of these buffers
+        translates to something `looks_latin1` still accepts.
+        """
+        eight_bit = (
+            (b"\xc3\xe4\xe2\xe3\xd6\xd4\xc5\xd9\x40\xd9\xc5\xc3\xd6\xd9\xc4\x25",
+             "iso-8859-1"),
+            (b"\xc8\x85\x93\x93\x96\x6b\x40\xa6\x96\x99\x93\x84\x25", "unknown-8bit"),
+            ("caf\xe9 na\xefve\n".encode("latin-1"), "iso-8859-1"),
+            (b"plain ASCII text\n", "ascii"),
+        )
+        for data, expected_encoding in eight_bit:
+            with self.subTest(data=data):
+                self.assertEqual(expected_encoding, polyfile.magic.detect_text_encoding(data))
+
     @staticmethod
     def messages(matcher: MagicMatcher, data: bytes) -> Set[str]:
         return {str(match) for match in matcher.match(data)}
