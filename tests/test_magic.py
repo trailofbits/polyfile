@@ -1300,16 +1300,19 @@ class StringDataTypeTest(TestCase):
         self.assertTrue(blanks.match(b"ABx", blanks.parse_expected("A\\tB")))
 
     def test_compact_whitespace_wins_over_optional_blanks(self):
-        """`StringMatch` raised when a definition set both `W` and `w`, as `magic_defs/sgml` does.
+        """`StringMatch` raised when a definition set both `W` and `w`.
 
         libmagic keeps both bits and lets `W` win, because `file_strncmp` tests it first
-        (`file/src/softmagic.c:2103-2120`).
+        (`file/src/softmagic.c:2103-2120`). The tab case pins that `W` keeps its byte set as well
+        as its lower bound when `w` is also set; `file` 5.48 reports `found` for `A\\tB` and not
+        for `AB`.
         """
         both = StringType.parse("string/Ww")
         self.assertTrue(both.compact_whitespace)
         self.assertTrue(both.optional_blanks)
         expected = both.parse_expected("A\\ B")
         self.assertTrue(both.match(b"A  B", expected))
+        self.assertTrue(both.match(b"A\tB", expected))
         self.assertFalse(both.match(b"AB", expected))
 
     def test_search_b_flag_is_not_optional_blanks(self):
@@ -1651,6 +1654,81 @@ class StringDataTypeTest(TestCase):
         definition = "0\tsearch/4/fb\tABC\tfound\n"
         self.assertEqual({"found"}, self.messages(definition, b"ABC\x00zz"))
         self.assertEqual({"data"}, self.messages(definition, b"ABC\x01zz"))
+
+    def test_compact_whitespace_accepts_any_whitespace_byte(self):
+        r"""A `W` blank repeated the value's own byte, so a tab never matched a declared space.
+
+        libmagic never compares the whitespace byte the value declares. A blank asks for
+        `isspace(*b)` and then skips whatever whitespace is left
+        (`file/src/softmagic.c:2102-2115`). The accepted set is C `isspace` in the `C` locale,
+        which is the same six bytes Python's `\s` matches in a bytes pattern.
+
+        `\xa0` is the guard against widening the class too far. `file(1)` accepts it as a seventh
+        byte on this host, but only because `main` adopts the caller's locale
+        (`file/src/file.c:211`) and macOS classifies `\xa0` as a space in a UTF-8 one; under
+        `LC_ALL=C`, `file` 5.48 reports `found` for the first group here and not for the second.
+        """
+        compact = StringType.parse("string/W")
+        space_in_value = compact.parse_expected("A\\ B")
+        for data in (b"A B", b"A\tB", b"A\nB", b"A\x0bB", b"A\x0cB", b"A\rB", b"A \t\r B"):
+            with self.subTest(data=data):
+                self.assertTrue(compact.match(data, space_in_value))
+        for data in (b"AB", b"ABx", b"AxB", b"A.B", b"A\xa0B"):
+            with self.subTest(data=data):
+                self.assertFalse(compact.match(data, space_in_value))
+
+    def test_compact_whitespace_ignores_the_blank_the_value_declares(self):
+        r"""A value that writes a tab or a newline compiled to that literal byte with no repetition.
+
+        Only the escaped space was recognized as a blank, so `magic_defs/perl:47`'s `\=pod\n`
+        demanded exactly one line feed. libmagic reads the value's blank through `isspace(*a)`
+        alone (`file/src/softmagic.c:2102-2103`), so which blank a definition writes is not
+        observable. `file` 5.48 agrees with every case here.
+        """
+        compact = StringType.parse("string/W")
+        for value in ("A\\tB", "A\\nB", "A\\ B"):
+            expected = compact.parse_expected(value)
+            with self.subTest(value=value):
+                for data in (b"A B", b"A\tB", b"A\nB", b"A  B"):
+                    self.assertTrue(compact.match(data, expected), repr(data))
+                self.assertFalse(compact.match(b"AB", expected))
+
+    def test_compact_whitespace_requires_one_blank_for_each_it_declares(self):
+        """`W` differs from `w` in its lower bound, and the fix for the byte set has to keep it.
+
+        libmagic consumes one whitespace byte per declared blank before it skips the rest of the
+        run (`file/src/softmagic.c:2102-2115`), where `w` consumes a run of any length including
+        none (`file/src/softmagic.c:2116-2121`). `file` 5.48 reports `found` for `A  B` under both
+        flags, for `ABxx` under `w` alone, and for none of `A B`, `A Bx`, `AB` or `ABxx` under `W`.
+        The four-byte cases matter on their own: a value never matches a buffer shorter than the
+        length it declares, so a three-byte buffer fails the bound that
+        `test_a_value_longer_than_the_buffer_does_not_match` covers before the lower bound here is
+        reached.
+        """
+        compact = StringType.parse("string/W")
+        two_blanks = compact.parse_expected("A\\ \\ B")
+        for data in (b"A  B", b"A\t\nB", b"A   B", b"A \t\r B"):
+            with self.subTest(data=data):
+                self.assertTrue(compact.match(data, two_blanks))
+        for data in (b"A B", b"A\tB", b"A Bx", b"AB", b"ABxx"):
+            with self.subTest(data=data):
+                self.assertFalse(compact.match(data, two_blanks))
+        blanks = StringType.parse("string/w")
+        self.assertTrue(blanks.match(b"ABxx", blanks.parse_expected("A\\ \\ B")))
+
+    def test_the_dos_batch_table_reports_a_tab_after_echo(self):
+        r"""`magic_defs/msdos:13` writes `echo\ off`, and a batch file may write the blank as a tab.
+
+        PolyFile reported the file as plain text, because the definition's space matched only a
+        space. `magic_defs/perl:47` is the same defect on a newline. `file` 5.48 reports
+        `DOS batch file, ASCII text, with CRLF line terminators` and
+        `Perl POD document, ASCII text`.
+        """
+        batch = MagicMatcher.DEFAULT_INSTANCE.match(b"@echo\toff\r\ndir\r\n")
+        self.assertEqual({"DOS batch file, ASCII text, with CRLF line terminators"},
+                         {str(match) for match in batch})
+        pod = MagicMatcher.DEFAULT_INSTANCE.match(b"=pod\x0bNAME\n")
+        self.assertEqual({"Perl POD document, ASCII text"}, {str(match) for match in pod})
 
     def test_the_interpreter_line_table_reports_a_posix_shell_script(self):
         """Every `f` definition in `magic_defs/commands` declares a value that starts with `#`.
