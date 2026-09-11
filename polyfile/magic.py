@@ -4574,6 +4574,47 @@ class OctetStreamTest(MagicTest):
         return self.test(data, absolute_offset, parent_match)
 
 
+class EmptyFileTest(MagicTest):
+    """Matches a zero-length buffer, which libmagic never runs a test against.
+
+    `file_buffer` short-circuits an empty buffer to the default description ahead of the text
+    encoding classifier and of every builtin and soft magic test (`file/src/funcs.c:360-362`
+    reaching `file/src/funcs.c:506-512`). The MIME type comes from `file_fsmagic`, which reads the
+    size out of `stat` and reports `inode/x-empty` without opening the file
+    (`file/src/fsmagic.c:406-411`). The `charset=binary` `file -i` prints alongside it is a MIME
+    encoding rather than a MIME type, and PolyFile reports no encodings, so this test carries only
+    the type.
+    """
+
+    AUTO_REGISTER_TEST = False
+
+    def __init__(
+            self,
+            offset: Offset = AbsoluteOffset(0),
+            mime: Union[str, TernaryExecutableMessage] = "inode/x-empty",
+            extensions: Iterable[str] = (),
+            message: Union[str, Message] = "empty",
+            parent: Optional["MagicTest"] = None,
+            comments: Iterable[Comment] = ()
+    ):
+        super().__init__(offset, mime, extensions, message, parent, comments)
+
+    def subtest_type(self) -> TestType:
+        return TestType.BINARY
+
+    def calculate_absolute_offset(self, data: bytes, parent_match: Optional[TestResult] = None) -> int:
+        # an empty buffer has no valid offset, and libmagic reports it without reading one
+        return self.offset.to_absolute(data, parent_match, allow_invalid=True)
+
+    def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
+        return MatchedTest(self, offset=absolute_offset, length=0, parent=parent_match, value=data)
+
+    def test_flip_endianness(
+            self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]
+    ) -> TestResult:
+        return self.test(data, absolute_offset, parent_match)
+
+
 TEST_PATTERN: Pattern[str] = re.compile(
     r"^(?P<level>[>]*)(?P<offset>[^\s!][^\s]*)\s+(?P<data_type>[^\s]+)\s+(?P<remainder>.+)$"
 )
@@ -4690,8 +4731,13 @@ class Match:
                 result = next(self._result_iter)
                 self._results.append(result)
                 if isinstance(result, IndirectResult):
-                    for match in self.matcher.match(self.context[result.offset:]):
-                        self._results.extend(match)
+                    indirect = self.context[result.offset:]
+                    # an indirect test re-enters soft magic over the sub-buffer rather than
+                    # classifying it (`file/src/softmagic.c:1949-1977`), so an offset at the end of
+                    # the file dispatches nothing instead of reporting the empty file
+                    if indirect.data:
+                        for match in self.matcher.match(indirect):
+                            self._results.extend(match)
             except StopIteration:
                 self._result_iter = None
         return self._results[index]
@@ -5049,6 +5095,11 @@ class MagicMatcher:
             to_match = MatchContext(to_match)
         elif not isinstance(to_match, MatchContext):
             to_match = MatchContext.load(to_match)
+        if not to_match.data:
+            # `file_buffer` reports an empty buffer before it classifies the encoding and before it
+            # runs a single test (`file/src/funcs.c:360-362`)
+            yield Match(matcher=self, context=to_match, results=EmptyFileTest().match(to_match))
+            return
         text_encoding = TextEncodingDescription.detect(to_match.data)
         yielded = False
         matched_on_the_files_bytes: Set[MagicTest] = set()
