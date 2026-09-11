@@ -745,6 +745,24 @@ class MagicMatchingRegressionTest(TestCase):
         self.assertNotIn(HTTP_11_MIME_TYPE, self.mimetypes(matcher, b"GET /xHTTP/1.1\r\n"))
         self.assertNotIn(HTTP_11_MIME_TYPE, self.mimetypes(matcher, b"\r" * 32))
 
+    def test_gentoo_manifest_test_terminates(self):
+        """Whitespace after a Manifest tag used to backtrack quartically in `gentoo`."""
+        self.match_in_subprocess(b"DIST " + b" " * 500 + b"\n")
+
+    def test_gentoo_manifest_test_semantics(self):
+        """The rewritten `gentoo-manifest` test accepts and rejects the same lines as before."""
+        matcher = self.definition_matcher("gentoo")
+        mime = "application/vnd.gentoo.manifest"
+        entry = b"DIST foo-1.0.tar.gz 12345 BLAKE2B " + b"0123456789abcdef" * 4 + b"\n"
+        self.assertIn(mime, self.mimetypes(matcher, entry))
+        # `[[:print:]]` holds a space, so upstream's pattern also accepts a file name made only of
+        # whitespace, and the rewrite keeps accepting it
+        self.assertIn(mime, self.mimetypes(matcher, b"DIST   1 a " + b"0" * 32 + b"\n"))
+        self.assertNotIn(mime, self.mimetypes(matcher, b"DIST \t1 a " + b"0" * 32 + b"\n"))
+        self.assertNotIn(mime, self.mimetypes(matcher, entry.replace(b" 12345", b" x12345")))
+        self.assertNotIn(mime, self.mimetypes(matcher, b"DIST foo 1 BLAKE2B " + b"0" * 31 + b"\n"))
+        self.assertNotIn(mime, self.mimetypes(matcher, b"DIST " + b" " * 500 + b"\n"))
+
     def test_match_results_are_lazy(self):
         """Reading one result used to drain the whole result iterator."""
         data = b"#!/bin/sh\nexec cat \"$@\"\n"

@@ -29,9 +29,15 @@ list of filenames to update.
 ## Local patches
 
 A definition file copied from `Magdir` may still carry a PolyFile-specific patch. As of libmagic
-5.48 there is one: `c-lang` rewrites the C++ class regex to remove exponential backtracking, because
-libmagic matches with a POSIX engine and PolyFile matches with Python's `re`. See
-[#3411](https://github.com/trailofbits/polyfile/issues/3411).
+5.48 there are two, and both exist for the same reason: libmagic matches with a POSIX engine, while
+PolyFile matches with Python's `re`, which backtracks. A pattern that costs libmagic one pass can
+cost PolyFile superlinear time, so each patch rewrites a pattern into one that accepts and rejects
+the same inputs without the backtracking.
+
+| File | Patch | Issue |
+|---|---|---|
+| `c-lang` | The C++ class regex, which backtracked exponentially on a header with CRLF line endings. | [#3411](https://github.com/trailofbits/polyfile/issues/3411) |
+| `gentoo` | The `gentoo-manifest` regex, whose `[[:print:]]` overlaps `[[:space:]]` and backtracked quartically on a run of whitespace. | [#3473](https://github.com/trailofbits/polyfile/issues/3473) |
 
 The sync overwrites these patches. Before you copy, list them:
 
