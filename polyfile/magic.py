@@ -79,6 +79,8 @@ BLANK_IN_PATTERN: Pattern[bytes] = re.compile(rb"\\?[ \t\n\v\f\r]")
 VALUE_TERMINATOR: Pattern[bytes] = re.compile(rb"[\0\r\n]")
 # `MAXstring`, the size of the buffer libmagic copies a string value into: `file/src/file.h:179`
 MAX_STRING_BYTES: int = 128
+# what the `f` flag requires after a match: `file/src/softmagic.c:2127-2130`
+FULL_WORD_TERMINATOR: bytes = rb"(?=[\0\s]|\Z)"
 ESCAPES = {
     "n": ord("\n"),
     "r": ord("\r"),
@@ -2103,6 +2105,13 @@ class StringMatch(StringTest):
         ``polyfile/magic_defs/sgml`` does. libmagic keeps both bits and lets ``W`` win, because
         ``file_strncmp`` tests it first (``file/src/softmagic.c:2103-2120``).
 
+        ``f`` (full word) constrains only what follows the match, and it asks for whitespace rather
+        than a word boundary: ``file_strncmp`` runs ``if (*b && !isspace(*b)) v = 1;`` once the
+        comparison has succeeded (``file/src/softmagic.c:2127-2130``). Nothing constrains what
+        precedes the match, the byte after it has to be a C ``isspace`` byte or a null byte, and
+        the end of the buffer qualifies because ``file_or_fd`` null-terminates it
+        (``file/src/magic.c:534``).
+
         Returns:
             The pattern to compile, with the flags folded into it.
         """
@@ -2148,7 +2157,7 @@ class StringMatch(StringTest):
         elif self.optional_blanks:
             pattern = BLANK_IN_PATTERN.sub(rb"\\s*", pattern)
         if self.full_word_match:
-            pattern = rb"\b" + pattern + rb"\b"
+            pattern += FULL_WORD_TERMINATOR
         return pattern
 
     def pattern_flags(self) -> int:

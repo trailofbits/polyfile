@@ -1422,6 +1422,57 @@ class StringDataTypeTest(TestCase):
         untrimmed = verbatim.match(b"\x06  hi  ", verbatim.parse_expected("x"))
         self.assertEqual("  hi  ", untrimmed.value)
 
+    def test_full_word_leaves_what_precedes_the_match_unconstrained(self):
+        """The `f` flag compiled to a word boundary on both sides, so `xxxABC` did not match.
+
+        libmagic applies `STRING_FULL_WORD` once, after the comparison has succeeded, and looks
+        only at the byte that follows the match (`file/src/softmagic.c:2127-2130`). `file` 5.48
+        reports `found` for every case here.
+        """
+        definition = "0\tsearch/4/f\tABC\tfound\n"
+        for data in (b"ABC", b"xABC", b"xxABC", b"xxxABC", b"xABC yy"):
+            with self.subTest(data=data):
+                self.assertEqual({"found, ASCII text, with no line terminators"},
+                                 self.messages(definition, data))
+
+    def test_full_word_requires_whitespace_or_the_end_of_the_buffer(self):
+        """A word boundary let `ABC.` through, which is the opposite error to the one above.
+
+        libmagic asks for `*b == '\\0' || isspace(*b)` (`file/src/softmagic.c:2127-2130`), so
+        punctuation fails even though it ends a word. The end of the buffer qualifies because
+        `file_or_fd` null-terminates it (`file/src/magic.c:534`). `file` 5.48 reports `found` for
+        the first group and not for the second.
+        """
+        definition = "0\tsearch/4/f\tABC\tfound\n"
+        for data in (b"ABC", b"ABC ", b"ABC\t", b"ABC\n", b"ABC\x0b", b"ABC\x0c", b"ABC\r"):
+            with self.subTest(data=data):
+                self.assertIn("found", " ".join(self.messages(definition, data)))
+        for data in (b"ABCD", b"ABC.", b"ABC-", b"ABC/", b"ABC_"):
+            with self.subTest(data=data):
+                self.assertNotIn("found", " ".join(self.messages(definition, data)))
+
+    def test_full_word_accepts_a_null_byte_and_rejects_another_control_byte(self):
+        """`\\0` is the byte that stands for the end of the buffer, and no other control byte is.
+
+        The cases need the `b` flag because a null byte makes the buffer binary, and a text test
+        never runs against one. `file` 5.48 reports `found` for the null byte and not for `\\x01`.
+        """
+        definition = "0\tsearch/4/fb\tABC\tfound\n"
+        self.assertEqual({"found"}, self.messages(definition, b"ABC\x00zz"))
+        self.assertEqual({"data"}, self.messages(definition, b"ABC\x01zz"))
+
+    def test_the_interpreter_line_table_reports_a_posix_shell_script(self):
+        """Every `f` definition in `magic_defs/commands` declares a value that starts with `#`.
+
+        A leading `\\b` at offset 0 needs a word character there, so all sixty of them were dead
+        and PolyFile reported only `a /bin/sh script` from `magic_defs/varied.script`. `file` 5.48
+        reports `POSIX shell script text executable` and `a /bin/sh script, ASCII text
+        executable`.
+        """
+        self.assertEqual({"POSIX shell script, ASCII text executable",
+                          "a /bin/sh script, ASCII text executable"},
+                         {str(match) for match in MagicMatcher.DEFAULT_INSTANCE.match(b"#! /bin/sh\n")})
+
 
 class SearchTextClassificationTest(TestCase):
     r"""Regression tests for the pass classification defect reported in issue #3511.
