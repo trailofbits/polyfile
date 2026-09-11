@@ -1,7 +1,8 @@
 """
 Unit tests for PDF parsing functionality, particularly edge cases with empty lists
-and malformed dictionary values that were causing crashes (issue #12), and the byte-provenance
-guards that keep a malformed PDF from truncating the match tree (issue #3464).
+and malformed dictionary values that were causing crashes (issue #12), the byte-provenance
+guards that keep a malformed PDF from truncating the match tree (issue #3464), and the
+cross-reference row cells that were never parsed (issue #3542).
 """
 import base64
 import logging
@@ -353,6 +354,52 @@ class TestMalformedPDFMatchTree(unittest.TestCase):
             ["Skipping PDF dictionary key '42' because it has no byte provenance"],
             warnings.messages("PDF")
         )
+
+
+class TestXRefRowCells(unittest.TestCase):
+    """Regression tests for the cross-reference row cells in issue #3542."""
+
+    def match(self, data: bytes) -> List[Match]:
+        """Runs the full matcher over a PDF held in memory.
+
+        Args:
+            data: The contents of the PDF to match.
+
+        Returns:
+            Every match PolyFile produced, in the order it produced them. The list has to be
+            materialized before the tree is walked, because a match's children are appended as
+            the parser yields them.
+        """
+        with NamedTemporaryFile(suffix=".pdf") as f:
+            f.write(data)
+            f.flush()
+            return list(Matcher(parse=True).match(f.name))
+
+    def test_row_cells_map_the_integers_they_hold(self):
+        """Every cell of a cross-reference row parses its contents.
+
+        `parse_object` was handed the `Submatch` that had just been created for the cell instead
+        of the cell itself. A `Submatch` carries no `pdf_offset`, so the call fell through every
+        branch and yielded nothing: `Position` and `Generation` were leaves, and the offsets the
+        table records never reached the output.
+        """
+        cells = [m for m in self.match(WELL_FORMED_PDF) if m.name in ("Position", "Generation")]
+        self.assertEqual(4, len(cells))
+        for cell in cells:
+            self.assertEqual(["PSInt"], [c.name for c in cell.children])
+            self.assertEqual(cell.offset, cell.children[0].offset)
+            self.assertEqual(cell.length, cell.children[0].length)
+        # object 1 is at byte 9 and object 2 at byte 58, both of generation 0
+        self.assertEqual([9, 0, 58, 0], [cell.children[0].match for cell in cells])
+
+    def test_reconstructed_xref_yields_no_cells(self):
+        """A rebuilt table maps to nothing rather than dereferencing its plain integers.
+
+        `PDFXRefFallback` stores positions as `int`, which `parse_object` has to skip. The rows
+        are dropped before `parse_xref_row` sees them, so no cell reaches the tree at all.
+        """
+        matches = self.match(RECONSTRUCTED_XREF_PDF)
+        self.assertEqual([], [m.name for m in matches if m.name in ("Position", "Generation")])
 
 
 if __name__ == '__main__':
