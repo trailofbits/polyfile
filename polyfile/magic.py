@@ -4031,13 +4031,37 @@ def _eight_bit_encoding(data: bytes) -> Optional[str]:
         return "unknown-8bit"
 
 
+def _trim_trailing_nuls(data: bytes) -> bytes:
+    """The prefix of `data` that libmagic classifies, with its trailing NUL padding removed.
+
+    ``file_ascmagic`` strips the trailing NULs before it calls ``file_encoding``, leaving at least
+    one byte, and then puts one byte back when the trim ends on an odd offset and the buffer was
+    evenly sized, so that UTF-16LE text keeps its last character (``trim_nuls`` and
+    ``file_ascmagic`` in ``file/src/ascmagic.c``). The byte it puts back is itself a NUL, which
+    belongs to no text character class, so evenly sized ASCII that trims to an odd length is
+    binary to libmagic.
+
+    Args:
+        data: the bytes to trim.
+
+    Returns:
+        The prefix of `data` libmagic classifies.
+    """
+    trimmed = max(len(data.rstrip(b"\0")), 1)
+    if trimmed % 2 == 1 and len(data) % 2 == 0:
+        trimmed += 1
+    return data[:trimmed]
+
+
 def detect_text_encoding(data: bytes) -> Optional[str]:
     """Decides whether `data` is text, and names the character encoding family it belongs to.
 
     This mirrors ``file_encoding`` in libmagic's ``src/encoding.c``: membership in a text
     encoding is decided by character class alone, with no statistical inference. Every byte in
     ``0xA0``-``0xFF`` is a printable ISO-8859 character, so a buffer of ASCII with a handful of
-    accented characters is text.
+    accented characters is text. libmagic classifies the buffer `_trim_trailing_nuls` prepares
+    rather than the file's own bytes, so text that a fixed record size or a block boundary padded
+    out with NULs still counts as text.
 
     Args:
         data: the bytes to classify.
@@ -4045,6 +4069,7 @@ def detect_text_encoding(data: bytes) -> Optional[str]:
     Returns:
         The name of the encoding family, or None if `data` belongs to no text character class.
     """
+    data = _trim_trailing_nuls(data)
     if len(data) < 2:
         return None
     elif _only_contains(data, _ASCII_BYTES):
@@ -4167,6 +4192,10 @@ class TextEncodingDescription:
     def detect(cls, data: bytes) -> Optional["TextEncodingDescription"]:
         """Classifies `data` and measures the line shape libmagic would report for it.
 
+        ``file_ascmagic`` hands the same trimmed buffer to ``file_encoding`` and to
+        ``file_ascmagic_with_encoding``, so NUL padding counts towards neither the encoding nor the
+        longest line.
+
         Args:
             data: the bytes to classify.
 
@@ -4177,10 +4206,11 @@ class TextEncodingDescription:
             ValueError: if `detect_text_encoding` named an encoding that
                 `LIBMAGIC_ENCODING_NAMES` does not describe.
         """
-        encoding = detect_text_encoding(data)
+        buffer = _trim_trailing_nuls(data)
+        encoding = detect_text_encoding(buffer)
         if encoding is None:
             return None
-        return cls(encoding, _decode_text(data, encoding))
+        return cls(encoding, _decode_text(buffer, encoding))
 
     def _splice(self, message: str) -> Tuple[str, bool]:
         """Replaces a soft magic message's trailing ``text`` with the separator libmagic uses.
