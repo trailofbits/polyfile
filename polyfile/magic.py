@@ -2187,6 +2187,23 @@ class StringMatch(StringTest):
         return DataTypeMatch.INVALID
 
     def search(self, data: bytes) -> DataTypeMatch:
+        """Finds the first start offset at which this value matches.
+
+        libmagic bounds every candidate start offset of a search, not only the start of the test:
+        it abandons the remaining offsets as soon as the declared length of the value no longer
+        fits in what is left of the buffer (``file/src/softmagic.c:2357-2361``). The leftmost match
+        is the one libmagic takes, so a leftmost match that starts past that bound rules out every
+        later offset too.
+
+        The bound is observable only when a flag lets a value consume fewer bytes than it declares,
+        which is what ``w`` does (``file/src/softmagic.c:2116-2121``).
+
+        Args:
+            data: The bytes at the offset being tested.
+
+        Returns:
+            The match, or `DataTypeMatch.INVALID` if no start offset that fits the value matches.
+        """
         if self.num_bytes is None:
             end_pos = len(data)
         else:
@@ -2194,9 +2211,9 @@ class StringMatch(StringTest):
             # many bytes plus the length of the string it is looking for
             end_pos = min(len(data), self.num_bytes + len(self.string))
         m = self.pattern.search(data, 0, end_pos)
-        if m:
-            return self.post_process(bytes(m.group(0)), initial_offset=m.start())
-        return DataTypeMatch.INVALID
+        if m is None or m.start() + self.value_length > len(data):
+            return DataTypeMatch.INVALID
+        return self.post_process(bytes(m.group(0)), initial_offset=m.start())
 
     def __str__(self):
         return repr(self.string)
