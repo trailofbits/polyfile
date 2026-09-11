@@ -9,6 +9,7 @@ import zipfile
 from polyfile.fileutils import FileStream
 from polyfile.magic import MagicMatcher, MatchContext
 from polyfile.polyfile import Match, Matcher
+from polyfile.structs import Constant
 from polyfile.zipmatcher import EndOfCentralDirectory, parse_zip
 
 MEMBERS: Dict[str, bytes] = {
@@ -67,10 +68,13 @@ class TestZipMatcher(TestCase):
                 cd.local_file_header(stream).file_name for cd in eocd.central_directories(stream)
             ]
 
-    def parsed_names(self, data: bytes) -> List[str]:
-        parent = Match("application/zip", None, 0, length=len(data), matcher=Matcher(parse=False))
+    def parsed_matches(self, data: bytes, parse: bool = False) -> List[Match]:
+        parent = Match("application/zip", None, 0, length=len(data), matcher=Matcher(parse=parse))
         with temporary_file(data) as path, FileStream(str(path)) as stream:
-            return [match.name for match in parse_zip(stream, parent)]
+            return list(parse_zip(stream, parent))
+
+    def parsed_names(self, data: bytes) -> List[str]:
+        return [match.name for match in self.parsed_matches(data)]
 
     def matched_mime_types(self, data: bytes) -> Set[str]:
         with temporary_file(data) as path, FileStream(str(path)) as stream:
@@ -112,6 +116,25 @@ class TestZipMatcher(TestCase):
 
     def test_parse_zip_with_prepended_data(self):
         self.assert_structure_parsed(build_zip(PNG))
+
+    def test_no_matches_inside_constant_fields(self):
+        """Regression test for #3470.
+
+        Every bytes field used to be written to a temporary file and re-matched to find
+        embedded files, including the fixed signatures declared as Constant fields. The four
+        bytes of `EndOfCentralDirectory.magic` matched as an empty archive, so each ZIP
+        reported a nested `application/zip` on its own magic, and the magic of the other two
+        records reported a nested `application/octet-stream`.
+        """
+        constants = [match for match in self.parsed_matches(build_zip()) if isinstance(match.match, Constant)]
+        self.assertEqual(2 * len(MEMBERS) + 1, len(constants))
+        for match in constants:
+            self.assertEqual((), match.children, f"{match.name} at offset {match.offset} was re-matched")
+
+    def test_no_parser_warning_for_constant_fields(self):
+        """The nested match on the magic ran parse_zip on four bytes, which logged a warning."""
+        with self.assertNoLogs("polyfile", "WARNING"):
+            self.parsed_matches(build_zip(), parse=True)
 
     def test_jar_with_prepended_data(self):
         """RelaxedJarMatcher reads local file headers, so it needs the archive offset too."""
