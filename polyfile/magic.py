@@ -25,8 +25,8 @@ import struct
 import sys
 from time import gmtime, localtime, strftime
 from typing import (
-    Any, BinaryIO, Callable, Dict, FrozenSet, Generic, Iterable, Iterator, List, NamedTuple,
-    Optional, Set, Tuple, Type, TypeVar, Union
+    Any, BinaryIO, Callable, Dict, FrozenSet, Generic, Iterable, Iterator, KeysView, List,
+    NamedTuple, Optional, Set, Tuple, Type, TypeVar, Union
 )
 from uuid import UUID
 
@@ -152,32 +152,38 @@ def unescape(to_unescape: Union[str, bytes]) -> bytes:
 
 
 class TestResult(ABC):
+    """The result of running one test, and the chain of tests that led to it.
+
+    `child_matched` is libmagic's ``ms->c.li[cont_level].got_match``: whether a continuation of
+    this test has already matched. A ``default`` fires only when it is unset, and a ``clear``
+    unsets it (``file/src/softmagic.c:418-428``). libmagic holds one flag per continuation level
+    and zeroes it on every descent into a level (``file/src/softmagic.c:346`` and ``:487``, through
+    ``file_check_mem`` at ``file/src/funcs.c:640-660``); the entries of a level are exactly the
+    continuations of one parent entry, so PolyFile holds the flag on the parent's result.
+
+    Any match raises its parent's flag, whatever its description says: libmagic gates only printing
+    and ``found_match`` on a non-empty description (``file/src/softmagic.c:432-440``), never
+    ``got_match``. Two kinds of result are excluded. A ``use`` raises the flag only when the named
+    list it ran printed something, which is what its ``magiccheck`` reports
+    (``file/src/softmagic.c:2429-2430``), so `UseTest._match` raises it itself. A ``name`` raises
+    nothing, because libmagic saves and restores the whole level array around a named list's run
+    (``file/src/softmagic.c:2013`` and ``:2033``), so what that list matches cannot reach the level
+    the ``use`` sits on.
+    """
+
     def __init__(self, test: "MagicTest", offset: int, parent: Optional["TestResult"] = None):
         self.test: MagicTest = test
         self.offset: int = offset
         self.parent: Optional["TestResult"] = parent
+        self.child_matched: bool = False
         if parent is not None and bool(self):
             assert self.test.named_test is self.test or parent.test.level == self.test.level - 1
-            if not isinstance(self.test, UseTest):
+            if not isinstance(self.test, (NamedTest, UseTest)):
                 parent.child_matched = True
-        self._child_matched: bool = False
 
     @abstractmethod
     def explain(self, writer: ANSIWriter, file: Streamable):
         raise NotImplementedError()
-
-    @property
-    def child_matched(self) -> bool:
-        return self._child_matched
-
-    @child_matched.setter
-    def child_matched(self, did_match: bool):
-        if did_match and isinstance(self.test, NamedTest):
-            assert isinstance(self.parent.test, UseTest)
-            self.parent.child_matched = True
-            if self.parent.parent is not None:
-                self.parent.parent.child_matched = True
-        self._child_matched = did_match
 
     def __hash__(self):
         return hash((self.test, self.offset))
@@ -318,6 +324,97 @@ operators that still read a value, so it loses two.
 
 UNSELECTIVE_RELATIONS: FrozenSet[str] = frozenset({"x", "!"})
 """The relations libmagic zeroes the strength for, because they match anything or almost anything."""
+
+LIBMAGIC_TYPE_CODES: Dict[str, int] = {
+    "invalid": 0, "byte": 1, "short": 2, "default": 3, "long": 4, "string": 5, "date": 6,
+    "beshort": 7, "belong": 8, "bedate": 9, "leshort": 10, "lelong": 11, "ledate": 12,
+    "pstring": 13, "ldate": 14, "beldate": 15, "leldate": 16, "regex": 17, "bestring16": 18,
+    "lestring16": 19, "search": 20, "medate": 21, "meldate": 22, "melong": 23, "quad": 24,
+    "lequad": 25, "bequad": 26, "qdate": 27, "leqdate": 28, "beqdate": 29, "qldate": 30,
+    "leqldate": 31, "beqldate": 32, "float": 33, "befloat": 34, "lefloat": 35, "double": 36,
+    "bedouble": 37, "ledouble": 38, "beid3": 39, "leid3": 40, "indirect": 41, "qwdate": 42,
+    "leqwdate": 43, "beqwdate": 44, "name": 45, "use": 46, "clear": 47, "der": 48, "guid": 49,
+    "leguid": 50, "beguid": 51, "offset": 52, "bevarint": 53, "levarint": 54, "msdosdate": 55,
+    "lemsdosdate": 56, "bemsdosdate": 57, "msdostime": 58, "lemsdostime": 59, "bemsdostime": 60,
+    "octal": 61,
+}
+"""libmagic's ``FILE_*`` type number for each type name a definition can declare.
+
+The number, not the name, is what orders two tests of equal strength, because libmagic compares
+their raw ``struct magic`` bytes (``file/src/apprentice.c:216-283`` and
+``file/src/file.h:245-306``).
+"""
+
+TYPE_MODIFIER: Pattern[str] = re.compile(r"[/&|^+\-*%]")
+"""The characters that start the modifiers a type declaration can carry after its name."""
+
+FLAG_INDIR: int = 0x01
+FLAG_UNSIGNED: int = 0x08
+FLAG_NOSPACE: int = 0x10
+FLAG_OFFNEGATIVE: int = 0x80
+"""The ``struct magic`` flag bits a level 0 test can carry (``file/src/file.h:225-235``).
+
+``OFFADD`` and ``INDIROFFADD`` are missing because libmagic rejects a relative offset at level 0
+(``file/src/apprentice.c:2132-2137``), and ``BINTEST`` and ``TEXTTEST`` because they only record
+which of `MagicMatcher.match`'s two passes a test belongs to.
+"""
+
+STRING_DEFAULT_RANGE: int = 100
+"""The ``str_range`` libmagic gives a ``search`` that declared none (``file/src/file.h:433``)."""
+
+REGEX_MAX: int = 8192
+"""``FILE_REGEX_MAX``, the hard ceiling libmagic puts on a regular expression's search region.
+
+``file/src/apprentice.c:573`` seeds ``ms->regex_max`` with it and ``file/src/softmagic.c:1421-1422``
+clamps the region to it, so a test that asks for more than 8KiB silently gets 8KiB. ``regex/128l``
+asks for 10240 bytes and is one of the shipped definitions this bites.
+"""
+
+
+STRING_FLAG_BITS: Tuple[Tuple[str, int], ...] = (
+    ("compact_whitespace", 0x0001),
+    ("optional_blanks", 0x0002),
+    ("case_insensitive_lower", 0x0004),
+    ("case_insensitive_upper", 0x0008),
+    ("match_to_start", 0x0010),
+    ("force_text", 0x0020),
+    ("trim", 0x2000),
+    ("full_word_match", 0x4000),
+)
+"""Each string modifier PolyFile records, with the ``str_flags`` bit libmagic sets for it.
+
+See ``file/src/file.h:414-432`` for the bit numbering and ``file/src/apprentice.c:1946-1980`` for
+the modifier characters they come from.
+"""
+
+
+def libmagic_field(value: int, num_bytes: int) -> bytes:
+    """Lays `value` out the way ``memcmp`` reads an integer field of ``struct magic``.
+
+    Args:
+        value: The number the field holds.
+        num_bytes: The width of the field.
+
+    Returns:
+        The field's bytes, least significant first, because libmagic runs on little endian
+        hardware.
+    """
+    return (value & ((1 << (8 * num_bytes)) - 1)).to_bytes(num_bytes, "little")
+
+
+def libmagic_base_type(declaration: str) -> str:
+    """Strips a type declaration down to the name libmagic's type table holds.
+
+    Args:
+        declaration: A type as a definition wrote it, such as ``ubelong&0x00ffffff``.
+
+    Returns:
+        A key of `LIBMAGIC_TYPE_CODES`.
+    """
+    name = TYPE_MODIFIER.split(declaration, maxsplit=1)[0]
+    if name.startswith("u") and name[1:] in LIBMAGIC_TYPE_CODES:
+        return name[1:]
+    return name
 
 
 def parse_numeric(text: Union[str, bytes]) -> int:
@@ -638,9 +735,66 @@ class IndirectOffset(Offset):
         return f"({self.offset!s}{['.', ','][self.signed]}{num_bytes}{self.endianness.value})"
 
 
+INDIRECT_OFFSET_TYPES: Dict[Tuple[int, Endianness], str] = {
+    (1, Endianness.LITTLE): "byte", (1, Endianness.BIG): "byte",
+    (2, Endianness.LITTLE): "leshort", (2, Endianness.BIG): "beshort",
+    (4, Endianness.LITTLE): "lelong", (4, Endianness.BIG): "belong",
+    (8, Endianness.LITTLE): "lequad", (8, Endianness.BIG): "bequad",
+}
+"""The type libmagic reads an indirect offset through, by width and byte order.
+
+See the character it comes from in ``file/src/apprentice.c:2158-2215``.
+"""
+
+
+def libmagic_indirect_type(offset: IndirectOffset) -> str:
+    """Names the type libmagic stores in ``in_type`` for `offset`.
+
+    Args:
+        offset: An indirect offset.
+
+    Returns:
+        A key of `LIBMAGIC_TYPE_CODES`.
+    """
+    if offset.is_id3:
+        return "leid3" if offset.endianness is Endianness.LITTLE else "beid3"
+    elif offset.num_bytes == IndirectOffset.OctalIndirectOffset:
+        return "octal"
+    return INDIRECT_OFFSET_TYPES.get((offset.num_bytes, offset.endianness), "long")
+
+
+def libmagic_offset_fields(offset: Offset) -> Tuple[int, int, str]:
+    """The ``struct magic`` fields that `offset` decides.
+
+    libmagic steps over the sign of a negative offset before it reads the number, so the field
+    holds the magnitude and the sign lives in a flag bit
+    (``file/src/apprentice.c:2140-2144``).
+
+    Args:
+        offset: The offset a definition declared.
+
+    Returns:
+        The flag bits `offset` sets, the number libmagic stores in the ``offset`` field, and the
+        name of the type an indirect offset reads through, which is ``"invalid"`` for a direct
+        offset.
+    """
+    if isinstance(offset, RelativeOffset):
+        offset = offset.relative_to
+    if isinstance(offset, IndirectOffset):
+        base = offset.offset
+        return (FLAG_INDIR,
+                base.offset if isinstance(base, AbsoluteOffset) else 0,
+                libmagic_indirect_type(offset))
+    elif isinstance(offset, NegativeOffset):
+        return FLAG_OFFNEGATIVE, offset.magnitude, "invalid"
+    elif isinstance(offset, AbsoluteOffset):
+        return 0, offset.offset, "invalid"
+    return 0, 0, "invalid"
+
+
 class SourceInfo:
-    def __init__(self, path: Path, line: int, original_line: Optional[str] = None):
-        self.path: Path = path
+    def __init__(self, path: Union[str, Path], line: int, original_line: Optional[str] = None):
+        self.path: Path = Path(path)
         self.line: int = line
         self.original_line: Optional[str] = original_line
 
@@ -652,15 +806,55 @@ class SourceInfo:
 
 
 class MatchContext:
-    def __init__(self, data: bytes, path: Optional[Path] = None, only_match_mime: bool = False):
+    """A buffer to run tests against, and where that buffer came from."""
+
+    def __init__(
+            self,
+            data: bytes,
+            path: Optional[Path] = None,
+            only_match_mime: bool = False,
+            decoded_from: Optional[str] = None
+    ):
+        """
+        Args:
+            data: the bytes the tests read.
+            path: the file `data` came from, if there is one.
+            only_match_mime: whether to discard matches that name no MIME type.
+            decoded_from: the encoding `data` was decoded from, if `data` is a rendering of the
+                file's bytes rather than the bytes themselves. Offsets into `data` are then
+                offsets into that rendering, not into the file.
+        """
         self.data: bytes = data
         self.path: Optional[Path] = path
         self.only_match_mime: bool = only_match_mime
+        self.decoded_from: Optional[str] = decoded_from
 
     def __getitem__(self, s: slice) -> "MatchContext":
         if not isinstance(s, slice):
             raise ValueError("Match contexts can only be sliced")
-        return MatchContext(data=self.data[s], path=self.path, only_match_mime=self.only_match_mime)
+        return MatchContext(data=self.data[s], path=self.path, only_match_mime=self.only_match_mime,
+                            decoded_from=self.decoded_from)
+
+    def text_test_context(self, encoding: Optional[str]) -> "MatchContext":
+        """The buffer libmagic runs its text tests against.
+
+        libmagic decodes its input into a UCS-4 buffer, drops the byte order mark, re-encodes that
+        buffer as UTF-8, and runs its text tests against the result rather than against the file's
+        bytes (``file_ascmagic_with_encoding`` in ``file/src/ascmagic.c``). That only changes the
+        bytes for a UCS encoding, so every other input keeps this context and the offsets its tests
+        report stay offsets into the file.
+
+        Args:
+            encoding: the encoding `detect_text_encoding` named for this context's data, or None if
+                it is not text.
+
+        Returns:
+            This context, or a context over the decoded text when the data are UCS-encoded.
+        """
+        if encoding is None or encoding not in _UCS_BOM_LENGTHS:
+            return self
+        return MatchContext(data=_decode_text(self.data, encoding).encode("utf-8"), path=self.path,
+                            only_match_mime=self.only_match_mime, decoded_from=encoding)
 
     @property
     def is_executable(self) -> bool:
@@ -775,9 +969,39 @@ class Comment:
 
 
 class TestType(IntFlag):
+    """The soft magic passes a level 0 test runs in.
+
+    libmagic runs soft magic twice, once over the file's bytes in ``BINTEST`` mode
+    (``file/src/funcs.c:482``) and once over the decoded text buffer in ``TEXTTEST`` mode
+    (``file/src/ascmagic.c:161-162``), and an entry can belong to either pass or to both.
+    """
+
     UNKNOWN = 0
     BINARY = 1
     TEXT = 2
+    BOTH = BINARY | TEXT
+
+
+def declared_passes(force_text: bool, force_binary: bool) -> TestType:
+    """The passes a definition's ``b`` and ``t`` flags name.
+
+    ``set_test_type`` sets ``BINTEST`` for ``b`` and ``TEXTTEST`` for ``t`` and then stops, so a
+    declaration that carries both belongs to both passes and one that carries neither leaves the
+    choice to its type (``file/src/apprentice.c:1258-1266``).
+
+    Args:
+        force_text: Whether the declaration carried ``t``.
+        force_binary: Whether the declaration carried ``b``.
+
+    Returns:
+        The passes the flags name, or `TestType.UNKNOWN` if they name none.
+    """
+    passes = TestType.UNKNOWN
+    if force_binary:
+        passes |= TestType.BINARY
+    if force_text:
+        passes |= TestType.TEXT
+    return passes
 
 
 class MagicTest(ABC):
@@ -846,29 +1070,48 @@ class MagicTest(ABC):
     def message(self, new_value: Message):
         self._message = new_value
 
+    def declared_test_type(self) -> TestType:
+        """The passes this test's own declaration named, if it named any.
+
+        Returns:
+            `TestType.UNKNOWN`, unless the declaration carried a ``b`` or a ``t`` flag.
+        """
+        return TestType.UNKNOWN
+
     @property
     def test_type(self) -> TestType:
+        """The soft magic passes `MagicMatcher.match` runs this test in.
+
+        libmagic decides from the level 0 line alone. ``set_text_binary`` hands ``set_test_type``
+        one entry per top-level test, and ``set_test_type`` reads that entry's own ``str_flags``
+        and ``type`` (``file/src/apprentice.c:1200-1284`` and ``1423-1453``); a subtest never
+        changes the answer. `subtest_type` reports exactly that decision. `IndirectTest` is the
+        one deliberate exception: it forces every ancestor to binary, because an indirect test can
+        dispatch any other test.
+
+        Returns:
+            The passes this test belongs to.
+        """
         if self._type == TestType.UNKNOWN:
             if hasattr(self, "__calculating_test_type") and getattr(self, "__calculating_test_type"):
                 return TestType.UNKNOWN
             setattr(self, "__calculating_test_type", True)
-            if self.can_be_indirect:
-                # indirect tests can execute any other (binary) test, so classify ourselves as binary
-                self._type = TestType.BINARY
-            else:
-                if any(bool(child.test_type & TestType.BINARY) for child in self.children):
-                    self._type = TestType.BINARY
-                else:
-                    self._type = self.subtest_type()
-                    if (self._type == TestType.UNKNOWN and self.children) or bool(self._type & TestType.TEXT):
-                        # A pattern is considered to be a text test when all its patterns are text patterns;
-                        # otherwise, it is considered to be a binary pattern.
-                        if all(bool(child.test_type & TestType.TEXT) for child in self.children):
-                            self._type = TestType.TEXT
-                        else:
-                            self._type = TestType.UNKNOWN
+            self._type = self.subtest_type()
             delattr(self, "__calculating_test_type")
         return self._type
+
+    @property
+    def precedes_soft_magic(self) -> bool:
+        """Whether libmagic runs this check ahead of soft magic, against the file's own bytes.
+
+        ``file_buffer`` runs its tar, JSON, CSV and SIMH checks before it reaches soft magic
+        (``src/funcs.c``), so such a check never reads the buffer ``file_ascmagic`` decodes for the
+        text pass, and the description ``file_ascmagic`` appends never lands on its message.
+
+        Returns:
+            True if libmagic runs this check before soft magic.
+        """
+        return False
 
     @property
     def appends_text_encoding(self) -> bool:
@@ -878,15 +1121,14 @@ class MagicTest(ABC):
         binary soft magic pass printed nothing, so it lands on whatever the ``TEXTTEST`` soft magic
         pass printed (``src/funcs.c`` and ``src/ascmagic.c``). ``set_test_type`` in
         ``src/apprentice.c`` decides which pass a definition runs in from the type and flags of its
-        level 0 test alone, and that is what `subtest_type` reports. `test_type`, which chooses the
-        pass PolyFile itself runs the test in, cannot answer this: it reports a group with any
-        binary subtest as binary, which is why libmagic describes the encoding of
-        ``file/tests/pnm1.testfile`` while PolyFile matches it in its binary pass.
+        level 0 test alone, and that is what `subtest_type` reports. `test_type` answers from the
+        same place, except where `IndirectTest` has forced an ancestor to binary, so reading
+        `subtest_type` keeps the question about libmagic rather than about PolyFile's own pass.
 
         Returns:
             True if libmagic would append the description to this test's message.
         """
-        return bool(self.subtest_type() & TestType.TEXT)
+        return not self.precedes_soft_magic and bool(self.subtest_type() & TestType.TEXT)
 
     @test_type.setter
     def test_type(self, value: TestType):
@@ -967,6 +1209,68 @@ class MagicTest(ABC):
         if not str(self.message).strip():
             val += 1
         return val
+
+    def libmagic_type(self) -> str:
+        """Names the type libmagic stores in this test's ``struct magic``.
+
+        Returns:
+            A key of `LIBMAGIC_TYPE_CODES`.
+        """
+        return "invalid"
+
+    def libmagic_flag(self) -> int:
+        """The ``flag`` word libmagic would give this test.
+
+        Returns:
+            The bits named in `FLAG_INDIR` and its neighbors.
+        """
+        flag, _, _ = libmagic_offset_fields(self.offset)
+        if str(self.message).startswith("\b"):
+            flag |= FLAG_NOSPACE
+        return flag
+
+    def libmagic_value_fields(self) -> Tuple[int, bytes, bytes]:
+        """The fields of libmagic's ``struct magic`` that hold this test's value.
+
+        Returns:
+            The value's length in bytes, the eight bytes that carry ``str_range`` and
+            ``str_flags``, and the value itself.
+        """
+        return 0, bytes(8), b""
+
+    def libmagic_sort_key(self) -> Tuple[Any, ...]:
+        """The key that orders this test the way libmagic's ``apprentice_sort`` would.
+
+        libmagic sorts by descending strength and settles a tie by comparing the two entries'
+        ``struct magic`` bytes with ``memcmp``, putting the greater one first
+        (``file/src/apprentice.c:1126-1152``). This key repeats that comparison over the fields
+        that decide it, in the order they sit in memory, so a descending sort by the key
+        reproduces libmagic's order.
+
+        The key stops at the value. ``desc``, ``mimetype``, ``apple``, and ``ext`` follow it in
+        the struct, but libmagic writes a definition file's name into an empty ``desc``
+        (``file/src/apprentice.c:2438``) and PolyFile has already unescaped the description, so
+        neither compares byte for byte. ``in_op``, ``mask_op``, and ``in_offset`` are skipped
+        because PolyFile folds each of them into a callable instead of keeping the number.
+
+        Returns:
+            A tuple to sort by in descending order.
+        """
+        value_length, string_flags, value = self.libmagic_value_fields()
+        _, offset, indirect_type = libmagic_offset_fields(self.offset)
+        return (
+            self.compute_strength(),
+            libmagic_field(self.libmagic_flag(), 2),
+            libmagic_field(self.strength_factor, 1),
+            libmagic_field(ord(self.relation()), 1),
+            libmagic_field(value_length, 1),
+            libmagic_field(LIBMAGIC_TYPE_CODES[self.libmagic_type()], 1),
+            libmagic_field(LIBMAGIC_TYPE_CODES[indirect_type], 1),
+            libmagic_field(ord(self.strength_op.value or "\0"), 1),
+            libmagic_field(offset, 4),
+            string_flags,
+            value.ljust(MAX_STRING_BYTES, b"\0")[:MAX_STRING_BYTES],
+        )
 
     @property
     def parent(self) -> Optional["MagicTest"]:
@@ -1107,9 +1411,9 @@ class MagicTest(ABC):
             writer.write(self.message, color=ANSIColor.BLUE, bold=True)
         if self.level == 0:
             if self.test_type & TestType.BINARY:
-                writer.write(f" \uF5BB BINARY TEST", color=ANSIColor.BLUE)
-            elif self.test_type & TestType.TEXT:
-                writer.write(f" \uF5B9 ASCII TEST", color=ANSIColor.BLUE)
+                writer.write(" \uF5BB BINARY TEST", color=ANSIColor.BLUE)
+            if self.test_type & TestType.TEXT:
+                writer.write(" \uF5B9 ASCII TEST", color=ANSIColor.BLUE)
         writer.write(pre_mime_text)
         if self.mime is not None:
             writer.write(f"\n  {indent}!:mime ", dim=True)
@@ -1314,9 +1618,31 @@ class DataType(ABC, Generic[T]):
         """
         return "="
 
-    @abstractmethod
-    def is_text(self, value: T) -> bool:
-        raise NotImplementedError()
+    def declared_test_types(self) -> TestType:
+        """The passes this type's declaration named outright, if it named any.
+
+        Returns:
+            `TestType.UNKNOWN`, unless the declaration carried a ``b`` or a ``t``.
+        """
+        return TestType.UNKNOWN
+
+    def test_types(self, expected: T) -> TestType:
+        """The soft magic passes libmagic runs a level 0 test of this type in.
+
+        ``set_test_type`` assigns ``BINTEST`` to every type that reads a fixed width of bytes, and
+        to a string type that names no pass of its own, which the comment there calls a
+        compatibility choice (``file/src/apprentice.c:1200-1284``).
+
+        Args:
+            expected: The value the test compares against.
+
+        Returns:
+            The passes the test belongs to.
+        """
+        declared = self.declared_test_types()
+        if declared != TestType.UNKNOWN:
+            return declared
+        return TestType.BINARY
 
     @abstractmethod
     def parse_expected(self, specification: str) -> T:
@@ -1355,6 +1681,7 @@ class DataType(ABC, Generic[T]):
                 dt = GUIDType(endianness=Endianness.LITTLE)
         else:
             dt = NumericDataType.parse(fmt)
+        _check_name_spells_every_flag(fmt, dt)
         if dt.name in TYPES_BY_NAME:
             # Sometimes a data type will change its name based on modifiers.
             # For example, string and pstring will always include their modifiers after their name
@@ -1364,11 +1691,41 @@ class DataType(ABC, Generic[T]):
         TYPES_BY_NAME[fmt] = dt
         return dt
 
+    def behavior(self) -> Dict[str, Any]:
+        """Everything about this type that decides how it matches.
+
+        Returns:
+            Every attribute except the name, which is a rendering of the rest.
+        """
+        return {key: value for key, value in vars(self).items() if key != "name"}
+
     def __str__(self):
         return self.name
 
     def __repr__(self):
         return f"{self.__class__.__name__}({self.name})"
+
+
+def _check_name_spells_every_flag(fmt: str, data_type: DataType) -> None:
+    """Checks that a flag-bearing type's name records everything the type does.
+
+    `DataType.parse` interns a type under its name, so two declarations that differ only by a flag
+    the name leaves out share one instance and silently share its flags (issue #3515). A flag a
+    type reads but does not spell shows up here as a name that parses back into a different type.
+
+    Args:
+        fmt: The declaration `data_type` was parsed from.
+        data_type: The type that was parsed.
+
+    Raises:
+        ValueError: If `data_type.name` does not parse back into a type that behaves the same way.
+    """
+    if fmt == data_type.name or not isinstance(data_type, (StringType, RegexType)):
+        return
+    rebuilt = DataType.parse(data_type.name)
+    if type(rebuilt) is not type(data_type) or rebuilt.behavior() != data_type.behavior():
+        raise ValueError(f"{fmt!r} parsed to a type named {data_type.name!r}, but that name parses back as "
+                         f"{rebuilt!r}: the name leaves out something the declaration set")
 
 
 class UUIDWildcard:
@@ -1387,9 +1744,6 @@ class GUIDType(DataType[Union[UUID, UUIDWildcard]]):
         else:
             raise ValueError(f"GUIDs only support big and little endianness, not {endianness!r}")
         self.endianness: Endianness = endianness
-
-    def is_text(self, value: Union[UUID, UUIDWildcard]) -> bool:
-        return False
 
     def strength_term(self, expected: Union[UUID, UUIDWildcard]) -> int:
         """A GUID is sized like the sixteen-byte integer it is (``file/src/apprentice.c:912-915``)."""
@@ -1432,9 +1786,6 @@ class UTF16Type(DataType[bytes]):
         super().__init__(name)
         self.endianness: Endianness = endianness
         self.num_bytes: Optional[int] = num_bytes
-
-    def is_text(self, value: bytes) -> bool:
-        return True
 
     def strength_term(self, expected: bytes) -> int:
         """Half of what the same value would score as a `string` (``file/src/apprentice.c:1003``).
@@ -1792,16 +2143,18 @@ class StringMatch(StringTest):
         return self._pattern
 
     def is_always_text(self) -> bool:
+        r"""Whether libmagic classifies a test looking for this value as a text test.
+
+        libmagic decides from ``file_looks_utf8`` over the value it unescaped while parsing the
+        definition (``file/src/apprentice.c:1277-1283``), so an escaped space is a space rather
+        than a null byte: ``\040`` is text, and only a genuine control character or a byte
+        sequence that is not valid UTF-8 makes the value binary.
+
+        Returns:
+            True if the unescaped value is valid UTF-8 made only of text characters.
+        """
         if self._is_always_text is None:
-            if "\\x" in self.raw_pattern or "\\0" in self.raw_pattern:
-                # the string has hex escapes, so do not treat it as text
-                self._is_always_text = False
-            else:
-                try:
-                    _ = self.pattern.pattern.decode("ascii")
-                    self._is_always_text = True
-                except UnicodeDecodeError:
-                    self._is_always_text = False
+            self._is_always_text = _looks_like_utf8(self.string)
         return self._is_always_text
 
     def matches(self, data: bytes) -> DataTypeMatch:
@@ -1828,7 +2181,47 @@ class StringMatch(StringTest):
         return repr(self.string)
 
 
+def reject_pascal_string_flags(declaration: str, format_str: str, options: str) -> None:
+    """Raises if `options` carries a length modifier that only ``pstring`` accepts.
+
+    ``B``, ``H``, ``h``, ``L`` and ``J`` size a Pascal string's length prefix, and libmagic's flag
+    loop jumps to its error label for any other type (``file/src/apprentice.c:1983-2020``). ``l``
+    is the exception, because on a ``regex`` it means ``REGEX_LINE_COUNT``.
+
+    Args:
+        declaration: The word the type was declared with.
+        format_str: The whole declaration, for the error message.
+        options: The flag letters that followed it.
+
+    Raises:
+        ValueError: If `options` carries a modifier only ``pstring`` accepts.
+    """
+    invalid = "".join(sorted({opt for opt in options if opt in "BHhLJ"}))
+    if invalid:
+        raise ValueError(f"Invalid {declaration} type declaration: {format_str!r} carries the {invalid!r} "
+                         f"modifier(s), which libmagic accepts only on pstring")
+
+
 class StringType(DataType[StringTest]):
+    DECLARATION: str = "string"
+    """The word a definition writes to declare this type."""
+
+    FLAGS: Tuple[Tuple[str, str], ...] = (
+        ("W", "compact_whitespace"),
+        ("w", "optional_blanks"),
+        ("C", "case_insensitive_upper"),
+        ("c", "case_insensitive_lower"),
+        ("T", "trim"),
+        ("f", "full_word_match"),
+        ("t", "force_text"),
+        ("b", "force_binary"),
+    )
+    """Every flag this type can carry, in the order `DataType.name` spells them.
+
+    See the letters in ``file/src/file.h:415-431`` and the loop that reads them in
+    ``file/src/apprentice.c:1940-2028``.
+    """
+
     def __init__(
             self,
             case_insensitive_lower: bool = False,
@@ -1838,20 +2231,9 @@ class StringType(DataType[StringTest]):
             full_word_match: bool = False,
             trim: bool = False,
             force_text: bool = False,
+            force_binary: bool = False,
             num_bytes: Optional[int] = None
     ):
-        if not any((num_bytes is not None, case_insensitive_lower, case_insensitive_upper, compact_whitespace,
-                    optional_blanks, trim, force_text)):
-            name = "string"
-        else:
-            if num_bytes is not None:
-                name = f"{num_bytes}/"
-            else:
-                name = ""
-            name = f"string/{name}{['', 'W'][compact_whitespace]}{['', 'w'][optional_blanks]}"\
-                   f"{['', 'C'][case_insensitive_upper]}{['', 'c'][case_insensitive_lower]}"\
-                   f"{['', 'T'][trim]}{['', 'f'][full_word_match]}{['', 't'][force_text]}"
-        super().__init__(name)
         self.case_insensitive_lower: bool = case_insensitive_lower
         self.case_insensitive_upper: bool = case_insensitive_upper
         self.compact_whitespace: bool = compact_whitespace
@@ -1859,10 +2241,26 @@ class StringType(DataType[StringTest]):
         self.full_word_match: bool = full_word_match
         self.trim: bool = trim
         self.force_text: bool = force_text
+        self.force_binary: bool = force_binary
         self.num_bytes: Optional[int] = num_bytes
+        super().__init__(self.declaration())
 
-    def is_text(self, value: StringTest) -> bool:
-        return self.force_text
+    def declaration(self) -> str:
+        """Rebuilds the declaration this type was parsed from, which is also its name.
+
+        Returns:
+            A string `DataType.parse` accepts and that spells every flag this type carries.
+        """
+        parts = [self.DECLARATION]
+        if self.num_bytes is not None:
+            parts.append(str(self.num_bytes))
+        flags = "".join(letter for letter, attribute in self.FLAGS if getattr(self, attribute))
+        if flags:
+            parts.append(flags)
+        return "/".join(parts)
+
+    def declared_test_types(self) -> TestType:
+        return declared_passes(self.force_text, self.force_binary)
 
     def strength_term(self, expected: StringTest) -> int:
         """One unit per byte of the value, the dominant term for most definitions.
@@ -1903,13 +2301,8 @@ class StringType(DataType[StringTest]):
             num_bytes: Optional[int] = None
         else:
             num_bytes = int(m.group("numbytes"))
-        if m.group("opts") is None:
-            options: Iterable[str] = ()
-        else:
-            options = m.group("opts")
-        unsupported_options = {opt for opt in options if opt not in "/WwcCtbTf"}
-        if unsupported_options:
-            log.warning(f"{format_str!r} has invalid option(s) that will be ignored: {', '.join(unsupported_options)}")
+        options = m.group("opts") or ""
+        reject_pascal_string_flags(cls.DECLARATION, format_str, options)
         return StringType(
             case_insensitive_lower="c" in options,
             case_insensitive_upper="C" in options,
@@ -1918,11 +2311,15 @@ class StringType(DataType[StringTest]):
             full_word_match="f" in options,
             trim="T" in options,
             force_text="t" in options,
+            force_binary="b" in options,
             num_bytes=num_bytes
         )
 
 
 class SearchType(StringType):
+    DECLARATION: str = "search"
+    FLAGS: Tuple[Tuple[str, str], ...] = StringType.FLAGS + (("s", "match_to_start"),)
+
     def __init__(
             self,
             repetitions: Optional[int] = None,
@@ -1932,31 +2329,24 @@ class SearchType(StringType):
             optional_blanks: bool = False,
             match_to_start: bool = False,
             full_word_match: bool = False,
-            trim: bool = False
+            trim: bool = False,
+            force_text: bool = False,
+            force_binary: bool = False
     ):
         if repetitions is not None and repetitions <= 0:
             raise ValueError("repetitions must be either None or a positive integer")
+        self.match_to_start: bool = match_to_start
         super().__init__(
             case_insensitive_lower=case_insensitive_lower,
             case_insensitive_upper=case_insensitive_upper,
             compact_whitespace=compact_whitespace,
             optional_blanks=optional_blanks,
             full_word_match=full_word_match,
-            trim=trim
+            trim=trim,
+            force_text=force_text,
+            force_binary=force_binary,
+            num_bytes=repetitions
         )
-        self.num_bytes = repetitions
-        if repetitions is None:
-            rep_str = ""
-        else:
-            rep_str = f"/{repetitions}"
-        assert self.name.startswith("string")
-        self.name = f"search{rep_str}{self.name[6:]}"
-        self.match_to_start: bool = match_to_start
-        if match_to_start:
-            if self.name == f"search{rep_str}":
-                self.name = f"search{rep_str}/s"
-            else:
-                self.name = f"{self.name}s"
 
     @property
     def repetitions(self) -> Optional[int]:
@@ -1968,8 +2358,25 @@ class SearchType(StringType):
         """
         return self.num_bytes
 
-    def is_text(self, value: StringTest) -> bool:
-        return value.is_always_text()
+    def test_types(self, expected: StringTest) -> TestType:
+        """The passes libmagic runs a search for `expected` in.
+
+        A declared ``b`` or ``t`` decides on its own: ``set_test_type`` reads the string flags and
+        breaks out of the case before it ever reaches ``file_looks_utf8``
+        (``file/src/apprentice.c:1258-1283``). Otherwise the value itself decides.
+
+        Args:
+            expected: The parsed value the search looks for.
+
+        Returns:
+            The passes the search belongs to.
+        """
+        declared = self.declared_test_types()
+        if declared != TestType.UNKNOWN:
+            return declared
+        elif expected.is_always_text():
+            return TestType.TEXT
+        return TestType.BINARY
 
     def strength_term(self, expected: StringTest) -> int:
         """Far less than a `string` of the same length, because a search roams the buffer.
@@ -1991,9 +2398,9 @@ class SearchType(StringType):
         r"((/(?P<repetitions1>(0[xX][\dA-Fa-f]+|\d+)))(/(?P<flags1>[BbCctTWwsf]*)?)?|"
         r"/((?P<flags2>[BbCctTWwsf]*)/?)?(?P<repetitions2>(0[xX][\dA-Fa-f]+|\d+)))$"
     )
-    # NOTE: some specification files like `ber` use `search/b64`, which is undocumented. We treat that equivalent to
-    #       the compliant `search/b/64`.
-    # TODO: Figure out if this is correct.
+    # NOTE: `ber` writes `search/b64`, which the documentation does not describe. libmagic reads the
+    #       digits of a string declaration as the repetition count and every letter as a flag
+    #       (`file/src/apprentice.c:1940-1956`), so that is `search/64` with `b` set.
 
     @classmethod
     def parse(cls, format_str: str) -> "SearchType":
@@ -2011,10 +2418,8 @@ class SearchType(StringType):
             flags = m.group("flags2")
         else:
             raise ValueError(f"Invalid search type declaration: {format_str!r}")
-        if flags is None:
-            options: Iterable[str] = ()
-        else:
-            options = flags
+        options = flags or ""
+        reject_pascal_string_flags(cls.DECLARATION, format_str, options)
         return SearchType(
             repetitions=repetitions,
             case_insensitive_lower="c" in options,
@@ -2023,7 +2428,9 @@ class SearchType(StringType):
             optional_blanks="w" in options,
             full_word_match="f" in options,
             trim="T" in options,
-            match_to_start="s" in options
+            match_to_start="s" in options,
+            force_text="t" in options,
+            force_binary="b" in options
         )
 
 
@@ -2073,10 +2480,6 @@ class PascalStringType(DataType[StringTest]):
         self.endianness: Endianness = endianness
         self.count_includes_length: int = count_includes_length
         self.string_type: StringType = StringType.parse(f"string/{string_flags}")
-
-    def is_text(self, value: StringTest) -> bool:
-        # TODO: See if Pascal strings should sometimes be forced to be text
-        return False
 
     def strength_term(self, expected: StringTest) -> int:
         """Scored like a `string`, counting the length prefix as part of the value.
@@ -2225,12 +2628,13 @@ class MagicRegex:
     scan, so the count is one lower per class unless it is taken first.
     """
 
-    def __init__(self, specification: bytes, flags: int = 0):
+    def __init__(self, specification: bytes, flags: int = 0, negated: bool = False):
         """Compiles `specification`, counting its literals before the POSIX rewrite.
 
         Args:
             specification: The unescaped pattern, as libmagic would hold it.
             flags: The regular expression flags to compile with.
+            negated: Whether the definition uses libmagic's ``!`` relation.
 
         Raises:
             re.error: If `specification` is not a valid regular expression.
@@ -2238,25 +2642,77 @@ class MagicRegex:
         self.literal_count: int = nonmagic(specification)
         self.pattern: bytes = posix_to_python_re(specification)
         self.compiled: Pattern[bytes] = re.compile(self.pattern, flags)
+        self.negated: bool = negated
 
     def search(self, data: bytes) -> Optional["re.Match[bytes]"]:
         return self.compiled.search(data)
-
-    def match(self, data: bytes) -> Optional["re.Match[bytes]"]:
-        return self.compiled.match(data)
 
     def __str__(self):
         return self.pattern.decode("utf-8", errors="replace")
 
 
+def line_region_length(region: bytes, line_count: int) -> int:
+    """How many bytes of `region` fall within its first `line_count` lines.
+
+    ``file/src/softmagic.c:1424-1440`` walks forward one line terminator at a time and stops once
+    it has stepped over `line_count` of them. Three details of that walk are load bearing: it looks
+    for a ``\\r`` only when no ``\\n`` remains anywhere ahead, it leaves the terminator out of the
+    region when the terminator is the region's own last byte, and it resumes each search one byte
+    past the line it just took, so a terminator sitting in that position is passed over. Running
+    out of terminators before `line_count` of them widens the region back to all of `region`.
+
+    libmagic also steps over a ``\\r\\n`` pair as one terminator, which this leaves out because the
+    step cannot be reached: the ``\\r`` search runs only once no ``\\n`` remains ahead, and a pair
+    needs one.
+
+    Args:
+        region: The bytes the byte budget already limited the test to.
+        line_count: The number of lines the ``l`` flag allows; zero imposes no limit.
+
+    Returns:
+        The number of bytes of `region` that the test may search.
+    """
+    end = len(region)
+    last = end
+    lines = line_count
+    position = 0
+    while lines and position < end:
+        found = region.find(b"\n", position, end)
+        if found < 0:
+            found = region.find(b"\r", position, end)
+        if found < 0:
+            break
+        position = found + 1 if found < end - 1 and region[found] == 0x0A else found
+        last = position
+        lines -= 1
+        position += 1
+    return end if lines else last
+
+
 class RegexType(DataType[MagicRegex]):
+    FLAGS: Tuple[Tuple[str, str], ...] = (
+        ("c", "case_insensitive"),
+        ("s", "match_to_start"),
+        ("l", "limit_lines"),
+        ("T", "trim"),
+        ("t", "force_text"),
+        ("b", "force_binary"),
+    )
+    """Every flag this type can carry, in the order `DataType.name` spells them.
+
+    ``l`` is ``CHAR_PSTRING_4_LE``, which libmagic reads as ``REGEX_LINE_COUNT`` on a regular
+    expression (``file/src/file.h:409`` and ``file/src/apprentice.c:2003-2012``).
+    """
+
     def __init__(
             self,
             length: Optional[int] = None,
             case_insensitive: bool = False,
             match_to_start: bool = False,
             limit_lines: bool = False,
-            trim: bool = False
+            trim: bool = False,
+            force_text: bool = False,
+            force_binary: bool = False
     ):
         if length is None:
             if limit_lines:
@@ -2268,17 +2724,44 @@ class RegexType(DataType[MagicRegex]):
         self.case_insensitive: bool = case_insensitive
         self.match_to_start: bool = match_to_start
         self.trim: bool = trim
-        super().__init__(f"regex/{self.length}{['', 'c'][case_insensitive]}{['', 's'][match_to_start]}"
-                         f"{['', 'l'][self.limit_lines]}{['', 'T'][self.trim]}")
+        self.force_text: bool = force_text
+        self.force_binary: bool = force_binary
+        super().__init__(self.declaration())
+
+    def declaration(self) -> str:
+        """Rebuilds the declaration this type was parsed from, which is also its name.
+
+        Returns:
+            A string `DataType.parse` accepts and that spells every flag this type carries.
+        """
+        flags = "".join(letter for letter, attribute in self.FLAGS if getattr(self, attribute))
+        return f"regex/{self.length}{flags}"
 
     DOLLAR_PATTERN = re.compile(rb"(^|[^\\])\$", re.MULTILINE)
 
-    def is_text(self, value: MagicRegex) -> bool:
-        try:
-            _ = value.pattern.decode("ascii")
-            return True
-        except UnicodeDecodeError:
-            return False
+    def declared_test_types(self) -> TestType:
+        return declared_passes(self.force_text, self.force_binary)
+
+    def test_types(self, expected: MagicRegex) -> TestType:
+        """The passes libmagic runs this regular expression in.
+
+        A declared ``b`` or ``t`` decides on its own, because ``set_test_type`` reads the string
+        flags and breaks out of the case before it reaches ``file_looks_utf8``
+        (``file/src/apprentice.c:1258-1283``). Otherwise the pattern itself decides, by the same
+        rule libmagic applies to a `search` value.
+
+        Args:
+            expected: The parsed regular expression.
+
+        Returns:
+            The passes the test belongs to.
+        """
+        declared = self.declared_test_types()
+        if declared != TestType.UNKNOWN:
+            return declared
+        elif _looks_like_utf8(expected.pattern):
+            return TestType.TEXT
+        return TestType.BINARY
 
     def strength_term(self, expected: MagicRegex) -> int:
         """One unit per literal character, capped the way a `search` is.
@@ -2288,7 +2771,15 @@ class RegexType(DataType[MagicRegex]):
         literals = expected.literal_count
         return literals * max(STRENGTH_MULT // literals, 1)
 
+    def relation(self, expected: MagicRegex) -> str:
+        return "!" if expected.negated else "="
+
     def parse_expected(self, specification: str) -> MagicRegex:
+        negated = specification.startswith("!")
+        if negated:
+            # libmagic consumes a leading `!` as the relation operator rather than compiling it
+            # as part of the regular expression (`file/src/apprentice.c:2389-2391`).
+            specification = specification[1:]
         if specification.startswith("="):
             # libmagic parses a leading `=` as the equality operator, not as part of the pattern
             # (`file/src/apprentice.c:2383-2384`)
@@ -2297,7 +2788,7 @@ class RegexType(DataType[MagicRegex]):
         if self.case_insensitive:
             flags |= re.IGNORECASE
         try:
-            return MagicRegex(unescape(specification), flags)
+            return MagicRegex(unescape(specification), flags, negated=negated)
         except re.error as e:
             raise ValueError(str(e))
 
@@ -2329,31 +2820,60 @@ class RegexType(DataType[MagicRegex]):
             return DataTypeMatch(raw_match, value, initial_offset=start, relative_base=start)
         return DataTypeMatch(raw_match, value, initial_offset=start)
 
+    def region(self, data: bytes) -> bytes:
+        """The bytes of `data` this test is allowed to look at, before it is NUL-terminated.
+
+        ``mcopy`` budgets the region in bytes: `length` of them, or, under the ``l`` flag, `length`
+        lines of an assumed 80 bytes each. A budget of zero means the rest of the file. Either way
+        the budget is clamped to what the file has left and then to `REGEX_MAX`
+        (``file/src/softmagic.c:1411-1422``). The ``l`` flag then cuts the region back to whole
+        lines (``file/src/softmagic.c:1424-1440``).
+
+        Args:
+            data: The file's bytes from the offset this test runs at.
+
+        Returns:
+            The region libmagic copies for ``regexec``.
+        """
+        byte_budget = self.length * 80 if self.limit_lines else self.length
+        if byte_budget == 0 or byte_budget > len(data):
+            byte_budget = len(data)
+        region = data[:min(byte_budget, REGEX_MAX)]
+        if self.limit_lines:
+            return region[:line_region_length(region, self.length)]
+        return region
+
+    def subject(self, data: bytes) -> bytes:
+        """The bytes libmagic hands to ``regexec``, given the file's bytes from this test's offset.
+
+        libmagic copies the region `RegexType.region` picks out, then terminates the copy by
+        overwriting its last byte with a NUL (``file/src/softmagic.c:2393-2405``). It passes the
+        result as a C string, so the pattern never sees the final byte of the region, and never
+        sees anything past a NUL that was already in it. The ``l`` flag narrows the region rather
+        than the copy, so under it the byte the NUL claims is the last byte of the last allowed
+        line.
+
+        Args:
+            data: The file's bytes from the offset this test runs at.
+
+        Returns:
+            The bytes to match the pattern against.
+        """
+        return self.region(data)[:-1].partition(b"\0")[0]
+
     def match(self, data: bytes, expected: MagicRegex) -> DataTypeMatch:
-        if not self.limit_lines:
-            m = expected.search(data[:self.length])
-            if m is None:
-                return DataTypeMatch.INVALID
-            return self.matched_extent(m, 0)
-        offset = 0
-        # libmagic uses an implicit byte limit that assumes 80 characters per line
-        byte_limit = 80 * self.length
-        for _ in range(self.length):
-            line_offset = data.find(b"\n", offset, byte_limit)
-            if line_offset < 0:
-                return DataTypeMatch.INVALID
-            m = expected.match(data[offset:line_offset])
-            if m is not None:
-                return self.matched_extent(m, offset)
-            offset = line_offset + 1
-        return DataTypeMatch.INVALID
+        m = expected.search(self.subject(data))
+        if expected.negated:
+            # the `!` relation inverts the verdict, and a negated test reports no matched bytes
+            # because nothing matched
+            return DataTypeMatch.INVALID if m is not None else DataTypeMatch(b"", "")
+        if m is None:
+            return DataTypeMatch.INVALID
+        return self.matched_extent(m, 0)
 
     REGEX_TYPE_FORMAT: Pattern[str] = re.compile(
-        r"^regex(/(?P<length>\d+)?(?P<flags1>[cslTt]*)(/(?P<flags2>[cslTt]*))?(b\d*)?)?$"
+        r"^regex(/(?P<length>\d+)?(?P<flags1>[bcslTt]*)(/(?P<flags2>[bcslTt]*))?)?$"
     )
-    # NOTE: some specification files like `cad` use `regex/b`, which is undocumented, and it's unclear from the libmagic
-    #       source code whether it is simply ignored or if it has a purpose. We ignore it here.
-    # NOTE: the `t` flag (force text) is also supported but currently ignored as it's a hint for output formatting.
     # NOTE: flags can appear either after length directly (regex/31cs) or with a slash (regex/31/cs).
 
     @classmethod
@@ -2375,7 +2895,9 @@ class RegexType(DataType[MagicRegex]):
             case_insensitive="c" in options,
             match_to_start="s" in options,
             limit_lines="l" in options,
-            trim="T" in options
+            trim="T" in options,
+            force_text="t" in options,
+            force_binary="b" in options
         )
 
 
@@ -2585,9 +3107,6 @@ class NumericDataType(DataType[NumericValue]):
         if self.endianness == Endianness.PDP and self.base_type.num_bytes != 4:
             raise ValueError(f"PDP endianness can only be used with four byte base types, not {self.base_type}")
 
-    def is_text(self, value: NumericValue) -> bool:
-        return False
-
     def strength_term(self, expected: NumericValue) -> int:
         """One unit per byte the type reads (``file/src/apprentice.c:975-996``)."""
         return self.base_type.num_bytes * STRENGTH_MULT
@@ -2695,6 +3214,87 @@ class NumericDataType(DataType[NumericValue]):
         )
 
 
+def libmagic_string_flags(data_type: DataType) -> bytes:
+    """The ``str_range`` and ``str_flags`` word libmagic gives a string type.
+
+    Args:
+        data_type: The type a definition declared.
+
+    Returns:
+        Eight bytes, which are zero for a type that carries no string modifiers.
+    """
+    if not isinstance(data_type, (StringType, PascalStringType, RegexType, UTF16Type)):
+        return bytes(8)
+    string_range = getattr(data_type, "num_bytes", None) or 0
+    if isinstance(data_type, SearchType) and string_range == 0:
+        string_range = STRING_DEFAULT_RANGE
+    flags = 0
+    for attribute, bit in STRING_FLAG_BITS:
+        if getattr(data_type, attribute, False):
+            flags |= bit
+    return libmagic_field(string_range, 4) + libmagic_field(flags, 4)
+
+
+def libmagic_string_value(constant: StringTest) -> bytes:
+    """The bytes libmagic would copy into ``value.s`` for a string test.
+
+    Args:
+        constant: The parsed value of a string, search, or Pascal string test.
+
+    Returns:
+        The unescaped value, which is empty for a test that declared none.
+    """
+    if isinstance(constant, NegatedStringTest):
+        return libmagic_string_value(constant.parent)
+    elif isinstance(constant, StringMatch):
+        return constant.string
+    elif isinstance(constant, StringLengthTest):
+        return unescape(constant.raw_pattern)
+    return b""
+
+
+def libmagic_numeric_value(data_type: DataType, value: Union[int, float]) -> bytes:
+    """The bytes libmagic would copy into a numeric test's value union.
+
+    Args:
+        data_type: The type a definition declared, which sizes a floating point value.
+        value: The parsed value.
+
+    Returns:
+        The value's little endian bytes.
+    """
+    if isinstance(value, float):
+        base_type = getattr(data_type, "base_type", None)
+        if getattr(base_type, "num_bytes", 8) == 4:
+            return struct.pack("<f", value)
+        return struct.pack("<d", value)
+    return libmagic_field(value, 8)
+
+
+def libmagic_value(data_type: DataType, constant: Any) -> Tuple[int, bytes]:
+    """The ``vallen`` and value bytes libmagic would store for a parsed test value.
+
+    libmagic reads no value at all for the ``x`` relation, so a wildcard leaves both zeroed
+    (``file/src/apprentice.c:2407-2412``).
+
+    Args:
+        data_type: The type a definition declared.
+        constant: The value the type parsed.
+
+    Returns:
+        The value's declared length and its bytes.
+    """
+    if isinstance(constant, StringTest):
+        return constant.value_length, libmagic_string_value(constant)
+    elif isinstance(constant, MagicRegex):
+        return len(constant.pattern), constant.pattern
+    elif isinstance(constant, bytes):
+        return len(constant), constant
+    elif isinstance(constant, NumericValue) and not isinstance(constant, NumericWildcard):
+        return 0, libmagic_numeric_value(data_type, constant.value)
+    return 0, b""
+
+
 class ConstantMatchTest(MagicTest, Generic[T]):
     def __init__(
             self,
@@ -2710,6 +3310,19 @@ class ConstantMatchTest(MagicTest, Generic[T]):
         self.data_type: DataType[T] = data_type
         self.constant: T = constant
 
+    def libmagic_type(self) -> str:
+        return libmagic_base_type(self.data_type.name)
+
+    def libmagic_flag(self) -> int:
+        flag = super().libmagic_flag()
+        if isinstance(self.data_type, NumericDataType) and self.data_type.unsigned:
+            flag |= FLAG_UNSIGNED
+        return flag
+
+    def libmagic_value_fields(self) -> Tuple[int, bytes, bytes]:
+        value_length, value = libmagic_value(self.data_type, self.constant)
+        return value_length, libmagic_string_flags(self.data_type), value
+
     def type_strength(self) -> int:
         return self.data_type.strength_term(self.constant)
 
@@ -2717,10 +3330,10 @@ class ConstantMatchTest(MagicTest, Generic[T]):
         return self.data_type.relation(self.constant)
 
     def subtest_type(self) -> TestType:
-        if self.data_type.is_text(self.constant):
-            return TestType.TEXT
-        else:
-            return TestType.BINARY
+        return self.data_type.test_types(self.constant)
+
+    def declared_test_type(self) -> TestType:
+        return self.data_type.declared_test_types()
 
     def calculate_absolute_offset(self, data: bytes, parent_match: Optional[TestResult] = None) -> int:
         return self.offset.to_absolute(data, parent_match, self.data_type.allows_invalid_offsets(self.constant))
@@ -2809,6 +3422,9 @@ class OffsetMatchTest(MagicTest):
         self.subtraction: int = subtraction
         self.modulo: int = modulo
 
+    def libmagic_type(self) -> str:
+        return "offset"
+
     def type_strength(self) -> int:
         """``offset`` is an eight-byte quantity (``file/src/apprentice.c:906-908``)."""
         return 8 * STRENGTH_MULT
@@ -2865,6 +3481,8 @@ class IndirectTest(MagicTest):
         self.relative: bool = relative
         self.can_match_mime = True
         self.can_be_indirect = True
+        # an indirect test can dispatch any other test, so PolyFile keeps the whole group in the
+        # binary pass rather than letting a level 0 flag hand it the decoded text buffer
         self._type = TestType.BINARY
         p = parent
         while p is not None:
@@ -2872,6 +3490,9 @@ class IndirectTest(MagicTest):
             p.can_match_mime = True
             p._type = TestType.BINARY
             p = p.parent
+
+    def libmagic_type(self) -> str:
+        return "indirect"
 
     def subtest_type(self) -> TestType:
         return TestType.BINARY
@@ -2918,6 +3539,9 @@ class NamedTest(MagicTest):
         self.name: str = name
         self.named_test = self
         self.used_by: Set[UseTest] = set()
+
+    def libmagic_type(self) -> str:
+        return "name"
 
     def subtest_type(self) -> TestType:
         return TestType.UNKNOWN
@@ -2978,6 +3602,9 @@ class UseTest(MagicTest):
         self.late_binding: bool = late_binding
         referenced_test.used_by.add(self)
 
+    def libmagic_type(self) -> str:
+        return "use"
+
     def subtest_type(self) -> TestType:
         return self.referenced_test.test_type
 
@@ -3007,6 +3634,10 @@ class UseTest(MagicTest):
         )
         if not matched:
             return
+        if parent_match is not None:
+            # a `use` that succeeded counts as a match at its level, so a later `default` there
+            # does not fire (`file/src/softmagic.c:424-428`)
+            parent_match.child_matched = True
         yield use_match
         for named_result in named_results:
             if not context.only_match_mime or named_result.test.mime is not None:
@@ -3134,17 +3765,17 @@ class JSONTest(MagicTest):
         return TestType.TEXT
 
     @property
-    def appends_text_encoding(self) -> bool:
-        """libmagic never appends its text-encoding description to a JSON verdict.
+    def precedes_soft_magic(self) -> bool:
+        """``file_is_json`` runs ahead of soft magic in ``file_buffer``.
 
-        ``file_is_json`` runs ahead of soft magic in ``file_buffer`` and its match ends the run, so
-        ``file_ascmagic`` never sees it: `file` reports ``JSON text data``, not
-        ``JSON text data, ASCII text``.
+        So it reads the file's own bytes rather than the buffer ``file_ascmagic`` decodes, and its
+        match ends the run before ``file_ascmagic`` can describe it: `file` reports
+        ``JSON text data``, not ``JSON text data, ASCII text``.
 
         Returns:
-            False.
+            True.
         """
-        return False
+        return True
 
     def test_flip_endianness(
             self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]
@@ -3197,16 +3828,16 @@ class CSVTest(MagicTest):
         return TestType.TEXT
 
     @property
-    def appends_text_encoding(self) -> bool:
-        """libmagic never appends its text-encoding description to a CSV verdict.
+    def precedes_soft_magic(self) -> bool:
+        """``file_is_csv`` runs ahead of soft magic in ``file_buffer``.
 
-        ``file_is_csv`` runs ahead of soft magic in ``file_buffer``, names the encoding itself, and
-        its match ends the run, so ``file_ascmagic`` never sees it.
+        So it reads the file's own bytes rather than the buffer ``file_ascmagic`` decodes, and it
+        names the encoding itself and ends the run before ``file_ascmagic`` can describe it.
 
         Returns:
-            False.
+            True.
         """
-        return False
+        return True
 
     def test_flip_endianness(
             self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]
@@ -3215,6 +3846,9 @@ class CSVTest(MagicTest):
 
 
 class DefaultTest(MagicTest):
+    def libmagic_type(self) -> str:
+        return "default"
+
     def subtest_type(self) -> TestType:
         return TestType.UNKNOWN
 
@@ -3240,6 +3874,9 @@ class DefaultTest(MagicTest):
 
 
 class ClearTest(MagicTest):
+    def libmagic_type(self) -> str:
+        return "clear"
+
     def subtest_type(self) -> TestType:
         return TestType.UNKNOWN
 
@@ -3248,11 +3885,17 @@ class ClearTest(MagicTest):
         return "x"
 
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> MatchedTest:
-        if parent_match is None:
-            return MatchedTest(self, offset=absolute_offset, length=0, value=None)
-        else:
+        """Matches unconditionally, having unset the parent's `TestResult.child_matched`.
+
+        The flag is unset after building the result, because building it raises the flag the way
+        any other match would. libmagic reaches the same place from the other direction: the
+        ``FILE_CLEAR`` arm of ``file/src/softmagic.c:422-428`` zeroes ``got_match`` instead of
+        taking the arm that would raise it.
+        """
+        result = MatchedTest(self, offset=absolute_offset, length=0, parent=parent_match, value=None)
+        if parent_match is not None:
             parent_match.child_matched = False
-            return MatchedTest(self, offset=absolute_offset, length=0, parent=parent_match, value=None)
+        return result
 
     def test_flip_endianness(
             self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]
@@ -3276,6 +3919,9 @@ class DERTest(MagicTest):
         super().__init__(offset=offset, mime=mime, extensions=extensions, message=message,
                          parent=parent, comments=comments)
         self.specification: DERSpecification = specification
+
+    def libmagic_type(self) -> str:
+        return "der"
 
     def type_strength(self) -> int:
         """One flat unit, whatever the specification says (``file/src/apprentice.c:1024-1026``)."""
@@ -3489,13 +4135,20 @@ class TextEncodingDescription:
     characters. `describe` applies that rewrite to one match's message.
     """
 
-    def __init__(self, code: str, text: str):
+    def __init__(self, encoding: str, text: str):
         """
         Args:
-            code: libmagic's name for the encoding, such as ``ASCII``.
+            encoding: the encoding `detect_text_encoding` named, such as ``ascii``.
             text: the decoded characters libmagic would scan.
+
+        Raises:
+            ValueError: if `LIBMAGIC_ENCODING_NAMES` has no description for `encoding`.
         """
-        self.code: str = code
+        if encoding not in LIBMAGIC_ENCODING_NAMES:
+            raise ValueError(f"there is no libmagic description for the text encoding "
+                             f"{encoding!r}; add one to LIBMAGIC_ENCODING_NAMES")
+        self.encoding: str = encoding
+        self.code: str = LIBMAGIC_ENCODING_NAMES[encoding]
         self.crlf: int = text.count("\r\n")
         self.lf: int = text.count("\n") - self.crlf
         # libmagic counts a CR when it reads the character after it, so a CR that ends the buffer
@@ -3526,10 +4179,7 @@ class TextEncodingDescription:
         encoding = detect_text_encoding(data)
         if encoding is None:
             return None
-        if encoding not in LIBMAGIC_ENCODING_NAMES:
-            raise ValueError(f"there is no libmagic description for the text encoding "
-                             f"{encoding!r}; add one to LIBMAGIC_ENCODING_NAMES")
-        return cls(LIBMAGIC_ENCODING_NAMES[encoding], _decode_text(data, encoding))
+        return cls(encoding, _decode_text(data, encoding))
 
     def _splice(self, message: str) -> Tuple[str, bool]:
         """Replaces a soft magic message's trailing ``text`` with the separator libmagic uses.
@@ -3738,9 +4388,26 @@ class Match:
         return LazyIterableSet(_extensions())
 
     def explain(self, file: Streamable, ansi_color: Optional[bool] = None) -> str:
+        """Explains every test that contributed to this match.
+
+        A match against a decoded buffer reports offsets into that buffer, so this explains it
+        against the buffer the tests read and says which encoding it was decoded from. There is no
+        map from those offsets back to the file's bytes; see `MatchContext.decoded_from`.
+
+        Args:
+            file: the file this match came from.
+            ansi_color: whether to colorize the explanation, defaulting to whether stdout is a tty.
+
+        Returns:
+            The explanation.
+        """
         if ansi_color is None:
             ansi_color = sys.stdout.isatty()
         writer = ANSIWriter(use_ansi=ansi_color)
+        if self.context.decoded_from is not None:
+            writer.write(f"  Every offset below is an offset into the text decoded from this file "
+                         f"as {self.context.decoded_from}, not into the file itself\n", dim=True)
+            file = self.context.data
         for result in self:
             result.explain(writer, file=file)
         return str(writer)
@@ -3827,6 +4494,69 @@ class Match:
     __str__ = message
 
 
+MATCH_SEPARATOR: str = "\n- "
+"""What libmagic puts between the matches it joins.
+
+``FILE_SEPARATOR`` in ``src/funcs.c``, printed by ``file_separator`` after every check that
+matched and trimmed off the end again by ``trim_separator``.
+"""
+
+
+def octal_escape(description: str) -> str:
+    """Escapes the characters `file` escapes when it is not run with ``-r``.
+
+    ``file_getbuffer`` in libmagic's ``src/funcs.c`` copies its output buffer verbatim when
+    ``MAGIC_RAW`` is set, and otherwise replaces every character it cannot print with a
+    backslash and three octal digits per byte. That is why ``file/tests/multiple.result`` holds
+    the separator's line feed as ``\\012``.
+
+    Args:
+        description: the description to escape.
+
+    Returns:
+        `description` with each unprintable character replaced by the octal escape of its UTF-8
+        bytes.
+    """
+    escaped: List[str] = []
+    for character in description:
+        if character.isprintable():
+            escaped.append(character)
+        else:
+            escaped.extend(f"\\{byte:03o}" for byte in character.encode("utf-8"))
+    return "".join(escaped)
+
+
+def join_matches(matches: Iterable[Match], raw: bool = False) -> str:
+    """Describes several matches the way ``file -k`` describes them, in one string.
+
+    ``MAGIC_CONTINUE`` does not change which checks libmagic runs; it changes how their messages
+    reach the one output buffer libmagic prints. Every check that matched appends its message and
+    a `MATCH_SEPARATOR`, ``file_ascmagic`` then rewrites the tail of that whole buffer, and
+    ``file_getbuffer`` escapes it. So the text-encoding description lands once, after the last
+    match, rather than once per match, and this consumes the matches `MagicMatcher.match` yields
+    without changing them.
+
+    Args:
+        matches: the matches to describe, in the order `MagicMatcher.match` reported them.
+        raw: whether to skip the escaping, as libmagic's ``MAGIC_RAW`` does.
+
+    Returns:
+        The joined description, which is empty when `matches` is.
+    """
+    text_encoding: Optional[TextEncodingDescription] = None
+    parts: List[str] = []
+    for match in matches:
+        parts.append(match._soft_magic_message())
+        if match.text_encoding is not None:
+            text_encoding = match.text_encoding
+    joined = MATCH_SEPARATOR.join(parts)
+    if text_encoding is not None:
+        joined = text_encoding.describe(joined)
+    if raw:
+        return joined
+    return octal_escape(joined)
+
+
 class DefaultMagicMatcher:
     _DEFAULT_INSTANCE: Optional["MagicMatcher"] = None
 
@@ -3851,8 +4581,8 @@ class MagicMatcher:
         self._tests_by_mime: Dict[str, Set[MagicTest]] = defaultdict(set)
         self._tests_by_ext: Dict[str, Set[MagicTest]] = defaultdict(set)
         self._tests_that_can_be_indirect: Set[MagicTest] = set()
-        self._non_text_tests: Set[MagicTest] = set()
-        self._text_tests: Set[MagicTest] = set()
+        self._non_text_tests: Dict[MagicTest, None] = {}
+        self._text_tests: Dict[MagicTest, None] = {}
         self._dirty: bool = True
         for test in tests:
             self.add(test)
@@ -3873,14 +4603,16 @@ class MagicMatcher:
         return self._tests_that_can_be_indirect
 
     @property
-    def non_text_tests(self) -> Set[MagicTest]:
+    def non_text_tests(self) -> KeysView[MagicTest]:
+        """The level 0 tests of `MagicMatcher.match`'s binary pass, in the order it runs them."""
         self._reassign_test_types()
-        return self._non_text_tests
+        return self._non_text_tests.keys()
 
     @property
-    def text_tests(self) -> Set[MagicTest]:
+    def text_tests(self) -> KeysView[MagicTest]:
+        """The level 0 tests of `MagicMatcher.match`'s text pass, in the order it runs them."""
         self._reassign_test_types()
-        return self._text_tests
+        return self._text_tests.keys()
 
     def add(self, test: Union[MagicTest, Path], test_type: TestType = TestType.UNKNOWN) -> List[MagicTest]:
         if not isinstance(test, MagicTest):
@@ -3912,20 +4644,36 @@ class MagicMatcher:
 
         return [test]
 
+    def _sort_tests(self):
+        """Puts the level 0 tests in the order libmagic would run them.
+
+        libmagic sorts strongest first and settles a tie with `MagicTest.libmagic_sort_key`. A tie
+        that key cannot settle keeps the order the definitions were read in, which is the order
+        libmagic itself hands its entries to ``qsort``: by definition file name
+        (``file/src/apprentice.c:1593``) and then by line.
+        """
+        self._tests.sort(key=lambda test: (
+            "" if test.source_info is None else test.source_info.path.name,
+            0 if test.source_info is None else test.source_info.line
+        ))
+        self._tests.sort(key=lambda test: test.libmagic_sort_key(), reverse=True)
+
     def _reassign_test_types(self):
         if not self._dirty:
             return
         self._dirty = False
-        self._text_tests = set()
-        self._non_text_tests = set()
+        self._sort_tests()
+        self._text_tests = {}
+        self._non_text_tests = {}
         self._tests_that_can_be_indirect = set()
         self._tests_by_ext = defaultdict(set)
         self._tests_by_mime = defaultdict(set)
         for test in self._tests:
-            if test.test_type == TestType.TEXT:
-                self._text_tests.add(test)
-            else:
-                self._non_text_tests.add(test)
+            test_type = test.test_type
+            if test_type & TestType.TEXT:
+                self._text_tests[test] = None
+            if test_type & TestType.BINARY or test_type == TestType.UNKNOWN:
+                self._non_text_tests[test] = None
             if test.can_be_indirect:
                 self._tests_that_can_be_indirect.add(test)
             for mime in test.mimetypes:
@@ -3964,6 +4712,8 @@ class MagicMatcher:
         return MagicMatcher(tests | required_named_tests)
 
     def __iter__(self) -> Iterator[MagicTest]:
+        """Yields the level 0 tests in the order `MagicMatcher.match` runs them."""
+        self._reassign_test_types()
         return iter(self._tests)
 
     @property
@@ -3981,28 +4731,58 @@ class MagicMatcher:
             tests: Iterable[MagicTest],
             context: MatchContext,
             text_encoding: Optional[TextEncodingDescription],
-            description: str
-    ) -> Iterator[Match]:
+            description: str,
+            file_context: Optional[MatchContext] = None
+    ) -> Iterator[Tuple[MagicTest, Match]]:
         """Yields a match for each of `tests` that matches `context`.
 
         Args:
             tests: the level 0 tests to run.
             context: the buffer to run them against.
-            text_encoding: the description of `context`'s text encoding, or None if it is not text.
+            text_encoding: the description libmagic appends to a match from this pass, or None if
+                this pass appends none.
             description: the label for the progress log.
+            file_context: the buffer holding the file's own bytes, when `context` is a rendering of
+                them. A check `MagicTest.precedes_soft_magic` names runs against this instead.
 
         Yields:
-            One match per test that matched, carrying `text_encoding` if libmagic would append it
-            to that test's message.
+            The test and its match, for each test that matched, carrying `text_encoding` if
+            libmagic would append it to that test's message.
         """
         for test in log.range(tests, desc=description, unit=" tests", delay=1.0):
-            m = Match(matcher=self, context=context, results=test.match(context))
+            if file_context is not None and test.precedes_soft_magic:
+                test_context = file_context
+            else:
+                test_context = context
+            m = Match(matcher=self, context=test_context, results=test.match(test_context))
             # the description is how a match is rendered, so it must not make an empty message
             # look like a match
-            if m and (not context.only_match_mime or any(t is not None for t in m.mimetypes)):
+            if m and (not test_context.only_match_mime or any(t is not None for t in m.mimetypes)):
                 if test.appends_text_encoding:
                     m.text_encoding = text_encoding
-                yield m
+                yield test, m
+
+    def binary_pass_tests(self, looks_text: bool) -> Iterable[MagicTest]:
+        """The level 0 tests `MagicMatcher.match` runs over the file's own bytes.
+
+        ``softmagic`` skips an entry whose declared string flags are exactly ``STRING_BINTEST``
+        when the buffer looks like text (``file/src/softmagic.c:249-253``). That is what keeps
+        libmagic from reporting the binary half of a definition that spells one shebang twice, as
+        ``magic_defs/varied.script`` does. An entry that declares both flags is not skipped,
+        because the test is for one bit and not the other.
+
+        Args:
+            looks_text: Whether `TextEncodingDescription.detect` recognized the buffer as text,
+                which is the ``looks_text`` ``file_buffer`` hands ``file_softmagic``
+                (``file/src/funcs.c:314-317`` and ``482``).
+
+        Returns:
+            The tests to run, in the order `MagicMatcher.match` runs them.
+        """
+        if not looks_text:
+            return self.non_text_tests
+        return [test for test in self.non_text_tests
+                if test.declared_test_type() != TestType.BINARY]
 
     def match(self, to_match: Union[bytes, BinaryIO, str, Path, MatchContext]) -> Iterator[Match]:
         if isinstance(to_match, bytes):
@@ -4011,16 +4791,27 @@ class MagicMatcher:
             to_match = MatchContext.load(to_match)
         text_encoding = TextEncodingDescription.detect(to_match.data)
         yielded = False
-        for m in self._run_tests(self.non_text_tests, to_match, text_encoding, "binary matching"):
+        matched_on_the_files_bytes: Set[MagicTest] = set()
+        # only the text pass carries the encoding description: `file_ascmagic` prints it, and
+        # `file_buffer` reaches `file_ascmagic` only once binary soft magic has printed nothing
+        # (`file/src/funcs.c:479-503`)
+        for test, m in self._run_tests(self.binary_pass_tests(text_encoding is not None),
+                                       to_match, None, "binary matching"):
+            matched_on_the_files_bytes.add(test)
             yield m
             yielded = True
         # is this a plain text file?
         text_matcher = Match(matcher=self, context=to_match, results=PlainTextTest().match(to_match))
-        is_text = text_matcher and (not to_match.only_match_mime or any(t is not None for t in text_matcher.mimetypes))
+        is_text = text_encoding is not None and text_matcher and (
+            not to_match.only_match_mime or any(t is not None for t in text_matcher.mimetypes))
         if is_text:
             text_matcher.text_encoding = text_encoding
-            # this is a text file, so try all of the textual tests:
-            for m in self._run_tests(self.text_tests, to_match, text_encoding, "text matching"):
+            # this is a text file, so try all of the textual tests, against the buffer libmagic
+            # hands them rather than against the file's bytes
+            text_context = to_match.text_test_context(text_encoding.encoding)
+            text_tests = [test for test in self.text_tests if test not in matched_on_the_files_bytes]
+            for _, m in self._run_tests(text_tests, text_context, text_encoding, "text matching",
+                                        file_context=to_match):
                 yield m
                 yielded = True
         if not yielded:
@@ -4299,8 +5090,6 @@ class MagicMatcher:
             assert test.can_match_mime
             for ancestor in test.ancestors():
                 ancestor.can_be_indirect = True
-        # Sort tests by strength (descending) for proper priority matching like libmagic
-        zero_level_tests.sort(key=lambda t: t.compute_strength(), reverse=True)
         for test in zero_level_tests:
             matcher.add(test)
         return matcher
