@@ -1438,6 +1438,83 @@ class StringDataTypeTest(TestCase):
         self.assertEqual({"ASCII text, with no line terminators"},
                          self.messages(definition, b"xAB"))
 
+    def test_a_flag_costs_a_search_its_last_start_offset(self):
+        """`search/4/c` found `ABC` at offset 4, where `file` tries offsets 0 through 3.
+
+        `magiccheck` implements a search twice, and the two disagree by one offset. The loop runs
+        `idx` over `[0, m->str_range)`, so its last start offset is `str_range - 1`
+        (`file/src/softmagic.c:2355-2368`). The `memmem` fast path ahead of it runs only when
+        `m->str_flags == 0`, and it searches a window of `m->str_range + slen` bytes
+        (`file/src/softmagic.c:2334-2353`), in which a value of `slen` bytes still fits when it
+        starts at `str_range`. PolyFile computed the `memmem` window for every search.
+
+        Every modifier letter a search accepts sets a bit of `str_flags`
+        (`file/src/apprentice.c:1952-1978`), `s`, `t` and `T` included, none of which changes how
+        a value is compared. So the flag that narrows the window need not be one that has anything
+        to do with matching.
+
+        The flagless row is the control, and the only one that reaches offset 4: `file` 5.48
+        reports `found` for `search/4` at offsets 3 and 4, for every flagged spelling at offset 3
+        alone, and for none of them at offset 5.
+        """
+        buffers = {3: b"xxxABC", 4: b"xxxxABC", 5: b"xxxxxABC"}
+        for flags, last_offset in (("", 4), ("/c", 3), ("/C", 3), ("/w", 3), ("/W", 3),
+                                   ("/T", 3), ("/s", 3), ("/t", 3), ("/Ww", 3)):
+            definition = f"0\tsearch/4{flags}\tABC\tfound\n"
+            for offset, data in buffers.items():
+                with self.subTest(flags=flags, offset=offset):
+                    found = "found, " if offset <= last_offset else ""
+                    self.assertEqual({f"{found}ASCII text, with no line terminators"},
+                                     self.messages(definition, data))
+
+    def test_a_search_bounds_where_a_match_starts_and_not_where_it_ends(self):
+        """`search/4/W` lost `A\\ B` in `xxxA   B`, and `search/4/w` found it in `xxxxABzz`.
+
+        The window was a bound on where a match ends, `num_bytes + len(value)`, which is the
+        `memmem` window. Subtracting one from it does not express the loop's bound either, because
+        `W` and `w` both match a run of blanks of any length against one declared blank
+        (`file/src/softmagic.c:2102-2121`). A match that starts at a candidate offset may then end
+        anywhere, and a match that ends inside the window may start past the last candidate
+        offset. libmagic bounds `idx`, which is where the match starts
+        (`file/src/softmagic.c:2355-2368`).
+
+        `file` 5.48 reports `found` for `xxxA   B` and `xxxABzz`, and not for `xxxxA   B` or
+        `xxxxABzz`.
+        """
+        stretched = "0\tsearch/4/W\tA\\ B\tfound\n"
+        self.assertEqual({"found, ASCII text, with no line terminators"},
+                         self.messages(stretched, b"xxxA   B"))
+        self.assertEqual({"ASCII text, with no line terminators"},
+                         self.messages(stretched, b"xxxxA   B"))
+        shortened = "0\tsearch/4/w\tA\\ B\tfound\n"
+        self.assertEqual({"found, ASCII text, with no line terminators"},
+                         self.messages(shortened, b"xxxABzz"))
+        self.assertEqual({"ASCII text, with no line terminators"},
+                         self.messages(shortened, b"xxxxABzz"))
+
+    def test_the_s_flag_narrows_the_window_without_changing_what_is_reported(self):
+        """`s` costs a search its last start offset, and still resolves `&` from the match.
+
+        `REGEX_OFFSET_START` governs only where a following relative offset resolves from
+        (`file/src/softmagic.c:966-968`), so it changes neither the value nor the length the value
+        declares, and `SearchType.declared_length` is not what bounds the window. `s` reaches the
+        window only by setting a `str_flags` bit, which is what takes the search off the `memmem`
+        path (`file/src/softmagic.c:2334`).
+
+        `file` 5.48 reports `found ABCD` for `xxxABCD` under `search/4/s`, nothing for `xxxxABCD`,
+        and `found D` for both under the flagless `search/4`, which keeps the extra offset and
+        counts the three bytes of the value.
+        """
+        definition = "0\tsearch/4/s\tABC\tfound\n>&0\tstring\tx\t%s\n"
+        self.assertEqual({"found ABCD, ASCII text, with no line terminators"},
+                         self.messages(definition, b"xxxABCD"))
+        self.assertEqual({"ASCII text, with no line terminators"},
+                         self.messages(definition, b"xxxxABCD"))
+        flagless = "0\tsearch/4\tABC\tfound\n>&0\tstring\tx\t%s\n"
+        for data in (b"xxxABCD", b"xxxxABCD"):
+            self.assertEqual({"found D, ASCII text, with no line terminators"},
+                             self.messages(flagless, data), repr(data))
+
     def test_a_two_byte_shebang_is_not_a_script(self):
         """`magic_defs/varied.script:8` declares the three bytes `#!\\ `, so `#!` alone is not it.
 
