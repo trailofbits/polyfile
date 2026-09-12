@@ -32,7 +32,9 @@ Notes, additions to SBuD, as well as any breaking changes are listed in C-style 
           "name": "header"    /* a descriptive element name       */
           "type": "magic"     /* the type of this element         */
           "size": 9           /* size of the element in bytes     */
-          "value": "%PDF1.3\n"
+          "value": "%PDF1.3\n" /* the content of this element,    *
+                                * omitted when the element has    *
+                                * none of its own; see below      */
           "img_data": "Optional base64 encoded image" /* not in SBud */ 
           "subEls": [
             /* any child elements, in the same format */
@@ -45,3 +47,18 @@ Notes, additions to SBuD, as well as any breaking changes are listed in C-style 
   ]
 }
 ```
+
+## Element values
+
+`value` holds the content that an element describes, rendered as a string. What the rendering
+looks like depends on what the element matched: a text description for a file type, a Python
+byte-string literal such as `b'PK\x03\x04'` for a raw byte field, or a decimal number for an
+integer field.
+
+An element that describes no content of its own omits `value` entirely. Structural elements are
+the case that arises in practice: a ZIP `LocalFileHeader` spans its fields and nothing else, so
+its child elements carry every byte it covers and there is nothing left for it to report. Read
+`value` with a default rather than by direct subscript.
+
+PolyFile 0.5.6 and earlier gave such an element the Python `repr` of the internal object that
+produced it, which embedded a heap address and so differed between runs over the same input.
