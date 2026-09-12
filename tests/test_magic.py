@@ -3274,6 +3274,50 @@ class PassGateTest(TestCase):
             with self.subTest(data=data):
                 self.assertEqual({"both flags"}, self.messages(definition, data))
 
+    def test_a_binary_flagged_entry_runs_against_nul_padded_text(self):
+        """Tests that the gate classifies the file's own bytes rather than the trimmed buffer.
+
+        This is a regression test for trailofbits/polyfile#3575. `file_buffer` calls
+        `file_encoding` on the buffer it was handed (`file/src/funcs.c:368-371`), and only
+        `file_ascmagic` trims the trailing NULs, so text padded out to a record boundary is
+        binary to the gate and text to the description. Gating on the trimmed buffer drops the
+        entry, and PolyFile reported `ASCII text, with no line terminators` where `file` reports
+        `binary only`.
+
+        The second case pins the other half: the description still comes from the trimmed buffer,
+        so dropping the trim to make the first case pass reports `data` here.
+        """
+        definition = "0\tsearch/40/b\t=ABC\tbinary only\n"
+        self.assertEqual({"binary only"}, self.messages(definition, b"ABC\x00\x00"))
+        self.assertEqual({"ASCII text, with no line terminators"},
+                         self.messages(definition, b"XYZ\x00\x00"))
+        self.assertNotIn("binary only", self.messages(definition, b"ABC and then some text\n"))
+
+    def test_a_nul_padded_winamp_preset_is_not_plain_text(self):
+        """Tests the shipped definition that first reported trailofbits/polyfile#3575.
+
+        `magic_defs/msdos:1966` is `0 string/b Nullsoft\\ AVS\\ Preset\\ `, and the presets
+        themselves are ASCII followed by NUL padding, so the gate decided the whole class of file.
+        """
+        data = b"Nullsoft AVS Preset 0.2\n" + b"\x00" * 8
+        self.assertEqual({"Winamp plug in"},
+                         {str(m) for m in MagicMatcher.DEFAULT_INSTANCE.match(data)})
+
+    def test_a_text_flagged_entry_skips_nul_padded_text(self):
+        """Tests the other arm of the same gate, for trailofbits/polyfile#3575.
+
+        `file_ascmagic` reaches the text pass on the strength of the trimmed buffer but hands
+        `file_softmagic` the answer `file_buffer` computed from the untrimmed one
+        (`file/src/ascmagic.c:71-100` and `161-162`), so a `t`-only entry is skipped for exactly
+        the buffers a `b`-only entry now runs against. PolyFile ran the entry and reported
+        `text only, ASCII text, with no line terminators`.
+        """
+        definition = "0\tstring/t\tABC\ttext only\n"
+        self.assertEqual({"ASCII text, with no line terminators"},
+                         self.messages(definition, b"ABC\x00\x00"))
+        self.assertEqual({"text only, ASCII text, with no line terminators"},
+                         self.messages(definition, b"ABC"))
+
     def test_a_script_reports_only_libmagics_variant(self):
         """Tests that `file/tests/cmd1.testfile` no longer reports a binary variant.
 
