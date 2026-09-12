@@ -167,15 +167,27 @@ class Match:
         return self._length
 
     def to_obj(self):
+        """Renders this match as the SBUD element that `docs/json_format.md` describes.
+
+        A match built with a `match_obj` of `None` describes no content of its own, so the
+        element it renders carries no `value` key. Any other match object becomes the `value`
+        through `str`, so a match may only hold an object whose `str` derives from the bytes
+        it matched. The default `object.__str__` does not: it embeds a heap address, which
+        differs between runs over the same input.
+
+        Returns:
+            The SBUD element, with one entry in `subEls` for each child match.
+        """
         ret = {
             'relative_offset': self.relative_offset,
             'offset': self.offset,
             'size': self.length,
             'type': self.name,
             'name': self.display_name,
-            'value': str(self.match),
-            'subEls': [c.to_obj() for c in self]
         }
+        if self.match is not None:
+            ret['value'] = str(self.match)
+        ret['subEls'] = [c.to_obj() for c in self]
         if self.img_data is not None:
             ret['img_data'] = self.img_data
         if self.decoded is not None:

@@ -23,6 +23,10 @@ class PolyFileStruct(Struct):
         exempt: their contents are the fixed signature that identified this struct, so
         matching them only rediscovers the struct's own file type at the offset of its magic.
 
+        The struct's own match carries no match object, so its SBUD element has no `value`:
+        the field matches below it describe every byte it spans, and a struct has no rendering
+        of its own that is a function of those bytes.
+
         Args:
             matcher: The matcher to use for fields that may contain embedded files.
             parent: The match that contains this struct, if any.
@@ -33,7 +37,7 @@ class PolyFileStruct(Struct):
         """
         m = Submatch(
             self.match_name,
-            match_obj=self,
+            match_obj=None,
             relative_offset=self.start_offset,
             length=self.num_bytes,
             parent=parent,
