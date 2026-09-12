@@ -449,6 +449,9 @@ class MagicTest(TestCase):
         fixed record size, a string table, or a block boundary leaves behind does not reach the
         character class check. Without the trim the NULs fail `_only_contains`, PolyFile reports
         no encoding, and `MagicMatcher.match` falls through to `application/octet-stream`.
+
+        `TextEncodingDescription.detect` is the `file_ascmagic` mirror that applies the trim;
+        `detect_text_encoding` is the `file_encoding` mirror and classifies what it is handed.
         """
         padded = (
             (b"\xde\xca\xff\xed" + b"\x00" * 4, "iso-8859-1"),
@@ -458,7 +461,9 @@ class MagicTest(TestCase):
         )
         for data, expected_encoding in padded:
             with self.subTest(data=data[:16]):
-                self.assertEqual(expected_encoding, polyfile.magic.detect_text_encoding(data))
+                description = polyfile.magic.TextEncodingDescription.detect(data)
+                self.assertIsNotNone(description)
+                self.assertEqual(expected_encoding, description.encoding)
                 mimetypes = {
                     mimetype
                     for match in MagicMatcher.DEFAULT_INSTANCE.match(data)
@@ -488,10 +493,14 @@ class MagicTest(TestCase):
         which belongs to no text character class, so `file` reports `data` for `abc\\0` and
         `ASCII text` for `abc\\0\\0`. Trimming without the adjustment reports text for both.
         """
-        self.assertIsNone(polyfile.magic.detect_text_encoding(b"abc\x00"))
-        self.assertIsNone(polyfile.magic.detect_text_encoding(b"The quick brown fox.\n"
-                                                              + b"\x00" * 491))
-        self.assertEqual("ascii", polyfile.magic.detect_text_encoding(b"abc\x00\x00"))
+        detect = polyfile.magic.TextEncodingDescription.detect
+        self.assertIsNone(detect(b"abc\x00"))
+        self.assertIsNone(detect(b"The quick brown fox.\n" + b"\x00" * 491))
+        self.assertEqual("ascii", detect(b"abc\x00\x00").encoding)
+        self.assertEqual({"data"},
+                         {str(m) for m in MagicMatcher.DEFAULT_INSTANCE.match(b"abc\x00")})
+        self.assertEqual({"ASCII text, with no line terminators"},
+                         {str(m) for m in MagicMatcher.DEFAULT_INSTANCE.match(b"abc\x00\x00")})
 
     def test_the_odd_byte_adjustment_keeps_the_last_utf_16le_character(self):
         """Tests that UTF-16LE text does not lose its last character to the NUL trim.
