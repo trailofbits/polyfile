@@ -105,6 +105,8 @@ TrID matching code is still shipped with PolyFile and can be invoked programmati
 
 PolyFile has several options for outputting its results, specified by its `--format` option. For computer-readable output, PolyFile has an extension of the [SBuD](https://github.com/corkami/sbud) JSON format described [in the documentation](docs/json_format.md). Prior to version 0.5.0 this was the default output format of PolyFile. However, now the default output format is to mimic the behavior of the `file` command. To maintain the original behavior, use the `--format sbud` option.
 
+The `json` and `sbud` formats include a `b64contents` key holding a base64 encoding of the entire input, so their output grows with the size of the file you analyze. Pass `--no-contents` to leave that key out; PolyFile then skips the encoding instead of computing it and throwing the result away. The key is omitted rather than emptied, so a consumer that needs the contents fails instead of reading the input as empty. The HTML hex viewer is built from the contents, so you cannot combine `--no-contents` with `--format html` or `--html`.
+
 ### libmagic Implementation
 
 PolyFile has a cleanroom implementation of [libmagic (used in the `file` command)](https://github.com/file/file).

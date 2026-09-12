@@ -73,7 +73,29 @@ def undescribed_regions(matches, length):
     return regions
 
 
+def encoded_contents(file_path, sbud):
+    """Returns the base64 encoding of the input that the hex viewer is built from.
+
+    Args:
+        file_path: the path of the analyzed file, used to report which input is missing.
+        sbud: the SBuD object describing that file.
+
+    Returns:
+        The value of the object's ``b64contents`` key.
+
+    Raises:
+        ValueError: if the object has no ``b64contents`` key, which is what
+            ``Analyzer.sbud(include_contents=False)`` produces.
+    """
+    if 'b64contents' not in sbud:
+        raise ValueError(f"cannot render a hex viewer for {file_path!r}: the SBuD object has no 'b64contents' key. "
+                         "Build it with Analyzer.sbud(include_contents=True), which is the default.")
+    return sbud['b64contents']
+
+
 def generate(file_path, sbud):
+    encoded = encoded_contents(file_path, sbud)
+
     global TEMPLATE, jinja2
     if jinja2 is None:
         # Load jinja2 lazily so that importing this module does not require it
@@ -170,7 +192,7 @@ def generate(file_path, sbud):
 
         return TEMPLATE.render(
             filename=os.path.split(file_path)[-1],
-            encoded=sbud['b64contents'],
+            encoded=encoded,
             matches=matches,
             input_file=input_file,
             input_bytes=input_bytes,
