@@ -113,6 +113,20 @@ class ValidateOutput(argparse.Action):
         ValidateOutput.add_output(args, values)
 
 
+def reject_html_without_contents(parser: argparse.ArgumentParser, args: argparse.Namespace):
+    """Exits with an error when `--no-contents` is combined with an output format that needs them.
+
+    The hex viewer is built from the base64 encoding of the input that `--no-contents` omits, so the
+    combination cannot produce HTML. Argparse cannot express the conflict on its own, because both
+    `--format html` and `--html` append to the same list of output formats.
+    """
+    if args.no_contents and any(output_format.output_format == "html" for output_format in args.format):
+        parser.print_usage()
+        sys.stderr.write("polyfile: error: `--no-contents` cannot be combined with HTML output, because the hex "
+                         "viewer is built from the contents of the input\n")
+        exit(1)
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description='A utility to recursively map the structure of a file.',
                                      formatter_class=argparse.RawTextHelpFormatter)
@@ -181,6 +195,17 @@ equivalent to `--format html --output HTML`"""))
 equivalent to `--format mime`"""))
     parser.add_argument('--only-match', '-m', action='store_true',
                         help='do not attempt to parse known filetypes; only match against file magic')
+    parser.add_argument('--no-contents', action='store_true',
+                        help=dedent("""omit the `b64contents` key from the `json` and `sbud` output
+
+That key holds a base64 encoding of the entire input, so it
+dominates the size of the output for all but the smallest files.
+Omitting it skips the encoding rather than discarding its result.
+
+The key is left out rather than emptied, so a consumer that needs
+the contents raises a `KeyError` instead of reading the input as
+empty. This option cannot be combined with HTML output, whose hex
+viewer is built from the contents."""))
     parser.add_argument('--require-match', action='store_true', help='if no matches are found, exit with code 127')
     parser.add_argument('--max-matches', type=int, default=None,
                         help='stop scanning after having found this many matches')
@@ -249,6 +274,8 @@ equivalent to `--format mime`"""))
     if not args.format:
         args.format.append(FormatOutput())
 
+    reject_html_without_contents(parser, args)
+
     if args.quiet:
         logger.setLevel(logging.CRITICAL)
     elif args.trace:
@@ -315,7 +342,7 @@ equivalent to `--format mime`"""))
                                 log.info(f"Found {args.max_matches} matches; stopping early")
                                 break
         if needs_sbud:
-            sbud = analyzer.sbud(matches=analyzer.matches_so_far)
+            sbud = analyzer.sbud(matches=analyzer.matches_so_far, include_contents=not args.no_contents)
 
             if args.require_match and not analyzer.matches_so_far:
                 log.info("No matches found, exiting")
