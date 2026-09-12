@@ -1,3 +1,7 @@
+include CHANGELOG.md
+# build_backend.py stages a copy inside the package so that the wheel carries it; the
+# source distribution needs only the one at the root.
+exclude polyfile/CHANGELOG.md
 include compile_kaitai_parsers.py
 include build_backend.py
 include CODEOWNERS

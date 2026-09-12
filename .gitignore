@@ -8,10 +8,16 @@ polyfile/trie_partial.gz
 .vscode/*
 polyfile/kaitai/kaitai-struct-compiler-*/
 
+# Release notes: CHANGELOG.md is the source, and a working file per release is not tracked
+/polyfile_*.md
+
 # Build artifacts
 /build/
 /dist/
 /*.egg-info/
+
+# Staged by build_backend.py from the CHANGELOG.md at the repository root
+/polyfile/CHANGELOG.md
 
 # uv resolves dependencies fresh across Python 3.10-3.14 in CI, so a lock file is not tracked
 uv.lock

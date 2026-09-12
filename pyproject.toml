@@ -73,6 +73,6 @@ namespaces = false
 # still have to be declared here. polyfile/magic.py enumerates the installed magic_defs
 # directory, so an omission changes which file types PolyFile can detect.
 [tool.setuptools.package-data]
-polyfile = ["templates/*"]
+polyfile = ["templates/*", "CHANGELOG.md"]
 "polyfile.kaitai.parsers" = ["*.py", "manifest.json"]
 "polyfile.magic_defs" = ["*"]

@@ -2,7 +2,11 @@
 
 PolyFile's Kaitai Struct parsers are generated at build time, so a build has to run
 ``compile_kaitai_parsers.rebuild()`` before setuptools collects the files that go into a
-distribution. This module wraps :mod:`setuptools.build_meta` to do that, and nothing else.
+distribution. This module wraps :mod:`setuptools.build_meta` to do that, and to stage
+``CHANGELOG.md`` inside the ``polyfile`` package, which is the only way a wheel can carry a file
+that lives at the repository root. The source distribution takes the root copy through
+``MANIFEST.in``, so the two builds that produce an installable tree stage it and ``build_sdist``
+does not.
 
 Only the three hooks that produce a distribution regenerate the parsers. The metadata hooks and
 the ``get_requires_for_build_*`` hooks are re-exported unchanged, so tools that want nothing but
@@ -16,6 +20,7 @@ because importing it runs ``git submodule init`` and ``git submodule update`` wh
 format library is missing.
 """
 
+import shutil
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -35,6 +40,22 @@ GENERATED_MANIFEST: Path = PROJECT_ROOT / "polyfile" / "kaitai" / "parsers" / "m
 
 # A source distribution always carries a PKG-INFO at its root; a checkout never does.
 SDIST_MARKER: Path = PROJECT_ROOT / "PKG-INFO"
+
+# CHANGELOG.md sits at the repository root, which is where GitHub renders it and where
+# MANIFEST.in takes it from for the source distribution. A wheel carries only what lives inside
+# a package, so a copy is staged into polyfile/ and declared as package data in pyproject.toml.
+CHANGELOG: Path = PROJECT_ROOT / "CHANGELOG.md"
+PACKAGED_CHANGELOG: Path = PROJECT_ROOT / "polyfile" / "CHANGELOG.md"
+
+
+def _stage_changelog() -> None:
+    """Copies the changelog into the ``polyfile`` package so that a wheel carries it."""
+    if not CHANGELOG.is_file():
+        raise FileNotFoundError(
+            f"{CHANGELOG} is missing: it is the source of PolyFile's release notes, and every "
+            f"distribution ships it"
+        )
+    shutil.copyfile(CHANGELOG, PACKAGED_CHANGELOG)
 
 
 def _rebuild_parsers() -> None:
@@ -60,6 +81,7 @@ def build_wheel(
     metadata_directory: Optional[str] = None,
 ) -> str:
     _rebuild_parsers()
+    _stage_changelog()
     return _setuptools.build_wheel(wheel_directory, config_settings, metadata_directory)
 
 
@@ -69,6 +91,7 @@ def build_editable(
     metadata_directory: Optional[str] = None,
 ) -> str:
     _rebuild_parsers()
+    _stage_changelog()
     return _setuptools.build_editable(wheel_directory, config_settings, metadata_directory)
 
 
