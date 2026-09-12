@@ -423,17 +423,46 @@ STRING_FLAG_BITS: Tuple[Tuple[str, int], ...] = (
     ("compact_whitespace", 0x0001),
     ("optional_blanks", 0x0002),
     ("case_insensitive_lower", 0x0004),
+    ("case_insensitive", 0x0004),
     ("case_insensitive_upper", 0x0008),
     ("match_to_start", 0x0010),
     ("force_text", 0x0020),
+    ("force_binary", 0x0040),
+    ("limit_lines", 0x0800),
     ("trim", 0x2000),
     ("full_word_match", 0x4000),
 )
 """Each string modifier PolyFile records, with the ``str_flags`` bit libmagic sets for it.
 
-See ``file/src/file.h:414-432`` for the bit numbering and ``file/src/apprentice.c:1946-1980`` for
+See ``file/src/file.h:396-414`` for the bit numbering and ``file/src/apprentice.c:1953-2015`` for
 the modifier characters they come from.
+
+A bit appears more than once when PolyFile's types spell the same modifier differently: `c` is
+`StringType.case_insensitive_lower` but `RegexType.case_insensitive`. No type carries both names,
+and the lookup is a bitwise or, so a repeated bit is set once.
+
+``0x0800`` is ``BIT(11)``, which libmagic names twice because its meaning depends on the type that
+carries it: ``PSTRING_4_LE`` on a `pstring` and ``REGEX_LINE_COUNT`` on a `regex`. PolyFile spells
+the regular expression's half of that as `RegexType.limit_lines` and reads the Pascal string's half
+out of `PSTRING_LENGTH_BITS`, so the two never collide.
 """
+
+PSTRING_LENGTH_BITS: Dict[str, int] = {
+    "B": 0x0080,
+    "H": 0x0100,
+    "h": 0x0200,
+    "L": 0x0400,
+    "l": 0x0800,
+}
+"""The ``PSTRING_LEN`` bit each length modifier letter sets (``file/src/file.h:403-411``).
+
+Exactly one of them is always set, because libmagic seeds a ``pstring``'s ``str_flags`` with
+``PSTRING_1_LE`` before it reads any modifier (``file/src/apprentice.c:2337``) and each letter
+replaces whatever the seed or an earlier letter left.
+"""
+
+PSTRING_LENGTH_INCLUDES_ITSELF: int = 0x1000
+"""``BIT(12)``, the bit ``pstring/J`` sets (``file/src/file.h:412``)."""
 
 
 def libmagic_field(value: int, num_bytes: int) -> bytes:
@@ -2672,6 +2701,12 @@ class PascalStringType(DataType[StringTest]):
                 modifier = "l"
         else:
             raise ValueError("byte_length must be either 1, 2, or 4")
+        self.length_modifier: str = modifier
+        """The letter libmagic reads the length prefix's width and byte order from.
+
+        A key of `PSTRING_LENGTH_BITS`. A declaration that named no letter still has one here,
+        because libmagic's default is the same ``B`` an explicit letter would spell.
+        """
         if count_includes_length:
             modifier = f"{modifier}J"
         super().__init__(f"pstring/{modifier}{string_flags}")
@@ -2913,6 +2948,13 @@ class RegexType(DataType[MagicRegex]):
             force_text: bool = False,
             force_binary: bool = False
     ):
+        self.declared_length: Optional[int] = length
+        """The number the declaration wrote after ``regex``, or None if it wrote none.
+
+        This, not `length`, is libmagic's ``str_range``: the defaults `length` falls back to are
+        applied when the test runs rather than when it is parsed
+        (``file/src/softmagic.c:1411-1422``).
+        """
         if length is None:
             if limit_lines:
                 length = 8 * 1024 // 80  # libmagic assumes 80 bytes per line
@@ -2930,11 +2972,19 @@ class RegexType(DataType[MagicRegex]):
     def declaration(self) -> str:
         """Rebuilds the declaration this type was parsed from, which is also its name.
 
+        The name leaves out a length the declaration did not write, because a declared length is
+        libmagic's ``str_range`` and an undeclared one is not. `DataType.parse` interns a type
+        under this name, so rendering the fallback `length` here would give ``regex`` and
+        ``regex/8192`` one shared instance and one shared sort key.
+
         Returns:
             A string `DataType.parse` accepts and that spells every flag this type carries.
         """
         flags = "".join(letter for letter, attribute in self.FLAGS if getattr(self, attribute))
-        return f"regex/{self.length}{flags}"
+        length = "" if self.declared_length is None else str(self.declared_length)
+        if not length and not flags:
+            return "regex"
+        return f"regex/{length}{flags}"
 
     DOLLAR_PATTERN = re.compile(rb"(^|[^\\])\$", re.MULTILINE)
 
@@ -3414,6 +3464,64 @@ class NumericDataType(DataType[NumericValue]):
         )
 
 
+def libmagic_str_range(data_type: DataType) -> int:
+    """The ``str_range`` libmagic stores for a string type.
+
+    It is the number the declaration wrote after the type name. A declaration that wrote none
+    leaves the field zero, because the range a `regex` or `search` falls back on is applied when
+    the test runs rather than when it is parsed (``file/src/softmagic.c:1411-1422``). The
+    `SearchType` line below is the one departure from that, which
+    https://github.com/trailofbits/polyfile/issues/3580 tracks.
+
+    Args:
+        data_type: The type a definition declared.
+
+    Returns:
+        libmagic's ``m->str_range`` for this type.
+    """
+    if isinstance(data_type, RegexType):
+        return data_type.declared_length or 0
+    string_range = getattr(data_type, "num_bytes", None) or 0
+    if isinstance(data_type, SearchType) and string_range == 0:
+        return STRING_DEFAULT_RANGE
+    return string_range
+
+
+def libmagic_str_flags(data_type: DataType) -> int:
+    """The ``str_flags`` bits the modifier letters on `data_type` set.
+
+    Args:
+        data_type: The type a definition declared.
+
+    Returns:
+        The bits named in `STRING_FLAG_BITS` that this type's modifiers ask for.
+    """
+    flags = 0
+    for attribute, bit in STRING_FLAG_BITS:
+        if getattr(data_type, attribute, False):
+            flags |= bit
+    return flags
+
+
+def libmagic_pstring_flags(data_type: PascalStringType) -> int:
+    """The ``str_flags`` word libmagic gives a ``pstring``.
+
+    The length modifier letter picks one of ``PSTRING_LEN``'s bits and ``J`` adds another
+    (``file/src/apprentice.c:1980-2015``). The rest of the letters are the ordinary string
+    modifiers, which `PascalStringType` keeps in a `StringType` of its own.
+
+    Args:
+        data_type: The Pascal string type a definition declared.
+
+    Returns:
+        Every ``str_flags`` bit the declaration sets.
+    """
+    flags = PSTRING_LENGTH_BITS[data_type.length_modifier]
+    if data_type.count_includes_length:
+        flags |= PSTRING_LENGTH_INCLUDES_ITSELF
+    return flags | libmagic_str_flags(data_type.string_type)
+
+
 def libmagic_string_flags(data_type: DataType) -> bytes:
     """The ``str_range`` and ``str_flags`` word libmagic gives a string type.
 
@@ -3425,14 +3533,11 @@ def libmagic_string_flags(data_type: DataType) -> bytes:
     """
     if not isinstance(data_type, (StringType, PascalStringType, RegexType, UTF16Type)):
         return bytes(8)
-    string_range = getattr(data_type, "num_bytes", None) or 0
-    if isinstance(data_type, SearchType) and string_range == 0:
-        string_range = STRING_DEFAULT_RANGE
-    flags = 0
-    for attribute, bit in STRING_FLAG_BITS:
-        if getattr(data_type, attribute, False):
-            flags |= bit
-    return libmagic_field(string_range, 4) + libmagic_field(flags, 4)
+    if isinstance(data_type, PascalStringType):
+        flags = libmagic_pstring_flags(data_type)
+    else:
+        flags = libmagic_str_flags(data_type)
+    return libmagic_field(libmagic_str_range(data_type), 4) + libmagic_field(flags, 4)
 
 
 def libmagic_string_value(constant: StringTest) -> bytes:
@@ -4336,9 +4441,9 @@ def detect_text_encoding(data: bytes) -> Optional[str]:
     This mirrors ``file_encoding`` in libmagic's ``src/encoding.c``: membership in a text
     encoding is decided by character class alone, with no statistical inference. Every byte in
     ``0xA0``-``0xFF`` is a printable ISO-8859 character, so a buffer of ASCII with a handful of
-    accented characters is text. libmagic classifies the buffer `_trim_trailing_nuls` prepares
-    rather than the file's own bytes, so text that a fixed record size or a block boundary padded
-    out with NULs still counts as text.
+    accented characters is text. ``file_encoding`` trims nothing itself, so a caller that mirrors
+    ``file_ascmagic`` hands it the buffer `_trim_trailing_nuls` prepares, and one that mirrors
+    ``file_buffer``'s soft magic pass gate hands it the file's own bytes.
 
     EBCDIC comes last because most EBCDIC buffers are also valid eight bit buffers, so testing for
     it any earlier would report ordinary ISO-8859 text as EBCDIC.
@@ -4349,7 +4454,6 @@ def detect_text_encoding(data: bytes) -> Optional[str]:
     Returns:
         The name of the encoding family, or None if `data` belongs to no text character class.
     """
-    data = _trim_trailing_nuls(data)
     if len(data) < 2:
         return None
     elif _only_contains(data, _ASCII_BYTES):
@@ -4595,7 +4699,9 @@ class PlainTextTest(MagicTest):
 
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
         content = data[absolute_offset:]
-        encoding = detect_text_encoding(content)
+        # this decides whether `file_ascmagic` reports text at all, and `file_ascmagic` classifies
+        # the trimmed buffer (`file/src/ascmagic.c:83-93`)
+        encoding = detect_text_encoding(_trim_trailing_nuls(content))
         if encoding is None:
             return FailedTest(self, offset=absolute_offset, parent=parent_match, message="the data do not appear to "
                                                                                          "be encoded in a text format")
@@ -5144,9 +5250,9 @@ class MagicMatcher:
         because the test is for one bit and not the other.
 
         Args:
-            looks_text: Whether `TextEncodingDescription.detect` recognized the buffer as text,
+            looks_text: Whether `detect_text_encoding` recognized the file's own bytes as text,
                 which is the ``looks_text`` ``file_buffer`` hands ``file_softmagic``
-                (``file/src/funcs.c:314-317`` and ``482``).
+                (``file/src/funcs.c:368-371`` and ``482``).
 
         Returns:
             The tests to run, in the order `MagicMatcher.match` runs them.
@@ -5155,6 +5261,28 @@ class MagicMatcher:
             return self.non_text_tests
         return [test for test in self.non_text_tests
                 if test.declared_test_type() != TestType.BINARY]
+
+    def text_pass_tests(self, looks_text: bool) -> Iterable[MagicTest]:
+        """The level 0 tests `MagicMatcher.match` runs over the decoded text buffer.
+
+        This is the other arm of the same condition `binary_pass_tests` reads: ``softmagic`` skips
+        an entry whose declared string flags are exactly ``STRING_TEXTTEST`` when the buffer does
+        not look like text (``file/src/softmagic.c:249-253``). ``file_ascmagic`` reaches this pass
+        on the strength of the trimmed buffer but passes ``file_buffer``'s answer straight through
+        (``file/src/ascmagic.c:71-100`` and ``161-162``), so the arm fires only for a buffer that
+        is text once its trailing NUL padding is gone and binary before that.
+
+        Args:
+            looks_text: Whether `detect_text_encoding` recognized the file's own bytes as text,
+                which is the ``text`` ``file_ascmagic_with_encoding`` hands ``file_softmagic``.
+
+        Returns:
+            The tests to run, in the order `MagicMatcher.match` runs them.
+        """
+        if looks_text:
+            return self.text_tests
+        return [test for test in self.text_tests
+                if test.declared_test_type() != TestType.TEXT]
 
     def match(self, to_match: Union[bytes, BinaryIO, str, Path, MatchContext]) -> Iterator[Match]:
         if isinstance(to_match, bytes):
@@ -5167,12 +5295,16 @@ class MagicMatcher:
             yield Match(matcher=self, context=to_match, results=EmptyFileTest().match(to_match))
             return
         text_encoding = TextEncodingDescription.detect(to_match.data)
+        # `file_buffer` gates both soft magic passes on the file's own bytes
+        # (`file/src/funcs.c:368-371`), while the description comes from the buffer
+        # `file_ascmagic` trims, so NUL-padded text is text to one and binary to the other
+        looks_text = detect_text_encoding(to_match.data) is not None
         yielded = False
         matched_on_the_files_bytes: Set[MagicTest] = set()
         # only the text pass carries the encoding description: `file_ascmagic` prints it, and
         # `file_buffer` reaches `file_ascmagic` only once binary soft magic has printed nothing
         # (`file/src/funcs.c:479-503`)
-        for test, m in self._run_tests(self.binary_pass_tests(text_encoding is not None),
+        for test, m in self._run_tests(self.binary_pass_tests(looks_text),
                                        to_match, None, "binary matching"):
             matched_on_the_files_bytes.add(test)
             yield m
@@ -5186,7 +5318,8 @@ class MagicMatcher:
             # this is a text file, so try all of the textual tests, against the buffer libmagic
             # hands them rather than against the file's bytes
             text_context = to_match.text_test_context(text_encoding.encoding)
-            text_tests = [test for test in self.text_tests if test not in matched_on_the_files_bytes]
+            text_tests = [test for test in self.text_pass_tests(looks_text)
+                          if test not in matched_on_the_files_bytes]
             # a match that carries the encoding description already reports it, and so does a
             # binary pass match, which is where `file_buffer` stops before `file_ascmagic`
             described = bool(matched_on_the_files_bytes)

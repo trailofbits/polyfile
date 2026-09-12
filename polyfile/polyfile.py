@@ -389,25 +389,43 @@ class Analyzer:
         else:
             yield from self._magic_matches
 
-    def sbud(self, matches: Optional[Iterable[Match]] = None) -> Dict[str, Any]:
+    def sbud(self, matches: Optional[Iterable[Match]] = None, include_contents: bool = True) -> Dict[str, Any]:
+        """Builds the SBuD object that describes this file.
+
+        Args:
+            matches: the matches to record. Defaults to running the analysis with
+                :meth:`Analyzer.matches`.
+            include_contents: whether to base64 encode the whole input into the ``b64contents`` key.
+                Pass ``False`` to skip the encoding, which omits the key rather than emitting an
+                empty one, so a caller that needs the contents fails with a ``KeyError`` instead of
+                reading the input as empty.
+
+        Returns:
+            The SBuD object, ready to serialize as JSON.
+        """
         if matches is None:
             matches = self.matches()
         md5 = hashlib.md5()
         sha1 = hashlib.sha1()
         sha256 = hashlib.sha256()
+        b64contents: Optional[str] = None
         with open(self.path, 'rb') as hash_file:
             data = hash_file.read()
             md5.update(data)
             sha1.update(data)
             sha256.update(data)
-            b64contents = base64.b64encode(data)
+            if include_contents:
+                b64contents = base64.b64encode(data).decode('utf-8')
             file_length = len(data)
             del data
-        return {
+        sbud: Dict[str, Any] = {
             'MD5': md5.hexdigest(),
             'SHA1': sha1.hexdigest(),
             'SHA256': sha256.hexdigest(),
-            'b64contents': b64contents.decode('utf-8'),
+        }
+        if b64contents is not None:
+            sbud['b64contents'] = b64contents
+        sbud.update({
             'fileName': self.path,
             'length': file_length,
             'versions': {
@@ -416,4 +434,5 @@ class Analyzer:
             'struc': [
                 match.to_obj() for match in matches
             ]
-        }
+        })
+        return sbud

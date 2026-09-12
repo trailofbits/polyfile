@@ -1,3 +1,4 @@
+import base64
 import contextlib
 import io
 import json
@@ -23,12 +24,31 @@ HELP_EXAMPLE = re.compile(r"^\s*polyfile INPUT_FILE (-\S+ \S+(?: -\S+ \S+)*)$", 
 OBJECT_REPR = re.compile(r"<[\w.]+ object at 0x[0-9a-f]+>")
 
 
+def zip_file() -> bytes:
+    """Builds the small ZIP archive that these tests hand to the command line."""
+    contents = io.BytesIO()
+    with ZipFile(contents, "w") as zf:
+        zf.writestr("hello.txt", "hello, PolyFile\n")
+    return contents.getvalue()
+
+
 def run_cli(*argv: str) -> str:
     """Runs PolyFile's command line with the given arguments and returns what it wrote to STDOUT."""
     output = io.StringIO()
     with contextlib.redirect_stdout(output):
         main(["polyfile", "--quiet", *argv])
     return output.getvalue()
+
+
+def run_cli_until_exit(*argv: str) -> Tuple[int, str]:
+    """Runs PolyFile's command line and returns its exit code and what it wrote to STDERR."""
+    errors = io.StringIO()
+    with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(errors):
+        try:
+            main(["polyfile", "--quiet", *argv])
+        except SystemExit as exiting:
+            return exiting.code, errors.getvalue()
+    return 0, errors.getvalue()
 
 
 def cli_help() -> str:
@@ -53,10 +73,7 @@ class FormatArgumentTests(TestCase):
 
     @classmethod
     def setUpClass(cls):
-        contents = io.BytesIO()
-        with ZipFile(contents, "w") as zf:
-            zf.writestr("hello.txt", "hello, PolyFile\n")
-        cls.zip_file = contents.getvalue()
+        cls.zip_file = zip_file()
 
     def test_default_format_is_valid(self):
         self.assertIn(FormatOutput.default_format, FormatOutput.valid_formats)
@@ -87,6 +104,68 @@ class FormatArgumentTests(TestCase):
         self.assertIn("\"b64contents\"", output)
 
 
+class NoContentsTests(TestCase):
+    """Tests for `--no-contents`, which drops the base64 encoding of the input from SBuD output.
+
+    These tests cover the request in https://github.com/trailofbits/polyfile/issues/3399. The
+    `b64contents` key scales with the size of the input, so it dominates the JSON output, and a
+    consumer that does not need the contents has no way to ask PolyFile not to produce them.
+    """
+
+    zip_file: bytes
+
+    @classmethod
+    def setUpClass(cls):
+        cls.zip_file = zip_file()
+
+    def analyze(self, *argv: str) -> dict:
+        with Tempfile(self.zip_file, suffix=".zip") as path:
+            return json.loads(run_cli(*argv, path))
+
+    def test_the_default_output_still_carries_the_contents(self):
+        self.assertEqual(base64.b64encode(self.zip_file).decode("utf-8"),
+                         self.analyze("--format", "json")["b64contents"])
+
+    def test_the_key_is_omitted_rather_than_emptied(self):
+        self.assertNotIn("b64contents", self.analyze("--format", "json", "--no-contents"))
+
+    def test_the_sbud_format_honors_the_flag(self):
+        self.assertNotIn("b64contents", self.analyze("--format", "sbud", "--no-contents"))
+
+    def test_nothing_else_about_the_output_changes(self):
+        with Tempfile(self.zip_file, suffix=".zip") as path:
+            with_contents = json.loads(run_cli("--format", "json", path))
+            without = json.loads(run_cli("--format", "json", "--no-contents", path))
+        del with_contents["b64contents"]
+        self.assertEqual(with_contents, without)
+
+    def test_html_output_refuses_the_flag(self):
+        """`polyfile/html.py` builds the hex viewer out of `b64contents`.
+
+        Without this check the run reached `html.generate` and failed there, so the message the
+        user saw depended on which output format happened to come first.
+        """
+        for argv in (("--format", "html"), ("--html", "-")):
+            with self.subTest(argv=argv):
+                with Tempfile(self.zip_file, suffix=".zip") as path:
+                    code, errors = run_cli_until_exit(*argv, "--no-contents", path)
+                self.assertEqual(1, code)
+                self.assertIn("`--no-contents` cannot be combined with HTML output", errors)
+
+    def test_html_output_is_refused_even_alongside_a_format_that_allows_it(self):
+        with Tempfile(self.zip_file, suffix=".zip") as path:
+            code, errors = run_cli_until_exit("--format", "json", "--format", "html", "--no-contents", path)
+        self.assertEqual(1, code)
+        self.assertIn("`--no-contents` cannot be combined with HTML output", errors)
+
+    def test_formats_that_carry_no_contents_are_unaffected(self):
+        with Tempfile(self.zip_file, suffix=".zip") as path:
+            for output_format in ("file", "mime", "explain"):
+                with self.subTest(output_format=output_format):
+                    self.assertEqual(run_cli("--format", output_format, path),
+                                     run_cli("--format", output_format, "--no-contents", path))
+
+
 REPRODUCIBILITY_SCRIPT: str = """
 import contextlib
 import hashlib
@@ -94,17 +173,24 @@ import io
 import sys
 from polyfile.__main__ import main
 
-for path in sys.argv[1:]:
-    output = io.StringIO()
-    with contextlib.redirect_stdout(output):
-        main(["polyfile", "--quiet", "--format", "json", "--format", "sbud", "--format", "html",
-              path])
-    print(path, hashlib.sha256(output.getvalue().encode("utf-8")).hexdigest())
-"""
-"""Renders every structured output format of each input, and prints a digest of the result.
+RENDERINGS = (
+    ["--format", "json", "--format", "sbud", "--format", "html"],
+    ["--format", "json", "--no-contents"],
+)
 
-The digest keeps a failure message short. What matters is that it covers the bytes a consumer
-receives, for all three formats that carry the match tree.
+for path in sys.argv[1:]:
+    for rendering in RENDERINGS:
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            main(["polyfile", "--quiet", *rendering, path])
+        digest = hashlib.sha256(output.getvalue().encode("utf-8")).hexdigest()
+        print(path, " ".join(rendering), digest)
+"""
+"""Renders each input every way that carries the match tree, and prints a digest of the result.
+
+`--no-contents` is a second rendering rather than another `--format`, because it cannot be
+combined with HTML output. The digest keeps a failure message short; what matters is that it
+covers the bytes a consumer receives.
 """
 
 SAMPLES: Dict[str, bytes] = {
@@ -124,7 +210,7 @@ ZIP_RECORDS: Tuple[str, ...] = ("LocalFileHeader", "CentralDirectory", "EndOfCen
 
 
 def elements(sbud: Dict) -> Iterator[Dict]:
-    """Yields every element of an SBUD document, parents before children."""
+    """Yields every element of an SBuD document, parents before children."""
     stack: List[Dict] = list(reversed(sbud["struc"]))
     while stack:
         element = stack.pop()
@@ -156,7 +242,7 @@ class ReproducibleOutputTests(TestCase):
             cls.paths[name] = str(path)
 
     def test_output_is_identical_between_runs(self):
-        """Tests that separate processes render one file's JSON, SBUD, and HTML identically.
+        """Tests that separate processes render one file's JSON, SBuD, and HTML identically.
 
         Separate processes are what makes this meaningful: the addresses a `repr` embeds are
         stable within one process, and Python randomizes the hash seed per process as well.
@@ -192,5 +278,20 @@ class ReproducibleOutputTests(TestCase):
         self.assertEqual(2 * len(MEMBERS) + 1, len(records))
         for record in records:
             self.assertNotIn("value", record)
+            self.assertTrue(all("value" in field for field in record["subEls"]),
+                            f"a field of {record['type']} lost its value")
+
+    def test_omitting_the_contents_omits_nothing_else(self):
+        """Tests that the two independent omissions do not interact.
+
+        `--no-contents` drops `b64contents` from the top of the SBuD object, and an element with
+        no content of its own drops `value`. Nothing else may go missing when both apply.
+        """
+        path = self.paths["sample.zip"]
+        without = json.loads(run_cli("--format", "json", "--no-contents", path))
+        self.assertNotIn("b64contents", without)
+        records = [element for element in elements(without) if element["type"] in ZIP_RECORDS]
+        self.assertEqual(2 * len(MEMBERS) + 1, len(records))
+        for record in records:
             self.assertTrue(all("value" in field for field in record["subEls"]),
                             f"a field of {record['type']} lost its value")

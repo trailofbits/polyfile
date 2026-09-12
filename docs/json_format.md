@@ -13,6 +13,7 @@ Notes, additions to SBuD, as well as any breaking changes are listed in C-style 
   "SHA1": "SHA1 hex string for the input file", 
   "SHA256": "SHA256 hex string for the input file", 
   "b64contents": "base64 encoded contents of the input file", 
+  /* the b64contents key is absent when PolyFile runs with --no-contents */
   "fileName": "The input filename, or 'STDIN' if the file was read from STDIN",
   "length": 1337, /* integer number of bytes in the file */
   "struc": [

@@ -449,6 +449,9 @@ class MagicTest(TestCase):
         fixed record size, a string table, or a block boundary leaves behind does not reach the
         character class check. Without the trim the NULs fail `_only_contains`, PolyFile reports
         no encoding, and `MagicMatcher.match` falls through to `application/octet-stream`.
+
+        `TextEncodingDescription.detect` is the `file_ascmagic` mirror that applies the trim;
+        `detect_text_encoding` is the `file_encoding` mirror and classifies what it is handed.
         """
         padded = (
             (b"\xde\xca\xff\xed" + b"\x00" * 4, "iso-8859-1"),
@@ -458,7 +461,9 @@ class MagicTest(TestCase):
         )
         for data, expected_encoding in padded:
             with self.subTest(data=data[:16]):
-                self.assertEqual(expected_encoding, polyfile.magic.detect_text_encoding(data))
+                description = polyfile.magic.TextEncodingDescription.detect(data)
+                self.assertIsNotNone(description)
+                self.assertEqual(expected_encoding, description.encoding)
                 mimetypes = {
                     mimetype
                     for match in MagicMatcher.DEFAULT_INSTANCE.match(data)
@@ -488,10 +493,14 @@ class MagicTest(TestCase):
         which belongs to no text character class, so `file` reports `data` for `abc\\0` and
         `ASCII text` for `abc\\0\\0`. Trimming without the adjustment reports text for both.
         """
-        self.assertIsNone(polyfile.magic.detect_text_encoding(b"abc\x00"))
-        self.assertIsNone(polyfile.magic.detect_text_encoding(b"The quick brown fox.\n"
-                                                              + b"\x00" * 491))
-        self.assertEqual("ascii", polyfile.magic.detect_text_encoding(b"abc\x00\x00"))
+        detect = polyfile.magic.TextEncodingDescription.detect
+        self.assertIsNone(detect(b"abc\x00"))
+        self.assertIsNone(detect(b"The quick brown fox.\n" + b"\x00" * 491))
+        self.assertEqual("ascii", detect(b"abc\x00\x00").encoding)
+        self.assertEqual({"data"},
+                         {str(m) for m in MagicMatcher.DEFAULT_INSTANCE.match(b"abc\x00")})
+        self.assertEqual({"ASCII text, with no line terminators"},
+                         {str(m) for m in MagicMatcher.DEFAULT_INSTANCE.match(b"abc\x00\x00")})
 
     def test_the_odd_byte_adjustment_keeps_the_last_utf_16le_character(self):
         """Tests that UTF-16LE text does not lose its last character to the NUL trim.
@@ -2646,6 +2655,196 @@ class MatchOrderTest(TestCase):
                          f"the match order differs between hash seeds:\n{detail}")
 
 
+class StringFlagSortKeyTest(TestCase):
+    """Regression tests for the string modifier bits reported in issue #3568.
+
+    `polyfile.magic.STRING_FLAG_BITS` mapped eight of the fifteen `str_flags` bits libmagic
+    defines in `file/src/file.h:396-414`, and `libmagic_string_flags` read attribute names that
+    `RegexType` and `PascalStringType` do not carry. A `b`, an `l`, a regular expression's range,
+    and every Pascal string modifier were therefore absent from
+    `MagicTest.libmagic_sort_key`, which is how PolyFile reproduces the `memcmp` tie-break
+    `apprentice_sort` applies to tests of equal strength (`file/src/apprentice.c:1132-1149`).
+
+    Each definition below declares two tests of equal strength, with descriptions chosen so that
+    ordering by description alone, or by the file and line order PolyFile falls back on, would
+    give the opposite answer. Every expected order is the order `file -b -k` reports the two
+    matches in, checked against libmagic 5.48 built from the `file` submodule over an input both
+    tests match: `b"ABCD\x00\xff\xfe"` for a string, `b"ABCD\n"` for a regular expression, and a
+    zeroed length prefix of the declared width for a Pascal string.
+    """
+
+    @staticmethod
+    def order(first: str, second: str, value: str) -> List[str]:
+        """The order PolyFile runs two equally strong tests of the given types in.
+
+        Args:
+            first: The type declaration of the test written on the first line.
+            second: The type declaration of the test written on the second line.
+            value: The value both tests look for.
+
+        Returns:
+            The description of each test, strongest first.
+        """
+        definition = f"0\t{first}\t{value}\tZZZ-first\n0\t{second}\t{value}\tAAA-second\n"
+        with TemporaryDirectory() as tmp_dir:
+            path = Path(tmp_dir) / "flag_sort_key"
+            path.write_text(definition)
+            return [str(test.message) for test in MagicMatcher.parse(path)]
+
+    def assert_second_sorts_first(self, first: str, second: str, value: str = "ABCD"):
+        """Asserts that the flag `second` carries lifts it above `first`.
+
+        Args:
+            first: The type declaration of the unflagged test, written on the first line.
+            second: The type declaration of the flagged test, written on the second line.
+            value: The value both tests look for.
+        """
+        self.assertEqual(["AAA-second", "ZZZ-first"], self.order(first, second, value),
+                         f"{second} does not sort ahead of {first}")
+
+    def test_an_already_mapped_flag_is_the_control(self):
+        """`T` and `f` were mapped all along, so they order the same before and after the fix.
+
+        They isolate the flag as the cause: the pairs differ only in a modifier, so a pair whose
+        bit the table holds ordering correctly while a pair whose bit it omits does not rules out
+        anything else about the two definitions.
+        """
+        self.assert_second_sorts_first("string", "string/T")
+        self.assert_second_sorts_first("string", "string/f")
+
+    def test_the_binary_test_flag_is_part_of_the_key(self):
+        """`b` is `STRING_BINTEST`, `BIT(6)` (`file/src/file.h:402`), which the table omitted.
+
+        Both tests here run in the binary pass, because libmagic assumes a `string` is binary
+        unless it says otherwise (`file/src/apprentice.c:1271-1276`), so the pass assignment
+        cannot account for the order.
+        """
+        self.assert_second_sorts_first("string", "string/b", value="ABCD")
+
+    def test_a_regular_expressions_range_is_part_of_the_key(self):
+        """`RegexType` spells the range `length`, so reading `num_bytes` left every regex at zero.
+
+        `file -b -k` reports `AAA-200` before `ZZZ-100` for the first pair: the range is
+        libmagic's `str_range`, and 200 compares greater than 100.
+        """
+        self.assert_second_sorts_first("regex/100", "regex/200")
+
+    def test_an_undeclared_range_is_not_the_range_a_regex_falls_back_on(self):
+        """A declaration that writes no range leaves `str_range` zero.
+
+        `RegexType.length` reports the 8 KiB a regular expression falls back on, but libmagic
+        applies that when the test runs rather than when it is parsed
+        (`file/src/softmagic.c:1411-1422`), so `regex/8192` outranks a bare `regex`.
+        """
+        self.assert_second_sorts_first("regex", "regex/8192")
+
+    def test_the_line_count_flag_is_part_of_the_key(self):
+        """`l` on a regex is `REGEX_LINE_COUNT`, `BIT(11)` (`file/src/file.h:409`).
+
+        libmagic names `BIT(11)` twice because its meaning depends on the type that carries it,
+        `PSTRING_4_LE` on a `pstring` and `REGEX_LINE_COUNT` on a `regex`, and PolyFile reaches
+        it through `RegexType.limit_lines` here.
+        """
+        self.assert_second_sorts_first("regex/5", "regex/5l")
+
+    def test_a_case_insensitive_regex_carries_the_ignore_case_bit(self):
+        """`RegexType` spells `c` as `case_insensitive`, not `case_insensitive_lower`.
+
+        The table held only the `StringType` spelling, so `c` on a regular expression contributed
+        nothing to the key.
+        """
+        self.assert_second_sorts_first("regex/5", "regex/5c")
+
+    def test_a_pascal_strings_length_modifier_is_part_of_the_key(self):
+        """`PascalStringType` carries none of the attribute names the table held.
+
+        Every `pstring` therefore had `str_flags` zero. The width of the length prefix already
+        separates two Pascal strings by strength, so each pair here declares the same width and
+        differs only in byte order: `h` is `PSTRING_2_LE` and `H` is `PSTRING_2_BE`, `l` is
+        `PSTRING_4_LE` and `L` is `PSTRING_4_BE` (`file/src/file.h:405-409`).
+        """
+        for width, (first, second) in ((2, ("pstring/H", "pstring/h")),
+                                       (4, ("pstring/L", "pstring/l"))):
+            with self.subTest(byte_length=width):
+                self.assert_second_sorts_first(first, second, value="x")
+
+    def test_a_length_prefix_that_counts_itself_is_part_of_the_key(self):
+        """`J` is `PSTRING_LENGTH_INCLUDES_ITSELF`, `BIT(12)` (`file/src/file.h:412`)."""
+        self.assert_second_sorts_first("pstring/B", "pstring/BJ", value="x")
+
+    def test_a_pascal_string_carries_the_ordinary_string_modifiers(self):
+        """The letters a `pstring` shares with a `string` set the same bits they set there.
+
+        `PascalStringType` keeps them in a `StringType` of its own, which is where
+        `libmagic_pstring_flags` reads them from.
+        """
+        for second in ("pstring/BT", "pstring/Bc"):
+            with self.subTest(declaration=second):
+                self.assert_second_sorts_first("pstring/B", second, value="x")
+
+    def test_an_undeclared_length_prefix_sorts_as_the_one_byte_prefix_it_is(self):
+        """A bare `pstring` and a `pstring/B` are one entry as far as libmagic is concerned.
+
+        libmagic seeds a Pascal string's `str_flags` with `PSTRING_1_LE` before it reads any
+        modifier (`file/src/apprentice.c:2337`), so the two declarations compile to identical
+        `struct magic` bytes. `file -m` warns `Duplicate magic entry` for the pair and leaves them
+        in the order they were read, which is what PolyFile falls back on for a tie.
+        """
+        self.assertEqual(["ZZZ-first", "AAA-second"], self.order("pstring", "pstring/B", "x"))
+
+    FLAG_WORDS: Tuple[Tuple[str, int, int], ...] = (
+        ("string", 0, 0x0000),
+        ("string/b", 0, 0x0040),
+        ("string/t", 0, 0x0020),
+        ("string/Tf", 0, 0x6000),
+        ("search/100", 100, 0x0000),
+        ("search/100/s", 100, 0x0010),
+        ("regex", 0, 0x0000),
+        ("regex/100", 100, 0x0000),
+        ("regex/50l", 50, 0x0800),
+        ("regex/50c", 50, 0x0004),
+        ("regex/50b", 50, 0x0040),
+        ("pstring", 0, 0x0080),
+        ("pstring/B", 0, 0x0080),
+        ("pstring/H", 0, 0x0100),
+        ("pstring/h", 0, 0x0200),
+        ("pstring/L", 0, 0x0400),
+        ("pstring/l", 0, 0x0800),
+        ("pstring/BJ", 0, 0x1080),
+        ("pstring/BT", 0, 0x2080),
+    )
+    """The `str_range` and `str_flags` libmagic gives each declaration, from `file/src/file.h`."""
+
+    def test_the_flag_word_holds_libmagics_bit_numbering(self):
+        """Tests the eight bytes `MagicTest.libmagic_sort_key` compares for a string type.
+
+        The ordering tests above prove that the right bits reach the key; this pins which bits
+        they are, so a pair that happens to order correctly under a wrong pair of values cannot
+        hide a mis-numbered table.
+        """
+        for declaration, string_range, flags in self.FLAG_WORDS:
+            with self.subTest(declaration=declaration):
+                expected = struct.pack("<II", string_range, flags)
+                data_type = DataType.parse(declaration)
+                self.assertEqual(expected, polyfile.magic.libmagic_string_flags(data_type))
+
+    def test_a_shipped_binary_string_sorts_ahead_of_its_equals(self):
+        """Tests the fix against a definition file rather than a synthetic pair.
+
+        `magic_defs/games` declares `0 string/b bnry` beside two unflagged four-byte strings of
+        the same strength. `file -m polyfile/magic_defs/games -l` lists the flagged one first;
+        PolyFile listed it last, because it sorted as though it carried no flag at all.
+        """
+        games = next(path for path in MAGIC_DEFS if path.name == "games")
+        order = [str(test.message).strip() for test in MagicMatcher.parse(games)]
+        flagged = "GTA Item Placement data (IPL), used in GTA SA/IV,"
+        unflagged = ("Syzygy DTZ tablebase", "Syzygy WDL tablebase")
+        for description in (flagged, *unflagged):
+            self.assertIn(description, order, "magic_defs/games no longer declares this test")
+        for description in unflagged:
+            self.assertLess(order.index(flagged), order.index(description))
+
+
 class MatchJoinTest(TestCase):
     """Tests for the joined description reported in issue #3491.
 
@@ -3264,6 +3463,50 @@ class PassGateTest(TestCase):
         for data in (b"MARK\x00\x01\x02\xff", b"MARK and then some text\n"):
             with self.subTest(data=data):
                 self.assertEqual({"both flags"}, self.messages(definition, data))
+
+    def test_a_binary_flagged_entry_runs_against_nul_padded_text(self):
+        """Tests that the gate classifies the file's own bytes rather than the trimmed buffer.
+
+        This is a regression test for trailofbits/polyfile#3575. `file_buffer` calls
+        `file_encoding` on the buffer it was handed (`file/src/funcs.c:368-371`), and only
+        `file_ascmagic` trims the trailing NULs, so text padded out to a record boundary is
+        binary to the gate and text to the description. Gating on the trimmed buffer drops the
+        entry, and PolyFile reported `ASCII text, with no line terminators` where `file` reports
+        `binary only`.
+
+        The second case pins the other half: the description still comes from the trimmed buffer,
+        so dropping the trim to make the first case pass reports `data` here.
+        """
+        definition = "0\tsearch/40/b\t=ABC\tbinary only\n"
+        self.assertEqual({"binary only"}, self.messages(definition, b"ABC\x00\x00"))
+        self.assertEqual({"ASCII text, with no line terminators"},
+                         self.messages(definition, b"XYZ\x00\x00"))
+        self.assertNotIn("binary only", self.messages(definition, b"ABC and then some text\n"))
+
+    def test_a_nul_padded_winamp_preset_is_not_plain_text(self):
+        """Tests the shipped definition that first reported trailofbits/polyfile#3575.
+
+        `magic_defs/msdos:1966` is `0 string/b Nullsoft\\ AVS\\ Preset\\ `, and the presets
+        themselves are ASCII followed by NUL padding, so the gate decided the whole class of file.
+        """
+        data = b"Nullsoft AVS Preset 0.2\n" + b"\x00" * 8
+        self.assertEqual({"Winamp plug in"},
+                         {str(m) for m in MagicMatcher.DEFAULT_INSTANCE.match(data)})
+
+    def test_a_text_flagged_entry_skips_nul_padded_text(self):
+        """Tests the other arm of the same gate, for trailofbits/polyfile#3575.
+
+        `file_ascmagic` reaches the text pass on the strength of the trimmed buffer but hands
+        `file_softmagic` the answer `file_buffer` computed from the untrimmed one
+        (`file/src/ascmagic.c:71-100` and `161-162`), so a `t`-only entry is skipped for exactly
+        the buffers a `b`-only entry now runs against. PolyFile ran the entry and reported
+        `text only, ASCII text, with no line terminators`.
+        """
+        definition = "0\tstring/t\tABC\ttext only\n"
+        self.assertEqual({"ASCII text, with no line terminators"},
+                         self.messages(definition, b"ABC\x00\x00"))
+        self.assertEqual({"text only, ASCII text, with no line terminators"},
+                         self.messages(definition, b"ABC"))
 
     def test_a_script_reports_only_libmagics_variant(self):
         """Tests that `file/tests/cmd1.testfile` no longer reports a binary variant.
