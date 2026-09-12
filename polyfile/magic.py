@@ -81,6 +81,9 @@ VALUE_TERMINATOR: Pattern[bytes] = re.compile(rb"[\0\r\n]")
 MAX_STRING_BYTES: int = 128
 # what the `f` flag requires after a match: `file/src/softmagic.c:2127-2130`
 FULL_WORD_TERMINATOR: bytes = rb"(?=[\0\s]|\Z)"
+# what a blank of a `W` or `w` value accepts: any byte C `isspace` accepts in the `C` locale, never
+# the value's own whitespace byte (`file/src/softmagic.c:2102-2121`)
+BLANK_CLASS: bytes = rb"[ \t\n\v\f\r]"
 ESCAPES = {
     "n": ord("\n"),
     "r": ord("\r"),
@@ -89,6 +92,49 @@ ESCAPES = {
     "t": ord("\t"),
     "f": ord("\f")
 }
+
+
+def compact_blanks(pattern: bytes, value: bytes) -> bytes:
+    """Renders the blanks of an `re.escape`-ed pattern the way the `W` string flag asks for.
+
+    Runs of an identical byte are collapsed into a counted repetition, and every blank counts as
+    the same byte however the value spelled it, so `A\\t\\ B` asks for two blanks of any kind.
+
+    Args:
+        pattern: The escaped value, which may already carry case-insensitive character classes.
+        value: The unescaped value, for the error message.
+
+    Returns:
+        The pattern with each run of *n* blanks replaced by *n* or more blanks of any kind.
+
+    Raises:
+        ValueError: If `pattern` ends in a backslash that escapes nothing.
+    """
+    runs: List[Tuple[bytes, int]] = []
+    escaped = False
+    for c in (bytes([b]) for b in pattern):
+        if escaped:
+            c = b"\\" + c
+            escaped = False
+        elif c == b"\\":
+            escaped = True
+            continue
+        if c[-1:] in WHITESPACE:
+            c = BLANK_CLASS
+        if runs and runs[-1][0] == c:
+            runs[-1] = (c, runs[-1][1] + 1)
+        else:
+            runs.append((c, 1))
+    if escaped:
+        raise ValueError(f"Error parsing search pattern {value!r}")
+    compacted = bytearray()
+    for c, count in runs:
+        compacted.extend(c)
+        if c == BLANK_CLASS:
+            compacted.extend(b"+" if count == 1 else f"{{{count},}}".encode("utf-8"))
+        elif count > 1:
+            compacted.extend(f"{{{count}}}".encode("utf-8"))
+    return bytes(compacted)
 
 
 def unescape(to_unescape: Union[str, bytes]) -> bytes:
@@ -2138,9 +2184,15 @@ class StringMatch(StringTest):
     def pattern_string(self) -> bytes:
         """Builds the regular expression that implements this test's string flags.
 
-        A definition may set both ``W`` (compact whitespace) and ``w`` (optional blanks);
-        ``polyfile/magic_defs/sgml`` does. libmagic keeps both bits and lets ``W`` win, because
-        ``file_strncmp`` tests it first (``file/src/softmagic.c:2103-2120``).
+        A definition may set both ``W`` (compact whitespace) and ``w`` (optional blanks). libmagic
+        keeps both bits and lets ``W`` win, because ``file_strncmp`` tests it first
+        (``file/src/softmagic.c:2103-2120``).
+
+        Neither flag compares the value's own whitespace byte. Each blank of a ``W`` value asks for
+        one byte that C ``isspace`` accepts, and after the last blank of a run libmagic skips
+        whatever whitespace is left (``file/src/softmagic.c:2102-2115``), so a run of *n* blanks
+        compiles to *n* or more blanks. ``w`` drops the lower bound and compiles to zero or more
+        (``file/src/softmagic.c:2116-2121``). Both take their byte set from `BLANK_CLASS`.
 
         ``f`` (full word) constrains only what follows the match, and it asks for whitespace rather
         than a word boundary: ``file_strncmp`` runs ``if (*b && !isspace(*b)) v = 1;`` once the
@@ -2164,35 +2216,9 @@ class StringMatch(StringTest):
             for ordinal in range(ord('A'), ord('Z') + 1):
                 pattern = pattern.replace(bytes([ordinal]), f"[{chr(ordinal)}{chr(ordinal+delta)}]".encode("utf-8"))
         if self.compact_whitespace:
-            new_pattern_bytes: List[Tuple[bytes, int]] = []
-            escaped = False
-            for c in (bytes([b]) for b in pattern):
-                if escaped:
-                    c = b"\\" + c
-                    escaped = False
-                elif c == b"\\":
-                    escaped = True
-                    continue
-                if new_pattern_bytes and new_pattern_bytes[-1][0] == c:
-                    new_pattern_bytes[-1] = (c, new_pattern_bytes[-1][1] + 1)
-                else:
-                    new_pattern_bytes.append((c, 1))
-            if escaped:
-                raise ValueError(f"Error parsing search pattern {self.string!r}")
-            pattern_bytes = bytearray()
-            for c, count in new_pattern_bytes:
-                pattern_bytes.extend(c)
-                if c in (b'\\ ', b'\\s', b'\\t', b'\\r', b'\\v', b'\\f'):
-                    # this is whitespace
-                    if count == 1:
-                        pattern_bytes.extend(b"+")
-                    else:
-                        pattern_bytes.extend(f"{{{count},}}".encode("utf-8"))
-                elif count > 1:
-                    pattern_bytes.extend(f"{{{count}}}".encode("utf-8"))
-            pattern = bytes(pattern_bytes)
+            pattern = compact_blanks(pattern, self.string)
         elif self.optional_blanks:
-            pattern = BLANK_IN_PATTERN.sub(rb"\\s*", pattern)
+            pattern = BLANK_IN_PATTERN.sub(lambda _: BLANK_CLASS + b"*", pattern)
         if self.full_word_match:
             pattern += FULL_WORD_TERMINATOR
         return pattern
