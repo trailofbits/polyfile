@@ -19,17 +19,19 @@ def match(offset, size, sub_els=()):
     }
 
 
-def sbud(contents, struc):
-    return {
+def sbud(contents, struc, include_contents=True):
+    obj = {
         'MD5': '',
         'SHA1': '',
         'SHA256': '',
-        'b64contents': base64.b64encode(contents).decode('utf-8'),
         'fileName': 'test.bin',
         'length': len(contents),
         'versions': [],
         'struc': struc
     }
+    if include_contents:
+        obj['b64contents'] = base64.b64encode(contents).decode('utf-8')
+    return obj
 
 
 class UndescribedRegionTests(TestCase):
@@ -78,9 +80,9 @@ class UndescribedRegionTests(TestCase):
 class GeneratedHtmlTests(TestCase):
     """Test that the generated hex viewer carries the data it needs to mark undescribed bytes."""
 
-    def render(self, contents, struc):
+    def render(self, contents, struc, include_contents=True):
         with Tempfile(contents) as file_path:
-            return generate(file_path, sbud(contents, struc))
+            return generate(file_path, sbud(contents, struc, include_contents))
 
     def emitted_regions(self, html):
         emitted = re.search(r'const UNDESCRIBED_REGIONS = (\[.*?]);', html)
@@ -120,3 +122,19 @@ class GeneratedHtmlTests(TestCase):
         self.assertIn(".toggleClass('undescribed'", html)
         self.assertIn('.undescribed {', html)
         self.assertIn('repeating-linear-gradient', html)
+
+    def test_the_contents_reach_the_viewer(self):
+        contents = bytes(range(16))
+        html = self.render(contents, [match(0, 16)])
+        self.assertIn(base64.b64encode(contents).decode('utf-8'), html)
+
+    def test_an_sbud_without_contents_is_refused(self):
+        """`--no-contents` omits `b64contents`, which the hex viewer is built from.
+
+        This is a regression test for trailofbits/polyfile#3399. Without the check, rendering an
+        SBuD object that carries no contents raised a bare `KeyError: 'b64contents'` from deep
+        inside `generate`.
+        """
+        with self.assertRaises(ValueError) as refused:
+            self.render(bytes(16), [match(0, 16)], include_contents=False)
+        self.assertIn("no 'b64contents' key", str(refused.exception))
