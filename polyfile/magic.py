@@ -4336,9 +4336,9 @@ def detect_text_encoding(data: bytes) -> Optional[str]:
     This mirrors ``file_encoding`` in libmagic's ``src/encoding.c``: membership in a text
     encoding is decided by character class alone, with no statistical inference. Every byte in
     ``0xA0``-``0xFF`` is a printable ISO-8859 character, so a buffer of ASCII with a handful of
-    accented characters is text. libmagic classifies the buffer `_trim_trailing_nuls` prepares
-    rather than the file's own bytes, so text that a fixed record size or a block boundary padded
-    out with NULs still counts as text.
+    accented characters is text. ``file_encoding`` trims nothing itself, so a caller that mirrors
+    ``file_ascmagic`` hands it the buffer `_trim_trailing_nuls` prepares, and one that mirrors
+    ``file_buffer``'s soft magic pass gate hands it the file's own bytes.
 
     EBCDIC comes last because most EBCDIC buffers are also valid eight bit buffers, so testing for
     it any earlier would report ordinary ISO-8859 text as EBCDIC.
@@ -4349,7 +4349,6 @@ def detect_text_encoding(data: bytes) -> Optional[str]:
     Returns:
         The name of the encoding family, or None if `data` belongs to no text character class.
     """
-    data = _trim_trailing_nuls(data)
     if len(data) < 2:
         return None
     elif _only_contains(data, _ASCII_BYTES):
@@ -4595,7 +4594,9 @@ class PlainTextTest(MagicTest):
 
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
         content = data[absolute_offset:]
-        encoding = detect_text_encoding(content)
+        # this decides whether `file_ascmagic` reports text at all, and `file_ascmagic` classifies
+        # the trimmed buffer (`file/src/ascmagic.c:83-93`)
+        encoding = detect_text_encoding(_trim_trailing_nuls(content))
         if encoding is None:
             return FailedTest(self, offset=absolute_offset, parent=parent_match, message="the data do not appear to "
                                                                                          "be encoded in a text format")
@@ -5144,9 +5145,9 @@ class MagicMatcher:
         because the test is for one bit and not the other.
 
         Args:
-            looks_text: Whether `TextEncodingDescription.detect` recognized the buffer as text,
+            looks_text: Whether `detect_text_encoding` recognized the file's own bytes as text,
                 which is the ``looks_text`` ``file_buffer`` hands ``file_softmagic``
-                (``file/src/funcs.c:314-317`` and ``482``).
+                (``file/src/funcs.c:368-371`` and ``482``).
 
         Returns:
             The tests to run, in the order `MagicMatcher.match` runs them.
@@ -5155,6 +5156,28 @@ class MagicMatcher:
             return self.non_text_tests
         return [test for test in self.non_text_tests
                 if test.declared_test_type() != TestType.BINARY]
+
+    def text_pass_tests(self, looks_text: bool) -> Iterable[MagicTest]:
+        """The level 0 tests `MagicMatcher.match` runs over the decoded text buffer.
+
+        This is the other arm of the same condition `binary_pass_tests` reads: ``softmagic`` skips
+        an entry whose declared string flags are exactly ``STRING_TEXTTEST`` when the buffer does
+        not look like text (``file/src/softmagic.c:249-253``). ``file_ascmagic`` reaches this pass
+        on the strength of the trimmed buffer but passes ``file_buffer``'s answer straight through
+        (``file/src/ascmagic.c:71-100`` and ``161-162``), so the arm fires only for a buffer that
+        is text once its trailing NUL padding is gone and binary before that.
+
+        Args:
+            looks_text: Whether `detect_text_encoding` recognized the file's own bytes as text,
+                which is the ``text`` ``file_ascmagic_with_encoding`` hands ``file_softmagic``.
+
+        Returns:
+            The tests to run, in the order `MagicMatcher.match` runs them.
+        """
+        if looks_text:
+            return self.text_tests
+        return [test for test in self.text_tests
+                if test.declared_test_type() != TestType.TEXT]
 
     def match(self, to_match: Union[bytes, BinaryIO, str, Path, MatchContext]) -> Iterator[Match]:
         if isinstance(to_match, bytes):
@@ -5167,12 +5190,16 @@ class MagicMatcher:
             yield Match(matcher=self, context=to_match, results=EmptyFileTest().match(to_match))
             return
         text_encoding = TextEncodingDescription.detect(to_match.data)
+        # `file_buffer` gates both soft magic passes on the file's own bytes
+        # (`file/src/funcs.c:368-371`), while the description comes from the buffer
+        # `file_ascmagic` trims, so NUL-padded text is text to one and binary to the other
+        looks_text = detect_text_encoding(to_match.data) is not None
         yielded = False
         matched_on_the_files_bytes: Set[MagicTest] = set()
         # only the text pass carries the encoding description: `file_ascmagic` prints it, and
         # `file_buffer` reaches `file_ascmagic` only once binary soft magic has printed nothing
         # (`file/src/funcs.c:479-503`)
-        for test, m in self._run_tests(self.binary_pass_tests(text_encoding is not None),
+        for test, m in self._run_tests(self.binary_pass_tests(looks_text),
                                        to_match, None, "binary matching"):
             matched_on_the_files_bytes.add(test)
             yield m
@@ -5186,7 +5213,8 @@ class MagicMatcher:
             # this is a text file, so try all of the textual tests, against the buffer libmagic
             # hands them rather than against the file's bytes
             text_context = to_match.text_test_context(text_encoding.encoding)
-            text_tests = [test for test in self.text_tests if test not in matched_on_the_files_bytes]
+            text_tests = [test for test in self.text_pass_tests(looks_text)
+                          if test not in matched_on_the_files_bytes]
             # a match that carries the encoding description already reports it, and so does a
             # binary pass match, which is where `file_buffer` stops before `file_ascmagic`
             described = bool(matched_on_the_files_bytes)

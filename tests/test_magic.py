@@ -449,6 +449,9 @@ class MagicTest(TestCase):
         fixed record size, a string table, or a block boundary leaves behind does not reach the
         character class check. Without the trim the NULs fail `_only_contains`, PolyFile reports
         no encoding, and `MagicMatcher.match` falls through to `application/octet-stream`.
+
+        `TextEncodingDescription.detect` is the `file_ascmagic` mirror that applies the trim;
+        `detect_text_encoding` is the `file_encoding` mirror and classifies what it is handed.
         """
         padded = (
             (b"\xde\xca\xff\xed" + b"\x00" * 4, "iso-8859-1"),
@@ -458,7 +461,9 @@ class MagicTest(TestCase):
         )
         for data, expected_encoding in padded:
             with self.subTest(data=data[:16]):
-                self.assertEqual(expected_encoding, polyfile.magic.detect_text_encoding(data))
+                description = polyfile.magic.TextEncodingDescription.detect(data)
+                self.assertIsNotNone(description)
+                self.assertEqual(expected_encoding, description.encoding)
                 mimetypes = {
                     mimetype
                     for match in MagicMatcher.DEFAULT_INSTANCE.match(data)
@@ -488,10 +493,14 @@ class MagicTest(TestCase):
         which belongs to no text character class, so `file` reports `data` for `abc\\0` and
         `ASCII text` for `abc\\0\\0`. Trimming without the adjustment reports text for both.
         """
-        self.assertIsNone(polyfile.magic.detect_text_encoding(b"abc\x00"))
-        self.assertIsNone(polyfile.magic.detect_text_encoding(b"The quick brown fox.\n"
-                                                              + b"\x00" * 491))
-        self.assertEqual("ascii", polyfile.magic.detect_text_encoding(b"abc\x00\x00"))
+        detect = polyfile.magic.TextEncodingDescription.detect
+        self.assertIsNone(detect(b"abc\x00"))
+        self.assertIsNone(detect(b"The quick brown fox.\n" + b"\x00" * 491))
+        self.assertEqual("ascii", detect(b"abc\x00\x00").encoding)
+        self.assertEqual({"data"},
+                         {str(m) for m in MagicMatcher.DEFAULT_INSTANCE.match(b"abc\x00")})
+        self.assertEqual({"ASCII text, with no line terminators"},
+                         {str(m) for m in MagicMatcher.DEFAULT_INSTANCE.match(b"abc\x00\x00")})
 
     def test_the_odd_byte_adjustment_keeps_the_last_utf_16le_character(self):
         """Tests that UTF-16LE text does not lose its last character to the NUL trim.
@@ -3264,6 +3273,50 @@ class PassGateTest(TestCase):
         for data in (b"MARK\x00\x01\x02\xff", b"MARK and then some text\n"):
             with self.subTest(data=data):
                 self.assertEqual({"both flags"}, self.messages(definition, data))
+
+    def test_a_binary_flagged_entry_runs_against_nul_padded_text(self):
+        """Tests that the gate classifies the file's own bytes rather than the trimmed buffer.
+
+        This is a regression test for trailofbits/polyfile#3575. `file_buffer` calls
+        `file_encoding` on the buffer it was handed (`file/src/funcs.c:368-371`), and only
+        `file_ascmagic` trims the trailing NULs, so text padded out to a record boundary is
+        binary to the gate and text to the description. Gating on the trimmed buffer drops the
+        entry, and PolyFile reported `ASCII text, with no line terminators` where `file` reports
+        `binary only`.
+
+        The second case pins the other half: the description still comes from the trimmed buffer,
+        so dropping the trim to make the first case pass reports `data` here.
+        """
+        definition = "0\tsearch/40/b\t=ABC\tbinary only\n"
+        self.assertEqual({"binary only"}, self.messages(definition, b"ABC\x00\x00"))
+        self.assertEqual({"ASCII text, with no line terminators"},
+                         self.messages(definition, b"XYZ\x00\x00"))
+        self.assertNotIn("binary only", self.messages(definition, b"ABC and then some text\n"))
+
+    def test_a_nul_padded_winamp_preset_is_not_plain_text(self):
+        """Tests the shipped definition that first reported trailofbits/polyfile#3575.
+
+        `magic_defs/msdos:1966` is `0 string/b Nullsoft\\ AVS\\ Preset\\ `, and the presets
+        themselves are ASCII followed by NUL padding, so the gate decided the whole class of file.
+        """
+        data = b"Nullsoft AVS Preset 0.2\n" + b"\x00" * 8
+        self.assertEqual({"Winamp plug in"},
+                         {str(m) for m in MagicMatcher.DEFAULT_INSTANCE.match(data)})
+
+    def test_a_text_flagged_entry_skips_nul_padded_text(self):
+        """Tests the other arm of the same gate, for trailofbits/polyfile#3575.
+
+        `file_ascmagic` reaches the text pass on the strength of the trimmed buffer but hands
+        `file_softmagic` the answer `file_buffer` computed from the untrimmed one
+        (`file/src/ascmagic.c:71-100` and `161-162`), so a `t`-only entry is skipped for exactly
+        the buffers a `b`-only entry now runs against. PolyFile ran the entry and reported
+        `text only, ASCII text, with no line terminators`.
+        """
+        definition = "0\tstring/t\tABC\ttext only\n"
+        self.assertEqual({"ASCII text, with no line terminators"},
+                         self.messages(definition, b"ABC\x00\x00"))
+        self.assertEqual({"text only, ASCII text, with no line terminators"},
+                         self.messages(definition, b"ABC"))
 
     def test_a_script_reports_only_libmagics_variant(self):
         """Tests that `file/tests/cmd1.testfile` no longer reports a binary variant.
