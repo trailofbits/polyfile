@@ -2656,7 +2656,7 @@ class MatchOrderTest(TestCase):
 
 
 class StringFlagSortKeyTest(TestCase):
-    """Regression tests for the string modifier bits reported in issue #3568.
+    """Regression tests for the sort key fields reported in issues #3568 and #3580.
 
     `polyfile.magic.STRING_FLAG_BITS` mapped eight of the fifteen `str_flags` bits libmagic
     defines in `file/src/file.h:396-414`, and `libmagic_string_flags` read attribute names that
@@ -2665,12 +2665,15 @@ class StringFlagSortKeyTest(TestCase):
     `MagicTest.libmagic_sort_key`, which is how PolyFile reproduces the `memcmp` tie-break
     `apprentice_sort` applies to tests of equal strength (`file/src/apprentice.c:1132-1149`).
 
+    Issue #3580 is the other half of `str_range`: a `search` that declared no range was given the
+    100 of `STRING_DEFAULT_RANGE`, where libmagic leaves the field zero.
+
     Each definition below declares two tests of equal strength, with descriptions chosen so that
     ordering by description alone, or by the file and line order PolyFile falls back on, would
     give the opposite answer. Every expected order is the order `file -b -k` reports the two
     matches in, checked against libmagic 5.48 built from the `file` submodule over an input both
-    tests match: `b"ABCD\x00\xff\xfe"` for a string, `b"ABCD\n"` for a regular expression, and a
-    zeroed length prefix of the declared width for a Pascal string.
+    tests match: `b"ABCD\x00\xff\xfe"` for a string, `b"ABCD\n"` for a regular expression or a
+    search, and a zeroed length prefix of the declared width for a Pascal string.
     """
 
     @staticmethod
@@ -2738,6 +2741,31 @@ class StringFlagSortKeyTest(TestCase):
         """
         self.assert_second_sorts_first("regex", "regex/8192")
 
+    def test_an_undeclared_search_range_is_not_the_range_a_search_falls_back_on(self):
+        """A `search` that declares no range leaves `str_range` zero, as a bare `regex` does.
+
+        libmagic zeroes the field (`file/src/apprentice.c:2336`) and only `parse_string_modifier`
+        writes it (`file/src/apprentice.c:1948`), which a declaration reaches only by carrying a
+        `/`. The `STRING_DEFAULT_RANGE` of 100 that `string_modifier_check` names beside its
+        warning never reaches a live entry, because the function returns before it unless
+        `MAGIC_CHECK` is set. Zero is not "search nothing" either: it is what asks the search loop
+        to run the whole buffer (`file/src/softmagic.c:2357`), which is why a bare `search` finds
+        a value 300 bytes in where `search/100` does not.
+        """
+        self.assert_second_sorts_first("search", "search/100")
+
+    def test_a_declared_search_range_outranks_an_undeclared_one_either_way_round(self):
+        """`search/1` sorts ahead of a bare `search` whichever of the two lines declares it.
+
+        One line order on its own cannot tell a stored 0 from a stored 100, because a pair that
+        ties falls back to the order the lines were read in and the bare declaration is written
+        first. Reading the pair both ways can: 1 outranks 0, so the declared range has to win from
+        either line, and the second direction rules out a fix that only inverts the line order.
+        `file -b -k` reports `search/1` first both ways round.
+        """
+        self.assert_second_sorts_first("search", "search/1")
+        self.assertEqual(["ZZZ-first", "AAA-second"], self.order("search/1", "search", "ABCD"))
+
     def test_the_line_count_flag_is_part_of_the_key(self):
         """`l` on a regex is `REGEX_LINE_COUNT`, `BIT(11)` (`file/src/file.h:409`).
 
@@ -2797,6 +2825,7 @@ class StringFlagSortKeyTest(TestCase):
         ("string/b", 0, 0x0040),
         ("string/t", 0, 0x0020),
         ("string/Tf", 0, 0x6000),
+        ("search", 0, 0x0000),
         ("search/100", 100, 0x0000),
         ("search/100/s", 100, 0x0010),
         ("regex", 0, 0x0000),
@@ -2843,6 +2872,24 @@ class StringFlagSortKeyTest(TestCase):
             self.assertIn(description, order, "magic_defs/games no longer declares this test")
         for description in unflagged:
             self.assertLess(order.index(flagged), order.index(description))
+
+    def test_a_shipped_bare_search_sorts_behind_its_equals(self):
+        """Tests the range against shipped definitions rather than a synthetic pair.
+
+        `magic_defs/bioinformatics:113` searches for `##fileformat=VCFv` and declares no range,
+        and `magic_defs/sgml:162` searches for a KDE cookie header with a range of 1. Both are
+        strength 47 and both run in the text pass, so the range is all that separates them.
+        `file -m <both definitions> -l` lists the declared range first, and PolyFile listed it
+        last, because a bare `search` sorted as though it had declared 100.
+        """
+        paths = [path for path in MAGIC_DEFS if path.name in ("bioinformatics", "sgml")]
+        self.assertEqual(2, len(paths), "magic_defs no longer ships both definitions")
+        order = [str(test.message) for test in MagicMatcher.parse(*paths)]
+        declared = "Konqueror cookie text"
+        undeclared = "Variant Call Format (VCF)"
+        for description in (declared, undeclared):
+            self.assertIn(description, order, "the definitions no longer declare this test")
+        self.assertLess(order.index(declared), order.index(undeclared))
 
 
 class MatchJoinTest(TestCase):

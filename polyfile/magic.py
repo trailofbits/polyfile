@@ -407,9 +407,6 @@ FLAG_OFFNEGATIVE: int = 0x80
 which of `MagicMatcher.match`'s two passes a test belongs to.
 """
 
-STRING_DEFAULT_RANGE: int = 100
-"""The ``str_range`` libmagic gives a ``search`` that declared none (``file/src/file.h:433``)."""
-
 REGEX_MAX: int = 8192
 """``FILE_REGEX_MAX``, the hard ceiling libmagic puts on a regular expression's search region.
 
@@ -3467,11 +3464,13 @@ class NumericDataType(DataType[NumericValue]):
 def libmagic_str_range(data_type: DataType) -> int:
     """The ``str_range`` libmagic stores for a string type.
 
-    It is the number the declaration wrote after the type name. A declaration that wrote none
-    leaves the field zero, because the range a `regex` or `search` falls back on is applied when
-    the test runs rather than when it is parsed (``file/src/softmagic.c:1411-1422``). The
-    `SearchType` line below is the one departure from that, which
-    https://github.com/trailofbits/polyfile/issues/3580 tracks.
+    It is the number the declaration wrote after the type name, and zero when it wrote none:
+    ``file/src/apprentice.c:2336`` zeroes the field, and only `parse_string_modifier` writes it
+    (``file/src/apprentice.c:1948``), which a declaration reaches only by carrying a ``/``. The
+    range a `regex` or `search` falls back on is applied when the test runs rather than when it
+    is parsed, and zero is what asks for it: a regular expression reads the fallback out of
+    ``FILE_REGEX_MAX`` (``file/src/softmagic.c:1411-1422``) and a search takes the loop bound
+    ``m->str_range == 0`` leaves unbounded (``file/src/softmagic.c:2357``).
 
     Args:
         data_type: The type a definition declared.
@@ -3481,10 +3480,7 @@ def libmagic_str_range(data_type: DataType) -> int:
     """
     if isinstance(data_type, RegexType):
         return data_type.declared_length or 0
-    string_range = getattr(data_type, "num_bytes", None) or 0
-    if isinstance(data_type, SearchType) and string_range == 0:
-        return STRING_DEFAULT_RANGE
-    return string_range
+    return getattr(data_type, "num_bytes", None) or 0
 
 
 def libmagic_str_flags(data_type: DataType) -> int:
