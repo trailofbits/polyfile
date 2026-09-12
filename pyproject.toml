@@ -9,7 +9,7 @@ backend-path = ["."]
 
 [project]
 name = "polyfile"
-version = "0.5.6"
+version = "0.6.0"
 description = "A utility to recursively map the structure of a file."
 readme = "README.md"
 requires-python = ">=3.10"
