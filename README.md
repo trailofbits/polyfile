@@ -9,7 +9,7 @@
 [![Slack Status](https://slack.empirehacking.nyc/badge.svg)](https://slack.empirehacking.nyc)
 
 A utility to identify and map the semantic and syntactic structure of files,
-including polyglots, chimeras, and schizophrenic files. It has [a pure-Python implementation of libmagic](#file-support) and can act as a drop-in replacement for the [`file` command](https://github.com/file/file). However, unlike `file`, PolyFile can recursively identify embedded files, like [binwalk](https://github.com/ReFirmLabs/binwalk).
+including polyglots, chimeras, and schizophrenic files. It has [a pure-Python implementation of libmagic](#file-support) and can act as a drop-in replacement for the [`file` command](https://github.com/file/file). However, unlike `file`, PolyFile recurses into the files it identifies: the ZIP parser matches every decompressed member, the PDF parser matches every decoded stream, and every non-constant byte field of a parsed structure is matched again on its own. A few matchers also search for their magic anywhere in the input, so a ZIP archive that does not start at byte offset zero is still found. PolyFile does not scan every offset the way [binwalk](https://github.com/ReFirmLabs/binwalk) does; [issue #3532](https://github.com/trailofbits/polyfile/issues/3532) tracks that.
 
 PolyFile can be used in conjunction with its sister tool
 [PolyTracker](https://github.com/trailofbits/polytracker) for
@@ -85,7 +85,7 @@ You can run PolyFile with the debugger enabled using the `-db` option.
 PolyFile has a cleanroom, [pure Python implementation of the libmagic file classifier](#libmagic-implementation), and supports all 896 MIME types that it can identify.
 
 It currently has support for parsing and semantically mapping the following formats:
-* PDF, using an instrumented version of [Didier Stevens' public domain, permissive, forensic parser](https://blog.didierstevens.com/programs/pdf-tools/)
+* PDF, using [pdfminer.six](https://github.com/pdfminer/pdfminer.six) to decode objects and streams
 * ZIP, including recursive identification of all ZIP contents
 * JPEG/JFIF, using its [Kaitai Struct grammar](https://formats.kaitai.io/jpeg/index.html)
 * [iNES](https://wiki.nesdev.com/w/index.php/INES)

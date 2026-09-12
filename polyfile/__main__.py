@@ -57,7 +57,7 @@ class KeyboardInterruptHandler:
 
 
 class FormatOutput:
-    valid_formats = ("mime", "html", "json", "sbud", "explain")
+    valid_formats = ("file", "mime", "html", "json", "sbud", "explain")
     default_format = "file"
 
     def __init__(self, output_format: Optional[str] = None, output_path: Optional[str] = None):
@@ -120,7 +120,7 @@ def main(argv=None):
                         help='the file to analyze; pass \'-\' or omit to read from STDIN')
 
     parser.add_argument('--format', '-r', type=FormatOutput, action="append", choices=[
-        FormatOutput(f) for f in FormatOutput.valid_formats + ("json",)
+        FormatOutput(f) for f in FormatOutput.valid_formats
     ], help=dedent("""PolyFile's output format
 
 Output formats are:
@@ -136,7 +136,7 @@ sbud ...... equivalent to 'json'
 
 Multiple formats can be output at once:
 
-    polyfile INPUT_FILE -f mime -f json
+    polyfile INPUT_FILE -r mime -r json
 
 Their output will be concatenated to STDOUT in the order that
 they occur in the arguments.
@@ -173,12 +173,9 @@ then it will implicitly be printed to STDOUT.
     group.add_argument('--list', '-l', action='store_true',
                        help='list the supported filetypes for the `--filetype` argument and exit')
     group.add_argument('--html', '-t', action="append",
-                       help=dedent("""path to write an interactive HTML file for exploring the PDF;
+                       help=dedent("""path to write an interactive HTML file for exploring the input;
 equivalent to `--format html --output HTML`"""))
     group.add_argument("--explain", action="store_true", help="equivalent to `--format explain")
-    # parser.add_argument('--try-all-offsets', '-a', action='store_true',
-    #                     help='Search for a file match at every possible offset; this can be very slow for larger '
-    #                     'files')
     group.add_argument('--only-match-mime', '-I', action='store_true',
                        help=dedent(""""just print out the matching MIME types for the file, one on each line;
 equivalent to `--format mime`"""))
