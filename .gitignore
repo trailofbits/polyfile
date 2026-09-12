@@ -8,6 +8,9 @@ polyfile/trie_partial.gz
 .vscode/*
 polyfile/kaitai/kaitai-struct-compiler-*/
 
+# Release notes: CHANGELOG.md is the source, and a working file per release is not tracked
+/polyfile_*.md
+
 # Build artifacts
 /build/
 /dist/
