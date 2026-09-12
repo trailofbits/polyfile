@@ -64,6 +64,7 @@ polyfile/
 ├── tests/                     # Test suite
 ├── docs/                      # Extension guide, JSON format spec
 ├── kaitai_struct_formats/     # Git submodule with KSY definitions
+├── CHANGELOG.md               # Release notes; the source of every GitHub release body
 ├── pyproject.toml             # Packaging metadata
 ├── build_backend.py           # In-tree PEP 517 backend; regenerates the Kaitai parsers
 ├── compile_kaitai_parsers.py  # Kaitai compilation and license audit
@@ -95,6 +96,29 @@ uvx twine check dist/*
 
 There is no `setup.py`. `pyproject.toml` selects `build_backend.py`, an in-tree PEP 517 backend
 that regenerates the Kaitai parsers for wheel, sdist and editable builds.
+
+### Release notes
+
+`CHANGELOG.md` at the repository root is the only place release notes are written, and every GitHub
+release body is extracted from it. A release adds a section to that file. Do not create a
+standalone `polyfile_#.#.#.md` working file; `polyfile_*.md` is gitignored.
+
+1. Add a `## [<version>] - <YYYY-MM-DD>` section at the top of `CHANGELOG.md`, in
+   [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format, and add the version's compare
+   link to the list at the end of the file. Use the `Added`, `Changed`, `Deprecated`, `Removed`,
+   `Fixed`, and `Security` headings, omit the ones with nothing under them, and mark an entry that
+   changes observable output, the command line, or the Python API with **Breaking**.
+2. Extract that section for the release body, so the two cannot disagree:
+
+```bash
+VERSION=0.6.0
+awk -v v="$VERSION" '/^## \[/{if(p)exit; if($0 ~ "^## \\["v"\\] "){p=1;next}} p' CHANGELOG.md \
+    | gh release create "v$VERSION" --draft --notes-file -
+```
+
+`MANIFEST.in` ships the root copy in the source distribution, and `build_backend.py` stages a copy
+into `polyfile/` so that the wheel carries it too. That staged `polyfile/CHANGELOG.md` is a build
+artifact: it is gitignored, and never edited by hand.
 
 ### Linting
 
