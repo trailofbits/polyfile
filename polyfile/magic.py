@@ -2227,6 +2227,13 @@ class StringMatch(StringTest):
         the end of the buffer qualifies because ``file_or_fd`` null-terminates it
         (``file/src/magic.c:534``).
 
+        That check reads the byte the comparison stopped on, and ``file_strncmp`` runs the
+        comparison in a single left-to-right pass: a blank consumes the rest of its whitespace
+        run and is never revisited. A backtracking engine can return a byte the run consumed so
+        that the terminator accepts it, matching ``A\\ B\\ `` against ``A B  x`` where libmagic
+        stops on the ``x`` and fails. Pinning the match inside a lookahead and replaying it with
+        a backreference makes it atomic, which is the one pass libmagic runs.
+
         Returns:
             The pattern to compile, with the flags folded into it.
         """
@@ -2246,7 +2253,7 @@ class StringMatch(StringTest):
         elif self.optional_blanks:
             pattern = BLANK_IN_PATTERN.sub(lambda _: BLANK_CLASS + b"*", pattern)
         if self.full_word_match:
-            pattern += FULL_WORD_TERMINATOR
+            pattern = rb"(?=(" + pattern + rb"))\1" + FULL_WORD_TERMINATOR
         return pattern
 
     def pattern_flags(self) -> int:
