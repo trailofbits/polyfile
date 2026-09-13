@@ -2277,7 +2277,18 @@ class StringMatch(StringTest):
         return self._is_always_text
 
     def matches(self, data: bytes) -> DataTypeMatch:
-        if self.num_bytes is not None:
+        if self.compact_whitespace or self.optional_blanks:
+            # libmagic compares a `string` value against the bytes it copied into its
+            # `MAXstring`-byte value union, and it NUL-terminates the last byte of that
+            # buffer before comparing (`file/src/softmagic.c:1238`), so a blank's
+            # whitespace run can reach at most `MAX_STRING_BYTES - 1` bytes into `data`
+            # before it meets that NUL (`file/src/softmagic.c:2102-2121`). A `str_range`
+            # shortens the copy and leaves the run at the padding NULs sooner
+            # (`file/src/softmagic.c:1480-1481`).
+            limit = MAX_STRING_BYTES - 1 if self.num_bytes is None else min(
+                self.num_bytes, MAX_STRING_BYTES - 1)
+            data = data[:limit].ljust(MAX_STRING_BYTES, b"\x00")
+        elif self.num_bytes is not None:
             data = data[:self.num_bytes]
         m = self.pattern.match(data)
         if m:
