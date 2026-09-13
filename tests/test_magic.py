@@ -1462,6 +1462,30 @@ class StringDataTypeTest(TestCase):
                 self.assertEqual({"found, ASCII text, with no line terminators"},
                                  self.messages(definition, data))
 
+    def test_a_negated_string_value_keeps_its_leading_operator_byte(self):
+        """`!>ABC` is the `!` relation over the literal value `>ABC`, not a negated `>` test.
+
+        libmagic reads exactly one relational operator off the front of the value and leaves the
+        rest of the line to `getvalue` (`file/src/apprentice.c:2366-2393`), so a `>`, `<`, or `=`
+        right after the `!` is the first byte of the value. Reading it as a second operator made
+        `!>ABC` reject `ZZZZZ`, which libmagic accepts because `ZZZZ` is not the bytes `>ABC`, and
+        made `!=ABC` reject `ABC` while accepting `=ABC`. The expected column below is what `file`
+        reports for each definition and input.
+        """
+        text = "ASCII text, with no line terminators"
+        for specification, accepted, rejected in (
+                ("!ABC", (b"ZZZZZ", b"=ABC", b">ABC"), (b"ABC",)),
+                ("!>ABC", (b"ZZZZZ", b"ABC", b"!<ABC"), (b">ABC", b">ABCx")),
+                ("!<ABC", (b"ZZZZZ", b"ABC", b">ABC"), (b"<ABC", b"<ABCx")),
+                ("!=ABC", (b"ZZZZZ", b"ABC", b"==ABC"), (b"=ABC", b"=ABCx")),
+        ):
+            definition = f"0\tstring\t{specification}\tfound\n"
+            with self.subTest(specification=specification):
+                for data in accepted:
+                    self.assertEqual({"found"}, self.messages(definition, data), repr(data))
+                for data in rejected:
+                    self.assertEqual({text}, self.messages(definition, data), repr(data))
+
     def test_a_search_value_longer_than_the_bytes_left_does_not_match(self):
         """`search/4/w` reported `A\\ B` as found in `AB` and in `xAB`, which hold no room for it.
 
