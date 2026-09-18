@@ -1991,23 +1991,12 @@ class StringTest(ABC):
         if specification.strip() == "x":
             return StringWildcard(trim=trim, compact_whitespace=compact_whitespace, num_bytes=num_bytes)
         if specification.startswith("!"):
-            negate = True
-            specification = specification[1:]
-        else:
-            negate = False
-        if specification.startswith(">") or specification.startswith("<"):
-            test = StringLengthTest(
+            # `!` is the whole relation: libmagic reads exactly one relational operator off the
+            # front of the value and leaves the rest of the line to `getvalue`, so the `>`, `<`,
+            # or `=` right after a `!` is the first byte of the value rather than a second
+            # operator (`file/src/apprentice.c:2391-2393`)
+            return NegatedStringTest(StringMatch(
                 to_match=specification[1:],
-                test_smaller=specification.startswith("<"),
-                trim=trim,
-                compact_whitespace=compact_whitespace,
-                num_bytes=num_bytes,
-            )
-        else:
-            if specification.startswith("="):
-                specification = specification[1:]
-            test = StringMatch(
-                to_match=specification,
                 trim=trim,
                 compact_whitespace=compact_whitespace,
                 case_insensitive_lower=case_insensitive_lower,
@@ -2016,11 +2005,30 @@ class StringTest(ABC):
                 full_word_match=full_word_match,
                 has_string_flags=has_string_flags,
                 num_bytes=num_bytes
+            ))
+        if specification.startswith(">") or specification.startswith("<"):
+            return StringLengthTest(
+                to_match=specification[1:],
+                test_smaller=specification.startswith("<"),
+                trim=trim,
+                compact_whitespace=compact_whitespace,
+                num_bytes=num_bytes,
             )
-        if negate:
-            return NegatedStringTest(test)
-        else:
-            return test
+        if specification.startswith("="):
+            # libmagic parses a leading `=` as the equality operator, not as part of the value
+            # (`file/src/apprentice.c:2383-2385`)
+            specification = specification[1:]
+        return StringMatch(
+            to_match=specification,
+            trim=trim,
+            compact_whitespace=compact_whitespace,
+            case_insensitive_lower=case_insensitive_lower,
+            case_insensitive_upper=case_insensitive_upper,
+            optional_blanks=optional_blanks,
+            full_word_match=full_word_match,
+            has_string_flags=has_string_flags,
+            num_bytes=num_bytes
+        )
 
 
 class StringWildcard(StringTest):
