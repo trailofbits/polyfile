@@ -4811,6 +4811,38 @@ def _split_with_escapes(text: str) -> Tuple[str, str]:
     return text[:first_length], text[first_length + delimiter_length:]
 
 
+PRINTF_LENGTH_MODIFIER: Pattern[str] = re.compile(
+    r"%(?P<flags>[-+ #0]*)(?P<width>[0-9]*)(?P<precision>\.[0-9]+)?"
+    r"(?:hh|h|ll|l|q|L|j|z|t)(?P<conversion>[diouxX])"
+)
+"""Matches a C integer conversion that carries a length modifier.
+
+The modifier tells C how wide the argument is, which Python's ``%`` operator has no use for and
+rejects outright. Everything else in the specification -- the flags, the field width and the
+precision -- means the same thing in both, so only the modifier is dropped.
+"""
+
+
+def printf_to_python(message: str) -> str:
+    """Rewrites libmagic's conversion specifications into ones Python's ``%`` accepts.
+
+    libmagic writes its messages in C's printf language, where an integer conversion may declare
+    the width of its argument: ``%lld``, ``%#16.16llx``. Python infers that from the value, and
+    raises ``ValueError: unsupported format character 'l'`` when it is spelled out.
+
+    Args:
+        message: a test's message, with its conversions in C's spelling.
+
+    Returns:
+        The same message with every length modifier removed.
+    """
+    return PRINTF_LENGTH_MODIFIER.sub(
+        lambda m: f"%{m.group('flags')}{m.group('width')}{m.group('precision') or ''}"
+                  f"{m.group('conversion')}",
+        message,
+    )
+
+
 class Match:
     """One level 0 test's verdict on a buffer, and the results of the subtests it reached."""
 
@@ -4943,8 +4975,7 @@ class Match:
                 # sometimes we parsed a negative value and want to print it as an unsigned int:
                 result_str = result_str % (result.value + 2**(8 * result.length),)
             elif "%" in result_str.replace("%%", ""):
-                result_str = result_str.replace("%ll", "%")
-                result_str = result_str.replace("%#ll", "0x%")
+                result_str = printf_to_python(result_str)
                 try:
                     result_str = result_str % (result.value,)
                 except ValueError as e:
