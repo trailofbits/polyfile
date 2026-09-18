@@ -813,6 +813,45 @@ class IndirectOffset(Offset):
         return f"({self.offset!s}{['.', ','][self.signed]}{num_bytes}{self.endianness.value})"
 
 
+def rebase_in_named_test(offset: Offset, named_test: "NamedTest") -> Offset:
+    """Resolves the positions in `offset` against the offset a named test was invoked at.
+
+    A test nested under a ``name`` block counts its offsets from wherever the ``use`` that
+    dispatched it matched, not from the start of the file. `NamedAbsoluteOffset` does that for a
+    test whose own offset is absolute, and this reaches the absolute offsets underneath one that
+    is not.
+
+    An indirect offset reads its pointer at a position, so that position is rebased too. A
+    relative (``&``) offset holds a *distance* from the previous match rather than a position, so
+    what it wraps is left alone: rebasing a distance would add the ``use`` site to it twice.
+
+    Args:
+        offset: The offset as parsed, counted from the start of the file.
+        named_test: The ``name`` block the test carrying `offset` belongs to.
+
+    Returns:
+        The offset with every position it reads resolved against the ``use`` site. The argument is
+        returned unchanged when it holds no absolute position.
+    """
+    if isinstance(offset, NamedAbsoluteOffset):
+        return offset
+    if isinstance(offset, AbsoluteOffset):
+        return NamedAbsoluteOffset(named_test, offset.offset)
+    if isinstance(offset, IndirectOffset):
+        rebased = rebase_in_named_test(offset.offset, named_test)
+        if rebased is offset.offset:
+            return offset
+        return IndirectOffset(
+            offset=rebased,
+            num_bytes=offset.num_bytes,
+            endianness=offset.endianness,
+            signed=offset.signed,
+            post_process=offset.post_process,
+            is_id3=offset.is_id3,
+        )
+    return offset
+
+
 INDIRECT_OFFSET_TYPES: Dict[Tuple[int, Endianness], str] = {
     (1, Endianness.LITTLE): "byte", (1, Endianness.BIG): "byte",
     (2, Endianness.LITTLE): "leshort", (2, Endianness.BIG): "beshort",
@@ -1110,8 +1149,8 @@ class MagicTest(ABC):
             self.level: int = self.parent.level + 1
             parent.children.append(self)
             self.named_test: Optional[NamedTest] = parent.named_test
-            if self.named_test is not None and isinstance(offset, AbsoluteOffset):
-                self.offset = NamedAbsoluteOffset(self.named_test, offset.offset)
+            if self.named_test is not None:
+                self.offset = rebase_in_named_test(offset, self.named_test)
             if mime is not None:
                 parent.can_match_mime = True
         else:

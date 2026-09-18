@@ -2051,6 +2051,57 @@ class SearchTextClassificationTest(TestCase):
         self.assertNotIn("Python script text executable", messages)
 
 
+class NamedTestOffsetTest(TestCase):
+    """An offset inside a `name` block counts from wherever the `use` dispatched it.
+
+    `NamedAbsoluteOffset` does that for a test whose own offset is absolute. An indirect offset
+    reads its pointer at a position too, and that position was left counting from the start of the
+    file, so every `(N.x)` inside a named list read the wrong bytes. On a Mach-O universal binary
+    that meant reading the CPU type where the architecture's file offset should be, and reporting
+    `[x86_64:]` with nothing inside the brackets.
+    """
+
+    POINTER_IN_NAMED_LIST: str = "\n".join((
+        "0\tname\tblk\t\\b [",
+        ">(4.L)\tindirect\tx\t\\b:",
+        "",
+        "0\tstring\tMAGI\tbase",
+        ">8\tuse\tblk\t\\b",
+        "",
+        "0\tstring\tNESTED\tnested",
+        "",
+    ))
+    """`blk` is dispatched at offset 8, so its `(4.L)` reads the pointer at offset 12."""
+
+    @staticmethod
+    def sample() -> bytes:
+        """A file whose pointer at offset 12 leads to `NESTED`, with a decoy at offset 4.
+
+        The decoy is what an offset counted from the start of the file would read instead.
+        """
+        data = bytearray(b"\x00" * 48)
+        data[0:4] = b"MAGI"
+        data[4:8] = struct.pack(">I", 44)
+        data[12:16] = struct.pack(">I", 32)
+        data[32:38] = b"NESTED"
+        return bytes(data)
+
+    def messages(self, definitions: str, data: bytes) -> Set[str]:
+        """Matches `data` against ad-hoc definitions written to a temporary file."""
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "definitions"
+            path.write_text(definitions)
+            return {str(match) for match in MagicMatcher.parse(path).match(data)}
+
+    def test_an_indirect_offset_reads_from_the_use_site(self):
+        """`file` 5.48 reports `base [:nested` for this input."""
+        messages = self.messages(self.POINTER_IN_NAMED_LIST, self.sample())
+        self.assertTrue(
+            any("nested" in message for message in messages),
+            f"the named list's indirect offset did not reach the pointer it declares: {messages!r}",
+        )
+
+
 class UseTestSemanticsTest(TestCase):
     """Regression tests for the `use` test truth value reported in issue #3484."""
 
