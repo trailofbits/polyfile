@@ -84,6 +84,10 @@ FULL_WORD_TERMINATOR: bytes = rb"(?=[\0\s]|\Z)"
 # what a blank of a `W` or `w` value accepts: any byte C `isspace` accepts in the `C` locale, never
 # the value's own whitespace byte (`file/src/softmagic.c:2102-2121`)
 BLANK_CLASS: bytes = rb"[ \t\n\v\f\r]"
+# a blank run at the very end of a value, which is the only thing `pattern_string` emits that can
+# match more than one length: `W` compiles a run to `+` or `{n,}` and `w` compiles it to `*`, while
+# every other atom is a literal, a class, or an exact `{n}`
+UNBOUNDED_BLANK_RUN: Pattern[bytes] = re.compile(re.escape(BLANK_CLASS) + rb"(?:\*|\+|\{\d+,\})$")
 ESCAPES = {
     "n": ord("\n"),
     "r": ord("\r"),
@@ -2235,6 +2239,24 @@ class StringMatch(StringTest):
         the end of the buffer qualifies because ``file_or_fd`` null-terminates it
         (``file/src/magic.c:534``).
 
+        That check reads the byte the comparison stopped on, and ``file_strncmp`` runs the
+        comparison in a single left-to-right pass: a blank consumes the rest of its whitespace
+        run and is never revisited. A backtracking engine can return a byte the run consumed so
+        that the terminator accepts it, matching ``A\\ B\\ `` against ``A B  x`` where libmagic
+        stops on the ``x`` and fails. Pinning the match inside a lookahead and replaying it with
+        a backreference makes it atomic, which is the one pass libmagic runs.
+
+        Only a value ending in a blank run needs that, because a run is the only thing this method
+        emits that can match more than one length. Wrapping the rest would cost them the literal
+        prefix CPython searches for, which for a `search` test means scanning the whole buffer
+        rather than skipping to the next plausible start.
+
+        The wrapper opens the first capturing group in the pattern, so ``\\1`` refers to it whatever
+        the value compiles to. What the idiom does require is that the value's own pattern carry no
+        backreference, which the wrap would renumber: an inner ``\\1`` raises at compile time, but an
+        inner ``\\2`` would silently come to mean something else. Everything emitted here is a
+        literal, a character class, or a repetition, so there is none to renumber.
+
         Returns:
             The pattern to compile, with the flags folded into it.
         """
@@ -2254,6 +2276,8 @@ class StringMatch(StringTest):
         elif self.optional_blanks:
             pattern = BLANK_IN_PATTERN.sub(lambda _: BLANK_CLASS + b"*", pattern)
         if self.full_word_match:
+            if UNBOUNDED_BLANK_RUN.search(pattern) is not None:
+                pattern = rb"(?=(" + pattern + rb"))\1"
             pattern += FULL_WORD_TERMINATOR
         return pattern
 
