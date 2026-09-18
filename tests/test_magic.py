@@ -1775,6 +1775,34 @@ class StringDataTypeTest(TestCase):
                           "a /bin/sh script, ASCII text executable"},
                          {str(match) for match in MagicMatcher.DEFAULT_INSTANCE.match(b"#! /bin/sh\n")})
 
+    def test_a_blank_run_stops_at_the_end_of_the_string_buffer(self):
+        r"""A `w` or `W` blank consumed a whitespace run of any length; libmagic's run is bounded.
+
+        This is a regression test for trailofbits/polyfile#3571. libmagic compares a `string`
+        value against the `MAXstring`-byte buffer it copied the candidate bytes into
+        (`file/src/file.h:179` and `file/src/softmagic.c:1478-1511`), and `mconvert`
+        NUL-terminates that buffer's last byte before the comparison
+        (`file/src/softmagic.c:1238`), so a run long enough to reach it ends there and the next
+        byte of the value compares against the NUL (`file/src/softmagic.c:2102-2121`). `file`
+        5.48 reports `found` for a run of 125 blanks, which puts the next byte at index 126, and
+        the text fallback for a run of 126 or longer, however long the file is. A `search` keeps
+        its own bound, the end of the buffer it reads in place
+        (`file/src/softmagic.c:2363-2364`), so the same run still matches through it.
+        """
+        for flags in ("/w", "/W"):
+            definition = f"0\tstring{flags}\tA\\ B\tfound\n"
+            for blanks in (125, 126, 200):
+                data = b"A" + b" " * blanks + b"B"
+                with self.subTest(flags=flags, blanks=blanks):
+                    expected = {"found"} if blanks <= 125 else {"ASCII text, with no line terminators"}
+                    self.assertEqual(expected, self.messages(definition, data))
+            padded = b"A" + b" " * 126 + b"B" + b"trailing bytes"
+            self.assertEqual({"ASCII text, with no line terminators"},
+                             self.messages(definition, padded))
+        search = "0\tsearch/200/W\tA\\ B\tfound\n"
+        self.assertEqual({"found, ASCII text, with no line terminators"},
+                         self.messages(search, b"A" + b" " * 200 + b"B"))
+
 
 class SearchTextClassificationTest(TestCase):
     r"""Regression tests for the pass classification defect reported in issue #3511.
