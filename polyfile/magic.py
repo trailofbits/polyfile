@@ -1995,23 +1995,12 @@ class StringTest(ABC):
         if specification.strip() == "x":
             return StringWildcard(trim=trim, compact_whitespace=compact_whitespace, num_bytes=num_bytes)
         if specification.startswith("!"):
-            negate = True
-            specification = specification[1:]
-        else:
-            negate = False
-        if specification.startswith(">") or specification.startswith("<"):
-            test = StringLengthTest(
+            # `!` is the whole relation: libmagic reads exactly one relational operator off the
+            # front of the value and leaves the rest of the line to `getvalue`, so the `>`, `<`,
+            # or `=` right after a `!` is the first byte of the value rather than a second
+            # operator (`file/src/apprentice.c:2391-2393`)
+            return NegatedStringTest(StringMatch(
                 to_match=specification[1:],
-                test_smaller=specification.startswith("<"),
-                trim=trim,
-                compact_whitespace=compact_whitespace,
-                num_bytes=num_bytes,
-            )
-        else:
-            if specification.startswith("="):
-                specification = specification[1:]
-            test = StringMatch(
-                to_match=specification,
                 trim=trim,
                 compact_whitespace=compact_whitespace,
                 case_insensitive_lower=case_insensitive_lower,
@@ -2020,11 +2009,30 @@ class StringTest(ABC):
                 full_word_match=full_word_match,
                 has_string_flags=has_string_flags,
                 num_bytes=num_bytes
+            ))
+        if specification.startswith(">") or specification.startswith("<"):
+            return StringLengthTest(
+                to_match=specification[1:],
+                test_smaller=specification.startswith("<"),
+                trim=trim,
+                compact_whitespace=compact_whitespace,
+                num_bytes=num_bytes,
             )
-        if negate:
-            return NegatedStringTest(test)
-        else:
-            return test
+        if specification.startswith("="):
+            # libmagic parses a leading `=` as the equality operator, not as part of the value
+            # (`file/src/apprentice.c:2383-2385`)
+            specification = specification[1:]
+        return StringMatch(
+            to_match=specification,
+            trim=trim,
+            compact_whitespace=compact_whitespace,
+            case_insensitive_lower=case_insensitive_lower,
+            case_insensitive_upper=case_insensitive_upper,
+            optional_blanks=optional_blanks,
+            full_word_match=full_word_match,
+            has_string_flags=has_string_flags,
+            num_bytes=num_bytes
+        )
 
 
 class StringWildcard(StringTest):
@@ -2301,7 +2309,18 @@ class StringMatch(StringTest):
         return self._is_always_text
 
     def matches(self, data: bytes) -> DataTypeMatch:
-        if self.num_bytes is not None:
+        if self.compact_whitespace or self.optional_blanks:
+            # libmagic compares a `string` value against the bytes it copied into its
+            # `MAXstring`-byte value union, and it NUL-terminates the last byte of that
+            # buffer before comparing (`file/src/softmagic.c:1238`), so a blank's
+            # whitespace run can reach at most `MAX_STRING_BYTES - 1` bytes into `data`
+            # before it meets that NUL (`file/src/softmagic.c:2102-2121`). A `str_range`
+            # shortens the copy and leaves the run at the padding NULs sooner
+            # (`file/src/softmagic.c:1480-1481`).
+            limit = MAX_STRING_BYTES - 1 if self.num_bytes is None else min(
+                self.num_bytes, MAX_STRING_BYTES - 1)
+            data = data[:limit].ljust(MAX_STRING_BYTES, b"\x00")
+        elif self.num_bytes is not None:
             data = data[:self.num_bytes]
         m = self.pattern.match(data)
         if m:
