@@ -1,6 +1,7 @@
 import base64
 import gzip
 import os
+import re
 import struct
 import subprocess
 import sys
@@ -17,14 +18,31 @@ import polyfile.der
 import polyfile.magic
 from polyfile.http.matcher import HTTP_11_MIME_TYPE
 from polyfile.magic import (
-    DataType, MagicMatcher, MAGIC_DEFS, Match, MatchContext, RegexType, SearchType, StringType,
-    TestResult
+    DataType, MagicMatcher, MagicTest, MAGIC_DEFS, Match, MatchContext, RegexType, SearchType,
+    StringMatch, StringType, TestResult
 )
 
 
 # logger.setLevel(logger.TRACE)
 
 FILE_TEST_DIR: Path = Path(__file__).parent.parent / "file" / "tests"
+
+
+def every_bundled_test() -> Iterator[MagicTest]:
+    """Walks the default matcher, including the subtests nested under each level 0 test.
+
+    Yields:
+        Each test once, in no particular order.
+    """
+    seen: Set[int] = set()
+    stack: List[MagicTest] = list(MagicMatcher.DEFAULT_INSTANCE)
+    while stack:
+        test = stack.pop()
+        if id(test) in seen:
+            continue
+        seen.add(id(test))
+        yield test
+        stack.extend(test.children)
 
 KNOWN_FAILURES: Dict[str, int] = {
     # Empty, and worth keeping that way: every stem of the libmagic corpus now matches what
@@ -1696,6 +1714,59 @@ class StringDataTypeTest(TestCase):
         search = "0\tsearch/20/Wf\tA\\ B\\ \tfound\n"
         self.assertIn("found", " ".join(self.messages(search, b"xA B  ")))
         self.assertNotIn("found", " ".join(self.messages(search, b"xA B  x")))
+
+    def test_the_atomic_wrap_is_only_emitted_for_a_trailing_blank_run(self):
+        r"""Wrapping a pattern that cannot backtrack costs its literal prefix for nothing.
+
+        A blank run is the only thing `StringMatch.pattern_string` emits that matches more than
+        one length, so it is the only thing the `f` flag's terminator can take a byte back from.
+        Every other atom is a literal, a character class, or an exact `{n}`.
+
+        The cost of wrapping anyway falls on `search`, which scans the whole buffer: CPython skips
+        to the next plausible start only while the pattern begins with a literal, and a lookahead
+        is not one. All seven `search/1/wft` definitions in `magic_defs/commands` are affected,
+        and none of them ends in a blank.
+        """
+        def wrapped(**kwargs) -> bool:
+            return StringMatch(full_word_match=True, **kwargs).pattern_string().startswith(b"(?=(")
+
+        # a trailing blank run, under `W` and under `w`
+        self.assertTrue(wrapped(to_match="A\\ B\\ ", compact_whitespace=True))
+        self.assertTrue(wrapped(to_match="A\\ B\\ ", optional_blanks=True))
+        self.assertTrue(wrapped(to_match="A\\ ", compact_whitespace=True))
+        # a blank that is not at the end, and a value with no blank at all
+        self.assertFalse(wrapped(to_match="A\\ B", compact_whitespace=True))
+        self.assertFalse(wrapped(to_match="#!\\ /bin/sh", compact_whitespace=True))
+        self.assertFalse(wrapped(to_match="ABC"))
+
+        shipped = [
+            test for test in every_bundled_test()
+            if isinstance(getattr(test, "constant", None), StringMatch) and test.constant.full_word_match
+        ]
+        self.assertEqual(60, len(shipped), "the bundled definitions no longer declare 60 `f` tests")
+        still_wrapped = sorted(
+            str(test.source_info) for test in shipped
+            if test.constant.pattern_string().startswith(b"(?=(")
+        )
+        self.assertEqual([], still_wrapped, "no bundled `f` value ends in a blank run")
+
+    def test_the_value_pattern_has_no_capturing_group(self):
+        r"""The wrap replays its group with `\1`, which renumbers any group inside it.
+
+        The wrapper's parenthesis opens first, so `\1` is the wrapper whatever the value compiles
+        to. What breaks is a backreference *inside* the value: an inner `\1` raises at compile
+        time, but an inner `\2` would quietly come to mean something else. Neither can arise while
+        the value's pattern has no group of its own, so that is the property to pin.
+        """
+        for kwargs in (
+            {"to_match": "A\\ B\\ ", "compact_whitespace": True},
+            {"to_match": "A\\ B\\ ", "optional_blanks": True},
+            {"to_match": "aBc", "case_insensitive_lower": True},
+            {"to_match": "aBc", "case_insensitive_upper": True},
+            {"to_match": "a.*[b]\\\\c+"},
+        ):
+            with self.subTest(**kwargs):
+                self.assertEqual(0, re.compile(StringMatch(**kwargs).pattern_string()).groups)
 
     def test_compact_whitespace_accepts_any_whitespace_byte(self):
         r"""A `W` blank repeated the value's own byte, so a tab never matched a declared space.
