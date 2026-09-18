@@ -19,6 +19,9 @@ from polyfile.fileutils import Tempfile
 from .test_pdf import WELL_FORMED_PDF
 from .test_zipmatcher import MEMBERS, PNG, build_zip
 
+ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;]*m")
+"""Matches a select-graphic-rendition escape, which is all argparse emits."""
+
 USAGE_CHOICES = re.compile(r"--format \{([^}]*)}")
 HELP_EXAMPLE = re.compile(r"^\s*polyfile INPUT_FILE (-\S+ \S+(?: -\S+ \S+)*)$", re.MULTILINE)
 OBJECT_REPR = re.compile(r"<[\w.]+ object at 0x[0-9a-f]+>")
@@ -52,11 +55,21 @@ def run_cli_until_exit(*argv: str) -> Tuple[int, str]:
 
 
 def cli_help() -> str:
+    """The `--help` output, with any colour argparse added stripped back out.
+
+    Python 3.14 colourizes argparse help, so the text carries escapes that sit between `--format`
+    and its choices and defeat a pattern written against what a reader sees. Whether they appear
+    depends on the interpreter and the environment, not on anything this project controls, so the
+    tests read the help with them removed rather than turning the colour off.
+
+    Returns:
+        The help text, free of terminal escapes.
+    """
     output = io.StringIO()
     with contextlib.redirect_stdout(output):
         with contextlib.suppress(SystemExit):
             main(["polyfile", "--help"])
-    return output.getvalue()
+    return ANSI_ESCAPE.sub("", output.getvalue())
 
 
 class FormatArgumentTests(TestCase):
