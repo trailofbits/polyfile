@@ -394,7 +394,9 @@ class Analyzer:
 
         Args:
             matches: the matches to record. Defaults to running the analysis with
-                :meth:`Analyzer.matches`.
+                :meth:`Analyzer.matches`. Whatever is passed is materialized before the tree is
+                built, so this is an optimization for a caller that already has the matches, never
+                a precondition.
             include_contents: whether to base64 encode the whole input into the ``b64contents`` key.
                 Pass ``False`` to skip the encoding, which omits the key rather than emitting an
                 empty one, so a caller that needs the contents fails with a ``KeyError`` instead of
@@ -403,8 +405,11 @@ class Analyzer:
         Returns:
             The SBuD object, ready to serialize as JSON.
         """
-        if matches is None:
-            matches = self.matches()
+        # `Analyzer.matches` yields a top-level match as soon as it is found and attaches its
+        # children as it goes, so `to_obj` has to run after the whole analysis rather than against
+        # a half-drained generator. A supplied iterable is materialized for the same reason: a
+        # caller cannot know how far this needs it drained.
+        matches = list(self.matches() if matches is None else matches)
         md5 = hashlib.md5()
         sha1 = hashlib.sha1()
         sha256 = hashlib.sha256()
