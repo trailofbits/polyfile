@@ -1664,6 +1664,39 @@ class StringDataTypeTest(TestCase):
         self.assertEqual({"found"}, self.messages(definition, b"ABC\x00zz"))
         self.assertEqual({"data"}, self.messages(definition, b"ABC\x01zz"))
 
+    def test_full_word_reads_the_byte_the_match_stopped_on(self):
+        r"""A blank at the end of a `w` or `W` value gave a whitespace byte back for the `f`
+        flag's lookahead to accept.
+
+        This is a regression test for trailofbits/polyfile#3570. `file_strncmp` is a single
+        left-to-right pass: a value's last blank consumes the rest of the whitespace run, and
+        the full-word check reads the byte the pass stopped on
+        (`file/src/softmagic.c:2102-2130`). Python's engine backtracked instead, so `A\ B\ `
+        matched `A B  x` by returning one of the run's blanks to the lookahead. `file` 5.48
+        reports `found` only when the run reaches the end of the buffer, under `W` and `w`
+        alike, and however many blanks the value declares at the end.
+        """
+        for flags in ("/Wf", "/wf"):
+            definition = f"0\tstring{flags}\tA\\ B\\ \tfound\n"
+            for data in (b"A B ", b"A B  ", b"A B \t"):
+                with self.subTest(flags=flags, data=data):
+                    self.assertIn("found", " ".join(self.messages(definition, data)))
+            for data in (b"A B  x", b"A B \tx", b"A B  x "):
+                with self.subTest(flags=flags, data=data):
+                    self.assertNotIn("found", " ".join(self.messages(definition, data)))
+        # a `w` blank may also stand for no blanks at all, and the run still ends the value
+        optional = "0\tstring/wf\tA\\ B\\ \tfound\n"
+        self.assertIn("found", " ".join(self.messages(optional, b"AB  ")))
+        self.assertNotIn("found", " ".join(self.messages(optional, b"AB x")))
+        # a run of two declared blanks compiles to `{2,}`, which backtracks the same way
+        counted = "0\tstring/Wf\tA\\ B\\ \\ \tfound\n"
+        self.assertIn("found", " ".join(self.messages(counted, b"A B   ")))
+        self.assertNotIn("found", " ".join(self.messages(counted, b"A B   x")))
+        # a search reads the buffer in place, so its run ends at the end of the buffer
+        search = "0\tsearch/20/Wf\tA\\ B\\ \tfound\n"
+        self.assertIn("found", " ".join(self.messages(search, b"xA B  ")))
+        self.assertNotIn("found", " ".join(self.messages(search, b"xA B  x")))
+
     def test_compact_whitespace_accepts_any_whitespace_byte(self):
         r"""A `W` blank repeated the value's own byte, so a tab never matched a declared space.
 
