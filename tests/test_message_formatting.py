@@ -1,9 +1,45 @@
 import tempfile
 from pathlib import Path
-from typing import Set
+from typing import Any, Iterator, List, Set, Tuple
 from unittest import TestCase
 
-from polyfile.magic import MagicMatcher, printf_to_python
+from polyfile.magic import MagicMatcher, MagicTest, printf_to_python
+
+RENDER_VALUES: Tuple[Any, ...] = (0, 1234, -1, 2 ** 40, b"abc", "abc")
+"""One value of every shape a test can hand its message: an integer, a byte string, a string.
+
+A conversion only has to accept one of them. `%d` rejecting `b"abc"` says nothing, because a test
+whose message holds `%d` never yields bytes; a message no value at all can render is the defect.
+"""
+
+
+def every_test(matcher: MagicMatcher) -> Iterator[MagicTest]:
+    """Walks a matcher's tests, including the subtests nested under them.
+
+    Args:
+        matcher: the matcher to walk.
+
+    Yields:
+        Each test once, in no particular order.
+    """
+    seen: Set[int] = set()
+    stack: List[MagicTest] = list(matcher)
+    while stack:
+        test = stack.pop()
+        if id(test) in seen:
+            continue
+        seen.add(id(test))
+        yield test
+        stack.extend(test.children)
+
+
+def renders(message: str, value: Any) -> bool:
+    """Reports whether `message` formats `value` without raising."""
+    try:
+        message % (value,)
+    except (ValueError, TypeError):
+        return False
+    return True
 
 
 class TestPrintfToPython(TestCase):
@@ -85,3 +121,63 @@ class TestMessagesRenderTheValue(TestCase):
         """
         self.assertEqual({"n 0X706050403020100,"}, self.messages("0\tlequad\tx\tn %#llX,\n"))
         self.assertEqual({"n 0x706050403020100,"}, self.messages("0\tlequad\tx\tn %#llx,\n"))
+
+
+class TestEveryBundledMessageRenders(TestCase):
+    """Guards against a bundled message whose conversion nothing can format.
+
+    `Match._soft_magic_message` formats a matched test's message with the value the test read, and
+    catches the `ValueError` that a conversion Python does not understand raises, logs it, and
+    keeps the message as it stands. So a definition PolyFile cannot render does not fail, or warn
+    anyone who is not reading the log: it prints its own format string where the value belongs, and
+    only a reader who knows what the output should say will notice.
+
+    That is how `%#16.16llx` survived in seven bundled definitions. This walks all of them so the
+    next one cannot.
+    """
+
+    maxDiff = None
+    """Every offending definition is named, rather than the first few and an ellipsis."""
+
+    def unrenderable(self) -> List[Tuple[str, str]]:
+        """Every bundled message spelling that no representative value formats.
+
+        Returns:
+            Pairs of source location and message, one per spelling that nothing renders.
+        """
+        failures: List[Tuple[str, str]] = []
+        for test in every_test(MagicMatcher.DEFAULT_INSTANCE):
+            message = getattr(test, "message", None)
+            if message is None:
+                continue
+            # `possibilities` yields both arms of a ternary, so neither hides behind the other
+            for spelling in message.possibilities():
+                candidate = spelling.lstrip()
+                # `_soft_magic_message` strips a leading backspace and skips a message with no
+                # conversion, and `%%` is an escaped percent rather than one
+                candidate = candidate[1:] if candidate.startswith("\b") else candidate
+                if "%" not in candidate.replace("%%", ""):
+                    continue
+                rendered = printf_to_python(candidate)
+                if not any(renders(rendered, value) for value in RENDER_VALUES):
+                    failures.append((str(test.source_info), candidate))
+        return failures
+
+    def test_every_message_with_a_conversion_renders_some_value(self):
+        failures = self.unrenderable()
+        self.assertEqual([], failures, (
+            f"{len(failures)} bundled message(s) carry a conversion that no value formats, so each "
+            f"one prints its own format string where the value belongs. Either the conversion needs "
+            f"handling in `printf_to_python`, or the definition is wrong."
+        ))
+
+    def test_the_walk_reaches_the_messages_it_is_meant_to_check(self):
+        """A walk that silently reached nothing would pass the gate above forever."""
+        with_conversion = [
+            spelling
+            for test in every_test(MagicMatcher.DEFAULT_INSTANCE)
+            if getattr(test, "message", None) is not None
+            for spelling in test.message.possibilities()
+            if "%" in spelling.replace("%%", "")
+        ]
+        self.assertGreater(len(with_conversion), 3000)
