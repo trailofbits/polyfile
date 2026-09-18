@@ -4,8 +4,9 @@ poyfile/trie_full.gz
 polyfile/trie_partial.gz
 ~*
 *.pyc
+# Editor and IDE state
 .vscode/
-.vscode/*
+.idea/
 polyfile/kaitai/kaitai-struct-compiler-*/
 
 # Release notes: CHANGELOG.md is the source, and a working file per release is not tracked
