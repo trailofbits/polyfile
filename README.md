@@ -103,7 +103,7 @@ TrID matching code is still shipped with PolyFile and can be invoked programmati
 
 ### Output Format
 
-PolyFile has several options for outputting its results, specified by its `--format` option. For computer-readable output, PolyFile has an extension of the [SBuD](https://github.com/corkami/sbud) JSON format described [in the documentation](docs/json_format.md). Prior to version 0.5.0 this was the default output format of PolyFile. However, now the default output format is to mimic the behavior of the `file` command. To maintain the original behavior, use the `--format sbud` option.
+PolyFile has several options for outputting its results, specified by its `--format` option. For computer-readable output, PolyFile has an extension of the [SBuD](https://github.com/corkami/sbud) JSON format described [in the documentation](https://github.com/trailofbits/polyfile/blob/master/docs/json_format.md). Prior to version 0.5.0 this was the default output format of PolyFile. However, now the default output format is to mimic the behavior of the `file` command. To maintain the original behavior, use the `--format sbud` option.
 
 The `json` and `sbud` formats include a `b64contents` key holding a base64 encoding of the entire input, so their output grows with the size of the file you analyze. Pass `--no-contents` to leave that key out; PolyFile then skips the encoding instead of computing it and throwing the result away. The key is omitted rather than emptied, so a consumer that needs the contents fails instead of reading the input as empty. The HTML hex viewer is built from the contents, so you cannot combine `--no-contents` with `--format html` or `--html`.
 
@@ -132,14 +132,14 @@ with open("file_to_test", "rb") as f:
 
 ## Extending PolyFile
 
-Instructions on extending PolyFile to support more file formats with new matchers and parsers is described [in the documentation]([in the documentation](docs/extending_polyfile.md)).
+Instructions on extending PolyFile to support more file formats with new matchers and parsers is described [in the documentation](https://github.com/trailofbits/polyfile/blob/master/docs/extending_polyfile.md).
 
 ## License and Acknowledgements
 
 This research was developed by [Trail of
 Bits](https://www.trailofbits.com/) with funding from the Defense
 Advanced Research Projects Agency (DARPA) under the SafeDocs program
-as a subcontractor to [Galois](https://galois.com). It is licensed under the [Apache 2.0 license](LICENSE).
+as a subcontractor to [Galois](https://galois.com). It is licensed under the [Apache 2.0 license](https://github.com/trailofbits/polyfile/blob/master/LICENSE).
 © 2019, Trail of Bits.
 
 PolyFile generates most of its parsers from the [Kaitai Struct format gallery](https://formats.kaitai.io/),
@@ -147,4 +147,4 @@ where each format specification carries its own license. A generated parser is a
 its specification, so PolyFile builds parsers only from specifications under a permissive license.
 The distributed package therefore contains no copyleft code, and the specifications PolyFile cannot
 redistribute are excluded from the source distribution. For the details, see
-[Licensing of generated parsers](docs/extending_polyfile.md#licensing-of-generated-parsers).
+[Licensing of generated parsers](https://github.com/trailofbits/polyfile/blob/master/docs/extending_polyfile.md#licensing-of-generated-parsers).
