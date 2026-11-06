@@ -2226,6 +2226,11 @@ class StringLengthTest(StringWildcard):
         return f"{['>', '<'][self.test_smaller]}{repr(self.to_match)}"
 
 
+# A search whose last permitted start is at most this far in is tried start by start once the buffer
+# is much longer than that range (see `StringMatch.search`).
+SEARCH_EACH_START_LIMIT: int = 8192
+
+
 class StringMatch(StringTest):
     def __init__(self,
                  to_match: str,
@@ -2410,9 +2415,23 @@ class StringMatch(StringTest):
         Returns:
             The match, or `DataTypeMatch.INVALID` if no start offset that fits the value matches.
         """
-        m = self.pattern.search(data)
-        if (m is None or m.start() > self.last_start_offset(len(data))
-                or m.start() + self.value_length > len(data)):
+        pattern = self.pattern
+        last_start = self.last_start_offset(len(data))
+        if (0 <= last_start <= SEARCH_EACH_START_LIMIT and len(data) > max(65536, last_start * 64)
+                and (pattern.pattern[:1] == b"[" or pattern.flags & re.IGNORECASE)):
+            # `pattern.search` would look for a match across the whole buffer and only then find
+            # that it starts too late. CPython skips ahead quickly to a literal prefix, but not to
+            # a character class or a case-insensitive prefix, so for those it is much cheaper to
+            # try each permitted start in turn. Each attempt still sees the whole buffer, because
+            # a blank run or a word terminator can extend past the last start.
+            m = None
+            for start in range(last_start + 1):
+                m = pattern.match(data, start)
+                if m is not None:
+                    break
+        else:
+            m = pattern.search(data)
+        if m is None or m.start() > last_start or m.start() + self.value_length > len(data):
             return DataTypeMatch.INVALID
         return self.post_process(bytes(m.group(0)), initial_offset=m.start())
 
