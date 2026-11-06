@@ -17,6 +17,7 @@ from datetime import datetime
 from enum import Enum, IntFlag
 from importlib import resources
 from io import StringIO
+from itertools import chain
 import json
 import logging
 from pathlib import Path
@@ -24,6 +25,7 @@ import re
 import struct
 import sys
 from time import gmtime, localtime, strftime
+from types import GeneratorType
 from typing import (
     Any, BinaryIO, Callable, Dict, FrozenSet, Generic, Iterable, Iterator, KeysView, List,
     NamedTuple, Optional, Set, Tuple, Type, TypeVar, Union
@@ -5341,7 +5343,20 @@ class MagicMatcher:
                 test_context = file_context
             else:
                 test_context = context
-            m = Match(matcher=self, context=test_context, results=test.match(test_context))
+            results = test.match(test_context)
+            if type(results) is GeneratorType:
+                # Almost every top-level test fails. Avoid allocating a Match and its
+                # lazy MIME/extension containers when the result generator is empty.
+                # Match.__iter__ also treats IndexError as exhaustion; a generator
+                # that raises it is closed, just like one that raises StopIteration.
+                try:
+                    first = next(results)
+                except (StopIteration, IndexError):
+                    continue
+                # Keep the first result on the normal path: __getitem__ expands
+                # IndirectResult, and the remaining continuations must stay lazy.
+                results = chain((first,), results)
+            m = Match(matcher=self, context=test_context, results=results)
             # the description is how a match is rendered, so it must not make an empty message
             # look like a match
             if m and (not test_context.only_match_mime or any(t is not None for t in m.mimetypes)):
