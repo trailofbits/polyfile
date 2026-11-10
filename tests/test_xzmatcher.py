@@ -299,3 +299,36 @@ def test_native_output_requests_respect_the_configured_allowance(
 
 def test_large_memory_allowance_does_not_overflow_native_integer() -> None:
     assert decode(encoded(JSON), max_memory=1 << 100).data == JSON
+
+
+def test_failed_concatenated_xz_streams_charge_each_attempt() -> None:
+    first = encoded(JSON[:8])
+    second = bytearray(encoded(JSON[8:]))
+    second[8] ^= 1
+    data = first + bytes(4) + second
+    with pytest.raises(DecodeError) as exc:
+        decode(data)
+    assert exc.value.member_count == 2
+    matches = analyzed(data, limits=AnalysisLimits(max_members=3))
+    wrapper = next(node for node in matches if node.name == "application/x-xz")
+    assert wrapper.analysis_context.members == 2
+    assert wrapper.analysis_status == "invalid"
+
+
+def test_invalid_padding_does_not_charge_a_codec_stream() -> None:
+    with pytest.raises(DecodeError) as exc:
+        decode(encoded(JSON) + bytes(1))
+    assert exc.value.member_count == 1
+
+
+@pytest.mark.parametrize("limit", [0, 1])
+def test_unattempted_xz_stream_does_not_consume_entry_budget(limit: int) -> None:
+    with pytest.raises(DecodeError) as exc:
+        decode(encoded(JSON) + bytes(4) + encoded(JSON), max_members=limit)
+    assert exc.value.member_count == limit
+
+
+def test_empty_input_does_not_charge_an_xz_stream() -> None:
+    with pytest.raises(DecodeError) as exc:
+        decode(b"")
+    assert exc.value.member_count == 0

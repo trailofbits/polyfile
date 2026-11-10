@@ -128,14 +128,17 @@ def decode_xz(
                     f"XZ stream count exceeds the limit of {max_members}",
                     status="limited",
                 )
-            regions.append(_member(stream, output, max_memory))
             members += 1
+            regions.append(_member(stream, output, max_memory))
         except DecodeError as error:
             raise DecodeError(
-                str(error), status=error.status, regions=tuple(regions) + error.regions
+                str(error),
+                status=error.status,
+                regions=tuple(regions) + error.regions,
+                member_count=members,
             ) from error
     if not members:
-        raise DecodeError("empty input contains no XZ stream")
+        raise DecodeError("empty input contains no XZ stream", member_count=0)
     return DecodeResult(output.finish(), tuple(regions), members)
 
 
