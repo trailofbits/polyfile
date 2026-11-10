@@ -10,6 +10,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 
 ### Added
 
+- **Breaking:** Identify SIMH tape images with native record checks, map their records and
+  markers, and recursively analyze independently recognizable record payloads (#3619).
 - **Breaking:** ELF identification descriptions now include validated linkage, interpreter,
   GNU/Go build IDs, ABI versions, stripping/debug information, and supported core-file details.
   The command line, Python identification API, and SBuD root values share these descriptions;
