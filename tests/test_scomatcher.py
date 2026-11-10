@@ -205,3 +205,19 @@ def test_requested_hard_memory_ceiling_is_explicitly_unsupported(gnu_gzip: str) 
     wrapper = next(match for match in matches if match.name == SCO_MIME)
     assert wrapper.analysis_status == "unsupported"
     assert wrapper.analysis_message is not None and "only on Linux" in wrapper.analysis_message
+
+
+def test_alias_does_not_suppress_overlapping_afx_description() -> None:
+    with FileStream(b"\x1f\xa0-afx-") as stream:
+        descriptions = {str(match) for match in Matcher().identify(stream)}
+    assert descriptions == {"SCO compress -H (LZH) data", "AFX compressed file data"}
+
+
+def test_custom_mime_without_native_signature_alias_keeps_bundled_verdict(tmp_path: Path) -> None:
+    custom = tmp_path / "custom.magic"
+    custom.write_text("0 string NOTSCO unrelated custom rule\n!:mime application/x-sco-compress\n")
+    definitions = MagicMatcher.parse(*MAGIC_DEFS)
+    definitions.add(custom)
+    with FileStream(b"\x1f\xa0") as stream:
+        descriptions = [str(match) for match in Matcher(matcher=definitions).identify(stream)]
+    assert descriptions == ["SCO compress -H (LZH) data"]

@@ -5353,10 +5353,20 @@ class MagicMatcher:
     def _superseded_compression_alias(self, test: MagicTest, match: Match, data: bytes) -> bool:
         if test.source_info is None or test.source_info.path.name != "compress":
             return False
-        aliases = {b"\x1f\xa0": "application/x-sco-compress"}
-        mime = aliases.get(data[:2])
-        return (mime is not None and bool(self.tests_by_mime.get(mime))
-                and not set(match.mimetypes) - {"application/octet-stream"})
+        aliases = {
+            b"\x1f\xa0": ("application/x-sco-compress", "SCO compress -H (LZH) data",
+                            "SCOCompressionMimeMatcher"),
+        }
+        alias = aliases.get(data[:2])
+        if alias is None:
+            return False
+        mime, description, source = alias
+        if str(test.message) != description:
+            return False
+        native = any(candidate.source_info is not None
+                     and candidate.source_info.path.name == source
+                     for candidate in self.tests_by_mime.get(mime, ()))
+        return native and not set(match.mimetypes) - {"application/octet-stream"}
 
     def _run_tests(
             self,
