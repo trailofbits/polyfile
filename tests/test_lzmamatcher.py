@@ -273,3 +273,43 @@ def test_optional_limits_keep_wrapper_without_decoded_children(
     wrapper = next(node for node in matches if node.name == "application/x-lzma")
     assert wrapper.analysis_status == "limited"
     assert not any(node.name == "decoded_content" for node in matches)
+
+
+class _RecordingDecoder:
+    def __init__(self, decoder: lzma.LZMADecompressor, requests: list[int]):
+        self.decoder = decoder
+        self.requests = requests
+
+    @property
+    def eof(self) -> bool:
+        return self.decoder.eof
+
+    @property
+    def needs_input(self) -> bool:
+        return self.decoder.needs_input
+
+    @property
+    def unused_data(self) -> bytes:
+        return self.decoder.unused_data
+
+    def decompress(self, data: bytes, max_length: int = -1) -> bytes:
+        self.requests.append(max_length)
+        return self.decoder.decompress(data, max_length=max_length)
+
+
+def test_unknown_size_native_output_is_bounded_before_allocation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    data = encoded(bytes(2_000_000))
+    factory = lzma.LZMADecompressor
+    requests: list[int] = []
+
+    def recording(*, format: int, memlimit: int | None = None) -> _RecordingDecoder:
+        return _RecordingDecoder(factory(format=format, memlimit=memlimit), requests)
+
+    monkeypatch.setattr(lzma, "LZMADecompressor", recording)
+    with pytest.raises(DecodeError) as exc:
+        decode(data, max_output=17)
+    assert exc.value.status == "limited"
+    assert requests
+    assert all(0 < request <= 18 for request in requests)
