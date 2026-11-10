@@ -96,3 +96,9 @@ decoded content. Zero padding is preserved; other trailing data reports an inval
 publishing decoded children. Configured output, member, depth, and codec-memory limits report
 `limited` instead. All limits are unlimited by default; codec-memory limits govern decoder state,
 not the total memory used by the Python process or report.
+
+When a container has already analyzed a member's contents, the raw encoded region can retain
+its own format labels without repeating the same recursive expansion. For example, a ZIP bzip2
+member keeps its raw bzip2 classification while the validated decoded tree appears once under
+the ZIP member's decoded-content region. Other raw polyglot interpretations remain eligible
+for their own parsers.

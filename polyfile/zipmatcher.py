@@ -428,6 +428,20 @@ def member_data(
 
 
 
+
+def _decoded_zip_parsers(header: LocalFileHeader, match: Match) -> set[str]:
+    """Identify raw interpretations whose decoded contents were already analyzed."""
+    if header.compression_method == 12:
+        return {"application/x-bzip2"}
+    if header.compression_method == 0:
+        return {
+            child.name
+            for source in match.children if source.name == "decoded_content"
+            for child in source.children
+        }
+    return set()
+
+
 def _member_matches(
     header: LocalFileHeader, archive: Optional[PythonZip], parent: Match
 ) -> Iterator[Match]:
@@ -439,6 +453,7 @@ def _member_matches(
         yield match
         if decoded is not None:
             yield from match_decoded(match, decoded, member_counted=True)
+            match.analysis_skip_parsers.update(_decoded_zip_parsers(header, match))
 
 
 def parse_archive(

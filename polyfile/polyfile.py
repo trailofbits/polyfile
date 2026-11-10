@@ -119,6 +119,7 @@ class Match:
             analysis_depth = parent.analysis_depth if parent is not None else 0
         self.analysis_depth = analysis_depth
         self.analysis_member_counted = False
+        self.analysis_skip_parsers: Set[str] = set()
         self.analysis_status: Optional[str] = None
         self.analysis_message: Optional[str] = None
         if display_name is None:
@@ -285,7 +286,7 @@ class Matcher:
             analysis_depth=analysis_depth
         )
         yield m
-        if self.parse:
+        if self.parse and (parent is None or mimetype not in parent.analysis_skip_parsers):
             for parser in PARSERS[mimetype]:
                 # Don't yield this custom match until we've tried its submatch function
                 # (which may throw an InvalidMatch, meaning that this match is invalid)
