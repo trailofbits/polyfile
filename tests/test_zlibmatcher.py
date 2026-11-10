@@ -1,5 +1,8 @@
 """Integrity, framing, and recursion tests for zlib streams."""
 
+import io
+import tarfile
+import zipfile
 import zlib
 
 import pytest
@@ -143,3 +146,44 @@ def test_memory_preflight_does_not_charge_an_unattempted_member() -> None:
         decode(zlib.compress(PAYLOAD), max_memory=1)
     assert failure.value.status == "limited"
     assert failure.value.member_count == 0
+
+
+def test_zlib_wrapped_tar_recursively_scans_json() -> None:
+    encoded = io.BytesIO()
+    with tarfile.open(
+        fileobj=encoded, mode="w", format=tarfile.USTAR_FORMAT
+    ) as archive:
+        member = tarfile.TarInfo("document.json")
+        member.size = len(PAYLOAD)
+        archive.addfile(member, io.BytesIO(PAYLOAD))
+    nodes = list(Matcher().match(zlib.compress(encoded.getvalue())))
+    archive_node = next(node for node in nodes if node.name == "application/x-tar")
+    document = next(node for node in nodes if node.name == "application/json")
+    decoded = next(node for node in nodes if node.name == "decoded_content")
+    assert decoded.decoded == encoded.getvalue()
+    assert (archive_node.source, archive_node.offset) == ("decoded:0", 0)
+    assert (document.source, document.offset, document.length) == (
+        "decoded:0",
+        512,
+        len(PAYLOAD),
+    )
+
+
+def test_zlib_wrapped_zip_recursively_scans_json() -> None:
+    encoded = io.BytesIO()
+    with zipfile.ZipFile(encoded, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("document.json", PAYLOAD)
+    nodes = list(Matcher().match(zlib.compress(encoded.getvalue())))
+    archive_node = next(node for node in nodes if node.name == "application/zip")
+    document = next(node for node in nodes if node.name == "application/json")
+    decoded = [node for node in nodes if node.name == "decoded_content"]
+    assert [(node.source, node.decoded) for node in decoded] == [
+        ("decoded:0", encoded.getvalue()),
+        ("decoded:1", PAYLOAD),
+    ]
+    assert (archive_node.source, archive_node.offset) == ("decoded:0", 0)
+    assert (document.source, document.offset, document.length) == (
+        "decoded:1",
+        0,
+        len(PAYLOAD),
+    )
