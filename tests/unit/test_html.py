@@ -171,3 +171,14 @@ class GeneratedHtmlTests(TestCase):
         self.assertIn('&lt;script&gt;', html)
         self.assertNotIn('<script>alert', html)
         self.assertNotIn('<img src=x onerror=', html)
+
+    def test_analysis_failure_status_and_reason_are_visible_and_escaped(self):
+        node = {
+            **match(0, 4),
+            "analysis_status": "unsupported",
+            "analysis_message": '<img src=x onerror=alert("reason")>',
+        }
+        html = self.render(b"file", [node])
+        self.assertIn('class="analysis-status">unsupported:', html)
+        self.assertIn("&lt;img src=x", html)
+        self.assertNotIn('<img src=x onerror=', html)

@@ -43,7 +43,9 @@
 
 {% macro render_match_name(match, first) -%}
 <a href="#" class="download" title="download" onclick='downloadFile({{ match["offset"] }}, {{ match["size"] }}, {{ match["type"]|tojson }}, {{ match.get("extension")|tojson }}, {{ match.get("source", "file")|tojson }}); return false'>⇩</a>
-{{ match['name']|e }}{% if not first %}<br />
+{{ match['name']|e }}{% if match.get('analysis_status') %}<br />
+<small class="analysis-status">{{ match['analysis_status']|e }}: {{ match.get('analysis_message', '')|e }}</small>
+{% endif %}{% if not first %}<br />
 <small style="color: gray;">{{ match['size'] }} bytes @ {{ '0x%0X' % match['offset'] }} ({{ match.get('source', 'file')|e }})</small>
 {% endif %}{% if match['decoded'] %}<br />
 [<a href="#decoded{{ match['uid'] }}">Decode</a>]{% endif %}{% if match['img_data'] %}
