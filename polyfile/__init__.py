@@ -3,6 +3,7 @@ from . import (
     jpeg,
     zipmatcher,
     gzipmatcher,
+    zstdmatcher,
     nitf,
     http,
     kaitaimatcher,
