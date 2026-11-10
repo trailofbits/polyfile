@@ -6,6 +6,31 @@ body: a release's notes are its section in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Entries marked
 **Breaking** change observable output, the command line, or the Python API.
 
+## [Unreleased]
+
+### Added
+
+- Optional recursive analysis controls through `AnalysisLimits` and `--max-depth`,
+  `--max-member-bytes`, `--max-total-bytes`, `--max-members`, and `--max-codec-memory`.
+  Defaults are unlimited; skipped regions report their reason in JSON output.
+- Native checksum-based TAR detection and recursive analysis of regular TAR members, including
+  nested archives. Headers, PAX/GNU name extensions, padding, and end markers retain physical
+  offsets. Links remain metadata, and sparse reconstruction reports unsupported status.
+  **Breaking:** valid TAR headers that soft magic misses now report `application/x-tar`, and
+  TAR JSON/HTML output includes member structure and nested classifications. Native TAR verdicts
+  replace generic soft-magic TAR aliases to avoid repeated recursive analysis. Specialized
+  GPKG verdicts also supersede redundant generic TAR aliases.
+
+### Changed
+
+- **Breaking:** Require Python 3.11 or later and pin patched filelock 4.2.7 and Pillow 13.0.0.
+  CI tests Python 3.11 through 3.14 independently so a failing job preserves other results.
+
+### Fixed
+
+- Bounded file regions now limit reads before allocating data, including `read()` and
+  `read(-1)`, so archive members cannot expose neighboring bytes or copy the remaining archive.
+
 ## [0.6.0] - 2026-09-12
 
 This release is seven months of work: 253 commits and 67 pull requests since v0.5.6, which was
@@ -619,3 +644,5 @@ No release notes were recorded for this release.
 [0.1.4]: https://github.com/trailofbits/polyfile/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/trailofbits/polyfile/compare/v0.1.2-SafeDocs-Internal...v0.1.3
 [0.1.2-SafeDocs-Internal]: https://github.com/trailofbits/polyfile/releases/tag/v0.1.2-SafeDocs-Internal
+
+[Unreleased]: https://github.com/trailofbits/polyfile/compare/v0.6.0...HEAD

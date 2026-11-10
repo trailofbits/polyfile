@@ -239,10 +239,9 @@ class FileStream(IO):
         ls = len(self)
         if pos >= ls:
             return b''
-        elif n is None:
-            return self._stream.read()[:ls - pos]
-        else:
-            return self._stream.read(min(n, ls - pos))
+        if n is None or n < 0:
+            n = ls - pos
+        return self._stream.read(min(n, ls - pos))
 
     def contains_all(self, *args):
         if args:

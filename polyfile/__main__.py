@@ -8,6 +8,7 @@ import sys
 from textwrap import dedent
 from typing import ContextManager, Optional, TextIO
 
+from polyfile.analysis import AnalysisLimits
 from . import html
 from . import logger
 from .fileutils import PathOrStdin, PathOrStdout
@@ -127,6 +128,37 @@ def reject_html_without_contents(parser: argparse.ArgumentParser, args: argparse
         exit(1)
 
 
+def nonnegative_integer(value: str) -> int:
+    """Parse an optional resource limit accepted by the command line."""
+    parsed = int(value)
+    if parsed < 0:
+        raise argparse.ArgumentTypeError("resource limits must be nonnegative integers")
+    return parsed
+
+
+def positive_integer(value: str) -> int:
+    """Parse a codec memory limit, which must allow at least one byte."""
+    parsed = nonnegative_integer(value)
+    if parsed == 0:
+        raise argparse.ArgumentTypeError("codec memory limits must be positive integers")
+    return parsed
+
+
+def add_analysis_limits(parser: argparse.ArgumentParser) -> None:
+    """Expose opt-in resource limits with unlimited defaults."""
+    descriptions = {
+        "max-depth": "maximum recursive content depth (input depth is zero)",
+        "max-member-bytes": "maximum bytes analyzed in one recursive content region",
+        "max-total-bytes": "maximum cumulative bytes analyzed recursively",
+        "max-members": "maximum container entries analyzed",
+        "max-codec-memory": "maximum decoder memory in bytes where the codec supports it",
+    }
+    for name, description in descriptions.items():
+        value_type = positive_integer if name == "max-codec-memory" else nonnegative_integer
+        parser.add_argument("--" + name, type=value_type, default=None,
+                            help=description + " (default: unlimited)")
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description='A utility to recursively map the structure of a file.',
                                      formatter_class=argparse.RawTextHelpFormatter)
@@ -207,6 +239,7 @@ the contents raises a `KeyError` instead of reading the input as
 empty. This option cannot be combined with HTML output, whose hex
 viewer is built from the contents."""))
     parser.add_argument('--require-match', action='store_true', help='if no matches are found, exit with code 127')
+    add_analysis_limits(parser)
     parser.add_argument('--max-matches', type=int, default=None,
                         help='stop scanning after having found this many matches')
     parser.add_argument('--debugger', '-db', action='store_true', help='drop into an interactive debugger for libmagic '
@@ -327,7 +360,13 @@ viewer is built from the contents."""))
         elif args.no_debug_python:
             log.warning("Ignoring `--no-debug-python`; it can only be used with the --debugger option.")
 
-        analyzer = Analyzer(file_path, parse=not args.only_match, magic_matcher=magic_matcher)
+        limits = AnalysisLimits(
+            max_depth=args.max_depth, max_member_bytes=args.max_member_bytes,
+            max_total_bytes=args.max_total_bytes, max_members=args.max_members,
+            max_codec_memory=args.max_codec_memory,
+        )
+        analyzer = Analyzer(file_path, parse=not args.only_match, magic_matcher=magic_matcher,
+                            limits=limits)
 
         needs_sbud = any(output_format.output_format in {"html", "json", "sbud"} for output_format in args.format)
         with KeyboardInterruptHandler():
