@@ -116,3 +116,21 @@ def test_cli_rejects_negative_limits(name: str) -> None:
     with contextlib.redirect_stderr(io.StringIO()), pytest.raises(SystemExit) as exc:
         main(["polyfile", "--" + name.replace("_", "-"), "-1"])
     assert exc.value.code == 2
+
+
+def test_container_entries_count_without_content() -> None:
+    context = AnalysisContext(AnalysisLimits(max_members=1))
+    assert context.claim_entry() is None
+    assert context.claim_member(5, 1, count=False) is None
+    assert context.members == 1
+    assert context.total_bytes == 5
+    assert context.claim_entry() is not None
+
+
+def test_precounted_payload_does_not_consume_another_entry() -> None:
+    matcher = Matcher(parse=False, limits=AnalysisLimits(max_members=1))
+    payload = Match("payload", None, matcher=matcher)
+    assert payload.analysis_context.claim_entry() is None
+    payload.analysis_member_counted = True
+    assert list(matcher.match(FileStream(b"{}"), parent=payload))
+    assert payload.analysis_context.members == 1

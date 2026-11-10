@@ -49,12 +49,21 @@ class AnalysisContext:
             bounds.append(max(0, self.limits.max_total_bytes - self.total_bytes))
         return min(bounds) if bounds else None
 
-    def claim_member(self, size: int, depth: int) -> str | None:
+    def claim_entry(self) -> str | None:
+        """Admit a container entry, including metadata-only entries and codec members."""
+        limit = self.limits.max_members
+        if limit is not None and self.members >= limit:
+            return f"Container entry exceeds --max-members={limit}"
+        self.members += 1
+        return None
+
+    def claim_member(self, size: int, depth: int, *, count: bool = True) -> str | None:
         """Admit one recursive content region or return the limit that rejects it.
 
         Args:
             size: Number of bytes in the region.
             depth: Number of content transitions from the original input.
+            count: Whether this region has not already consumed a container entry.
 
         Returns:
             An actionable rejection message, or None after charging the region.
@@ -63,13 +72,13 @@ class AnalysisContext:
             ("max_depth", depth),
             ("max_member_bytes", size),
             ("max_total_bytes", self.total_bytes + size),
-            ("max_members", self.members + 1),
+            ("max_members", self.members + int(count)),
         )
         for name, value in checks:
             limit = getattr(self.limits, name)
             if limit is not None and value > limit:
                 flag = "--" + name.replace("_", "-")
                 return f"Recursive analysis requires {value}, exceeding {flag}={limit}"
-        self.members += 1
+        self.members += int(count)
         self.total_bytes += size
         return None

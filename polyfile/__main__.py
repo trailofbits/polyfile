@@ -142,7 +142,7 @@ def add_analysis_limits(parser: argparse.ArgumentParser) -> None:
         "max-depth": "maximum recursive content depth (input depth is zero)",
         "max-member-bytes": "maximum bytes analyzed in one recursive content region",
         "max-total-bytes": "maximum cumulative bytes analyzed recursively",
-        "max-members": "maximum recursive content regions analyzed",
+        "max-members": "maximum container entries analyzed",
         "max-codec-memory": "maximum decoder memory in bytes where the codec supports it",
     }
     for name, description in descriptions.items():

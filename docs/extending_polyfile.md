@@ -298,7 +298,9 @@ supports them; they do not limit the Python process's total memory.
 
 The original input has depth zero and does not consume the recursive member or byte budgets.
 Depth counts transitions into content, including archive members and decoded streams, rather
-than structural nodes. Byte and member counts are cumulative across an analysis, including
-siblings. A skipped region remains in the output with `analysis_status: "limited"` and an
+than structural nodes. Byte counts are cumulative across an analysis, including siblings. Member
+counts include container entries without payloads, such as directories and links, and codec
+members. Parsers admit entries with `AnalysisContext.claim_entry()` and mark their content region
+with `analysis_member_counted = True` before recursive matching to avoid counting it twice. A skipped region remains in the output with `analysis_status: "limited"` and an
 `analysis_message` naming the limit. A new top-level analysis starts a new budget even when you
 reuse a `Matcher`.

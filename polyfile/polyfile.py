@@ -114,6 +114,7 @@ class Match:
         if analysis_depth is None:
             analysis_depth = parent.analysis_depth if parent is not None else 0
         self.analysis_depth = analysis_depth
+        self.analysis_member_counted = False
         self.analysis_status: Optional[str] = None
         self.analysis_message: Optional[str] = None
         if display_name is None:
@@ -312,7 +313,9 @@ class Matcher:
         depth = parent.analysis_depth + 1 if parent is not None else 0
         with FileStream(file_stream) as f:
             if parent is not None:
-                reason = context.claim_member(len(f), depth)
+                reason = context.claim_member(
+                    len(f), depth, count=not parent.analysis_member_counted,
+                )
                 if reason is not None:
                     parent.analysis_status = "limited"
                     parent.analysis_message = reason
