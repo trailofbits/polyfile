@@ -34,6 +34,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
   The command line, Python identification API, and SBuD root values share these descriptions;
   malformed metadata retains the ELF classification and reports a diagnostic.
 
+- **Breaking:** LZMA-alone files are decoded and recursively analyzed using the standard
+  library, preserving their physical header and decoded coordinate source. Known and streamed
+  sizes, supported properties, malformed endings, and optional resource limits are validated.
+
 - **Breaking:** XZ streams are decoded and recursively analyzed, with complete integrity checks,
   concatenated-stream and four-byte padding semantics, source-aware archive recursion, and
   optional native memory, decoded output, depth, and stream-count limits.

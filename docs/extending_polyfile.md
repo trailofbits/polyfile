@@ -381,3 +381,29 @@ and sets no application limit. Memory-limit failures report limited status. The 
 byte, depth, and stream-count controls share the containing analysis's budget. Padding does not
 consume a stream entry. See the [Python lzma incremental-decoding
 reference](https://docs.python.org/3/library/lzma.html#lzma.LZMADecompressor) for backend semantics.
+
+## LZMA-alone decoded content
+
+Legacy LZMA-alone uses the standard-library `lzma` backend and explicit `FORMAT_ALONE` framing.
+Its 13-byte header retains the properties byte, unsigned 32-bit dictionary size, and unsigned
+64-bit decoded size. An all-ones decoded size means unknown length and requires an end marker.
+Known-size streams can omit the marker; a marker with a known size requires liblzma 5.2.6 or
+newer. The decoder follows the installed backend's ending support and checks declared sizes.
+LZMA-alone has no checksum.
+
+Property bytes above 224 are invalid. Valid properties with `lc + lp > 4` report unsupported
+status because liblzma cannot decode them. Other valid properties and unsigned dictionary
+values, including noncanonical dictionary sizes, use native validation and memory admission.
+No auto-detection dictionary or 256 GiB size heuristic is applied by the explicit decoder.
+Automatic classification continues to follow bundled libmagic rules, which can miss valid
+small-dictionary or nondefault-property headers.
+
+LZMA-alone does not define concatenated files. Trailing bytes, including another stream or zero
+padding, are rejected using XZ Utils' strict policy. Complete decoded bytes receive their own
+source and recursive JSON/archive analysis; malformed input never publishes partial children.
+Known sizes are checked against an optional output allowance before codec construction, and
+unknown-size output requests are bounded incrementally. Native memory, depth, and member
+controls use the shared optional analysis limits; omitted limits remain unlimited.
+
+See the [XZ project's LZMA file-format specification](https://github.com/tukaani-project/xz/blob/master/doc/lzma-file-format.txt)
+for legacy properties and ending rules.
