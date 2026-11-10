@@ -5313,6 +5313,18 @@ class MagicMatcher:
         """Returns the set of extensions this matcher is capable of matching"""
         return self.tests_by_ext.keys()
 
+    def _superseded_tar_alias(self, test: MagicTest, match: Match, data: bytes) -> bool:
+        from polyfile.tarmatcher import TarMatcher, _tar_variant
+
+        aliases = {"application/x-tar", "application/x-ustar", "application/x-gtar"}
+        mimetypes = set(match.mimetypes)
+        if isinstance(test, TarMatcher) or not mimetypes or not mimetypes <= aliases:
+            return False
+        variant = _tar_variant(data[:512])
+        native_tests = self.tests_by_mime.get("application/x-tar", ())
+        return any(isinstance(native, TarMatcher) and native.variant == variant
+                   for native in native_tests)
+
     def _run_tests(
             self,
             tests: Iterable[MagicTest],
@@ -5345,6 +5357,8 @@ class MagicMatcher:
             # the description is how a match is rendered, so it must not make an empty message
             # look like a match
             if m and (not test_context.only_match_mime or any(t is not None for t in m.mimetypes)):
+                if self._superseded_tar_alias(test, m, test_context.data):
+                    continue
                 if test.appends_text_encoding:
                     m.text_encoding = text_encoding
                 yield test, m

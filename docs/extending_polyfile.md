@@ -304,3 +304,27 @@ members. Parsers admit entries with `AnalysisContext.claim_entry()` and mark the
 with `analysis_member_counted = True` before recursive matching to avoid counting it twice. A skipped region remains in the output with `analysis_status: "limited"` and an
 `analysis_message` naming the limit. A new top-level analysis starts a new budget even when you
 reuse a `Matcher`.
+
+## TAR member analysis
+
+The native TAR matcher validates the first header checksum and recognizes V7, POSIX, and GNU
+headers. A valid native checksum verdict replaces generic soft-magic TAR aliases with
+`application/x-tar`, preventing repeated traversal of nested archives. Specialized soft-magic
+matches remain available, including Gentoo GPKG. The parser handles
+all emitted TAR MIME variants and GPKG containers. An all-zero empty archive is not classified
+as TAR because it has no checksum-bearing header, but the TAR parser can map its end markers
+when invoked explicitly.
+
+Regular members are analyzed recursively in physical `FileStream` slices. TAR headers, data,
+padding, end markers, and trailing data retain offsets in their containing buffer. PAX local and
+global names and sizes, USTAR prefixes, and GNU long names and link names are applied while the
+original extension records remain visible. Effective archive paths and link targets are escaped
+metadata; no path is extracted or followed. Directories, links, devices, and FIFOs have no nested
+file analysis. A non-file entry that declares a payload is invalid.
+
+Invalid checksums, truncated records, malformed extensions, missing end markers, and incomplete
+payloads report an invalid region while preserving preceding valid structure. Two consecutive
+zero blocks end the archive; remaining bytes are retained as trailing data. Old GNU and PAX
+sparse members stop structural traversal with an unsupported status. Their logical contents are
+never reconstructed or allocated. Compressed TAR wrappers require a decoder for the wrapper;
+plain TAR parsing does not automatically run an external decompressor.

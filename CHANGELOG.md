@@ -13,6 +13,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 - Optional recursive analysis controls through `AnalysisLimits` and `--max-depth`,
   `--max-member-bytes`, `--max-total-bytes`, `--max-members`, and `--max-codec-memory`.
   Defaults are unlimited; skipped regions report their reason in JSON output.
+- Native checksum-based TAR detection and recursive analysis of regular TAR members, including
+  nested archives. Headers, PAX/GNU name extensions, padding, and end markers retain physical
+  offsets. Links remain metadata, and sparse reconstruction reports unsupported status.
+  **Breaking:** valid TAR headers that soft magic misses now report `application/x-tar`, and
+  TAR JSON/HTML output includes member structure and nested classifications. Native TAR verdicts
+  replace generic soft-magic TAR aliases to avoid repeated recursive analysis.
 
 ## [0.6.0] - 2026-09-12
 

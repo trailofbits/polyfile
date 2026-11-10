@@ -176,7 +176,7 @@ def test_long_names_preserve_physical_extension_records(format: int) -> None:
     info.size = len(JSON)
     parent, _ = parsed(archive_bytes(members=[(info, JSON)], format=format))
     members = [node for node in parent if node.name == "TarMember"]
-    assert members[-1].match == name
+    assert members[-1].match == repr(name)
     assert any(node.name == "application/json" for node in descendants(parent))
     assert members[-1].offset == (0 if format == tarfile.USTAR_FORMAT else 1024)
 
@@ -197,8 +197,8 @@ def test_pax_global_and_local_names() -> None:
             archive.addfile(info, BytesIO(JSON))
     parent, _ = parsed(output.getvalue())
     names = [node.match for node in parent if node.name == "TarMember"]
-    assert "local.json" in names
-    assert "global.json" in names
+    assert repr("local.json") in names
+    assert repr("global.json") in names
 
 
 @pytest.mark.parametrize(
@@ -296,3 +296,147 @@ def test_large_member_is_not_read_for_recursion_when_limited() -> None:
     data = next(node for node in descendants(parent) if node.name == "data")
     assert data.analysis_status == "limited"
     assert not data.children
+
+
+def test_pax_size_override_locates_payload_and_following_header() -> None:
+    info = tarfile.TarInfo("document.json")
+    info.size = len(JSON)
+    info.pax_headers = {"size": str(len(JSON))}
+    data = bytearray(archive_bytes(members=[(info, JSON)], format=tarfile.PAX_FORMAT))
+    start, end = 1024 + 124, 1024 + 136
+    data[start:end] = b"00000000000\0"
+    data = data[:1024] + update_checksum(data[1024:])
+    parent, _ = parsed(data)
+    assert parent.analysis_status is None
+    nested = next(
+        node for node in descendants(parent) if node.name == "application/json"
+    )
+    assert nested.offset == 1536
+    assert nested.length == len(JSON)
+
+
+@pytest.mark.parametrize(
+    "payload", [b"bad", b"0 x=y\n", b"50 path=long\n", b"6 x=y!", b"5 =x\n"]
+)
+def test_malformed_pax_records_are_invalid(payload: bytes) -> None:
+    info = tarfile.TarInfo("pax")
+    info.type = tarfile.XHDTYPE
+    info.size = len(payload)
+    parent, _ = parsed(archive_bytes(members=[(info, payload)]))
+    assert parent.analysis_status == "invalid"
+    assert "PAX" in (parent.analysis_message or "")
+
+
+@pytest.mark.parametrize("value", ["-1", "not-a-size", "1.5"])
+def test_invalid_pax_size_is_rejected(value: str) -> None:
+    info = tarfile.TarInfo("document.json")
+    info.size = len(JSON)
+    info.pax_headers = {"size": value}
+    parent, _ = parsed(archive_bytes(members=[(info, JSON)], format=tarfile.PAX_FORMAT))
+    assert parent.analysis_status == "invalid"
+    assert "PAX size" in (parent.analysis_message or "")
+
+
+@pytest.mark.parametrize("format", [tarfile.GNU_FORMAT, tarfile.PAX_FORMAT])
+def test_long_link_target_is_retained_without_following_it(format: int) -> None:
+    info = tarfile.TarInfo("link")
+    info.type = tarfile.SYMTYPE
+    info.linkname = "../" * 50 + "outside.json"
+    parent, _ = parsed(archive_bytes(members=[(info, b"")], format=format))
+    link = next(
+        node for node in descendants(parent) if node.name == "effective_linkname"
+    )
+    assert link.match == repr(info.linkname)
+    assert not any(node.name == "application/json" for node in descendants(parent))
+
+
+def test_orphaned_longname_extension_is_invalid() -> None:
+    info = tarfile.TarInfo("longname")
+    info.type = tarfile.GNUTYPE_LONGNAME
+    payload = b"long-name.json\0"
+    info.size = len(payload)
+    parent, _ = parsed(archive_bytes(members=[(info, payload)]))
+    assert parent.analysis_status == "invalid"
+    assert "no following member" in (parent.analysis_message or "")
+
+
+def test_nonregular_payload_is_invalid() -> None:
+    info = tarfile.TarInfo("link")
+    info.type = tarfile.SYMTYPE
+    info.size = 1
+    parent, _ = parsed(archive_bytes(members=[(info, b"x")]))
+    assert parent.analysis_status == "invalid"
+    assert "non-file" in (parent.analysis_message or "")
+
+
+def test_non_utf8_name_is_escaped_in_metadata() -> None:
+    data = bytearray(archive_bytes())
+    data[0] = 0xFF
+    parent, _ = parsed(update_checksum(data))
+    member = next(node for node in parent if node.name == "TarMember")
+    assert "\\udcff" in str(member.match)
+    assert member.display_name.encode("utf-8")
+
+
+def test_full_matcher_handles_file_and_byte_stream_entry_points(tmp_path: Path) -> None:
+    data = archive_bytes()
+    path = tmp_path / "sample.tar"
+    path.write_bytes(data)
+    matcher = Matcher()
+    for stream in (FileStream(data), FileStream(path)):
+        with stream:
+            roots = [node for node in matcher.match(stream) if node.parent is None]
+        assert any(node.name == "application/x-tar" for node in roots)
+        assert any(
+            node.name == "application/json"
+            for root in roots
+            for node in descendants(root)
+        )
+
+
+def test_bad_checksum_keeps_soft_magic_but_marks_structure_invalid() -> None:
+    data = bytearray(archive_bytes())
+    data[0] ^= 1
+    roots = [
+        node for node in Matcher().match(FileStream(bytes(data))) if node.parent is None
+    ]
+    tar_roots = [node for node in roots if node.name == "application/x-ustar"]
+    assert tar_roots
+    assert all(root.analysis_status == "invalid" for root in tar_roots)
+
+
+def test_nested_tar_structure_grows_linearly() -> None:
+    data = JSON
+    for depth in range(8):
+        info = tarfile.TarInfo(f"level-{depth}.bin")
+        info.size = len(data)
+        data = archive_bytes(members=[(info, data)])
+    roots = [node for node in Matcher().match(FileStream(data)) if node.parent is None]
+    nodes = [node for root in roots for node in descendants(root)]
+    assert [root.name for root in roots] == ["application/x-tar"]
+    assert sum(node.name == "TarMember" for node in nodes) == 8
+    assert sum(node.name == "application/json" for node in nodes) == 1
+
+
+def test_filtered_soft_tar_alias_still_parses_without_native_detector() -> None:
+    magic = MagicMatcher.DEFAULT_INSTANCE.only_match(mimetypes={"application/x-ustar"})
+    roots = [
+        node
+        for node in Matcher(matcher=magic).match(FileStream(archive_bytes()))
+        if node.parent is None
+    ]
+    assert [root.name for root in roots] == ["application/x-ustar"]
+    assert any(node.name == "TarHeader" for node in descendants(roots[0]))
+
+
+def test_specialized_tar_verdict_is_preserved_with_native_match() -> None:
+    info = tarfile.TarInfo("machine.ovf")
+    info.size = len(JSON)
+    roots = [
+        node
+        for node in Matcher().match(FileStream(archive_bytes(members=[(info, JSON)])))
+        if node.parent is None
+    ]
+    assert {"application/x-tar", "application/x-virtualbox-ova"} <= {
+        root.name for root in roots
+    }

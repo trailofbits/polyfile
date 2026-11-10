@@ -238,7 +238,7 @@ class _TarReader:
         available = min(padded, len(self.stream) - offset - BLOCK_SIZE)
         member = Submatch(
             "TarMember",
-            info.name,
+            repr(info.name),
             offset,
             BLOCK_SIZE + available,
             parent=self.parent,
@@ -246,6 +246,10 @@ class _TarReader:
         )
         yield member
         yield from self.header_fields(header, member)
+        if info.islnk() or info.issym():
+            yield Submatch(
+                "effective_linkname", repr(info.linkname), 0, 0, parent=member
+            )
         data = Submatch("data", None, BLOCK_SIZE, min(size, available), parent=member)
         data.analysis_member_counted = True
         yield data
@@ -298,7 +302,7 @@ class _TarReader:
         self, info: tarfile.TarInfo, header: bytes, offset: int
     ) -> Iterator[Match]:
         member = Submatch(
-            "TarMember", info.name, offset, BLOCK_SIZE, parent=self.parent
+            "TarMember", repr(info.name), offset, BLOCK_SIZE, parent=self.parent
         )
         yield member
         yield from self.header_fields(header, member)
