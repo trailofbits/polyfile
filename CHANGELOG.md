@@ -20,6 +20,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
   TAR JSON/HTML output includes member structure and nested classifications. Native TAR verdicts
   replace generic soft-magic TAR aliases to avoid repeated recursive analysis.
 
+### Fixed
+
+- Bounded file regions now limit reads before allocating data, including `read()` and
+  `read(-1)`, so archive members cannot expose neighboring bytes or copy the remaining archive.
+
 ## [0.6.0] - 2026-09-12
 
 This release is seven months of work: 253 commits and 67 pull requests since v0.5.6, which was
