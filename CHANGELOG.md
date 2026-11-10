@@ -10,6 +10,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 
 ### Added
 
+- **Breaking:** ELF identification descriptions now include validated linkage, interpreter,
+  GNU/Go build IDs, ABI versions, stripping/debug information, and supported core-file details.
+  The command line, Python identification API, and SBuD root values share these descriptions;
+  malformed metadata retains the ELF classification and reports a diagnostic.
+
 - Optional recursive analysis controls through `AnalysisLimits` and `--max-depth`,
   `--max-member-bytes`, `--max-total-bytes`, `--max-members`, and `--max-codec-memory`.
   Defaults are unlimited; skipped regions report their reason in JSON output.
