@@ -27,15 +27,15 @@ mod_year = localtime(Path(__file__).stat().st_mtime).tm_year
 __copyright__: str = f"Copyright ©{mod_year} Trail of Bits"
 __license__: str = "Apache License Version 2.0 https://www.apache.org/licenses/"
 
-ParserFunction = Callable[[FileStream, "Match"], Iterator["Submatch"]]
+ParserFunction = Callable[[FileStream, "Match"], Iterator["Match"]]
 
 
 class Parser(ABC, ParserFunction):
     @abstractmethod
-    def parse(self, stream: FileStream, match: "Match") -> Iterator["Submatch"]:
+    def parse(self, stream: FileStream, match: "Match") -> Iterator["Match"]:
         raise NotImplementedError()
 
-    def __call__(self, stream: FileStream, match: "Match") -> Iterator["Submatch"]:
+    def __call__(self, stream: FileStream, match: "Match") -> Iterator["Match"]:
         yield from self.parse(stream, match)
 
     def __hash__(self):
@@ -52,7 +52,7 @@ class ParserFunctionWrapper(Parser):
     def __hash__(self):
         return hash(self.parser)
 
-    def parse(self, stream: FileStream, match: "Match") -> Iterator["Submatch"]:
+    def parse(self, stream: FileStream, match: "Match") -> Iterator["Match"]:
         yield from self.parser(stream, match)
 
     def __str__(self):
