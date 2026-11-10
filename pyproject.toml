@@ -12,7 +12,7 @@ name = "polyfile"
 version = "0.6.0"
 description = "A utility to recursively map the structure of a file."
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
 authors = [{ name = "Trail of Bits" }]
@@ -29,7 +29,7 @@ dependencies = [
     "abnf~=2.2.0",
     "cint>=1.0.0",
     "fickling>=0.0.8",
-    "filelock>=3.20.3",
+    "filelock==4.2.7",
     "graphviz>=0.20.1",
     "intervaltree>=2.4.0",
     "jinja2>=2.1.0",
@@ -38,7 +38,7 @@ dependencies = [
     "networkx>=2.6.3",
     "packaging>=21.0",
     "pdfminer.six>=20251230",
-    "Pillow>=5.0.0",
+    "Pillow==13.0.0",
     "pyreadline3; platform_system == 'Windows'",
     "pyyaml>=3.13",
     # Also the floor that keeps CI's pip-audit of the installed environment clean
