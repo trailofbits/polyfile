@@ -102,3 +102,28 @@ its own format labels without repeating the same recursive expansion. For exampl
 member keeps its raw bzip2 classification while the validated decoded tree appears once under
 the ZIP member's decoded-content region. Other raw polyglot interpretations remain eligible
 for their own parsers.
+
+LZ4 analysis supports modern frames, concatenated frames, and skippable metadata frames. Header,
+block, and content checksums are validated before decoded children are published. Legacy frames
+and nonzero external dictionary IDs report `unsupported`; a zero dictionary ID needs no dictionary.
+The required `lz4==4.4.5` dependency supplies bounded incremental decoding on supported Python
+runtimes. No external decoder command is needed.
+
+For LZ4, `--max-codec-memory` is checked before decompression against a conservative native-buffer
+allowance: twice the frame's maximum block size, 128 KiB for linked-block history when present,
+and 4 KiB for context metadata. Output and frame-count limits apply across concatenated and
+skippable frames. All limits remain unlimited by default.
+
+The buffer allowance follows the
+[LZ4 frame decoder's input, output, and history allocations](https://github.com/lz4/lz4/blob/v1.9.4/lib/lz4frame.c).
+Zstandard analysis decodes modern frames (v0.8 and later), validates content checksums, and
+concatenates decoded bytes across frames. Skippable frames retain physical extents and count
+toward `--max-members`, including frames before the first compressed frame. Historical versions
+and frames declaring an external dictionary report `unsupported`; no dictionary-loading API is
+provided. Trailing non-frame bytes and incomplete frames report `invalid` without decoded children.
+
+Python 3.14 uses `compression.zstd`. Python 3.11 through 3.13 installs the required
+`backports.zstd==1.8.0` dependency, which exposes the same incremental API. For Zstandard,
+`--max-codec-memory` limits the declared decoder window. An omitted limit uses the largest window
+supported by the runtime, rather than imposing an application memory cap. Output and frame limits
+are also optional and unlimited by default.
