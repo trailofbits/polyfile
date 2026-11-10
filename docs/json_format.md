@@ -102,3 +102,10 @@ its own format labels without repeating the same recursive expansion. For exampl
 member keeps its raw bzip2 classification while the validated decoded tree appears once under
 the ZIP member's decoded-content region. Other raw polyglot interpretations remain eligible
 for their own parsers.
+
+UNIX compress analysis preserves the physical `compress_header` and `lzw_data` regions and
+publishes a separate decoded source only after its supported GNU gzip helper succeeds. Missing
+or incompatible helpers report `unsupported`. A configured hard helper memory ceiling is
+supported on Linux; other platforms report `unsupported` when you request that ceiling.
+`helper_timeout` and decoded-output limits report `limited`. UNIX compress has no checksum or
+decoded-size field, so some complete-code prefixes remain valid shorter files.

@@ -291,11 +291,19 @@ where .............. print the context of the current magic test (aliases: backt
 
 Pass an `AnalysisLimits` instance through the keyword-only `limits` argument of `Matcher` or
 `Analyzer` to limit recursive content analysis. All fields default to `None`, meaning unlimited.
-A configured codec memory limit must be positive; zero remains valid for the other controls.
+A configured codec memory limit must be positive; zero remains valid for the integer recursion controls.
 The command line exposes the same controls as `--max-depth`, `--max-member-bytes`,
 `--max-total-bytes`, `--max-members`, and `--max-codec-memory`. Values are nonnegative integers;
-zero prevents the corresponding recursive work except for codec memory, which must be positive. Codec memory limits apply where a decoder
-supports them; they do not limit the Python process's total memory.
+zero prevents the corresponding recursive work except for codec memory, which must be positive.
+`--helper-timeout` accepts positive finite seconds, including fractions, and limits each external
+decoder invocation. Its Python API field is `AnalysisLimits.helper_timeout`. Codec memory limits
+apply where a decoder supports them; they do not limit the Python process's total memory.
+
+UNIX compress (`.Z`) decoding automatically uses `ggzip` or `gzip` from `PATH` when its version
+banner identifies GNU gzip 1.15 or newer. Other gzip implementations and older releases report
+`unsupported`, with an installation message. PolyFile invokes fixed arguments with standard input
+and output, without a shell, inherited codec options, or extraction into the filesystem. See
+[external decoder behavior](external_decoders.md) for setup, resource controls, and integrity limits.
 
 ZIP DEFLATE requires a 64 KiB codec-memory allowance when that control is configured. ZIP
 bzip2/LZMA members report unsupported analysis when byte or memory limits are configured,

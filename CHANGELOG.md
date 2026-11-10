@@ -10,6 +10,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 
 ### Added
 
+- **Breaking:** UNIX compress (`.Z`) payloads are recursively analyzed through an automatically
+  discovered GNU gzip 1.15 or newer, preserving physical framing and decoded source coordinates.
+  Missing or incompatible helpers report unsupported status. Optional `--helper-timeout` /
+  `AnalysisLimits.helper_timeout` limits each external decoder invocation; helper memory ceilings
+  use Linux address-space limits and report unsupported status on other platforms when requested.
+
 - Optional recursive analysis controls through `AnalysisLimits` and `--max-depth`,
   `--max-member-bytes`, `--max-total-bytes`, `--max-members`, and `--max-codec-memory`.
   Defaults are unlimited; skipped regions report their reason in JSON output.
