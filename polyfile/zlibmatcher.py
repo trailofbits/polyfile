@@ -90,7 +90,9 @@ def decode_zlib(
     """
     if max_members is not None and max_members < 1:
         raise DecodeError(
-            "zlib member count exceeds its analysis allowance", status="limited"
+            "zlib member count exceeds its analysis allowance",
+            status="limited",
+            member_count=0,
         )
     if max_memory is not None and max_memory < ZLIB_MEMORY:
         raise DecodeError(

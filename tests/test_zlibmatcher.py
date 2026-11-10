@@ -90,6 +90,7 @@ def test_member_limit() -> None:
     with pytest.raises(DecodeError) as failure:
         decode(zlib.compress(PAYLOAD), max_members=0)
     assert failure.value.status == "limited"
+    assert failure.value.member_count == 0
 
 
 def test_empty_decoded_payload() -> None:
