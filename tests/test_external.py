@@ -2,12 +2,14 @@
 
 import json
 import os
+import subprocess
 import sys
 import time
 from pathlib import Path
 
 import pytest
 
+from polyfile import external
 from polyfile.compression import DecodeError
 from polyfile.external import DIAGNOSTIC_BYTES, run_helper
 from polyfile.fileutils import FileStream
@@ -216,3 +218,24 @@ def test_timeout_closes_pipes_inherited_by_a_descendant_after_leader_exit() -> N
         run_helper(stream, python_helper(code), helper_timeout=0.2)
     assert error.value.status == "limited"
     assert time.monotonic() - started < 1.5
+
+
+@pytest.mark.skipif(os.name != "posix", reason="resource-based isolated launcher")
+def test_launcher_rejects_subpage_limit_before_setting_it_or_executing_helper() -> None:
+    launcher = str(Path(external.__file__).with_name("_helper_launcher.py"))
+    command = (sys.executable, "-I", launcher, "1", *python_helper("print('executed')"))
+    result = subprocess.run(command, capture_output=True, check=False, timeout=5)
+    assert result.returncode == 125
+    assert result.stdout == b""
+    assert b"below one memory page" in result.stderr
+
+
+@pytest.mark.skipif(sys.platform != "linux", reason="Linux hard-memory launcher")
+def test_linux_subpage_ceiling_reports_limited_without_starting_decoder() -> None:
+    import resource
+
+    for ceiling in (1, resource.getpagesize() - 1):
+        with FileStream(b"") as stream, pytest.raises(DecodeError) as error:
+            run_helper(stream, python_helper("print('executed')"), max_memory=ceiling)
+        assert error.value.status == "limited"
+        assert "below one memory page" in str(error.value)
