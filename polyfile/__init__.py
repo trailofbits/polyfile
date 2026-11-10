@@ -2,6 +2,7 @@ from . import (
     nes,
     jpeg,
     zipmatcher,
+    gzipmatcher,
     nitf,
     http,
     kaitaimatcher,
