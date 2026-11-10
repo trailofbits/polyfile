@@ -19,6 +19,8 @@ as _The ALAN Parsers Project_.
 
 ## Quickstart
 
+PolyFile requires Python 3.11 or later.
+
 You can install the latest stable version of PolyFile from PyPI with
 [uv](https://docs.astral.sh/uv/):
 ```
