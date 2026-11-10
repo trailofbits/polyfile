@@ -102,3 +102,17 @@ its own format labels without repeating the same recursive expansion. For exampl
 member keeps its raw bzip2 classification while the validated decoded tree appears once under
 the ZIP member's decoded-content region. Other raw polyglot interpretations remain eligible
 for their own parsers.
+
+Lzip analysis supports version 1 members using the standard-library raw-LZMA1 decoder. Each
+member preserves its six-byte header, compressed stream, and 20-byte trailer. The decoder checks
+the end marker, CRC32, decoded size, and complete member size before publishing concatenated
+decoded bytes. Version 0 and unknown versions report `unsupported`.
+
+Coded dictionary sizes are validated against the format's 4 KiB through 512 MiB range before
+constructing the decoder. An optional `--max-codec-memory` allowance must cover the dictionary
+plus 64 KiB of decoder state. Output and attempted-member limits also apply across concatenated
+members, including invalid members. All limits remain unlimited by default.
+
+Following the [lzip version 1 file format](https://lzip.nongnu.org/manual/lzip_manual.html#File-format),
+a single empty member is accepted, while empty members in multimember files are invalid.
+Trailing bytes outside complete members are invalid. Decoding requires no external command.

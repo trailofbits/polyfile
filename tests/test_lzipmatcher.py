@@ -103,6 +103,15 @@ def test_fractional_dictionary_size_is_supported():
     assert decode(member(code=0xD3, dictionary=320 * 1024)).data == PAYLOAD
 
 
+def test_fractional_dictionary_memory_limit_uses_the_encoded_size():
+    data = member(code=0xD3, dictionary=320 * 1024)
+    required = 320 * 1024 + 64 * 1024
+    assert decode(data, max_memory=required).data == PAYLOAD
+    with pytest.raises(DecodeError) as error:
+        decode(data, max_memory=required - 1)
+    assert error.value.status == "limited"
+
+
 @pytest.mark.parametrize("version", [0, 2, 255])
 def test_unsupported_versions_are_explicit(version):
     data = bytearray(member())
@@ -183,6 +192,8 @@ def test_empty_member_accepts_zero_output_but_is_invalid_in_multimember_files():
     for data in (member(b"") + member(), member() + member(b"")):
         with pytest.raises(DecodeError, match="empty members"):
             decode(data)
+        matches = list(Matcher().match(data))
+        assert not any(m.name == "decoded_content" for m in matches)
 
 
 def test_output_and_member_limits_apply_to_concatenated_content():

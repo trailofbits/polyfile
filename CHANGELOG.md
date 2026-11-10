@@ -10,6 +10,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 
 ### Added
 
+- **Breaking:** Lzip version 1 payloads are recursively analyzed with native header, raw-LZMA,
+  CRC32, decoded-size, and member-size validation. Concatenated members preserve physical
+  structure and share optional resource limits. Older versions report unsupported status;
+  the decoder uses the Python standard library and requires no external helper.
 - Optional recursive analysis controls through `AnalysisLimits` and `--max-depth`,
   `--max-member-bytes`, `--max-total-bytes`, `--max-members`, and `--max-codec-memory`.
   Defaults are unlimited; skipped regions report their reason in JSON output.
