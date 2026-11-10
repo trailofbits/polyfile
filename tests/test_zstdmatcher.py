@@ -157,6 +157,16 @@ def test_window_descriptor_limit_checks_non_single_segment_frames():
     assert error.value.status == "limited"
 
 
+def test_non_power_of_two_window_limit_accepts_its_exact_boundary():
+    data = bytearray(frame(content_size=False))
+    data[5] = 4
+    assert zstd.decompress(data) == PAYLOAD
+    assert decode(bytes(data), max_memory=1536).data == PAYLOAD
+    with pytest.raises(DecodeError) as error:
+        decode(bytes(data), max_memory=1535)
+    assert error.value.status == "limited"
+
+
 def test_valid_empty_frames_accept_zero_output_allowance():
     assert decode(frame(b""), max_output=0).data == b""
 

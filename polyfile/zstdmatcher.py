@@ -142,7 +142,7 @@ def _decompressor(backend: ModuleType, window: int, max_memory: int | None):
     bound = (
         upper
         if max_memory is None
-        else max(lower, min(upper, max_memory.bit_length() - 1))
+        else max(lower, min(upper, (max_memory - 1).bit_length()))
     )
     return backend.ZstdDecompressor(options={parameter: bound})
 

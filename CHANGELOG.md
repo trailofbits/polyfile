@@ -10,6 +10,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 
 ### Added
 
+- **Breaking:** Zstandard payloads are recursively analyzed after validating concatenated and
+  skippable frames. Optional output, frame, depth, and decoder-window limits preserve explicit
+  failure status. Python 3.10 through 3.13 requires `backports.zstd==1.8.0`; Python 3.14 uses its
+  standard-library backend. External dictionaries and historical frames report unsupported status.
 - Optional recursive analysis controls through `AnalysisLimits` and `--max-depth`,
   `--max-member-bytes`, `--max-total-bytes`, `--max-members`, and `--max-codec-memory`.
   Defaults are unlimited; skipped regions report their reason in JSON output.
