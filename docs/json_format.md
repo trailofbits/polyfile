@@ -116,3 +116,14 @@ skippable frames. All limits remain unlimited by default.
 
 The buffer allowance follows the
 [LZ4 frame decoder's input, output, and history allocations](https://github.com/lz4/lz4/blob/v1.9.4/lib/lz4frame.c).
+Zstandard analysis decodes modern frames (v0.8 and later), validates content checksums, and
+concatenates decoded bytes across frames. Skippable frames retain physical extents and count
+toward `--max-members`, including frames before the first compressed frame. Historical versions
+and frames declaring an external dictionary report `unsupported`; no dictionary-loading API is
+provided. Trailing non-frame bytes and incomplete frames report `invalid` without decoded children.
+
+Python 3.14 uses `compression.zstd`. Python 3.11 through 3.13 installs the required
+`backports.zstd==1.8.0` dependency, which exposes the same incremental API. For Zstandard,
+`--max-codec-memory` limits the declared decoder window. An omitted limit uses the largest window
+supported by the runtime, rather than imposing an application memory cap. Output and frame limits
+are also optional and unlimited by default.

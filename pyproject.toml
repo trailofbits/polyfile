@@ -27,6 +27,7 @@ classifiers = [
 ]
 dependencies = [
     "abnf~=2.2.0",
+    "backports.zstd==1.8.0; python_version < '3.14'",
     "cint>=1.0.0",
     "fickling>=0.0.8",
     "filelock==4.2.7",
