@@ -96,7 +96,9 @@ def decode_zlib(
         )
     if max_memory is not None and max_memory < ZLIB_MEMORY:
         raise DecodeError(
-            "zlib requires a 64 KiB codec-memory allowance", status="limited"
+            "zlib requires a 64 KiB codec-memory allowance",
+            status="limited",
+            member_count=0,
         )
     start = stream.tell()
     header = _header(stream)

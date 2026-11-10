@@ -136,3 +136,10 @@ def test_required_dictionary_preserves_wrapper_without_fabricated_content() -> N
     parent = next(node for node in nodes if node.name == "application/zlib")
     assert parent.analysis_status == "unsupported"
     assert not any(node.name == "decoded_content" for node in nodes)
+
+
+def test_memory_preflight_does_not_charge_an_unattempted_member() -> None:
+    with pytest.raises(DecodeError) as failure:
+        decode(zlib.compress(PAYLOAD), max_memory=1)
+    assert failure.value.status == "limited"
+    assert failure.value.member_count == 0
