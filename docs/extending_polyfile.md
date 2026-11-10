@@ -337,3 +337,26 @@ zero blocks end the archive; remaining bytes are retained as trailing data. Old 
 sparse members stop structural traversal with an unsupported status. Their logical contents are
 never reconstructed or allocated. Compressed TAR wrappers require a decoder for the wrapper;
 plain TAR parsing does not automatically run an external decompressor.
+
+## Bzip2 decoded content
+
+Bzip2 uses Python's standard-library `bz2.BZ2Decompressor`; no helper executable or additional
+package is required. If Python lacks its optional `bz2` module, classification remains available
+and decoding reports unsupported status. Each complete concatenated stream contributes to one
+decoded buffer, so a JSON document or archive can span streams. Block and combined checksums are
+validated before the decoded buffer is published. Truncation, invalid headers, corrupted data,
+and trailing bytes, including zero bytes, report invalid status instead of publishing partial
+content.
+
+The physical tree maps each stream's signature, declared block size, and first block checksum.
+An empty stream's aligned end marker and combined checksum are mapped directly. Later blocks
+and the nonempty stream footer can be bit-aligned, so their encoded bytes remain in the
+`compressed_data` region rather than receiving invented byte offsets.
+
+Optional output and stream-count limits are checked incrementally. Before constructing each
+codec instance, its header is checked against the configured codec-memory allowance using
+libbz2's ordinary workspace estimate of `100000 + 4 * block_size` bytes. Python does not expose
+libbz2's alternative small-memory mode. This allowance governs libbz2 workspace, separately
+from Python's input/output buffers and report storage. See the [bzip2 memory-management
+manual](https://sourceware.org/bzip2/manual/manual.html) for the workspace model. Limits are
+unlimited when omitted.

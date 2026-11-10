@@ -10,6 +10,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 
 ### Added
 
+- **Breaking:** Bzip2 streams are decoded and recursively analyzed using Python's standard
+  library. Concatenated streams retain their physical framing and produce one validated decoded
+  buffer; integrity errors, truncation, and configured resource limits report explicit status.
 - **Breaking:** Identify SIMH tape images with native record checks, map their records and
   markers, and recursively analyze independently recognizable record payloads (#3619).
 - **Breaking:** ELF identification descriptions now include validated linkage, interpreter,
