@@ -40,6 +40,13 @@ class AnalysisContext:
         return source
 
     @property
+    def remaining_members(self) -> int | None:
+        """Return the remaining container-entry allowance, or None if unlimited."""
+        if self.limits.max_members is None:
+            return None
+        return max(0, self.limits.max_members - self.members)
+
+    @property
     def member_limit(self) -> int | None:
         """Return the remaining output allowance for one member, or None if unlimited."""
         bounds = []
