@@ -5,6 +5,7 @@ from . import (
     zlibmatcher,
     simh,
     gzipmatcher,
+    lzipmatcher,
     lz4matcher,
     zstdmatcher,
     nitf,
