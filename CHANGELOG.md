@@ -10,6 +10,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 
 ### Added
 
+- **Breaking:** Decode zlib streams and recursively map validated content, preserving source-aware
+  offsets and reporting checksum, dictionary, trailing-data, and resource-limit failures (#3625).
 - **Breaking:** Modern LZ4 payloads are recursively analyzed after validating frame headers,
   block/content checksums, and concatenated/skippable frames. The required `lz4==4.4.5` backend
   honors optional output, frame, depth, and native-buffer limits. Legacy frames and declared
