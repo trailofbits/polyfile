@@ -215,3 +215,25 @@ def test_generic_record_bytes_consume_cumulative_budget() -> None:
     assert payloads[0].analysis_status is None
     assert payloads[1].analysis_status == "limited"
     assert nodes[0].analysis_context.total_bytes == 4
+
+
+def test_many_records_use_bounded_linear_reads() -> None:
+    class TrackingStream(BytesIO):
+        def __init__(self, data: bytes) -> None:
+            super().__init__(data)
+            self.name = "simh-read-tracker"
+            self.bytes_read = 0
+            self.unsized_reads = 0
+
+        def read(self, size: int = -1) -> bytes:
+            data = super().read(size)
+            self.bytes_read += len(data)
+            self.unsized_reads += size < 0
+            return data
+
+    data = record(b"\xff" * 64) * 80
+    stream = TrackingStream(data)
+    nodes = list(Matcher().match(stream))
+    assert len([node for node in nodes if node.name == "record_payload"]) == 80
+    assert stream.unsized_reads == 0
+    assert stream.bytes_read <= 3 * len(data)
