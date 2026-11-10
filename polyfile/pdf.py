@@ -20,6 +20,8 @@ from pdfminer.pdftypes import (
     int_value, apply_png_predictor
 )
 
+from polyfile.compression import match_decoded
+
 from .fileutils import FileStream
 from .fileutils import Tempfile
 from .logger import getStatusLogger
@@ -937,24 +939,17 @@ def parse_object(obj, matcher: Matcher, parent: Optional[Match] = None, pdf_head
         )
         yield filter_obj
         if obj.error is None:
-            stream = Submatch(
-                "DecodedStream",
-                bytes(obj),
-                relative_offset=obj.pdf_offset - (parent.offset - pdf_header_offset),
-                length=obj.pdf_bytes,
-                parent=filter_obj,
-                decoded=bytes(obj)
-            )
+            yield from match_decoded(filter_obj, bytes(obj))
         else:
             stream = Submatch(
                 "DecodingError",
                 obj.error.message,
-                relative_offset=obj.pdf_offset - (parent.offset - pdf_header_offset),
+                relative_offset=0,
                 length=obj.pdf_bytes,
                 parent=filter_obj
             )
-        yield stream
-        yield from parse_object(obj.original_bytes, matcher=matcher, parent=stream,
+            yield stream
+        yield from parse_object(obj.original_bytes, matcher=matcher, parent=filter_obj,
                                 pdf_header_offset=pdf_header_offset)
     elif isinstance(obj, PDFList):
         list_obj = Submatch(
@@ -973,20 +968,17 @@ def parse_object(obj, matcher: Matcher, parent: Optional[Match] = None, pdf_head
         deciphered = Submatch(
             "PDFDeciphered",
             obj.original_bytes,
-            decoded=obj,
             relative_offset=obj.pdf_offset - (parent.offset - pdf_header_offset),
             length=obj.pdf_bytes,
             parent=parent
         )
         yield deciphered
-        with Tempfile(obj) as f:
-            yield from matcher.match(f, parent=deciphered)
+        yield from match_decoded(deciphered, bytes(obj))
     elif isinstance(obj, PSBytes):
         if isinstance(obj, PNGPredictor):
             match = Submatch(
                 "PNGPredictor",
                 bytes(obj.original_bytes),
-                decoded=obj,
                 relative_offset=obj.pdf_offset - (parent.offset - pdf_header_offset),
                 length=obj.pdf_bytes,
                 parent=parent
@@ -1006,8 +998,11 @@ def parse_object(obj, matcher: Matcher, parent: Optional[Match] = None, pdf_head
             yield from parse_object(obj.original_bytes, matcher=matcher, parent=match,
                                     pdf_header_offset=pdf_header_offset)
         # recursively match against the deflated contents
-        with Tempfile(obj) as f:
-            yield from matcher.match(f, parent=match)
+        if hasattr(obj, "original_bytes"):
+            yield from match_decoded(match, bytes(obj))
+        else:
+            with Tempfile(obj) as f:
+                yield from matcher.match(f, parent=match)
     elif has_provenance(obj):
         yield Submatch(
             obj.__class__.__name__,

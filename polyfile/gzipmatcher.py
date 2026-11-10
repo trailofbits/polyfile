@@ -140,6 +140,7 @@ def decode_gzip(
     *,
     max_output: int | None = None,
     max_memory: int | None = None,
+    max_members: int | None = None,
 ) -> DecodeResult:
     """Decodes concatenated gzip members with complete framing and integrity checks.
 
@@ -147,6 +148,7 @@ def decode_gzip(
         stream: The gzip stream to decode.
         max_output: Optional maximum size of the concatenated decoded content.
         max_memory: Optional codec-memory allowance; gzip needs at most 64 KiB.
+        max_members: Optional maximum number of gzip members.
 
     Returns:
         The validated concatenated output and physical member regions.
@@ -160,6 +162,7 @@ def decode_gzip(
         )
     output = OutputBuffer(max_output)
     regions: list[RawRegion] = []
+    members = 0
     while stream.tell() < len(stream):
         with stream.save_pos():
             magic = stream.read(2)
@@ -167,14 +170,20 @@ def decode_gzip(
             if regions and magic.startswith(b"\0"):
                 regions.append(_padding(stream))
             else:
+                if max_members is not None and members >= max_members:
+                    raise DecodeError(
+                        f"gzip member count exceeds the limit of {max_members}",
+                        status="limited",
+                    )
                 regions.append(_member(stream, output))
+                members += 1
         except DecodeError as error:
             raise DecodeError(
                 str(error), status=error.status, regions=tuple(regions) + error.regions
             ) from error
     if not regions:
         raise DecodeError("empty input contains no gzip member")
-    return DecodeResult(output.finish(), tuple(regions))
+    return DecodeResult(output.finish(), tuple(regions), members)
 
 
 @register_parser("application/gzip")

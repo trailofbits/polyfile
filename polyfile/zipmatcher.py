@@ -7,7 +7,7 @@ from typing import Iterator, Optional
 from zipfile import BadZipFile
 from zipfile import ZipFile as PythonZip
 
-from polyfile.compression import CHUNK_SIZE, DecodeError, OutputBuffer
+from polyfile.compression import CHUNK_SIZE, DecodeError, OutputBuffer, match_decoded
 
 from .fileutils import ExactNamedTempfile, FileStream, Tempfile
 from .logger import StatusLogger
@@ -436,12 +436,9 @@ def _member_matches(
     for match in header.match(matcher=parent.matcher, parent=parent):
         match.analysis_member_counted = True
         decoded = member_data(archive, header, match, parent)
-        if decoded is not None:
-            match.decoded = decoded
         yield match
         if decoded is not None:
-            with Tempfile(decoded) as content:
-                yield from parent.matcher.match(content, parent=match)
+            yield from match_decoded(match, decoded, member_counted=True)
 
 
 def parse_archive(

@@ -1,5 +1,7 @@
-const rawBytes = atob("{{ encoded }}");
-const ROWS = Math.max(Math.ceil(rawBytes.length / 16), 1);
+const SOURCE_BUFFERS = {{ source_buffers|tojson }};
+let activeSource = 'file';
+let rawBytes = atob("{{ encoded }}");
+let ROWS = Math.max(Math.ceil(rawBytes.length / 16), 1);
 const UNDESCRIBED_REGIONS = {{ undescribed_regions }};
 let BYTE_HEIGHT;
 let ROW_OFFSET = 0;
@@ -13,15 +15,38 @@ let $rbytes = [];
 
 function buildUndescribedMap() {
     const map = new Uint8Array(rawBytes.length);
-    for(let i=0; i<UNDESCRIBED_REGIONS.length; ++i) {
-        const region = UNDESCRIBED_REGIONS[i];
+    const regions = SOURCE_BUFFERS[activeSource].regions;
+    for(let i=0; i<regions.length; ++i) {
+        const region = regions[i];
         map.fill(1, region[0], region[0] + region[1]);
     }
     return map;
 }
 
 /* Expanded once at load so that rendering a row costs one array read per byte. */
-const undescribedMap = buildUndescribedMap();
+let undescribedMap = buildUndescribedMap();
+
+function selectSource(source) {
+    if(source === activeSource) {
+        return;
+    }
+    activeSource = source;
+    rawBytes = atob(SOURCE_BUFFERS[source].encoded);
+    ROWS = Math.max(Math.ceil(rawBytes.length / 16), 1);
+    undescribedMap = buildUndescribedMap();
+    highlights = {};
+    linesByRow = [1];
+    LINE_DIGITS = 1;
+    $('#source').val(source);
+    $('.manually-focused, .searchresult, .highlighted').removeClass(
+        'manually-focused searchresult highlighted');
+    const undescribed = SOURCE_BUFFERS[source].regions.reduce((total, region) => total + region[1], 0);
+    $('.coverage').text(source + ': ' + undescribed + ' of ' + rawBytes.length + ' bytes are undescribed.');
+    $('.scrollheightproxy').height(BYTE_HEIGHT * (ROWS + 2));
+    assignLines();
+    scrollToRow(0);
+    pageSearch();
+}
 
 function getByte(index) {
     if(index < $bytes.length && index >= 0) {
@@ -105,12 +130,13 @@ const mime_types = {
     "video/mp4": "mp4",
 };
 
-function downloadFile(offset, length, mime_type, extension) {
+function downloadFile(offset, length, mime_type, extension, source = activeSource) {
+    const bytes = atob(SOURCE_BUFFERS[source].encoded);
     if(typeof offset === 'undefined') {
         offset = 0;
     }
     if(typeof length === 'undefined') {
-        length = rawBytes.length;
+        length = bytes.length;
     }
     if(typeof mime_type === 'undefined' || !mime_type) {
         if(typeof extension !== 'undefined' && extension) {
@@ -122,8 +148,8 @@ function downloadFile(offset, length, mime_type, extension) {
             }
         }
         if(typeof mime_type === 'undefined' || !mime_type) {
-            if(offset === 0 && length === rawBytes.length) {
-                mime_type = '{{ mime_type }}';
+            if(offset === 0 && length === bytes.length && source === 'file') {
+                mime_type = {{ mime_type|tojson }};
             } else {
                 mime_type = 'application/octet-stream';
             }
@@ -134,14 +160,17 @@ function downloadFile(offset, length, mime_type, extension) {
             extension = mime_types[mime_type];
         }
     }
-    let filename = '{{ filename.replace("'", "\\'") }}';
-    if(offset !== 0 || length !== rawBytes.length || mime_type !== '{{ mime_type }}') {
+    let filename = {{ filename|tojson }};
+    if(source !== 'file') {
+        filename += '-' + source.replace(':', '-');
+    }
+    if(offset !== 0 || length !== bytes.length || mime_type !== {{ mime_type|tojson }}) {
         filename += "@" + offset + "-" + (offset + length - 1);
         if(typeof extension !== 'undefined' && extension) {
             filename += "." + extension;
         }
     }
-    download('data:{{ mime_type }};base64,'+ btoa(rawBytes.slice(offset, offset + length)),
+    download('data:' + mime_type + ';base64,'+ btoa(bytes.slice(offset, offset + length)),
         filename, mime_type);
 }
 
@@ -273,6 +302,9 @@ function labelsForByte(byte_id) {
         return $byteLabelCache.read(byte_id)
     } else {
         return $byteLabelCache.write(byte_id, $labels.filter(function() {
+            if($(this).attr('matchsource') !== activeSource) {
+                return false;
+            }
             const start = parseInt($(this).attr('matchbyte'));
             if(start > byte_id) {
                 return false;
@@ -592,6 +624,9 @@ function pageSearch() {
 
     const queryLower = query.toLowerCase();
     searchMatches = new Set($.map($labels, function(label) {
+        if($(label).attr('matchsource') !== activeSource) {
+            return null;
+        }
         if($(label).text().toLowerCase().includes(queryLower)) {
             const offset = $(label).attr('matchbyte');
             const length = $(label).attr('matchlength');
@@ -696,9 +731,11 @@ $(document).ready(function() {
 //        cursor($(this).attr('byteid'));
 //    })
     $labels.hover(function() {
+        selectSource($(this).attr('matchsource'));
         highlight($(this).attr('matchbyte'), $(this).attr('matchlength'));
     });
     $(".tree_label:not([for])").css("cursor", "zoom-in").click(function() {
+        selectSource($(this).attr('matchsource'));
         if($(this).hasClass("manually-focused")) {
             removeHighlight("manually-focused");
             $(this).removeClass("manually-focused");

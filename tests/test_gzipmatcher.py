@@ -3,12 +3,16 @@
 import gzip
 import struct
 import zlib
+from io import BytesIO
+from zipfile import ZIP_DEFLATED, ZipFile
 
 import pytest
 
+from polyfile.analysis import AnalysisLimits
 from polyfile.compression import DecodeError
 from polyfile.fileutils import FileStream
 from polyfile.gzipmatcher import GZIP_MEMORY, decode_gzip
+from polyfile.polyfile import Matcher
 
 PAYLOAD = b'{"gzip_member": true}\n'
 
@@ -147,3 +151,108 @@ def test_codec_memory_limit_is_optional():
     with FileStream(data) as stream, pytest.raises(DecodeError) as error:
         decode_gzip(stream, max_memory=GZIP_MEMORY - 1)
     assert error.value.status == "limited"
+
+
+def analyzed(data, limits=None):
+    return list(Matcher(limits=limits).match(data))
+
+
+def test_decoded_json_has_its_own_zero_based_source():
+    matches = analyzed(member(PAYLOAD))
+    wrapper = next(m for m in matches if m.name == "application/gzip")
+    decoded = next(m for m in matches if m.name == "decoded_content")
+    document = next(m for m in matches if m.name == "application/json")
+    assert wrapper.source == "file"
+    assert decoded.source == document.source == "decoded:0"
+    assert decoded.parent is wrapper
+    assert decoded.decoded == PAYLOAD
+    assert (decoded.offset, document.offset, document.length) == (0, 0, len(PAYLOAD))
+    assert wrapper.analysis_context.members == 1
+
+
+def test_split_json_across_members_is_recursively_recognized():
+    matches = analyzed(member(PAYLOAD[:8]) + member(PAYLOAD[8:]))
+    document = next(m for m in matches if m.name == "application/json")
+    assert document.source == "decoded:0"
+    assert document.analysis_context.members == 2
+
+
+def test_nested_gzip_sources_are_distinct_and_deterministic():
+    data = member(member(PAYLOAD))
+    for _ in range(2):
+        matches = analyzed(data)
+        decoded = [m for m in matches if m.name == "decoded_content"]
+        assert [m.source for m in decoded] == ["decoded:0", "decoded:1"]
+        document = next(m for m in matches if m.name == "application/json")
+        assert document.source == "decoded:1"
+        assert document.offset == 0
+
+
+def test_gzip_zip_json_recursion_keeps_all_coordinate_spaces():
+    buffer = BytesIO()
+    with ZipFile(buffer, "w", ZIP_DEFLATED) as archive:
+        archive.writestr("document.json", PAYLOAD)
+    matches = analyzed(member(buffer.getvalue()))
+    archive = next(m for m in matches if m.name == "application/zip")
+    document = next(m for m in matches if m.name == "application/json")
+    assert archive.source == "decoded:0"
+    assert document.source != archive.source
+    assert document.offset == 0
+    compressed = document.parent.parent
+    assert compressed.name == "compressed_data"
+    assert compressed.source == archive.source
+    assert compressed.offset > 0
+
+
+def test_invalid_data_publishes_no_decoded_child(caplog):
+    data = bytearray(member(PAYLOAD))
+    data[-8] ^= 1
+    matches = analyzed(bytes(data))
+    wrapper = next(m for m in matches if m.name == "application/gzip")
+    assert wrapper.analysis_status == "invalid"
+    assert not any(m.name == "decoded_content" for m in matches)
+    assert not [record for record in caplog.records if record.levelno >= 30]
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("max_member_bytes", 4),
+        ("max_total_bytes", 4),
+        ("max_depth", 0),
+        ("max_members", 0),
+    ],
+)
+def test_configured_limits_are_explicit_and_do_not_publish_decoded_content(
+    field, value
+):
+    matches = analyzed(member(PAYLOAD), AnalysisLimits(**{field: value}))
+    wrapper = next(m for m in matches if m.name == "application/gzip")
+    assert wrapper.analysis_status == "limited"
+    assert wrapper.analysis_message
+    assert not any(m.name == "decoded_content" for m in matches)
+
+
+def test_nested_depth_limit_stops_at_the_selected_content_transition():
+    matches = analyzed(member(member(PAYLOAD)), AnalysisLimits(max_depth=1))
+    wrappers = [m for m in matches if m.name == "application/gzip"]
+    assert len(wrappers) == 2
+    assert wrappers[0].analysis_status is None
+    assert wrappers[1].analysis_status == "limited"
+    assert not any(m.name == "application/json" for m in matches)
+
+
+def test_member_limit_counts_each_gzip_member():
+    matches = analyzed(
+        member(PAYLOAD[:8]) + member(PAYLOAD[8:]), AnalysisLimits(max_members=1)
+    )
+    wrapper = next(m for m in matches if m.name == "application/gzip")
+    assert wrapper.analysis_status == "limited"
+    assert not any(m.name == "decoded_content" for m in matches)
+
+
+def test_default_analysis_does_not_impose_an_output_limit():
+    payload = b'{"content":"' + b"x" * 200_000 + b'"}'
+    matches = analyzed(member(payload))
+    decoded = next(m for m in matches if m.name == "decoded_content")
+    assert decoded.decoded == payload

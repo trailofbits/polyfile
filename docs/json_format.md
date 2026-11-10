@@ -22,12 +22,13 @@ Notes, additions to SBuD, as well as any breaking changes are listed in C-style 
      * in the case of a polyglot                                  */
     {
       "name":   "ADOBE_PDF",  /* the filetype                     */
-      "offset": 0,            /* the offset of this file object   *
-                               * within the input file            */
+      "source": "file",       /* the buffer containing this node  */
+      "offset": 0,            /* the offset within that buffer    */
       "subEls": [
         /* sub-elements of this filetype                          */
         {
-          "offset": 0         /* once again, the global offset    */
+          "source": "file",  /* inherited by ordinary children   */
+          "offset": 0         /* the offset within this source    */
           "relative_offset: 0 /* the offset of this element       *
                                * relative to its parent           */
           "name": "header"    /* a descriptive element name       */
@@ -71,3 +72,27 @@ complete. Statuses are `invalid` for malformed input, `unsupported` for a recogn
 parser cannot process, and `limited` when an explicitly configured resource limit stops work.
 The message gives the reason. These fields are absent when no such condition is reported;
 the element's existing structure and classification remain available.
+
+## Physical and decoded sources
+
+Every element has a `source` identifier. `file` refers to the original input in `b64contents`.
+Offsets and sizes always refer to bytes in the named source. A child with the same source has an
+`offset` equal to its parent's offset plus its `relative_offset`.
+
+Decompression creates a `decoded_content` child with a new source, such as `decoded:0`, offset
+zero, and the size of the decoded buffer. Its `decoded` field contains that buffer as base64.
+Its parent describes the physical encoded region, while its children describe the decoded bytes.
+At a source boundary, `relative_offset` is relative to the new buffer's origin, not the parent.
+Source identifiers are deterministic within an analysis; a nested decoder creates another source.
+
+This changes earlier output, which added decoded offsets to the containing compressed region's
+physical offset. Consumers must use `(source, offset)` to identify a byte location. HTML highlights,
+downloads, and coverage use the selected source. The source selector lets you inspect the original
+input and each decoded buffer separately.
+
+Gzip analysis preserves headers, optional fields, compressed bodies, and trailers for each member.
+It validates header checksums, payload CRCs, and decoded sizes before analyzing the concatenated
+decoded content. Zero padding is preserved; other trailing data reports an invalid stream without
+publishing decoded children. Configured output, member, depth, and codec-memory limits report
+`limited` instead. All limits are unlimited by default; codec-memory limits govern decoder state,
+not the total memory used by the Python process or report.

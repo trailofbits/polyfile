@@ -3,6 +3,7 @@
 import pytest
 
 from polyfile.compression import DecodeError, OutputBuffer
+from polyfile.polyfile import Match, Matcher, Submatch
 
 
 def test_output_is_unlimited_by_default():
@@ -28,3 +29,22 @@ def test_a_zero_limit_accepts_empty_output():
     output = OutputBuffer(0)
     output.append(b"")
     assert output.finish() == b""
+
+
+def test_offsets_stop_at_a_source_boundary():
+    physical = Match("wrapper", None, relative_offset=100, length=10, matcher=Matcher())
+    decoded = Submatch(
+        "decoded_content", None, length=20, parent=physical, source="decoded:0"
+    )
+    child = Submatch("field", None, relative_offset=3, length=2, parent=decoded)
+    assert (physical.offset, decoded.offset, child.offset) == (100, 0, 3)
+    assert child.source == "decoded:0"
+    assert child.root_offset == 3
+    assert child.to_obj()["source"] == "decoded:0"
+
+
+def test_a_decoded_child_does_not_change_a_physical_extent():
+    physical = Match("wrapper", None, relative_offset=100, matcher=Matcher())
+    Submatch("physical", None, length=10, parent=physical)
+    Submatch("decoded_content", None, length=1000, parent=physical, source="decoded:0")
+    assert physical.length == 10
