@@ -196,8 +196,8 @@ def _notes(view: _View, records: Sequence[_Program], errors: list[str]) -> Itera
         align = 8 if align == 8 else 4
         start, end = record.ofs_body, record.ofs_body + record.len_body
         previous_end = _covered_note_end(covered, start, align)
-        if previous_end >= end and start < end:
-            if (end, align) not in boundaries:
+        if previous_end >= end:
+            if start < end and (end, align) not in boundaries:
                 errors.append("truncated ELF note")
             continue
         start = previous_end

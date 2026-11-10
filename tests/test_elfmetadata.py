@@ -565,3 +565,15 @@ def test_overlapping_note_prefixes_finish_within_a_subprocess_deadline() -> None
         [sys.executable, "-c", script], input=data, capture_output=True, check=True, timeout=20
     )
     assert result.stdout == b"ELF fixture, statically linked, no section header\n"
+
+
+
+def test_empty_note_region_can_share_a_nonempty_region_start() -> None:
+    """An empty note region remains valid when another region has already covered its offset."""
+    payload = note(b"GNU", 3, bytes(range(20)))
+    data = bytearray(build_elf(programs=((4, payload), (4, b""))))
+    offset = struct.unpack_from("<Q", data, 64 + 8)[0]
+    struct.pack_into("<Q", data, 64 + 56 + 8, offset)
+    message = description(bytes(data))
+    assert "BuildID[sha1]=" in message
+    assert "invalid" not in message and "truncated" not in message
