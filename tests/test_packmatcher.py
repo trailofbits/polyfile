@@ -3,7 +3,6 @@
 import contextlib
 import io
 import json
-import sys
 from hashlib import sha256
 from pathlib import Path
 
@@ -12,10 +11,11 @@ import pytest
 from polyfile import AnalysisLimits
 from polyfile.__main__ import main
 from polyfile.compression import DecodeError, DecodeResult
+from polyfile.external import run_helper
 from polyfile.fileutils import FileStream
 from polyfile.gziphelper import find_gnu_gzip
 from polyfile.magic import MAGIC_DEFS, MagicMatcher, join_matches
-from polyfile.packmatcher import PACK_MIME, decode_pack
+from polyfile.packmatcher import PACK_MEMORY, PACK_MIME, decode_pack
 from polyfile.polyfile import Match, Matcher
 from tests.pack_fixture import pack_fixture
 
@@ -42,7 +42,7 @@ def analyzed(data: bytes | Path, limits: AnalysisLimits | None = None) -> list[M
 
 
 @pytest.mark.parametrize("item", PROVENANCE, ids=lambda item: item["fixture"])
-def test_owned_pack_fixtures_round_trip_with_real_decoder(gnu_gzip: str, item: dict) -> None:
+def test_owned_pack_fixtures_round_trip_with_real_decoder(item: dict) -> None:
     encoded = (FIXTURES / item["fixture"]).read_bytes()
     expected = (FIXTURES / item["payload"]).read_bytes()
     assert sha256(encoded).hexdigest() == item["encoded_sha256"]
@@ -54,10 +54,10 @@ def test_owned_generator_reproduces_all_bytes_fixture() -> None:
     assert pack_fixture(bytes(range(256))) == (FIXTURES / "all-bytes.z").read_bytes()
 
 
-def test_raw_fields_have_exact_encoded_offsets(gnu_gzip: str) -> None:
+def test_raw_fields_have_exact_encoded_offsets() -> None:
     data = (FIXTURES / "document.z").read_bytes()
     result = decode(data)
-    header, body = result.regions
+    header, body = result.regions[0].children
     assert (header.name, header.offset, header.length) == ("pack_header", 0, 272)
     assert [(field.name, field.offset, field.length) for field in header.children] == [
         ("magic", 0, 2),
@@ -70,7 +70,7 @@ def test_raw_fields_have_exact_encoded_offsets(gnu_gzip: str) -> None:
     assert (body.name, body.offset, body.length) == ("huffman_data", 272, len(data) - 272)
 
 
-def test_decoded_json_and_tar_use_separate_sources(gnu_gzip: str) -> None:
+def test_decoded_json_and_tar_use_separate_sources() -> None:
     for name, offset in (("document.z", 0), ("archive.z", 512)):
         matches = analyzed(FIXTURES / name)
         wrapper = next(match for match in matches if match.name == PACK_MIME)
@@ -83,7 +83,7 @@ def test_decoded_json_and_tar_use_separate_sources(gnu_gzip: str) -> None:
         assert not any(match.name == "application/octet-stream" for match in matches)
 
 
-def test_path_and_rawbytes_are_equivalent(gnu_gzip: str) -> None:
+def test_path_and_rawbytes_are_equivalent() -> None:
     path = FIXTURES / "document.z"
     assert [(match.name, match.source, match.offset) for match in analyzed(path)] == [
         (match.name, match.source, match.offset) for match in analyzed(path.read_bytes())
@@ -91,7 +91,7 @@ def test_path_and_rawbytes_are_equivalent(gnu_gzip: str) -> None:
 
 
 @pytest.mark.parametrize("output_format", ("file", "mime", "json"))
-def test_cli_file_mime_and_json_dispatch(gnu_gzip: str, output_format: str) -> None:
+def test_cli_file_mime_and_json_dispatch(output_format: str) -> None:
     output = io.StringIO()
     with contextlib.redirect_stdout(output):
         main(["polyfile", "-q", "-r", output_format, str(FIXTURES / "document.z")])
@@ -139,7 +139,7 @@ def test_old_pack_is_recognized_and_explicitly_unsupported() -> None:
     assert not any(match.name == "decoded_content" for match in matches)
 
 
-@pytest.mark.parametrize("length", (0, 1, 2, 3, 5, 6, 7, 10, 15, 16, 100, 271))
+@pytest.mark.parametrize("length", (1, 2, 3, 5, 6, 7, 10, 15, 16, 100, 271))
 def test_truncated_headers_and_tree_are_invalid(length: int) -> None:
     data = (FIXTURES / "document.z").read_bytes()[:length]
     with pytest.raises(DecodeError, match="truncated") as error:
@@ -162,7 +162,7 @@ def test_wrong_signature_is_invalid() -> None:
         (b"\x1f\x1e\0\0\0\1\2\xff\1", "too many literals"),
     ],
 )
-def test_invalid_huffman_tree_is_rejected_before_helper(data: bytes, message: str) -> None:
+def test_invalid_huffman_tree_is_rejected_before_decoding(data: bytes, message: str) -> None:
     with pytest.raises(DecodeError, match=message) as error:
         decode(data)
     assert error.value.status == "invalid"
@@ -175,7 +175,7 @@ def test_code_length_above_backend_support_is_explicit() -> None:
 
 
 @pytest.mark.parametrize("mutation", ("size", "truncated-body"))
-def test_helper_integrity_error_publishes_no_partial_output(gnu_gzip: str, mutation: str) -> None:
+def test_integrity_error_publishes_no_partial_output(mutation: str) -> None:
     data = bytearray((FIXTURES / "document.z").read_bytes())
     if mutation == "size":
         data[5] ^= 1
@@ -189,14 +189,14 @@ def test_helper_integrity_error_publishes_no_partial_output(gnu_gzip: str, mutat
     assert not any(match.name == "decoded_content" for match in matches)
 
 
-def test_declared_output_limit_is_checked_before_helper(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_declared_output_limit_is_checked_before_decoding(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("polyfile.gziphelper.shutil.which", lambda name: None)
     with pytest.raises(DecodeError, match="declared") as error:
         decode((FIXTURES / "document.z").read_bytes(), max_output=len(PAYLOAD) - 1)
     assert error.value.status == "limited"
 
 
-def test_exact_output_boundary_and_empty_zero_limit(gnu_gzip: str) -> None:
+def test_exact_output_boundary_and_empty_zero_limit() -> None:
     assert decode((FIXTURES / "document.z").read_bytes(), max_output=len(PAYLOAD)).data == PAYLOAD
     assert decode((FIXTURES / "empty.z").read_bytes(), max_output=0).data == b""
 
@@ -205,7 +205,7 @@ def test_exact_output_boundary_and_empty_zero_limit(gnu_gzip: str) -> None:
     "field,value",
     [("max_depth", 0), ("max_members", 0), ("max_member_bytes", 1), ("max_total_bytes", 1)],
 )
-def test_configured_recursive_limits_are_explicit(gnu_gzip: str, field: str, value: int) -> None:
+def test_configured_recursive_limits_are_explicit(field: str, value: int) -> None:
     matches = analyzed(FIXTURES / "document.z", AnalysisLimits(**{field: value}))
     wrapper = next(match for match in matches if match.name == PACK_MIME)
     assert wrapper.analysis_status == "limited"
@@ -218,25 +218,25 @@ def test_direct_member_allowance_zero_is_limited() -> None:
     assert error.value.status == "limited"
 
 
-def test_missing_helper_preserves_signature_and_tree(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_native_pack_does_not_require_an_installed_helper(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("polyfile.gziphelper.shutil.which", lambda name: None)
     matches = analyzed(FIXTURES / "document.z")
     wrapper = next(match for match in matches if match.name == PACK_MIME)
-    assert wrapper.analysis_status == "unsupported"
+    assert wrapper.analysis_status is None
     assert any(match.name == "literals" for match in matches)
-    assert not any(match.name == "decoded_content" for match in matches)
+    assert any(match.name == "application/json" for match in matches)
 
 
 def test_arbitrary_octet_stream_data_is_not_decoded_as_pack() -> None:
     assert not any(match.name == PACK_MIME for match in analyzed(b"arbitrary\0binary\xffdata"))
 
 
-@pytest.mark.skipif(sys.platform == "linux", reason="hard memory limit outside Linux")
-def test_requested_hard_memory_ceiling_is_unsupported_outside_linux(gnu_gzip: str) -> None:
-    matches = analyzed(FIXTURES / "document.z", AnalysisLimits(max_codec_memory=128 << 20))
-    wrapper = next(match for match in matches if match.name == PACK_MIME)
-    assert wrapper.analysis_status == "unsupported"
-    assert wrapper.analysis_message is not None and "only on Linux" in wrapper.analysis_message
+def test_native_codec_memory_boundary_is_available_on_all_platforms() -> None:
+    data = (FIXTURES / "document.z").read_bytes()
+    assert decode(data, max_memory=PACK_MEMORY).data == PAYLOAD
+    with pytest.raises(DecodeError) as error:
+        decode(data, max_memory=PACK_MEMORY - 1)
+    assert error.value.status == "limited"
 
 
 @pytest.mark.parametrize("signature", (b"\x1f\x1e", b"\x1f\x1f"))
@@ -254,11 +254,87 @@ def test_explicit_generic_mime_filter_retains_original_pack_verdict() -> None:
     assert not any(match.name == "decoded_content" for match in matches)
 
 
-def test_successful_helper_still_requires_exact_declared_length(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr("polyfile.packmatcher.find_gnu_gzip", lambda **kwargs: sys.executable)
-    monkeypatch.setattr("polyfile.packmatcher.run_helper", lambda *args, **kwargs: b"short")
-    with pytest.raises(DecodeError, match="declared size") as error:
-        decode((FIXTURES / "document.z").read_bytes())
+@pytest.mark.parametrize("item", PROVENANCE, ids=lambda item: item["fixture"])
+def test_native_pack_agrees_with_gnu_reference(gnu_gzip: str, item: dict) -> None:
+    encoded = (FIXTURES / item["fixture"]).read_bytes()
+    with FileStream(encoded) as stream:
+        reference = run_helper(stream, (gnu_gzip, "-d", "-c"))
+    assert decode(encoded).data == reference
+
+
+@pytest.mark.parametrize("second", ("document.z", "empty.z", "one-byte.z"))
+def test_concatenated_members_have_individual_framing_and_counts(second: str) -> None:
+    first = (FIXTURES / "document.z").read_bytes()
+    following = (FIXTURES / second).read_bytes()
+    expected = PAYLOAD + (FIXTURES / second.replace(".z", ".decoded")).read_bytes()
+    result = decode(first + following)
+    assert result.data == expected
+    assert result.member_count == 2
+    assert [(region.offset, region.length) for region in result.regions] == [
+        (0, len(first)),
+        (len(first), len(following)),
+    ]
+    with pytest.raises(DecodeError) as error:
+        decode(first + following, max_members=1)
+    assert error.value.status == "limited"
+    assert error.value.member_count == 1
+
+
+def test_member_limit_applies_even_when_following_member_is_empty() -> None:
+    data = (FIXTURES / "document.z").read_bytes() + (FIXTURES / "empty.z").read_bytes()
+    matches = analyzed(data, AnalysisLimits(max_members=1))
+    wrapper = next(match for match in matches if match.name == PACK_MIME)
+    assert wrapper.analysis_status == "limited"
+    assert not any(match.name == "decoded_content" for match in matches)
+
+
+def test_filtered_modern_alias_does_not_hide_old_pack_rule() -> None:
+    definitions = MagicMatcher.DEFAULT_INSTANCE.only_match(
+        mimetypes=("application/octet-stream",), extensions=("z",)
+    )
+    with FileStream(b"\x1f\x1f") as stream:
+        assert join_matches(Matcher(matcher=definitions).identify(stream), raw=True) == (
+            "old packed data"
+        )
+
+
+def test_empty_input_has_no_attempted_member() -> None:
+    with pytest.raises(DecodeError) as error:
+        decode(b"")
     assert error.value.status == "invalid"
+    assert error.value.member_count == 0
+
+
+@pytest.mark.parametrize("size", (65535, 65536, 65537, 131073))
+def test_input_output_chunk_boundaries_and_read_ahead(size: int) -> None:
+    payload = (bytes(range(256)) * ((size + 255) // 256))[:size]
+    first = pack_fixture(payload)
+    last = (FIXTURES / "document.z").read_bytes()
+    result = decode(first + last, max_output=size + len(PAYLOAD))
+    assert result.data == payload + PAYLOAD
+    assert result.member_count == 2
+    assert result.regions[0].length == len(first)
+    assert result.regions[1].offset == len(first)
+
+
+def test_multimember_output_allowance_and_failed_attempt_count() -> None:
+    first = (FIXTURES / "document.z").read_bytes()
+    with pytest.raises(DecodeError) as error:
+        decode(first + first, max_output=2 * len(PAYLOAD) - 1)
+    assert error.value.status == "limited"
+    assert error.value.member_count == 2
+    with pytest.raises(DecodeError) as error:
+        decode(first + first[:-1], max_members=2)
+    assert error.value.status == "invalid"
+    assert error.value.member_count == 2
+
+
+def test_wrong_decoded_size_never_publishes_partial_concat_output() -> None:
+    first = (FIXTURES / "document.z").read_bytes()
+    second = bytearray(first)
+    second[5] -= 1
+    matches = analyzed(first + bytes(second))
+    wrapper = next(match for match in matches if match.name == PACK_MIME)
+    assert wrapper.analysis_status == "invalid"
+    assert wrapper.analysis_context.members == 2
+    assert not any(match.name == "decoded_content" for match in matches)
