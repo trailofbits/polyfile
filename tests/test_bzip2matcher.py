@@ -302,3 +302,31 @@ def test_corrupt_later_stream_preserves_raw_structure_without_partial_output() -
     assert streams[1].offset == len(first)
     assert wrapper.analysis_status == "invalid"
     assert not any(node.name == "decoded_content" for node in matches)
+
+
+def test_failed_concatenated_streams_charge_each_attempt() -> None:
+    first = bz2.compress(JSON[:8])
+    second = bytearray(bz2.compress(JSON[8:]))
+    second[10] ^= 1
+    data = first + second
+    with pytest.raises(DecodeError) as exc:
+        decode(data)
+    assert exc.value.member_count == 2
+    matches = analyzed(data, limits=AnalysisLimits(max_members=3))
+    wrapper = next(node for node in matches if node.name == "application/x-bzip2")
+    assert wrapper.analysis_context.members == 2
+    assert wrapper.analysis_status == "invalid"
+
+
+@pytest.mark.parametrize("limit", [0, 1])
+def test_rejected_next_stream_does_not_charge_an_unattempted_entry(limit: int) -> None:
+    with pytest.raises(DecodeError) as exc:
+        decode(bz2.compress(JSON) * 2, max_members=limit)
+    assert exc.value.status == "limited"
+    assert exc.value.member_count == limit
+
+
+def test_empty_input_does_not_charge_a_codec_attempt() -> None:
+    with pytest.raises(DecodeError) as exc:
+        decode(b"")
+    assert exc.value.member_count == 0

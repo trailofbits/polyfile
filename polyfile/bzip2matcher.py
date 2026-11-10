@@ -123,23 +123,26 @@ def decode_bzip2(
     """
     output = OutputBuffer(max_output)
     regions: list[RawRegion] = []
+    members = 0
     while stream.tell() < len(stream):
         try:
-            if max_members is not None and len(regions) >= max_members:
+            if max_members is not None and members >= max_members:
                 raise DecodeError(
                     f"bzip2 stream count exceeds the limit of {max_members}",
                     status="limited",
                 )
+            members += 1
             regions.append(_member(stream, output, max_memory))
         except DecodeError as error:
             raise DecodeError(
                 str(error),
                 status=error.status,
                 regions=tuple(regions) + error.regions,
+                member_count=members,
             ) from error
     if not regions:
-        raise DecodeError("empty input contains no bzip2 stream")
-    return DecodeResult(output.finish(), tuple(regions), len(regions))
+        raise DecodeError("empty input contains no bzip2 stream", member_count=0)
+    return DecodeResult(output.finish(), tuple(regions), members)
 
 
 @register_parser("application/x-bzip2")
