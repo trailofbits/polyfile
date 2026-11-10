@@ -102,3 +102,15 @@ its own format labels without repeating the same recursive expansion. For exampl
 member keeps its raw bzip2 classification while the validated decoded tree appears once under
 the ZIP member's decoded-content region. Other raw polyglot interpretations remain eligible
 for their own parsers.
+
+Zstandard analysis decodes modern frames (v0.8 and later), validates content checksums, and
+concatenates decoded bytes across frames. Skippable frames retain physical extents and count
+toward `--max-members`, including frames before the first compressed frame. Historical versions
+and frames declaring an external dictionary report `unsupported`; no dictionary-loading API is
+provided. Trailing non-frame bytes and incomplete frames report `invalid` without decoded children.
+
+Python 3.14 uses `compression.zstd`. Python 3.11 through 3.13 installs the required
+`backports.zstd==1.8.0` dependency, which exposes the same incremental API. For Zstandard,
+`--max-codec-memory` limits the declared decoder window. An omitted limit uses the largest window
+supported by the runtime, rather than imposing an application memory cap. Output and frame limits
+are also optional and unlimited by default.

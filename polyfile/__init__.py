@@ -4,6 +4,7 @@ from . import (
     zipmatcher,
     simh,
     gzipmatcher,
+    zstdmatcher,
     nitf,
     http,
     kaitaimatcher,

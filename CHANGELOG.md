@@ -10,6 +10,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 
 ### Added
 
+- **Breaking:** Zstandard payloads are recursively analyzed after validating concatenated and
+  skippable frames. Optional output, frame, depth, and decoder-window limits preserve explicit
+  failure status. Python 3.11 through 3.13 requires `backports.zstd==1.8.0`; Python 3.14 uses its
+  standard-library backend. External dictionaries and historical frames report unsupported status.
 - **Breaking:** Bzip2 streams are decoded and recursively analyzed using Python's standard
   library. Concatenated streams retain their physical framing and produce one validated decoded
   buffer; integrity errors, truncation, and configured resource limits report explicit status.
