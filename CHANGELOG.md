@@ -14,6 +14,26 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
   CRC32, decoded-size, and member-size validation. Concatenated members preserve physical
   structure and share optional resource limits. Older versions report unsupported status;
   the decoder uses the Python standard library and requires no external helper.
+- **Breaking:** Decode zlib streams and recursively map validated content, preserving source-aware
+  offsets and reporting checksum, dictionary, trailing-data, and resource-limit failures (#3625).
+- **Breaking:** Modern LZ4 payloads are recursively analyzed after validating frame headers,
+  block/content checksums, and concatenated/skippable frames. The required `lz4==4.4.5` backend
+  honors optional output, frame, depth, and native-buffer limits. Legacy frames and declared
+  external dictionaries report unsupported status.
+- **Breaking:** Zstandard payloads are recursively analyzed after validating concatenated and
+  skippable frames. Optional output, frame, depth, and decoder-window limits preserve explicit
+  failure status. Python 3.11 through 3.13 requires `backports.zstd==1.8.0`; Python 3.14 uses its
+  standard-library backend. External dictionaries and historical frames report unsupported status.
+- **Breaking:** Bzip2 streams are decoded and recursively analyzed using Python's standard
+  library. Concatenated streams retain their physical framing and produce one validated decoded
+  buffer; integrity errors, truncation, and configured resource limits report explicit status.
+- **Breaking:** Identify SIMH tape images with native record checks, map their records and
+  markers, and recursively analyze independently recognizable record payloads (#3619).
+- **Breaking:** ELF identification descriptions now include validated linkage, interpreter,
+  GNU/Go build IDs, ABI versions, stripping/debug information, and supported core-file details.
+  The command line, Python identification API, and SBuD root values share these descriptions;
+  malformed metadata retains the ELF classification and reports a diagnostic.
+
 - Optional recursive analysis controls through `AnalysisLimits` and `--max-depth`,
   `--max-member-bytes`, `--max-total-bytes`, `--max-members`, and `--max-codec-memory`.
   Defaults are unlimited; skipped regions report their reason in JSON output.

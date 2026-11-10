@@ -2,8 +2,12 @@ from . import (
     nes,
     jpeg,
     zipmatcher,
+    zlibmatcher,
+    simh,
     gzipmatcher,
     lzipmatcher,
+    lz4matcher,
+    zstdmatcher,
     nitf,
     http,
     kaitaimatcher,
@@ -12,7 +16,7 @@ from . import (
     polyfile
 )
 
-from polyfile import tarmatcher
+from polyfile import bzip2matcher, tarmatcher
 from polyfile.analysis import AnalysisLimits
 from .__main__ import main
 from .polyfile import __version__, InvalidMatch, Match, Matcher, Parser, PARSERS, register_parser, Submatch
