@@ -48,3 +48,35 @@ def test_a_decoded_child_does_not_change_a_physical_extent():
     Submatch("physical", None, length=10, parent=physical)
     Submatch("decoded_content", None, length=1000, parent=physical, source="decoded:0")
     assert physical.length == 10
+
+
+def test_failed_concatenation_consumes_shared_frame_budget() -> None:
+    import gzip
+
+    from polyfile.analysis import AnalysisLimits
+    from polyfile.compression import parse_compressed
+    from polyfile.fileutils import FileStream
+    from polyfile.gzipmatcher import decode_gzip
+
+    matcher = Matcher(limits=AnalysisLimits(max_members=2))
+    first = Match("application/gzip", None, matcher=matcher)
+    data = gzip.compress(b"first", mtime=0) + gzip.compress(b"second", mtime=0)[:-2]
+    with FileStream(data) as stream:
+        list(parse_compressed(stream, first, decode_gzip))
+    assert first.analysis_status == "invalid"
+    assert first.analysis_context.members == 2
+
+    second = Match(
+        "application/gzip",
+        None,
+        matcher=matcher,
+        analysis_context=first.analysis_context,
+    )
+
+    def unexpected_decode(*args, **kwargs):
+        raise AssertionError("Exhausted shared frame budget still invoked a decoder")
+
+    with FileStream(gzip.compress(b"third", mtime=0)) as stream:
+        list(parse_compressed(stream, second, unexpected_decode))
+    assert second.analysis_status == "limited"
+    assert first.analysis_context.members == 2

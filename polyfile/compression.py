@@ -4,6 +4,7 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import Protocol
 
+from polyfile.analysis import AnalysisContext
 from polyfile.fileutils import FileStream
 from polyfile.polyfile import Match, Submatch
 
@@ -52,10 +53,12 @@ class DecodeError(ValueError):
         *,
         status: str = "invalid",
         regions: tuple[RawRegion, ...] = (),
+        member_count: int = 1,
     ) -> None:
         super().__init__(message)
         self.status = status
         self.regions = regions
+        self.member_count = member_count
 
 
 class Decoder(Protocol):
@@ -140,10 +143,36 @@ def match_decoded(
         yield from parent.matcher.match(data, parent=decoded)
 
 
+def _decode_admission(parent: Match) -> str | None:
+    context = parent.analysis_context
+    max_depth = context.limits.max_depth
+    if max_depth is not None and parent.analysis_depth >= max_depth:
+        return f"Recursive analysis exceeds the depth limit of {max_depth}"
+    if context.remaining_members == 0:
+        return "Codec member count exceeds the remaining analysis allowance"
+    return None
+
+
+def _charge_entries(context: AnalysisContext, count: int) -> str | None:
+    for _ in range(count):
+        reason = context.claim_entry()
+        if reason is not None:
+            return reason
+    return None
+
+
+def _failed_decode(parent: Match, error: DecodeError) -> Iterator[Match]:
+    reason = _charge_entries(parent.analysis_context, error.member_count)
+    parent.analysis_status = "limited" if reason is not None else error.status
+    parent.analysis_message = reason if reason is not None else str(error)
+    for region in error.regions:
+        yield from region.matches(parent)
+
+
 def parse_compressed(
     stream: FileStream, parent: Match, decoder: Decoder
 ) -> Iterator[Match]:
-    """Maps a compressed stream and analyzes its validated decoded content.
+    """Map a compressed stream and analyze its validated decoded content.
 
     Args:
         stream: The encoded input, positioned at its start.
@@ -154,12 +183,9 @@ def parse_compressed(
         Physical framing regions, followed by validated decoded content.
     """
     context = parent.analysis_context
-    max_depth = context.limits.max_depth
-    if max_depth is not None and parent.analysis_depth >= max_depth:
-        parent.analysis_status = "limited"
-        parent.analysis_message = (
-            f"recursive analysis exceeds the depth limit of {max_depth}"
-        )
+    reason = _decode_admission(parent)
+    if reason is not None:
+        parent.analysis_status, parent.analysis_message = "limited", reason
         return
     try:
         result = decoder(
@@ -169,17 +195,12 @@ def parse_compressed(
             max_members=context.remaining_members,
         )
     except DecodeError as error:
-        parent.analysis_status = error.status
-        parent.analysis_message = str(error)
-        for region in error.regions:
-            yield from region.matches(parent)
+        yield from _failed_decode(parent, error)
         return
+    reason = _charge_entries(context, result.member_count)
     for region in result.regions:
         yield from region.matches(parent)
-    for _ in range(result.member_count):
-        reason = context.claim_entry()
-        if reason is not None:
-            parent.analysis_status = "limited"
-            parent.analysis_message = reason
-            return
+    if reason is not None:
+        parent.analysis_status, parent.analysis_message = "limited", reason
+        return
     yield from match_decoded(parent, result.data, member_counted=True)

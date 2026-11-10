@@ -158,7 +158,9 @@ def decode_gzip(
     """
     if max_memory is not None and max_memory < GZIP_MEMORY:
         raise DecodeError(
-            "gzip requires a 64 KiB codec-memory allowance", status="limited"
+            "gzip requires a 64 KiB codec-memory allowance",
+            status="limited",
+            member_count=0,
         )
     output = OutputBuffer(max_output)
     regions: list[RawRegion] = []
@@ -175,14 +177,17 @@ def decode_gzip(
                         f"gzip member count exceeds the limit of {max_members}",
                         status="limited",
                     )
-                regions.append(_member(stream, output))
                 members += 1
+                regions.append(_member(stream, output))
         except DecodeError as error:
             raise DecodeError(
-                str(error), status=error.status, regions=tuple(regions) + error.regions
+                str(error),
+                status=error.status,
+                regions=tuple(regions) + error.regions,
+                member_count=members,
             ) from error
     if not regions:
-        raise DecodeError("empty input contains no gzip member")
+        raise DecodeError("empty input contains no gzip member", member_count=0)
     return DecodeResult(output.finish(), tuple(regions), members)
 
 
