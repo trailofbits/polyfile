@@ -10,6 +10,7 @@ from . import (
     polyfile
 )
 
+from polyfile import tarmatcher
 from polyfile.analysis import AnalysisLimits
 from .__main__ import main
 from .polyfile import __version__, InvalidMatch, Match, Matcher, Parser, PARSERS, register_parser, Submatch
