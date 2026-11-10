@@ -567,7 +567,6 @@ def test_overlapping_note_prefixes_finish_within_a_subprocess_deadline() -> None
     assert result.stdout == b"ELF fixture, statically linked, no section header\n"
 
 
-
 def test_empty_note_region_can_share_a_nonempty_region_start() -> None:
     """An empty note region remains valid when another region has already covered its offset."""
     payload = note(b"GNU", 3, bytes(range(20)))
