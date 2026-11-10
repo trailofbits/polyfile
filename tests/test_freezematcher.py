@@ -196,7 +196,7 @@ def test_missing_or_wrong_signature_is_invalid(data: bytes) -> None:
 
 
 @pytest.mark.parametrize("legacy", (False, True))
-def test_every_truncated_prefix_is_invalid(legacy: bool) -> None:
+def test_truncated_prefixes_require_a_complete_supported_variant(legacy: bool) -> None:
     data = (
         legacy_gzip(PAYLOAD) if legacy else (FIXTURES / "document.json.F").read_bytes()
     )
@@ -320,3 +320,24 @@ def test_failed_gzip_tail_preserves_global_member_count() -> None:
     wrapper = next(match for match in matches if match.name == FREEZE_MIME)
     assert wrapper.analysis_status == "invalid"
     assert wrapper.analysis_context.remaining_members == 0
+
+
+def test_invalid_candidates_preserve_each_physical_interpretation() -> None:
+    first = legacy_gzip(PAYLOAD)
+    data = first + b"\x1f\x9e\x08"
+    with pytest.raises(DecodeError) as error:
+        decode(data)
+    gzip_candidate, freeze_candidate = error.value.regions
+    assert (gzip_candidate.name, freeze_candidate.name) == (
+        "gzip_0_5_candidate",
+        "freeze_1_candidate",
+    )
+    assert gzip_candidate.offset == freeze_candidate.offset == 0
+    assert gzip_candidate.length == freeze_candidate.length == len(data)
+    assert gzip_candidate.children[0].name == "gzip_0_5_member"
+    assert gzip_candidate.children[0].length == len(first)
+    assert gzip_candidate.children[0].children[-1].name == "len_uncompressed"
+    assert freeze_candidate.children[0].name == "freeze_1_header"
+    matches = analyzed(data)
+    assert {match.source for match in matches} == {"file"}
+    assert not any(match.name == "decoded_content" for match in matches)

@@ -154,6 +154,8 @@ CRC32, and decoded-size checks; otherwise analysis tries freeze 1.x. A third byt
 does not identify gzip. Gzip framing appears as `gzip_0_5_member`; freeze framing appears as
 `freeze_1_header` and `adaptive_huffman_data`. Each selected format publishes one decoded source,
 concatenating gzip members before recursive analysis.
+If both variants fail, their physical fields remain under `gzip_0_5_candidate` and
+`freeze_1_candidate` regions; neither candidate publishes decoded content.
 
 Freeze requires an end marker and consumes every encoded byte, allowing unused bits in the final
 byte. Its initial 4 KiB dictionary contains spaces, so early backreferences are valid. Freeze has

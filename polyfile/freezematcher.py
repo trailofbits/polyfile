@@ -115,7 +115,22 @@ def _disambiguate(
         raise DecodeError(
             f"neither gzip 0.5 ({gzip_error}) nor freeze 1.x ({error}) validates",
             status=status,
-            regions=error.regions,
+            regions=(
+                RawRegion(
+                    "gzip_0_5_candidate",
+                    start,
+                    len(stream) - start,
+                    str(gzip_error),
+                    gzip_error.regions,
+                ),
+                RawRegion(
+                    "freeze_1_candidate",
+                    start,
+                    len(stream) - start,
+                    str(error),
+                    error.regions,
+                ),
+            ),
             member_count=max(gzip_error.member_count, error.member_count),
         ) from error
     return DecodeResult(
