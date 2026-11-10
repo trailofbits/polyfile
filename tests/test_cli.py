@@ -14,7 +14,7 @@ from unittest import TestCase
 from zipfile import ZipFile
 
 from polyfile.__main__ import FormatOutput, main
-from polyfile.fileutils import Tempfile
+from polyfile.fileutils import PathOrStdin, Tempfile
 
 from .test_pdf import WELL_FORMED_PDF
 from .test_zipmatcher import MEMBERS, PNG, build_zip
@@ -115,6 +115,26 @@ class FormatArgumentTests(TestCase):
             output = run_cli(*shlex.split(example.group(1)), path)
         self.assertIn("application/zip", output)
         self.assertIn("\"b64contents\"", output)
+
+
+class DirectoryInputTests(TestCase):
+    """Tests that a directory passed as FILE exits cleanly instead of crashing.
+
+    A directory passes the `exists` check in `PathOrStdin`, but can never be
+    mapped like a file; without an explicit rejection it dies with a raw
+    `IsADirectoryError`/`PermissionError` traceback from the matcher.
+    """
+
+    def test_path_or_stdin_rejects_directories(self):
+        with TemporaryDirectory() as directory:
+            with self.assertRaises(IsADirectoryError):
+                PathOrStdin(directory)
+
+    def test_directory_input_exits_with_code_1(self):
+        with TemporaryDirectory() as directory:
+            code, errors = run_cli_until_exit(directory)
+        self.assertEqual(code, 1)
+        self.assertNotIn("Traceback", errors)
 
 
 class NoContentsTests(TestCase):
