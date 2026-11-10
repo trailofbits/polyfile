@@ -12,7 +12,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 
 - **Breaking:** Zstandard payloads are recursively analyzed after validating concatenated and
   skippable frames. Optional output, frame, depth, and decoder-window limits preserve explicit
-  failure status. Python 3.10 through 3.13 requires `backports.zstd==1.8.0`; Python 3.14 uses its
+  failure status. Python 3.11 through 3.13 requires `backports.zstd==1.8.0`; Python 3.14 uses its
   standard-library backend. External dictionaries and historical frames report unsupported status.
 - Optional recursive analysis controls through `AnalysisLimits` and `--max-depth`,
   `--max-member-bytes`, `--max-total-bytes`, `--max-members`, and `--max-codec-memory`.
@@ -34,6 +34,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 - **Breaking:** JSON elements identify their physical or decoded `source`; offsets stop at
   decoded-buffer boundaries. ZIP and PDF decoded content uses explicit `decoded_content` nodes.
   HTML highlighting, downloads, and coverage use the selected source, and decoded text is escaped.
+
+- **Breaking:** Require Python 3.11 or later and pin patched filelock 4.2.7 and Pillow 13.0.0.
+  CI tests Python 3.11 through 3.14 independently so a failing job preserves other results.
 
 ### Fixed
 

@@ -109,7 +109,7 @@ toward `--max-members`, including frames before the first compressed frame. Hist
 and frames declaring an external dictionary report `unsupported`; no dictionary-loading API is
 provided. Trailing non-frame bytes and incomplete frames report `invalid` without decoded children.
 
-Python 3.14 uses `compression.zstd`. Python 3.10 through 3.13 installs the required
+Python 3.14 uses `compression.zstd`. Python 3.11 through 3.13 installs the required
 `backports.zstd==1.8.0` dependency, which exposes the same incremental API. For Zstandard,
 `--max-codec-memory` limits the declared decoder window. An omitted limit uses the largest window
 supported by the runtime, rather than imposing an application memory cap. Output and frame limits
