@@ -36,6 +36,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
   decoded-buffer boundaries. ZIP and PDF decoded content uses explicit `decoded_content` nodes.
   HTML highlighting, downloads, and coverage use the selected source, and decoded text is escaped.
 
+- **Breaking:** Require Python 3.11 or later and pin patched filelock 4.2.7 and Pillow 13.0.0.
+  CI tests Python 3.11 through 3.14 independently so a failing job preserves other results.
+
 ### Fixed
 
 - Bounded file regions now limit reads before allocating data, including `read()` and
