@@ -38,7 +38,7 @@ class PickleMatcher(DynamicMagicTest):
                     with warnings.catch_warnings():
                         warnings.filterwarnings(
                             "error",
-                            message="invalid escape sequence",
+                            message=r".*invalid escape sequence",
                             category=DeprecationWarning,
                             module="pickletools",
                         )
