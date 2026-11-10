@@ -26,6 +26,12 @@ HEADER_FIELDS = (
     ("encryption", 22, 23),
     ("last_block", 23, 24),
 )
+LEGACY_HEADER_FIELDS = (
+    *HEADER_FIELDS[:4],
+    ("unused_14_15", 14, 16),
+    *HEADER_FIELDS[6:-1],
+    ("unused_23", 23, 24),
+)
 
 
 def find_lrzip(*, helper_timeout: float | None = None) -> str:
@@ -67,7 +73,7 @@ def find_lrzip(*, helper_timeout: float | None = None) -> str:
 
 def _stream_flags_valid(data: bytes) -> bool:
     if data[5] == 6:
-        return data[14] == 0 and data[23] == 0
+        return True
     return data[14] in (0, 1) and data[23] in (0, 1) and bool(data[14] or data[23])
 
 
@@ -86,7 +92,11 @@ def _validate_header(data: bytes, region: RawRegion) -> int:
             status="unsupported",
             regions=(region,),
         )
-    if data[21] not in (0, 1) or data[15] or not _stream_flags_valid(data):
+    if (
+        data[21] not in (0, 1)
+        or (data[5] == 7 and data[15])
+        or not _stream_flags_valid(data)
+    ):
         raise DecodeError(
             "invalid LRZIP header flags or reserved bytes", regions=(region,)
         )
@@ -143,9 +153,10 @@ def _framing(
     header = RawRegion("lrzip_header", start, len(data), data)
     if len(data) != 24:
         raise DecodeError("truncated LRZIP header", regions=(header,))
+    layout = LEGACY_HEADER_FIELDS if data[5] == 6 else HEADER_FIELDS
     fields = tuple(
         RawRegion(name, start + first, last - first, data[first:last])
-        for name, first, last in HEADER_FIELDS
+        for name, first, last in layout
     )
     header = RawRegion("lrzip_header", start, 24, children=fields)
     size = _validate_header(data, header)

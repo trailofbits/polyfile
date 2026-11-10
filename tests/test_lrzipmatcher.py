@@ -66,18 +66,15 @@ def test_physical_framing_and_chunk_capacity(lrzip: str, version: str) -> None:
     result = decode(data)
     header, body, digest = result.regions
     assert (header.name, header.offset, header.length) == ("lrzip_header", 0, 24)
-    assert [child.name for child in header.children] == [
-        "magic",
-        "major_version",
-        "minor_version",
-        "uncompressed_size",
-        "streaming",
-        "reserved",
-        "lzma_properties",
-        "md5_present",
-        "encryption",
-        "last_block",
-    ]
+    fields = [(child.name, child.offset, child.length) for child in header.children]
+    if version == "0.6":
+        assert ("unused_14_15", 14, 2) in fields
+        assert ("unused_23", 23, 1) in fields
+        assert not any(name in ("streaming", "last_block") for name, _, _ in fields)
+    else:
+        assert ("streaming", 14, 1) in fields
+        assert ("reserved", 15, 1) in fields
+        assert ("last_block", 23, 1) in fields
     assert (body.name, body.offset, body.length) == ("lrzip_body", 24, len(data) - 40)
     capacity = body.children[0].children[-1]
     assert capacity.name == "chunk_capacity"
@@ -400,3 +397,11 @@ def test_valid_empty_archives_accept_zero_output_limit(
     result = decode(data, max_output=0, max_members=1)
     assert result.data == b""
     assert result.member_count == 1
+
+
+@pytest.mark.parametrize("offset", (14, 15, 23))
+def test_legacy_unused_header_bytes_are_not_modern_flags(
+    lrzip: str, offset: int
+) -> None:
+    data = (FIXTURES / "document.json-0.6-none.lrz").read_bytes()
+    assert decode(replace(data, offset, b"\x55")).data == PAYLOAD

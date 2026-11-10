@@ -54,7 +54,8 @@ assumption and does not impose a hard process-memory ceiling. The optional outpu
 Linux address-space controls described above apply to LRZIP.
 
 The parser preserves the 24-byte physical header, first RZIP chunk framing, remaining encoded
-chunks, and optional final MD5 digest. The chunk's capacity can exceed its decoded payload size;
+chunks, and optional final MD5 digest. Unused version 0.6 header bytes remain metadata; version
+0.7 streaming flags and its reserved byte follow their version-specific validation. The chunk's capacity can exceed its decoded payload size;
 output limits use the archive's decoded-size field when known and bound helper output in all
 cases. Internal chunk records are part of one archive and do not consume separate member entries.
 The installed decoder validates secondary compression, RZIP backward references, per-chunk CRC
