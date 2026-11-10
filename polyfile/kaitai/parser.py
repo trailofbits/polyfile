@@ -16,7 +16,7 @@ from ..fileutils import FileStream
 
 from kaitaistruct import KaitaiStruct
 
-with resources.path(parsers, "manifest.json") as manifest_path:
+with resources.as_file(resources.files(parsers) / "manifest.json") as manifest_path:
     PARSER_DIR: Path = manifest_path.parent
 if sys.version_info >= (3, 9):
     with (resources.files(parsers) / "manifest.json").open("r") as f:
