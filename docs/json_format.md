@@ -147,3 +147,21 @@ or incompatible helpers report `unsupported`. A configured hard helper memory ce
 supported on Linux; other platforms report `unsupported` when you request that ceiling.
 `helper_timeout` and decoded-output limits report `limited`. UNIX compress has no checksum or
 decoded-size field, so some complete-code prefixes remain valid shorter files.
+
+Freeze 1.x and gzip 0.5 share `1f 9e` and emit `application/x-freeze`, preserving the existing
+`frozen file 1.0 (or gzip 0.5)` description once. A gzip candidate must pass complete framing,
+CRC32, and decoded-size checks; otherwise analysis tries freeze 1.x. A third byte of `08` alone
+does not identify gzip. Gzip framing appears as `gzip_0_5_member`; freeze framing appears as
+`freeze_1_header` and `adaptive_huffman_data`. Each selected format publishes one decoded source,
+concatenating gzip members before recursive analysis.
+
+Freeze requires an end marker and consumes every encoded byte, allowing unused bits in the final
+byte. Its initial 4 KiB dictionary contains spaces, so early backreferences are valid. Freeze has
+no checksum: a truncated gzip candidate that is independently a complete freeze stream remains
+valid as freeze. Gzip 0.5 multipart continuations report `unsupported` when freeze also fails.
+Freeze 2.x uses a different signature and is outside this decoder.
+
+Both variants use a conservative 64 KiB codec-state allowance when a codec-memory limit is set;
+all analysis limits remain unlimited by default. A limited gzip candidate stops analysis without
+falling back or resetting resource allowances. Candidate probing of concatenated gzip members
+retains the attempted member count even when a subsequent freeze interpretation is selected.

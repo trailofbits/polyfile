@@ -43,6 +43,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
   decoded content through a bounded native canonical Huffman decoder. Each concatenated member
   retains physical header/tree/body offsets and is size-checked and counted before nested analysis.
   Historical `1f 1f` pack files keep their description and report unsupported decoding status.
+- **Breaking:** Freeze 1.x and gzip 0.5 streams now emit `application/x-freeze` and recursively
+  analyze validated decoded content without external helpers. Native freeze decoding handles
+  adaptive Huffman rebuilding and its space-filled 4 KiB dictionary. Gzip 0.5 candidates require
+  valid framing, CRC32, and decoded size before selection; both formats preserve physical fields
+  and honor optional analysis limits.
 - **Breaking:** SCO compress -H (LZH) streams now emit `application/x-sco-compress` and recursively
   analyze decoded content using the supported installed GNU gzip helper. Physical signature/body
   regions and decoded coordinates remain distinct; unavailable helpers and configured limits

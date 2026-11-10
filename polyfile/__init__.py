@@ -19,7 +19,7 @@ from . import (
     polyfile
 )
 
-from polyfile import bzip2matcher, lzmamatcher, tarmatcher, xzmatcher
+from polyfile import bzip2matcher, freezematcher, lzmamatcher, tarmatcher, xzmatcher
 from polyfile.analysis import AnalysisLimits
 from .__main__ import main
 from .polyfile import __version__, InvalidMatch, Match, Matcher, Parser, PARSERS, register_parser, Submatch
