@@ -360,3 +360,24 @@ libbz2's alternative small-memory mode. This allowance governs libbz2 workspace,
 from Python's input/output buffers and report storage. See the [bzip2 memory-management
 manual](https://sourceware.org/bzip2/manual/manual.html) for the workspace model. Limits are
 unlimited when omitted.
+
+## XZ decoded content
+
+XZ uses Python's standard-library `lzma.LZMADecompressor` with explicit `FORMAT_XZ` framing.
+No helper executable or additional dependency is required. Missing `lzma` support and integrity
+check IDs unavailable in the installed liblzma report unsupported status. Header CRC32, stream
+flags, block checks, index, and footer integrity are validated before publishing decoded content.
+Check types supported by the backend include no check, CRC32, CRC64, and SHA-256.
+
+Complete concatenated streams contribute to one decoded buffer, including documents split
+between streams. Zero padding between or after streams must have a length divisible by four;
+leading padding and other trailing bytes are invalid. The physical tree retains each stream's
+header, encoded blocks, index, footer, and padding with exact byte offsets. Invalid or truncated
+input keeps its wrapper and available raw structure without publishing partial decoded children.
+
+Decoded output is requested from liblzma in bounded chunks. A configured codec-memory allowance
+is passed to native `memlimit` before dictionary allocation; an omitted allowance passes `None`
+and sets no application limit. Memory-limit failures report limited status. The output, total
+byte, depth, and stream-count controls share the containing analysis's budget. Padding does not
+consume a stream entry. See the [Python lzma incremental-decoding
+reference](https://docs.python.org/3/library/lzma.html#lzma.LZMADecompressor) for backend semantics.

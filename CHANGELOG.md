@@ -34,6 +34,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
   The command line, Python identification API, and SBuD root values share these descriptions;
   malformed metadata retains the ELF classification and reports a diagnostic.
 
+- **Breaking:** XZ streams are decoded and recursively analyzed, with complete integrity checks,
+  concatenated-stream and four-byte padding semantics, source-aware archive recursion, and
+  optional native memory, decoded output, depth, and stream-count limits.
+
 - Optional recursive analysis controls through `AnalysisLimits` and `--max-depth`,
   `--max-member-bytes`, `--max-total-bytes`, `--max-members`, and `--max-codec-memory`.
   Defaults are unlimited; skipped regions report their reason in JSON output.
