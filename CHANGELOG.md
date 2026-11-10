@@ -18,7 +18,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
   offsets. Links remain metadata, and sparse reconstruction reports unsupported status.
   **Breaking:** valid TAR headers that soft magic misses now report `application/x-tar`, and
   TAR JSON/HTML output includes member structure and nested classifications. Native TAR verdicts
-  replace generic soft-magic TAR aliases to avoid repeated recursive analysis.
+  replace generic soft-magic TAR aliases to avoid repeated recursive analysis. Specialized
+  GPKG verdicts also supersede redundant generic TAR aliases.
 
 ### Fixed
 
@@ -638,3 +639,5 @@ No release notes were recorded for this release.
 [0.1.4]: https://github.com/trailofbits/polyfile/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/trailofbits/polyfile/compare/v0.1.2-SafeDocs-Internal...v0.1.3
 [0.1.2-SafeDocs-Internal]: https://github.com/trailofbits/polyfile/releases/tag/v0.1.2-SafeDocs-Internal
+
+[Unreleased]: https://github.com/trailofbits/polyfile/compare/v0.6.0...HEAD

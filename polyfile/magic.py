@@ -5322,8 +5322,17 @@ class MagicMatcher:
             return False
         variant = _tar_variant(data[:512])
         native_tests = self.tests_by_mime.get("application/x-tar", ())
-        return any(isinstance(native, TarMatcher) and native.variant == variant
-                   for native in native_tests)
+        if any(isinstance(native, TarMatcher) and native.variant == variant
+               for native in native_tests):
+            return True
+        context = MatchContext(data, only_match_mime=True)
+        specialized = "application/vnd.gentoo.gpkg"
+        for candidate in self.tests_by_mime.get(specialized, ()):
+            for result in candidate.match(context):
+                if (result.test.mime is not None
+                        and result.test.mime.resolve(context) == specialized):
+                    return True
+        return False
 
     def _run_tests(
             self,

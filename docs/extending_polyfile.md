@@ -297,6 +297,12 @@ The command line exposes the same controls as `--max-depth`, `--max-member-bytes
 zero prevents the corresponding recursive work except for codec memory, which must be positive. Codec memory limits apply where a decoder
 supports them; they do not limit the Python process's total memory.
 
+ZIP DEFLATE requires a 64 KiB codec-memory allowance when that control is configured. ZIP
+bzip2/LZMA members report unsupported analysis when byte or memory limits are configured,
+because the standard-library ZIP backend cannot bound their incremental decoder output.
+Without configured limits, those backends retain their normal decoding behavior. ZIP entry
+counts exclude structural field probes and count each archive member once.
+
 The original input has depth zero and does not consume the recursive member or byte budgets.
 Depth counts transitions into content, including archive members and decoded streams, rather
 than structural nodes. Byte counts are cumulative across an analysis, including siblings. Member
