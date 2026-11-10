@@ -21,7 +21,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
   replace generic soft-magic TAR aliases to avoid repeated recursive analysis. Specialized
   GPKG verdicts also supersede redundant generic TAR aliases.
 
+- **Breaking:** Gzip members are decoded and recursively analyzed, with validated framing,
+  checksums, concatenated-member semantics, and optional resource limits. Raw member fields
+  remain available alongside decoded content.
+
 ### Changed
+
+- **Breaking:** JSON elements identify their physical or decoded `source`; offsets stop at
+  decoded-buffer boundaries. ZIP and PDF decoded content uses explicit `decoded_content` nodes.
+  HTML highlighting, downloads, and coverage use the selected source, and decoded text is escaped.
 
 - **Breaking:** Require Python 3.11 or later and pin patched filelock 4.2.7 and Pillow 13.0.0.
   CI tests Python 3.11 through 3.14 independently so a failing job preserves other results.

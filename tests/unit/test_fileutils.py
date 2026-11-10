@@ -78,3 +78,24 @@ class TestFileStreamLength(TestCase):
                 stream = self.raw(start, length)
                 self.assertLessEqual(0, len(stream))
                 self.assertEqual(len(stream), len(stream.read()))
+
+
+class TestMemorySearch(TestCase):
+    """Decoded buffers support the same searches as physical files."""
+
+    def test_searches_stay_inside_a_memory_slice_and_restore_position(self):
+        with FileStream(b"prefix%PDFsuffix", start=6, length=4) as stream:
+            stream.seek(2)
+            self.assertEqual(0, stream.first_index_of(b"%PDF"))
+            self.assertEqual(-1, stream.first_index_of(b"suffix"))
+            self.assertTrue(stream.contains_all(b"%P", b"DF"))
+            self.assertFalse(stream.contains_all(b"suffix"))
+            self.assertEqual(2, stream.tell())
+
+    def test_searches_handle_an_empty_buffer(self):
+        with FileStream(b"") as stream:
+            self.assertEqual(-1, stream.first_index_of(b"x"))
+            self.assertEqual(0, stream.first_index_of(b""))
+            self.assertTrue(stream.contains_all())
+            self.assertTrue(stream.contains_all(b""))
+            self.assertFalse(stream.contains_all(b"x"))

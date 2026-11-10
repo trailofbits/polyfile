@@ -11,7 +11,7 @@ import traceback
 from typing import Any, Callable, Dict, IO, Iterable, Iterator, List, Optional, Set, Tuple, Union
 
 from polyfile.analysis import AnalysisContext, AnalysisLimits
-from .fileutils import FileStream
+from polyfile.fileutils import FileStream, Streamable
 from . import logger
 from .magic import MagicMatcher, Match as MagicMatch, MatchContext, TestResult
 
@@ -88,7 +88,8 @@ class Match:
             extension: Optional[str] = None,
             *,
             analysis_context: Optional[AnalysisContext] = None,
-            analysis_depth: Optional[int] = None
+            analysis_depth: Optional[int] = None,
+            source: Optional[str] = None
     ):
         self._children: List[Match] = []
         self.name: str = name
@@ -99,6 +100,9 @@ class Match:
         self._offset: int = relative_offset
         self._length: Optional[int] = length
         self._parent: Optional[Match] = parent
+        self.source = source if source is not None else (
+            parent.source if parent is not None else "file"
+        )
         if parent is not None:
             if not isinstance(parent, Match):
                 raise ValueError("The parent must be an instance of a Match")
@@ -115,6 +119,7 @@ class Match:
             analysis_depth = parent.analysis_depth if parent is not None else 0
         self.analysis_depth = analysis_depth
         self.analysis_member_counted = False
+        self.analysis_skip_parsers: Set[str] = set()
         self.analysis_status: Optional[str] = None
         self.analysis_message: Optional[str] = None
         if display_name is None:
@@ -147,8 +152,8 @@ class Match:
 
     @property
     def offset(self) -> int:
-        """The global offset of this match with respect to the original file"""
-        if self.parent is not None:
+        """The offset within this match's physical or decoded source buffer."""
+        if self.parent is not None and self.parent.source == self.source:
             return self.parent.offset + self.relative_offset
         else:
             return self.relative_offset
@@ -162,7 +167,9 @@ class Match:
 
     @property
     def root_offset(self) -> int:
-        return self.offset - self.root.offset
+        if self.root.source == self.source:
+            return self.offset - self.root.offset
+        return self.offset
 
     @property
     def relative_offset(self) -> int:
@@ -174,7 +181,8 @@ class Match:
         """The number of bytes in the match"""
         if self._length is None:
             if self._children:
-                return max(c.offset + c.length for c in self._children) - self.offset
+                children = [c for c in self._children if c.source == self.source]
+                return max((c.offset + c.length for c in children), default=self.offset) - self.offset
             else:
                 return 0
         return self._length
@@ -197,6 +205,7 @@ class Match:
             'size': self.length,
             'type': self.name,
             'name': self.display_name,
+            'source': self.source,
         }
         if self.match is not None:
             ret['value'] = str(self.match)
@@ -277,7 +286,7 @@ class Matcher:
             analysis_depth=analysis_depth
         )
         yield m
-        if self.parse:
+        if self.parse and (parent is None or mimetype not in parent.analysis_skip_parsers):
             for parser in PARSERS[mimetype]:
                 # Don't yield this custom match until we've tried its submatch function
                 # (which may throw an InvalidMatch, meaning that this match is invalid)
@@ -307,7 +316,7 @@ class Matcher:
             context = MatchContext.load(f, only_match_mime=False)
             yield from self.magic_matcher.match(context)
 
-    def match(self, file_stream: Union[str, Path, IO, FileStream],
+    def match(self, file_stream: Streamable,
               parent: Optional[Match] = None) -> Iterator[Match]:
         context = parent.analysis_context if parent is not None else AnalysisContext(self.limits)
         depth = parent.analysis_depth + 1 if parent is not None else 0

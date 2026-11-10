@@ -7,7 +7,7 @@ from typing import Iterator, Optional
 from zipfile import BadZipFile
 from zipfile import ZipFile as PythonZip
 
-from polyfile.compression import CHUNK_SIZE, DecodeError, OutputBuffer
+from polyfile.compression import CHUNK_SIZE, DecodeError, OutputBuffer, match_decoded
 
 from .fileutils import ExactNamedTempfile, FileStream, Tempfile
 from .logger import StatusLogger
@@ -428,6 +428,20 @@ def member_data(
 
 
 
+
+def _decoded_zip_parsers(header: LocalFileHeader, match: Match) -> set[str]:
+    """Identify raw interpretations whose decoded contents were already analyzed."""
+    if header.compression_method == 12:
+        return {"application/x-bzip2"}
+    if header.compression_method == 0:
+        return {
+            child.name
+            for source in match.children if source.name == "decoded_content"
+            for child in source.children
+        }
+    return set()
+
+
 def _member_matches(
     header: LocalFileHeader, archive: Optional[PythonZip], parent: Match
 ) -> Iterator[Match]:
@@ -436,12 +450,10 @@ def _member_matches(
     for match in header.match(matcher=parent.matcher, parent=parent):
         match.analysis_member_counted = True
         decoded = member_data(archive, header, match, parent)
-        if decoded is not None:
-            match.decoded = decoded
         yield match
         if decoded is not None:
-            with Tempfile(decoded) as content:
-                yield from parent.matcher.match(content, parent=match)
+            yield from match_decoded(match, decoded, member_counted=True)
+            match.analysis_skip_parsers.update(_decoded_zip_parsers(header, match))
 
 
 def parse_archive(

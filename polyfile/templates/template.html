@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>PolyFile | {{ filename }}</title>
+    <title>PolyFile | {{ filename|e }}</title>
     <style>
 {% include "hexdump.css" %}
     </style>
@@ -22,6 +22,9 @@
 </head>
 <body>
 <input type="button" onclick="downloadFile()" value="Download File" />
+<label>Source <select id="source" onchange="selectSource(this.value)">
+{% for source in source_buffers %}<option value="{{ source|e }}">{{ source|e }}</option>{% endfor %}
+</select></label>
 <input type="search" placeholder="search" id="search" onsearch="pageSearch()" />
 <span id="searchinfo"></span>
 <span id="searchbuttons" style="display:none;">
@@ -39,9 +42,11 @@
 </div>
 
 {% macro render_match_name(match, first) -%}
-<a href="#" class="download" title="download" onclick="downloadFile({{ match['offset'] }}, {{ match['size'] }}, '{{ match['type'] }}', '{{ match['extension'] }}')">⇩</a>
-{{ match['name'] }}{% if not first %}<br />
-<small style="color: gray;">{{ match['size'] }} bytes @ {{ '0x%0X' % match['offset'] }}</small>
+<a href="#" class="download" title="download" onclick='downloadFile({{ match["offset"] }}, {{ match["size"] }}, {{ match["type"]|tojson }}, {{ match.get("extension")|tojson }}, {{ match.get("source", "file")|tojson }}); return false'>⇩</a>
+{{ match['name']|e }}{% if match.get('analysis_status') %}<br />
+<small class="analysis-status">{{ match['analysis_status']|e }}: {{ match.get('analysis_message', '')|e }}</small>
+{% endif %}{% if not first %}<br />
+<small style="color: gray;">{{ match['size'] }} bytes @ {{ '0x%0X' % match['offset'] }} ({{ match.get('source', 'file')|e }})</small>
 {% endif %}{% if match['decoded'] %}<br />
 [<a href="#decoded{{ match['uid'] }}">Decode</a>]{% endif %}{% if match['img_data'] %}
         <span class="tree_custom">
@@ -53,7 +58,7 @@
 <li>
     {% if 'subEls' in match and match['subEls'] %}
     <input type="checkbox" {{'checked="checked" ' if first}}id="match{{ match['uid'] }}" />
-    <label class="tree_label" for="match{{ match['uid'] }}" matchbyte="{{ match['offset'] }}" matchlength="{{ match['size'] }}">
+    <label class="tree_label" for="match{{ match['uid'] }}" matchbyte="{{ match['offset'] }}" matchlength="{{ match['size'] }}" matchsource="{{ match.get('source', 'file')|e }}">
         {{ render_match_name(match, first) }}
     </label>
     <ul>
@@ -62,7 +67,7 @@
         {% endfor %}
     </ul>
     {% else %}
-    <span class="tree_label" matchbyte="{{ match['offset'] }}" matchlength="{{ match['size'] }}">
+    <span class="tree_label" matchbyte="{{ match['offset'] }}" matchlength="{{ match['size'] }}" matchsource="{{ match.get('source', 'file')|e }}">
         {{ render_match_name(match, first) }}
     </span>
     {% endif %}
@@ -109,7 +114,7 @@
 {% for match, decoded in decoded_matches() %}
 <div id="decoded{{ match['uid'] }}" class="overlay">
     <div class="popup">
-        <h2>Decoded {{ match['name'] }}</h2>
+        <h2>Decoded {{ match['name']|e }}</h2>
 		<a class="close" href="#">&times;</a>
         <div class="content rawdump">{{ decoded|safe }}</div>
     </div>
