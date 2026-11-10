@@ -10,6 +10,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 
 ### Added
 
+- **Breaking:** Modern LZ4 payloads are recursively analyzed after validating frame headers,
+  block/content checksums, and concatenated/skippable frames. The required `lz4==4.4.5` backend
+  honors optional output, frame, depth, and native-buffer limits. Legacy frames and declared
+  external dictionaries report unsupported status.
 - Optional recursive analysis controls through `AnalysisLimits` and `--max-depth`,
   `--max-member-bytes`, `--max-total-bytes`, `--max-members`, and `--max-codec-memory`.
   Defaults are unlimited; skipped regions report their reason in JSON output.
