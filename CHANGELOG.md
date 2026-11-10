@@ -39,6 +39,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 - **Breaking:** XZ streams are decoded and recursively analyzed, with complete integrity checks,
   concatenated-stream and four-byte padding semantics, source-aware archive recursion, and
   optional native memory, decoded output, depth, and stream-count limits.
+- **Breaking:** SCO compress -H (LZH) streams now emit `application/x-sco-compress` and recursively
+  analyze decoded content using the supported installed GNU gzip helper. Physical signature/body
+  regions and decoded coordinates remain distinct; unavailable helpers and configured limits
+  report explicit analysis status.
 - **Breaking:** UNIX compress (`.Z`) payloads are recursively analyzed through an automatically
   discovered GNU gzip 1.15 or newer, preserving physical framing and decoded source coordinates.
   Missing or incompatible helpers report unsupported status. Optional `--helper-timeout` /

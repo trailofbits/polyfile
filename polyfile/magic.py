@@ -5350,6 +5350,14 @@ class MagicMatcher:
                     return True
         return False
 
+    def _superseded_compression_alias(self, test: MagicTest, match: Match, data: bytes) -> bool:
+        if test.source_info is None or test.source_info.path.name != "compress":
+            return False
+        aliases = {b"\x1f\xa0": "application/x-sco-compress"}
+        mime = aliases.get(data[:2])
+        return (mime is not None and bool(self.tests_by_mime.get(mime))
+                and not set(match.mimetypes) - {"application/octet-stream"})
+
     def _run_tests(
             self,
             tests: Iterable[MagicTest],
@@ -5382,7 +5390,8 @@ class MagicMatcher:
             # the description is how a match is rendered, so it must not make an empty message
             # look like a match
             if m and (not test_context.only_match_mime or any(t is not None for t in m.mimetypes)):
-                if self._superseded_tar_alias(test, m, test_context.data):
+                if (self._superseded_tar_alias(test, m, test_context.data)
+                        or self._superseded_compression_alias(test, m, test_context.data)):
                     continue
                 if test.appends_text_encoding:
                     m.text_encoding = text_encoding

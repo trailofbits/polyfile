@@ -9,6 +9,7 @@ from . import (
     lz4matcher,
     zstdmatcher,
     compressmatcher,
+    scomatcher,
     nitf,
     http,
     kaitaimatcher,
