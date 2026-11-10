@@ -10,6 +10,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 
 ### Added
 
+- **Breaking:** Decode zlib streams and recursively map validated content, preserving source-aware
+  offsets and reporting checksum, dictionary, trailing-data, and resource-limit failures (#3625).
+
 - Optional recursive analysis controls through `AnalysisLimits` and `--max-depth`,
   `--max-member-bytes`, `--max-total-bytes`, `--max-members`, and `--max-codec-memory`.
   Defaults are unlimited; skipped regions report their reason in JSON output.
