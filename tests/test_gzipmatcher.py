@@ -13,6 +13,7 @@ from polyfile.compression import DecodeError
 from polyfile.fileutils import FileStream
 from polyfile.gzipmatcher import GZIP_MEMORY, decode_gzip
 from polyfile.polyfile import Matcher
+from tests.test_pdf import WELL_FORMED_PDF
 
 PAYLOAD = b'{"gzip_member": true}\n'
 
@@ -256,3 +257,13 @@ def test_default_analysis_does_not_impose_an_output_limit():
     matches = analyzed(member(payload))
     decoded = next(m for m in matches if m.name == "decoded_content")
     assert decoded.decoded == payload
+
+
+def test_a_decoded_pdf_keeps_its_structure_in_the_decoded_source(caplog):
+    matches = analyzed(member(WELL_FORMED_PDF))
+    document = next(m for m in matches if m.name == "application/pdf")
+    assert document.source == "decoded:0"
+    objects = [m for m in matches if m.name == "PDFObject"]
+    assert objects
+    assert all(m.source == "decoded:0" for m in objects)
+    assert not [record for record in caplog.records if record.levelno >= 30]

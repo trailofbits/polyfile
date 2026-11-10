@@ -89,7 +89,7 @@ def load_xref(self: PDFXRef, parser: "PDFParser"):
             (pos_b, genno_b, use_b) = f
             if use_b != b"n":
                 continue
-            self.offsets[objid] = (None, pos_b.__int__(), genno_b.__int__())
+            self.offsets[objid] = (None, pos_b.as_int(), genno_b.as_int())
     log.debug("xref objects: %r", self.offsets)
     self.load_trailer(parser)
 
@@ -109,9 +109,13 @@ class PSToken:
         return ret
 
     def __int__(self):
-        if isinstance(self, PSInt):
-            return self
-        return PSInt(int(self, base=10), pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes)
+        if isinstance(self, int):
+            return int.__int__(self)
+        return int(self, base=10)
+
+    def as_int(self):
+        """Converts a numeric token to an integer while retaining its byte provenance."""
+        return PSInt(int(self), pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes)
 
     def __float__(self):
         if isinstance(self, float):
@@ -145,7 +149,7 @@ class PSToken:
 
 class PSInt(PSToken, int):
     def __index__(self):
-        return self
+        return int.__index__(self)
 
     def __str__(self):
         return str(int(self))
@@ -313,7 +317,7 @@ class PSBool:
         return self.value
 
     def __int__(self):
-        return PSInt(int(self.value), pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes)
+        return int(self.value)
 
     def __eq__(self, other):
         return self.value == bool(other)
@@ -786,8 +790,8 @@ class PDFParser(PDFMinerParser):
         if token is self.KEYWORD_R:
             # reference to indirect object
             try:
-                ((_, objid), (_, genno)) = self.pop(2)
-                obj = PDFObjRef(self.doc, objid, genno)
+                ((_, objid), _) = self.pop(2)
+                obj = PDFObjRef(self.doc, objid)
                 self.push((pos, obj))
             except PSSyntaxError:
                 pass

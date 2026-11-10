@@ -38,8 +38,8 @@ function selectSource(source) {
     linesByRow = [1];
     LINE_DIGITS = 1;
     $('#source').val(source);
-    $('.manually-focused, .searchresult, .highlighted').removeClass(
-        'manually-focused searchresult highlighted');
+    $('.manually-focused, .searchresult, .highlighted, .cursor').removeClass(
+        'manually-focused searchresult highlighted cursor');
     const undescribed = SOURCE_BUFFERS[source].regions.reduce((total, region) => total + region[1], 0);
     $('.coverage').text(source + ': ' + undescribed + ' of ' + rawBytes.length + ' bytes are undescribed.');
     $('.scrollheightproxy').height(BYTE_HEIGHT * (ROWS + 2));
