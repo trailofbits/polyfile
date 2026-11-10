@@ -10,6 +10,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 
 ### Added
 
+- **Breaking:** Unencrypted LRZIP 0.6 and 0.7 archives are recursively analyzed through an
+  installed LRZIP 0.7.3 or newer helper, preserving physical framing and decoded source
+  coordinates. Missing helpers and unsupported archive variants report explicit status; declared
+  sizes, integrity, optional output limits, and helper resource controls gate recursive analysis.
+
 - **Breaking:** UNIX compress (`.Z`) payloads are recursively analyzed through an automatically
   discovered GNU gzip 1.15 or newer, preserving physical framing and decoded source coordinates.
   Missing or incompatible helpers report unsupported status. Optional `--helper-timeout` /

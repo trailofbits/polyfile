@@ -109,3 +109,10 @@ or incompatible helpers report `unsupported`. A configured hard helper memory ce
 supported on Linux; other platforms report `unsupported` when you request that ceiling.
 `helper_timeout` and decoded-output limits report `limited`. UNIX compress has no checksum or
 decoded-size field, so some complete-code prefixes remain valid shorter files.
+
+LRZIP analysis preserves the physical `lrzip_header`, `lrzip_body`, first `rzip_chunk_header`,
+remaining `encoded_chunks`, and optional final `md5` region. Successful unencrypted version 0.6
+or 0.7 decoding publishes a new decoded source only after the qualified LRZIP helper and output
+integrity checks succeed. Missing helpers, encryption, and other archive versions report
+`unsupported`; corrupt framing or integrity reports `invalid`; configured resource limits report
+`limited`. Internal RZIP chunks count as one containing archive for member admission.
