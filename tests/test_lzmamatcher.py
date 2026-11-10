@@ -313,3 +313,19 @@ def test_unknown_size_native_output_is_bounded_before_allocation(
     assert exc.value.status == "limited"
     assert requests
     assert all(0 < request <= 18 for request in requests)
+
+
+@pytest.mark.parametrize("empty", [False, True])
+def test_no_codec_attempt_is_charged_before_entry_admission(empty: bool) -> None:
+    with pytest.raises(DecodeError) as exc:
+        decode(b"" if empty else encoded(JSON), max_members=0)
+    assert exc.value.member_count == 0
+
+
+def test_failed_lzma_alone_stream_consumes_one_shared_entry() -> None:
+    data = encoded(JSON)[:-5]
+    matches = analyzed(data, limits=AnalysisLimits(max_members=2))
+    wrapper = next(node for node in matches if node.name == "application/x-lzma")
+    assert wrapper.analysis_context.members == 1
+    assert wrapper.analysis_status == "invalid"
+    assert not any(node.name == "decoded_content" for node in matches)

@@ -105,9 +105,13 @@ def decode_lzma_alone(
     Raises:
         DecodeError: If framing, backend support, a declared size, or a limit fails.
     """
+    if stream.tell() >= len(stream):
+        raise DecodeError("empty input contains no LZMA-alone stream", member_count=0)
     if max_members is not None and max_members < 1:
         raise DecodeError(
-            "LZMA-alone stream exceeds the member allowance", status="limited"
+            "LZMA-alone stream exceeds the member allowance",
+            status="limited",
+            member_count=0,
         )
     return _member(stream, OutputBuffer(max_output), max_memory)
 
