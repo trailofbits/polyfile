@@ -88,6 +88,7 @@ def _backend() -> ModuleType:
         raise DecodeError(
             f"Zstandard decoder {module} is unavailable; reinstall PolyFile's dependencies",
             status="unsupported",
+            member_count=0,
         ) from error
 
 
@@ -221,20 +222,25 @@ def decode_zstd(
     backend = _backend()
     output = OutputBuffer(max_output)
     regions: list[RawRegion] = []
+    members = 0
     while stream.tell() < len(stream):
         try:
-            if max_members is not None and len(regions) >= max_members:
+            if max_members is not None and members >= max_members:
                 raise DecodeError(
                     f"Zstandard frame count exceeds {max_members}", status="limited"
                 )
+            members += 1
             regions.append(_next_region(stream, output, backend, max_memory))
         except DecodeError as error:
             raise DecodeError(
-                str(error), status=error.status, regions=tuple(regions) + error.regions
+                str(error),
+                status=error.status,
+                regions=tuple(regions) + error.regions,
+                member_count=members,
             ) from error
     if not regions:
-        raise DecodeError("empty input contains no Zstandard frame")
-    return DecodeResult(output.finish(), tuple(regions), len(regions))
+        raise DecodeError("empty input contains no Zstandard frame", member_count=0)
+    return DecodeResult(output.finish(), tuple(regions), members)
 
 
 @register_parser("application/zstd")

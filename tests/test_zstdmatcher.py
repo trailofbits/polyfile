@@ -12,8 +12,8 @@ import pytest
 from polyfile.analysis import AnalysisLimits
 from polyfile.compression import DecodeError
 from polyfile.fileutils import FileStream
-from polyfile.polyfile import Matcher
-from polyfile.zstdmatcher import decode_zstd
+from polyfile.polyfile import Match, Matcher, Submatch
+from polyfile.zstdmatcher import decode_zstd, parse_zstd
 
 if sys.version_info >= (3, 14):
     from compression import zstd
@@ -208,3 +208,24 @@ def test_analysis_limits_are_applied_before_publishing_decoded_content():
     wrapper = next(m for m in matches if m.name == "application/zstd")
     assert wrapper.analysis_status == "limited"
     assert not any(m.name == "decoded_content" for m in matches)
+
+
+def test_failed_frames_consume_the_shared_entry_budget():
+    parent = Match("root", None, matcher=Matcher(limits=AnalysisLimits(max_members=2)))
+    first = Submatch("application/zstd", None, parent=parent)
+    with FileStream(frame() + frame()[:-1]) as stream:
+        list(parse_zstd(stream, first))
+    assert first.analysis_status == "invalid"
+    assert parent.analysis_context.members == 2
+    second = Submatch("application/zstd", None, parent=parent)
+    with FileStream(frame()) as stream:
+        list(parse_zstd(stream, second))
+    assert second.analysis_status == "limited"
+    assert not second.children
+
+
+def test_a_frame_limit_counts_only_entries_already_attempted():
+    with pytest.raises(DecodeError) as error:
+        decode(frame() + frame(), max_members=1)
+    assert error.value.status == "limited"
+    assert error.value.member_count == 1
