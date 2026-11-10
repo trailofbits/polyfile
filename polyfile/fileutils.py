@@ -66,6 +66,11 @@ class PathOrStdin:
             self._tempfile: Optional[ExactNamedTempfile] = ExactNamedTempfile(sys.stdin.buffer.read(), "STDIN")
         elif not Path(path).exists():
             raise FileNotFoundError(path)
+        elif Path(path).is_dir():
+            # Directories pass the `exists` check above, but cannot be mapped
+            # like a file; fail early so the caller reports a clean error
+            # instead of a raw traceback from deep inside the matcher.
+            raise IsADirectoryError(path)
         else:
             self._tempfile = None
 

@@ -304,6 +304,9 @@ viewer is built from the contents."""))
     except FileNotFoundError:
         log.error(f"Cannot open {args.FILE!r} (No such file or directory)")
         exit(1)
+    except IsADirectoryError:
+        log.error(f"Cannot open {args.FILE!r} (Is a directory)")
+        exit(1)
     except KeyboardInterrupt:
         # this will happen if the user presses ^C wile reading from STDIN
         exit(1)
