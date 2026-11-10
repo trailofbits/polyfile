@@ -3,6 +3,8 @@
 import contextlib
 import io
 import struct
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -451,3 +453,115 @@ def test_every_fixture_truncation_retains_base_description() -> None:
     result = describe_elf(data[:-1], "ELF fixture")
     assert "BuildID[sha1]=" in result
     assert "invalid or truncated ELF section header table" in result
+
+
+@pytest.mark.parametrize("command", (b'python -c "print(1)"', b"python -c 'print(1)'"))
+def test_core_commands_preserve_quoted_arguments(command: bytes) -> None:
+    """Valid quoted arguments remain visible in a core's process command."""
+    info = bytearray(136)
+    end = 56 + len(command)
+    info[56:end] = command
+    data = build_elf(kind=4, programs=((4, note(b"CORE", 3, info)),))
+    assert command.decode().replace("'", "\\'") in description(data)
+
+
+def test_powerpc_core_uses_the_declared_linux_layout() -> None:
+    """A long PowerPC process name cannot be mistaken for the command's suffix."""
+    info = bytearray(128)
+    info[32:48] = b"longprocessname\0"
+    command = b"/usr/bin/longprocessname --flag"
+    end = 48 + len(command)
+    info[48:end] = command
+    struct.pack_into(">I", info, 16, 1234)
+    data = bytearray(
+        build_elf(bits=32, order=">", kind=4, programs=((4, note(b"CORE", 3, info, ">")),))
+    )
+    struct.pack_into(">H", data, 18, 20)
+    assert "from '/usr/bin/longprocessname --flag', pid=1234" in description(bytes(data))
+
+
+def test_netbsd_declared_size_bounds_optional_fields() -> None:
+    """Bytes after the declared descriptor cannot become optional NetBSD process fields."""
+    words = [1, 156] + [0] * 29
+    info = struct.pack("<31I", *words) + b"program".ljust(32, b"\0") + b"JUNK"
+    data = build_elf(kind=4, programs=((4, note(b"NetBSD-CORE", 1, info)),))
+    assert "from 'program'" in description(data)
+    assert "lwp=" not in description(data)
+
+
+@pytest.mark.parametrize("size", (0, 64))
+def test_missing_extended_section_zero_is_diagnosed(size: int) -> None:
+    """An indirect count needs a real section-zero record before it can describe an empty table."""
+    data = bytearray(build_elf())
+    struct.pack_into("<Q", data, 40, 64)
+    struct.pack_into("<H", data, 58, size)
+    message = description(bytes(data))
+    assert "invalid or truncated ELF section header table" in message
+    assert "no section header" not in message
+
+
+@pytest.mark.parametrize(
+    "name,expected", ((".debug_info", True), (".zdebug_info", True), (".debug_information", False))
+)
+def test_debug_section_names_are_exact(name: str, expected: bool) -> None:
+    """Debug-section recognition compares complete names without decoding unrelated table tails."""
+    data = build_elf(sections=((name, 1, b"debug"),))
+    assert ("with debug_info" in description(data)) == expected
+
+
+@pytest.mark.parametrize("bits", (32, 64))
+@pytest.mark.parametrize("order", ("<", ">"))
+def test_unterminated_dynamic_table_does_not_claim_static_pie(bits: int, order: str) -> None:
+    """Incomplete dynamic entries cannot establish the absence of runtime dependencies."""
+    flags = struct.pack(order + ("QQ" if bits == 64 else "II"), 0x6FFFFFFB, 0x08000000)
+    data = build_elf(bits=bits, order=order, kind=3, programs=((2, flags),))
+    result = description(data)
+    assert "unterminated ELF dynamic table" in result
+    assert "static-pie linked" not in result
+
+
+@pytest.mark.parametrize("order", ("<", ">"))
+def test_overlapping_note_regions_preserve_distinct_notes(order: str) -> None:
+    """Overlapping program-note regions share parsing while retaining distinct metadata."""
+    first = note(b"GNU", 3, bytes(range(20)), order)
+    second = note(b"GNU", 1, struct.pack(order + "4I", 0, 3, 2, 1), order)
+    data = bytearray(build_elf(order=order, programs=((4, first + second), (4, b""))))
+    start = struct.unpack_from(order + "Q", data, 64 + 8)[0]
+    struct.pack_into(order + "Q", data, 64 + 56 + 8, start + len(first))
+    struct.pack_into(order + "Q", data, 64 + 56 + 32, len(second))
+    message = description(bytes(data))
+    assert message.count("BuildID[sha1]=") == 1
+    assert message.count("for GNU/Linux 3.2.1") == 1
+
+
+def test_short_overlapping_note_region_is_diagnosed() -> None:
+    """A containing note region does not hide a second region's truncated descriptor."""
+    payload = note(b"GNU", 3, bytes(range(20)))
+    data = bytearray(build_elf(programs=((4, payload), (4, b""))))
+    start = struct.unpack_from("<Q", data, 64 + 8)[0]
+    struct.pack_into("<Q", data, 64 + 56 + 8, start)
+    struct.pack_into("<Q", data, 64 + 56 + 32, len(payload) - 1)
+    message = description(bytes(data))
+    assert "BuildID[sha1]=" in message
+    assert "truncated ELF note" in message
+
+
+def test_overlapping_note_prefixes_finish_within_a_subprocess_deadline() -> None:
+    """Repeated references to the same physical notes cannot multiply identification work."""
+    count = 6000
+    data = bytearray(build_elf(programs=tuple((4, b"") for _ in range(count))))
+    start = len(data)
+    data += note(b"unknown", 99, b"") * 12000
+    size = len(data) - start
+    for index in range(count):
+        struct.pack_into("<Q", data, 64 + 56 * index + 8, start + 20 * index)
+        length = size // 2 if index == 0 else size - 20 * index
+        struct.pack_into("<Q", data, 64 + 56 * index + 32, length)
+    script = (
+        "import sys; from polyfile.elfmetadata import describe_elf; "
+        "print(describe_elf(sys.stdin.buffer.read(), 'ELF fixture'))"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", script], input=data, capture_output=True, check=True, timeout=20
+    )
+    assert result.stdout == b"ELF fixture, statically linked, no section header\n"

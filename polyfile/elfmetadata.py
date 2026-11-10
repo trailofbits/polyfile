@@ -89,7 +89,7 @@ def _region(data: bytes, offset: int, size: int) -> bytes | None:
     return data[offset:end]
 
 
-def _extended_counts(view: _View) -> None:
+def _extended_counts(view: _View, errors: list[str]) -> None:
     header = view.elf.header
     if not header.ofs_section_headers:
         return
@@ -102,6 +102,7 @@ def _extended_counts(view: _View) -> None:
     size = 64 if view.wide else 40
     data = _region(view.data, header.ofs_section_headers, size)
     if data is None or header.section_header_size != size:
+        errors.append("invalid or truncated ELF section header table")
         return
     values = struct.unpack(view.order + ("IIQQQQIIQQ" if view.wide else "10I"), data)
     if header.num_section_headers == 0:
@@ -135,6 +136,9 @@ def _programs(view: _View, errors: list[str]) -> Sequence[_Program] | None:
 def _sections(view: _View, errors: list[str]) -> Sequence[_Section] | None:
     header = view.elf.header
     if not header.num_section_headers:
+        if header.ofs_section_headers:
+            errors.append("invalid or truncated ELF section header table")
+            return None
         return ()
     values = header.ofs_section_headers, header.section_header_size, header.num_section_headers
     if not _valid_table(view, values, 64 if view.wide else 40):
@@ -148,7 +152,9 @@ def _string(data: bytes) -> str:
     return "".join(char if char.isprintable() else f"\\{ord(char):03o}" for char in value)
 
 
-def _read_notes(data: bytes, order: str, align: int, errors: list[str]) -> Iterator[_Note]:
+def _read_notes(
+    data: bytes, order: str, align: int, errors: list[str]
+) -> Iterator[tuple[int, int, _Note]]:
     offset = 0
     while offset < len(data):
         if len(data) - offset < 12:
@@ -163,25 +169,51 @@ def _read_notes(data: bytes, order: str, align: int, errors: list[str]) -> Itera
             errors.append("truncated ELF note")
             return
         name_end = name_offset + namesize
-        yield _Note(data[name_offset:name_end].rstrip(b"\0"), kind, data[desc_offset:end])
-        offset = (end + align - 1) & -align
+        next_offset = (end + align - 1) & -align
+        note = _Note(data[name_offset:name_end].rstrip(b"\0"), kind, data[desc_offset:end])
+        yield offset, end, note
+        offset = next_offset
+
+
+def _covered_note_end(covered: dict[tuple[int, int], int], start: int, align: int) -> int:
+    offsets: list[int] = []
+    end = start
+    while covered.get((end, align), end) > end:
+        offsets.append(end)
+        end = covered[end, align]
+    for offset in offsets:
+        covered[offset, align] = end
+    return end
 
 
 def _notes(view: _View, records: Sequence[_Program], errors: list[str]) -> Iterator[_Note]:
-    seen: set[tuple[int, int]] = set()
-    for record in records:
-        key = record.ofs_body, record.len_body
-        if key in seen:
-            continue
-        seen.add(key)
-        data = _region(view.data, *key)
-        if data is None:
-            errors.append("invalid or truncated ELF note region")
-            continue
+    covered: dict[tuple[int, int], int] = {}
+    boundaries: set[tuple[int, int]] = set()
+    for record in sorted(records, key=lambda item: (item.ofs_body, -item.len_body)):
         align = record.align
         if align not in (0, 1, 4, 8):
             errors.append("invalid ELF note alignment")
-        yield from _read_notes(data, view.order, 8 if align == 8 else 4, errors)
+        align = 8 if align == 8 else 4
+        start, end = record.ofs_body, record.ofs_body + record.len_body
+        previous_end = _covered_note_end(covered, start, align)
+        if previous_end >= end and start < end:
+            if (end, align) not in boundaries:
+                errors.append("truncated ELF note")
+            continue
+        start = previous_end
+        data = _region(view.data, start, end - start)
+        if data is None:
+            errors.append("invalid or truncated ELF note region")
+            continue
+        starts = [record.ofs_body]
+        parsed_end = start
+        for offset, note_end, note in _read_notes(data, view.order, align, errors):
+            starts.append(start + offset)
+            parsed_end = min(start + ((note_end + align - 1) & -align), end)
+            boundaries.update((value, align) for value in range(start + note_end, parsed_end + 1))
+            yield note
+        for offset in starts:
+            covered[offset, align] = max(covered.get((offset, align), offset), parsed_end)
 
 
 def _build_id(note: _Note) -> str | None:
@@ -272,14 +304,19 @@ def _dynamic(view: _View, programs: Sequence[_Program], errors: list[str]) -> tu
         if data is None or len(data) % size:
             errors.append("invalid or truncated ELF dynamic table")
             continue
+        table_pie = table_needed = False
         for offset in range(0, len(data), size):
             tag, value = struct.unpack_from(
                 view.order + ("QQ" if view.wide else "II"), data, offset
             )
             if tag == 0:
+                pie |= table_pie
+                needed |= table_needed
                 break
-            needed |= tag == 1
-            pie |= tag == 0x6FFFFFFB and bool(value & 0x08000000)
+            table_needed |= tag == 1
+            table_pie |= tag == 0x6FFFFFFB and bool(value & 0x08000000)
+        else:
+            errors.append("unterminated ELF dynamic table")
     return pie, needed
 
 
@@ -319,7 +356,7 @@ def _section_state(view: _View, sections: Sequence[_Section], errors: list[str])
     debug = False
     for section in sections:
         offset = section.ofs_name
-        if offset < len(names) and _string(names[offset:]) in (".debug_info", ".zdebug_info"):
+        if names.startswith((b".debug_info\0", b".zdebug_info\0"), offset):
             debug = True
     stripped = not debug and not any(section.type == 2 for section in sections)
     return (["with debug_info"] if debug else []) + ["stripped" if stripped else "not stripped"]
@@ -333,20 +370,26 @@ def _core_command(view: _View, note: _Note) -> list[str]:
         if len(note.data) < offset + 81:
             return []
         end = offset + 80
-        parts = [f"from '{_string(note.data[offset:end])}'"]
+        parts = [_core_origin(note.data[offset:end])]
         if len(note.data) >= offset + 87:
             pid = struct.unpack_from(view.order + "I", note.data, offset + 83)[0]
             parts.append(f"pid={pid}")
         return parts
-    offsets = (56, 136, 152) if view.wide else (44, 48, 100, 104)
+    layouts = {136: (56,)} if view.wide else {124: (44,), 128: (48,)}
+    offsets = layouts.get(len(note.data), (136, 152) if view.wide else (100, 104))
     for offset in offsets:
         if offset >= len(note.data):
             continue
         end = offset + 80
         command = note.data[offset:end].split(b"\0", 1)[0].rstrip()
-        if command and all(32 <= value < 127 and value not in (34, 39) for value in command):
-            return [f"from '{command.decode('ascii')}'", *_linux_pid(view, note)]
+        if command and all(32 <= value < 127 for value in command):
+            return [_core_origin(command), *_linux_pid(view, note)]
     return []
+
+
+def _core_origin(data: bytes) -> str:
+    command = _string(data).replace("'", "\\'")
+    return f"from '{command}'"
 
 
 def _linux_pid(view: _View, note: _Note) -> list[str]:
@@ -364,13 +407,13 @@ def _netbsd_core(view: _View, note: _Note) -> list[str]:
     if values[0] != 1 or not 156 <= values[1] <= len(note.data):
         return []
     details = [
-        f"from '{_string(note.data[124:156])}'",
+        _core_origin(note.data[124:156]),
         f"pid={values[20]}",
         f"uid={values[25]}",
         f"gid={values[28]}",
         f"nlwps={values[30]}",
     ]
-    if len(note.data) >= 160:
+    if values[1] >= 160:
         details.append(f"lwp={struct.unpack_from(view.order + 'I', note.data, 156)[0]}")
     details.append(f"signal {values[2]}/code {values[3]}")
     return details
@@ -407,8 +450,8 @@ def describe_elf(data: bytes, description: str) -> str:
     view = _load(data)
     if view is None:
         return description
-    _extended_counts(view)
     errors: list[str] = []
+    _extended_counts(view, errors)
     programs, sections = _programs(view, errors), _sections(view, errors)
     records = [record for record in programs or () if record.type == 4]
     records.extend(record for record in sections or () if record.type == 7)

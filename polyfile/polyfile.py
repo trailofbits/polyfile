@@ -174,7 +174,8 @@ class Match:
 
         An explicit `description` supplies the rendered value while retaining the original
         match object. A match with neither a description nor a `match_obj` describes no content
-        of its own, so the element it renders carries no `value` key. Any other match object becomes the `value`
+        of its own, so the element it renders carries no `value` key. Any other match object becomes
+        the `value`
         through `str`, so a match may only hold an object whose `str` derives from the bytes
         it matched. The default `object.__str__` does not: it embeds a heap address, which
         differs between runs over the same input.
