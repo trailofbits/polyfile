@@ -87,7 +87,6 @@ KAITAI_MIME_MAPPING: Dict[str, str] = {
     # Only CPython 2.7 bytecode parses; other versions raise a KaitaiStructError.
     "application/x-bytecode.python": "executable/python_pyc_27.ksy",
     # Archives and filesystems
-    "application/gzip": "archive/gzip.ksy",
     # application/vnd.rar is unmapped because archive/rar.ksy hangs on RAR5. Its `blocks`
     # field is `repeat: eos` over a switch whose v5 case, `block_v5`, is an empty stub that
     # consumes no bytes, so the loop never advances the stream and grows the block list until

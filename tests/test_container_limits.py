@@ -77,8 +77,13 @@ def test_unbounded_zip_backend_reports_requested_limit_as_unsupported(
 
     monkeypatch.setattr(ZipFile, "open", unexpected_open)
     nodes = list(Matcher(limits=AnalysisLimits(max_member_bytes=1024)).match(data))
-    assert any(node.analysis_status == "unsupported" for node in nodes)
-    assert not any(node.decoded is not None for node in nodes)
+    encoded = next(
+        node
+        for node in nodes
+        if node.name == "compressed_data" and node.parent.name == "LocalFileHeader"
+    )
+    assert encoded.analysis_status == "unsupported"
+    assert not any(child.name == "decoded_content" for child in encoded)
 
 
 def gpkg_archive(payload: bytes, *, nested: bool) -> bytes:
@@ -103,7 +108,45 @@ def test_nested_gpkg_is_traversed_once_per_archive() -> None:
 
 
 def test_filtered_generic_tar_still_parses_gpkg() -> None:
-    matcher = MagicMatcher.DEFAULT_INSTANCE.only_match(mimetypes=["application/x-ustar"])
+    matcher = MagicMatcher.DEFAULT_INSTANCE.only_match(
+        mimetypes=["application/x-ustar"]
+    )
     nodes = list(Matcher(matcher=matcher).match(gpkg_archive(PAYLOAD, nested=False)))
     assert nodes[0].name == "application/x-ustar"
     assert sum(node.name == "TarMember" for node in nodes) == 2
+
+
+def test_nested_stored_zip_retains_labels_without_duplicate_structure() -> None:
+    from zipfile import ZIP_STORED
+
+    data = PAYLOAD
+    for _ in range(6):
+        data = zip_bytes(data, method=ZIP_STORED)
+    nodes = list(Matcher().match(data))
+    assert sum(node.name == "LocalFileHeader" for node in nodes) == 6
+    assert sum(node.name == "application/json" for node in nodes) <= 2
+
+
+def test_nested_zip_bzip_preserves_raw_type_without_duplicate_expansion(
+    monkeypatch,
+) -> None:
+    import bz2
+
+    from polyfile.compression import match_decoded
+    from polyfile.polyfile import PARSERS, ParserFunctionWrapper
+
+    def parse_bzip(stream, parent):
+        yield from match_decoded(parent, bz2.decompress(stream.read()))
+
+    monkeypatch.setitem(
+        PARSERS,
+        "application/x-bzip2",
+        {ParserFunctionWrapper(parse_bzip)},
+    )
+    data = PAYLOAD
+    for _ in range(4):
+        data = zip_bytes(data, method=ZIP_BZIP2)
+    nodes = list(Matcher().match(data))
+    assert any(node.name == "application/x-bzip2" for node in nodes)
+    assert sum(node.name == "LocalFileHeader" for node in nodes) == 4
+    assert sum(node.name == "application/json" for node in nodes) == 1
