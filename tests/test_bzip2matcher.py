@@ -3,7 +3,8 @@
 import bz2
 import random
 import sys
-from collections.abc import Iterator
+import tarfile
+from collections.abc import Callable, Iterator
 from io import BytesIO
 from zipfile import ZIP_DEFLATED, ZipFile
 
@@ -235,3 +236,69 @@ def test_corruption_keeps_raw_wrapper_and_no_decoded_children(
     assert any(node.name == "block_size" for node in descendants(wrapper))
     assert not any(node.name == "decoded_content" for node in matches)
     assert not caplog.records
+
+
+class _RecordingDecoder:
+    def __init__(self, factory: Callable[[], bz2.BZ2Decompressor], requests: list[int]):
+        self.decoder = factory()
+        self.requests = requests
+
+    @property
+    def eof(self) -> bool:
+        return self.decoder.eof
+
+    @property
+    def needs_input(self) -> bool:
+        return self.decoder.needs_input
+
+    @property
+    def unused_data(self) -> bytes:
+        return self.decoder.unused_data
+
+    def decompress(self, data: bytes, max_length: int = -1) -> bytes:
+        self.requests.append(max_length)
+        return self.decoder.decompress(data, max_length=max_length)
+
+
+def test_output_is_bounded_at_the_native_codec_boundary(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    data = bz2.compress(bytes(3_000_000))
+    factory = bz2.BZ2Decompressor
+    requests: list[int] = []
+    monkeypatch.setattr(
+        bz2, "BZ2Decompressor", lambda: _RecordingDecoder(factory, requests)
+    )
+    with pytest.raises(DecodeError) as exc:
+        decode(data, max_output=17)
+    assert exc.value.status == "limited"
+    assert requests
+    assert all(0 < request <= 18 for request in requests)
+
+
+def test_bzip2_tar_json_recursion_keeps_tar_offsets_in_decoded_source() -> None:
+    output = BytesIO()
+    with tarfile.open(fileobj=output, mode="w", format=tarfile.USTAR_FORMAT) as archive:
+        info = tarfile.TarInfo("document.json")
+        info.size = len(JSON)
+        archive.addfile(info, BytesIO(JSON))
+    matches = analyzed(bz2.compress(output.getvalue()))
+    archive_match = next(node for node in matches if node.name == "application/x-tar")
+    document = next(node for node in matches if node.name == "application/json")
+    assert archive_match.source == document.source == "decoded:0"
+    assert archive_match.offset == 0
+    assert document.offset == 512
+
+
+def test_corrupt_later_stream_preserves_raw_structure_without_partial_output() -> None:
+    first = bz2.compress(JSON[:8])
+    second = bytearray(bz2.compress(JSON[8:]))
+    second[10] ^= 1
+    matches = analyzed(first + second)
+    wrapper = next(node for node in matches if node.name == "application/x-bzip2")
+    streams = [node for node in wrapper if node.name == "bzip2_stream"]
+    assert len(streams) == 2
+    assert streams[0].length == len(first)
+    assert streams[1].offset == len(first)
+    assert wrapper.analysis_status == "invalid"
+    assert not any(node.name == "decoded_content" for node in matches)

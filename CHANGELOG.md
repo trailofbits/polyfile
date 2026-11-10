@@ -10,6 +10,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 
 ### Added
 
+- **Breaking:** Bzip2 streams are decoded and recursively analyzed using Python's standard
+  library. Concatenated streams retain their physical framing and produce one validated decoded
+  buffer; integrity errors, truncation, and configured resource limits report explicit status.
+
 - Optional recursive analysis controls through `AnalysisLimits` and `--max-depth`,
   `--max-member-bytes`, `--max-total-bytes`, `--max-members`, and `--max-codec-memory`.
   Defaults are unlimited; skipped regions report their reason in JSON output.
