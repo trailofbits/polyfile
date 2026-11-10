@@ -286,3 +286,19 @@ step ............... step through a single magic test
 test ............... test the following libmagic DSL test at the current position
 where .............. print the context of the current magic test (aliases: backtrace and info stack)
 ```
+
+## Limit recursive analysis
+
+Pass an `AnalysisLimits` instance through the keyword-only `limits` argument of `Matcher` or
+`Analyzer` to limit recursive content analysis. All fields default to `None`, meaning unlimited.
+The command line exposes the same controls as `--max-depth`, `--max-member-bytes`,
+`--max-total-bytes`, `--max-members`, and `--max-codec-memory`. Values are nonnegative integers;
+zero prevents the corresponding recursive work. Codec memory limits apply where a decoder
+supports them; they do not limit the Python process's total memory.
+
+The original input has depth zero and does not consume the recursive member or byte budgets.
+Depth counts transitions into content, including archive members and decoded streams, rather
+than structural nodes. Byte and member counts are cumulative across an analysis, including
+siblings. A skipped region remains in the output with `analysis_status: "limited"` and an
+`analysis_message` naming the limit. A new top-level analysis starts a new budget even when you
+reuse a `Matcher`.

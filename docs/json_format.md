@@ -63,3 +63,11 @@ its child elements carry every byte it covers and there is nothing left for it t
 
 PolyFile 0.5.6 and earlier gave such an element the Python `repr` of the internal object that
 produced it, which embedded a heap address and so differed between runs over the same input.
+
+## Incomplete content analysis
+
+An element can include `analysis_status` and `analysis_message` when content analysis cannot
+complete. Statuses are `invalid` for malformed input, `unsupported` for a recognized feature the
+parser cannot process, and `limited` when an explicitly configured resource limit stops work.
+The message gives the reason. These fields are absent when no such condition is reported;
+the element's existing structure and classification remain available.

@@ -6,6 +6,14 @@ body: a release's notes are its section in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Entries marked
 **Breaking** change observable output, the command line, or the Python API.
 
+## [Unreleased]
+
+### Added
+
+- Optional recursive analysis controls through `AnalysisLimits` and `--max-depth`,
+  `--max-member-bytes`, `--max-total-bytes`, `--max-members`, and `--max-codec-memory`.
+  Defaults are unlimited; skipped regions report their reason in JSON output.
+
 ## [0.6.0] - 2026-09-12
 
 This release is seven months of work: 253 commits and 67 pull requests since v0.5.6, which was

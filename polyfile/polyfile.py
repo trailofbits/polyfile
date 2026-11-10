@@ -10,6 +10,7 @@ from time import localtime
 import traceback
 from typing import Any, Callable, Dict, IO, Iterable, Iterator, List, Optional, Set, Tuple, Union
 
+from polyfile.analysis import AnalysisContext, AnalysisLimits
 from .fileutils import FileStream
 from . import logger
 from .magic import MagicMatcher, Match as MagicMatch, MatchContext, TestResult
@@ -84,7 +85,10 @@ class Match:
             display_name: Optional[str] = None,
             img_data: Optional[str] = None,
             decoded: Optional[bytes] = None,
-            extension: Optional[str] = None
+            extension: Optional[str] = None,
+            *,
+            analysis_context: Optional[AnalysisContext] = None,
+            analysis_depth: Optional[int] = None
     ):
         self._children: List[Match] = []
         self.name: str = name
@@ -104,6 +108,14 @@ class Match:
         if matcher is None:
             raise(ValueError("A Match must be initialized with `parent` and/or `matcher` not being None"))
         self.matcher = matcher
+        if parent is not None:
+            analysis_context = parent.analysis_context
+        self.analysis_context = analysis_context or AnalysisContext(matcher.limits)
+        if analysis_depth is None:
+            analysis_depth = parent.analysis_depth if parent is not None else 0
+        self.analysis_depth = analysis_depth
+        self.analysis_status: Optional[str] = None
+        self.analysis_message: Optional[str] = None
         if display_name is None:
             self.display_name: str = name
         else:
@@ -194,6 +206,9 @@ class Match:
             ret['decoded'] = base64.b64encode(self.decoded).decode('utf-8')
         if self.extension is not None:
             ret['extension'] = self.extension
+        if self.analysis_status is not None:
+            ret['analysis_status'] = self.analysis_status
+            ret['analysis_message'] = self.analysis_message
         return ret
 
     def json(self) -> str:
@@ -221,12 +236,14 @@ def register_parser(*filetypes: str) -> Callable[[Union[Parser, ParserFunction]]
 
 
 class Matcher:
-    def __init__(self, parse: bool = True, matcher: Optional[MagicMatcher] = None):
+    def __init__(self, parse: bool = True, matcher: Optional[MagicMatcher] = None,
+                 *, limits: Optional[AnalysisLimits] = None):
         if matcher is None:
             self.magic_matcher: MagicMatcher = MagicMatcher.DEFAULT_INSTANCE
         else:
             self.magic_matcher = matcher
         self.parse: bool = parse
+        self.limits = limits or AnalysisLimits()
 
     def handle_mimetype(
             self, mimetype: str,
@@ -235,7 +252,10 @@ class Matcher:
             file_stream: Union[str, Path, IO, FileStream],
             parent: Optional[Match] = None,
             offset: int = 0,
-            length: Optional[int] = None
+            length: Optional[int] = None,
+            *,
+            analysis_context: Optional[AnalysisContext] = None,
+            analysis_depth: int = 0
     ) -> Iterator[Match]:
         if length is None:
             length = len(data) - offset
@@ -251,7 +271,9 @@ class Matcher:
             length=length,
             parent=parent,
             matcher=self,
-            extension=extension
+            extension=extension,
+            analysis_context=analysis_context,
+            analysis_depth=analysis_depth
         )
         yield m
         if self.parse:
@@ -284,27 +306,41 @@ class Matcher:
             context = MatchContext.load(f, only_match_mime=False)
             yield from self.magic_matcher.match(context)
 
-    def match(self, file_stream: Union[str, Path, IO, FileStream], parent: Optional[Match] = None) -> Iterator[Match]:
+    def match(self, file_stream: Union[str, Path, IO, FileStream],
+              parent: Optional[Match] = None) -> Iterator[Match]:
+        context = parent.analysis_context if parent is not None else AnalysisContext(self.limits)
+        depth = parent.analysis_depth + 1 if parent is not None else 0
         with FileStream(file_stream) as f:
+            if parent is not None:
+                reason = context.claim_member(len(f), depth)
+                if reason is not None:
+                    parent.analysis_status = "limited"
+                    parent.analysis_message = reason
+                    return
             matched_mimetypes: Set[str] = set()
-            context = MatchContext.load(f, only_match_mime=True)
-            for magic_match in self.magic_matcher.match(context):
+            magic_context = MatchContext.load(f, only_match_mime=True)
+            for magic_match in self.magic_matcher.match(magic_context):
                 for result in magic_match:
                     if result.test.mime is None:
                         continue
-                    mimetype = result.test.mime.resolve(context)
+                    mimetype = result.test.mime.resolve(magic_context)
                     if mimetype in matched_mimetypes:
                         continue
                     matched_mimetypes.add(mimetype)
-                    yield from self.handle_mimetype(mimetype, result, context.data, f, parent)
+                    yield from self.handle_mimetype(
+                        mimetype, result, magic_context.data, f, parent,
+                        analysis_context=context, analysis_depth=depth,
+                    )
 
 
 class Analyzer:
     def __init__(self, path: Union[str, Path], parse: bool = True,
-                 magic_matcher: Optional[MagicMatcher] = None):
+                 magic_matcher: Optional[MagicMatcher] = None,
+                 *, limits: Optional[AnalysisLimits] = None):
         self.path: Union[str, Path] = path
         self.parse: bool = parse
         self._magic_matcher: Optional[MagicMatcher] = magic_matcher
+        self.limits = limits or AnalysisLimits()
         self._matcher: Optional[Matcher] = None
         self._matches: Optional[List[Match]] = None
         self._match_iterator: Optional[Iterator[Match]] = None
@@ -333,7 +369,8 @@ class Analyzer:
     @property
     def matcher(self) -> Matcher:
         if self._matcher is None:
-            self._matcher = Matcher(parse=self.parse, matcher=self.magic_matcher)
+            self._matcher = Matcher(parse=self.parse, matcher=self.magic_matcher,
+                                    limits=self.limits)
         return self._matcher
 
     @property
