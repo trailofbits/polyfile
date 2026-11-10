@@ -136,6 +136,14 @@ def nonnegative_integer(value: str) -> int:
     return parsed
 
 
+def positive_integer(value: str) -> int:
+    """Parse a codec memory limit, which must allow at least one byte."""
+    parsed = nonnegative_integer(value)
+    if parsed == 0:
+        raise argparse.ArgumentTypeError("codec memory limits must be positive integers")
+    return parsed
+
+
 def add_analysis_limits(parser: argparse.ArgumentParser) -> None:
     """Expose opt-in resource limits with unlimited defaults."""
     descriptions = {
@@ -146,7 +154,8 @@ def add_analysis_limits(parser: argparse.ArgumentParser) -> None:
         "max-codec-memory": "maximum decoder memory in bytes where the codec supports it",
     }
     for name, description in descriptions.items():
-        parser.add_argument("--" + name, type=nonnegative_integer, default=None,
+        value_type = positive_integer if name == "max-codec-memory" else nonnegative_integer
+        parser.add_argument("--" + name, type=value_type, default=None,
                             help=description + " (default: unlimited)")
 
 

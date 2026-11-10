@@ -22,6 +22,8 @@ class AnalysisLimits:
             value = getattr(self, item.name)
             if value is not None and (not isinstance(value, int) or value < 0):
                 raise ValueError(f"{item.name} must be a nonnegative integer or None")
+        if self.max_codec_memory == 0:
+            raise ValueError("max_codec_memory must be a positive integer or None")
 
 
 @dataclass

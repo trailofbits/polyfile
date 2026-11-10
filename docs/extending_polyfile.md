@@ -291,9 +291,10 @@ where .............. print the context of the current magic test (aliases: backt
 
 Pass an `AnalysisLimits` instance through the keyword-only `limits` argument of `Matcher` or
 `Analyzer` to limit recursive content analysis. All fields default to `None`, meaning unlimited.
+A configured codec memory limit must be positive; zero remains valid for the other controls.
 The command line exposes the same controls as `--max-depth`, `--max-member-bytes`,
 `--max-total-bytes`, `--max-members`, and `--max-codec-memory`. Values are nonnegative integers;
-zero prevents the corresponding recursive work. Codec memory limits apply where a decoder
+zero prevents the corresponding recursive work except for codec memory, which must be positive. Codec memory limits apply where a decoder
 supports them; they do not limit the Python process's total memory.
 
 The original input has depth zero and does not consume the recursive member or byte budgets.
@@ -316,7 +317,9 @@ as TAR because it has no checksum-bearing header, but the TAR parser can map its
 when invoked explicitly.
 
 Regular members are analyzed recursively in physical `FileStream` slices. TAR headers, data,
-padding, end markers, and trailing data retain offsets in their containing buffer. PAX local and
+padding, end markers, and trailing data retain offsets in their containing buffer. Header field
+names follow their variant: USTAR prefixes, old GNU timestamps and sparse descriptors, and V7
+reserved padding remain distinct. PAX local and
 global names and sizes, USTAR prefixes, and GNU long names and link names are applied while the
 original extension records remain visible. Effective archive paths and link targets are escaped
 metadata; no path is extracted or followed. Directories, links, devices, and FIFOs have no nested

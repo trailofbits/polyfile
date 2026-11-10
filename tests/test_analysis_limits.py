@@ -91,7 +91,14 @@ def test_analyzer_forwards_limits(tmp_path: Path) -> None:
     assert Analyzer(path, limits=limits).matcher.limits is limits
 
 
-@pytest.mark.parametrize("name", AnalysisLimits.__dataclass_fields__)
+@pytest.mark.parametrize(
+    "name",
+    [
+        name
+        for name in AnalysisLimits.__dataclass_fields__
+        if name != "max_codec_memory"
+    ],
+)
 def test_cli_accepts_explicit_zero_limits(name: str, tmp_path: Path) -> None:
     path = tmp_path / "document.json"
     path.write_bytes(b"{}")
@@ -134,3 +141,15 @@ def test_precounted_payload_does_not_consume_another_entry() -> None:
     payload.analysis_member_counted = True
     assert list(matcher.match(FileStream(b"{}"), parent=payload))
     assert payload.analysis_context.members == 1
+
+
+def test_codec_memory_limit_must_be_positive() -> None:
+    with pytest.raises(ValueError, match="positive"):
+        AnalysisLimits(max_codec_memory=0)
+    assert AnalysisLimits(max_codec_memory=1).max_codec_memory == 1
+
+
+def test_cli_rejects_zero_codec_memory() -> None:
+    with contextlib.redirect_stderr(io.StringIO()), pytest.raises(SystemExit) as exc:
+        main(["polyfile", "--max-codec-memory", "0"])
+    assert exc.value.code == 2
