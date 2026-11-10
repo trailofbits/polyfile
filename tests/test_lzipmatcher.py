@@ -105,7 +105,7 @@ def test_fractional_dictionary_size_is_supported():
 
 def test_fractional_dictionary_memory_limit_uses_the_encoded_size():
     data = member(code=0xD3, dictionary=320 * 1024)
-    required = 320 * 1024 + 64 * 1024
+    required = 320 * 1024 + 128 * 1024
     assert decode(data, max_memory=required).data == PAYLOAD
     with pytest.raises(DecodeError) as error:
         decode(data, max_memory=required - 1)
@@ -145,7 +145,7 @@ def test_memory_limit_is_checked_before_large_dictionary_allocation():
 
 
 def test_codec_memory_boundary_includes_decoder_state():
-    required = 4096 + 64 * 1024
+    required = 4096 + 128 * 1024
     assert decode(member(), max_memory=required).data == PAYLOAD
     with pytest.raises(DecodeError) as error:
         decode(member(), max_memory=required - 1)
@@ -254,3 +254,13 @@ def test_member_limit_counts_only_attempted_members():
     with pytest.raises(DecodeError) as error:
         decode(member() + member(), max_members=1)
     assert error.value.member_count == 1
+
+
+def test_old_state_allowance_is_rejected_before_decoder_allocation():
+    with (
+        patch("polyfile.lzipmatcher.lzma.LZMADecompressor") as constructor,
+        pytest.raises(DecodeError) as error,
+    ):
+        decode(member(), max_memory=4096 + 64 * 1024)
+    assert error.value.status == "limited"
+    constructor.assert_not_called()

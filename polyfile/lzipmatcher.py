@@ -17,7 +17,7 @@ from polyfile.fileutils import FileStream
 from polyfile.polyfile import Match, register_parser
 
 LZIP_MAGIC = b"LZIP"
-LZMA_STATE_ALLOWANCE = 64 * 1024
+LZMA_STATE_ALLOWANCE = 128 * 1024
 
 
 def _dictionary_size(code: int) -> int:

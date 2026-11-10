@@ -110,7 +110,7 @@ decoded bytes. Version 0 and unknown versions report `unsupported`.
 
 Coded dictionary sizes are validated against the format's 4 KiB through 512 MiB range before
 constructing the decoder. An optional `--max-codec-memory` allowance must cover the dictionary
-plus 64 KiB of decoder state. Output and attempted-member limits also apply across concatenated
+plus a conservative 128 KiB allowance for decoder state. Output and attempted-member limits also apply across concatenated
 members, including invalid members. All limits remain unlimited by default.
 
 Following the [lzip version 1 file format](https://lzip.nongnu.org/manual/lzip_manual.html#File-format),
