@@ -440,3 +440,38 @@ def test_specialized_tar_verdict_is_preserved_with_native_match() -> None:
     assert {"application/x-tar", "application/x-virtualbox-ova"} <= {
         root.name for root in roots
     }
+
+
+def test_gnu_header_tail_maps_gnu_fields_without_inventing_a_prefix() -> None:
+    data = bytearray(archive_bytes(format=tarfile.GNU_FORMAT))
+    data[345:357] = b"00000000001\0"
+    data[357:369] = b"00000000002\0"
+    parent, _ = parsed(update_checksum(data))
+    member = next(node for node in parent if node.name == "TarMember")
+    assert member.match == repr("document.json")
+    header = next(node for node in member if node.name == "TarHeader")
+    fields = {node.name: node for node in header}
+    assert "prefix" not in fields
+    assert "version" not in fields
+    assert fields["atime"].offset == 345
+    assert fields["ctime"].offset == 357
+    assert fields["sparse_0_offset"].offset == 386
+    assert fields["isextended"].offset == 482
+    assert fields["realsize"].offset == 483
+    assert sum(node.length for node in header) == 512
+    assert parent.analysis_status is None
+
+
+def test_v7_header_tail_is_reserved() -> None:
+    data = bytearray(archive_bytes())
+    data[257:512] = bytes(255)
+    data[345:353] = b"padding\0"
+    parent, _ = parsed(update_checksum(data))
+    assert parent.children[0].match == repr("document.json")
+    header = next(node for node in descendants(parent) if node.name == "TarHeader")
+    fields = {node.name: node for node in header}
+    assert "prefix" not in fields
+    assert "magic" not in fields
+    assert fields["reserved"].offset == 257
+    assert fields["reserved"].length == 255
+    assert sum(node.length for node in header) == 512

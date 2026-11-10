@@ -31,7 +31,7 @@ EXTENSION_TYPES = (
     tarfile.GNUTYPE_LONGNAME,
     tarfile.GNUTYPE_LONGLINK,
 )
-HEADER_FIELDS = (
+COMMON_HEADER_FIELDS = (
     ("name", 0, 100),
     ("mode", 100, 108),
     ("uid", 108, 116),
@@ -41,6 +41,8 @@ HEADER_FIELDS = (
     ("checksum", 148, 156),
     ("typeflag", 156, 157),
     ("linkname", 157, 257),
+)
+USTAR_HEADER_FIELDS = (
     ("magic", 257, 263),
     ("version", 263, 265),
     ("uname", 265, 297),
@@ -50,6 +52,38 @@ HEADER_FIELDS = (
     ("prefix", 345, 500),
     ("reserved", 500, 512),
 )
+
+GNU_HEADER_FIELDS = (
+    ("magic", 257, 265),
+    ("uname", 265, 297),
+    ("gname", 297, 329),
+    ("devmajor", 329, 337),
+    ("devminor", 337, 345),
+    ("atime", 345, 357),
+    ("ctime", 357, 369),
+    ("volume_offset", 369, 381),
+    ("longnames", 381, 385),
+    ("unused_pad", 385, 386),
+    ("sparse_0_offset", 386, 398),
+    ("sparse_0_numbytes", 398, 410),
+    ("sparse_1_offset", 410, 422),
+    ("sparse_1_numbytes", 422, 434),
+    ("sparse_2_offset", 434, 446),
+    ("sparse_2_numbytes", 446, 458),
+    ("sparse_3_offset", 458, 470),
+    ("sparse_3_numbytes", 470, 482),
+    ("isextended", 482, 483),
+    ("realsize", 483, 495),
+    ("reserved", 495, 512),
+)
+
+
+def _header_layout(header: bytes) -> tuple[tuple[str, int, int], ...]:
+    if header[257:263] == b"ustar ":
+        return COMMON_HEADER_FIELDS + GNU_HEADER_FIELDS
+    if header[257:262] == b"ustar":
+        return COMMON_HEADER_FIELDS + USTAR_HEADER_FIELDS
+    return COMMON_HEADER_FIELDS + (("reserved", 257, 512),)
 
 
 def _native_checksum(field_bytes: bytes) -> int:
@@ -228,7 +262,7 @@ class _TarReader:
     def header_fields(self, header: bytes, member: Match) -> Iterator[Match]:
         region = Submatch("TarHeader", None, 0, BLOCK_SIZE, parent=member)
         yield region
-        for name, start, end in HEADER_FIELDS:
+        for name, start, end in _header_layout(header):
             yield Submatch(name, header[start:end], start, end - start, parent=region)
 
     def member(
@@ -284,6 +318,13 @@ class _TarReader:
 
     def read_header(self, header: bytes) -> tuple[tarfile.TarInfo, bool]:
         info = tarfile.TarInfo.frombuf(header, "utf-8", "surrogateescape")
+        uses_prefix = header[257:262] == b"ustar" and header[257:263] != b"ustar "
+        if not uses_prefix:
+            info.name = (
+                header[:100].partition(b"\0")[0].decode("utf-8", "surrogateescape")
+            )
+            if info.isdir():
+                info.name = info.name.rstrip("/")
         sparse = False
         if info.type not in EXTENSION_TYPES:
             info, sparse = self.names.apply(info)
