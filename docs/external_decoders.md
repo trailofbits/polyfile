@@ -58,8 +58,8 @@ chunks, and optional final MD5 digest. Unused version 0.6 header bytes remain me
 0.7 streaming flags and its reserved byte follow their version-specific validation. The chunk's capacity can exceed its decoded payload size;
 output limits use the archive's decoded-size field when known and bound helper output in all
 cases. Internal chunk records are part of one archive and do not consume separate member entries.
-The installed decoder validates secondary compression, RZIP backward references, per-chunk CRC
-where present, and final integrity. PolyFile also verifies a declared decoded size and final MD5
+The installed decoder validates secondary compression, RZIP backward references, and per-chunk
+CRC when MD5 is absent. PolyFile also verifies a declared decoded size and final MD5
 before publishing any decoded source. Archives can require substantial native memory; configure
 `--max-codec-memory` on Linux to impose a hard ceiling. No codec-memory ceiling applies by default.
 
