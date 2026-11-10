@@ -6,6 +6,15 @@ body: a release's notes are its section in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Entries marked
 **Breaking** change observable output, the command line, or the Python API.
 
+## [Unreleased]
+
+### Added
+
+- **Breaking:** ELF identification descriptions now include validated linkage, interpreter,
+  GNU/Go build IDs, ABI versions, stripping/debug information, and supported core-file details.
+  The command line, Python identification API, and SBuD root values share these descriptions;
+  malformed metadata retains the ELF classification and reports a diagnostic.
+
 ## [0.6.0] - 2026-09-12
 
 This release is seven months of work: 253 commits and 67 pull requests since v0.5.6, which was

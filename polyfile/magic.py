@@ -4948,6 +4948,7 @@ class Match:
         self.text_encoding: Optional[TextEncodingDescription] = text_encoding
         self._result_iter: Optional[Iterator[TestResult]] = iter(results)
         self._results: List[TestResult] = []
+        self._elf_description: Optional[str] = None
 
     @property
     def data(self) -> bytes:
@@ -5066,6 +5067,21 @@ class Match:
             msg = f"{msg}{result_str}"
         return msg
 
+    def description(self) -> str:
+        """Returns the magic description with native ELF identification metadata.
+
+        Returns:
+            The shared identification description, with ELF metadata cached after its first read.
+        """
+        message = self._soft_magic_message()
+        if not message.startswith("ELF "):
+            return message
+        if self._elf_description is None:
+            from polyfile.elfmetadata import describe_elf
+
+            self._elf_description = describe_elf(self.data, message)
+        return self._elf_description
+
     def message(self) -> str:
         """Describes this match the way `file` describes it.
 
@@ -5073,7 +5089,7 @@ class Match:
             What soft magic printed, followed by the text description libmagic appends to a text
             file's description when it applies.
         """
-        msg = self._soft_magic_message()
+        msg = self.description()
         if self.text_encoding is None:
             return msg
         return self.text_encoding.describe(msg)
@@ -5133,7 +5149,7 @@ def join_matches(matches: Iterable[Match], raw: bool = False) -> str:
     text_encoding: Optional[TextEncodingDescription] = None
     parts: List[str] = []
     for match in matches:
-        parts.append(match._soft_magic_message())
+        parts.append(match.description())
         if match.text_encoding is not None:
             text_encoding = match.text_encoding
     joined = MATCH_SEPARATOR.join(parts)
