@@ -40,6 +40,24 @@ jobs:
       # dependency from it. setuptools no longer needs installing here: the isolated build
       # environment gets it from [build-system] requires in pyproject.toml.
       run: uv pip install --system '.[dev]'
+    - name: Install the GNU gzip reference decoder
+      shell: bash
+      run: |
+        set -euo pipefail
+        helper_root="$RUNNER_TEMP/polyfile-helpers"
+        mkdir -p "$helper_root"
+        curl --fail --location --silent --show-error \
+          --output "$helper_root/gzip-1.15.tar.xz" \
+          https://ftp.gnu.org/gnu/gzip/gzip-1.15.tar.xz
+        gzip_sha256="9aa0cc780dec156b8282844833b342ab7cb08c25d2cd9a1869cdd0df31deff48"
+        printf '%s  %s\n' "$gzip_sha256" "$helper_root/gzip-1.15.tar.xz" \
+          | sha256sum --check --status
+        tar -xJf "$helper_root/gzip-1.15.tar.xz" -C "$helper_root"
+        cd "$helper_root/gzip-1.15"
+        ./configure --prefix="$helper_root"
+        make -j2
+        make install
+        echo "$helper_root/bin" >> "$GITHUB_PATH"
     - name: Scan with pip-audit
       uses: trailofbits/gh-action-pip-audit@1220774d901786e6f652ae159f7b6bc8fea6d266 # v1.1.0
     - name: Lint with flake8
