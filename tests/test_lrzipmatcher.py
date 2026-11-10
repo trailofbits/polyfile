@@ -5,7 +5,7 @@ import io
 import json
 import os
 import sys
-from hashlib import sha256
+from hashlib import md5, sha256
 from pathlib import Path
 
 import pytest
@@ -405,3 +405,49 @@ def test_legacy_unused_header_bytes_are_not_modern_flags(
 ) -> None:
     data = (FIXTURES / "document.json-0.6-none.lrz").read_bytes()
     assert decode(replace(data, offset, b"\x55")).data == PAYLOAD
+
+
+def continuation_archive() -> bytes:
+    """Join genuine 0.7 chunk bodies with an LRZC header and whole-archive digest."""
+    header = bytearray(DOCUMENT[:24])
+    payload = PAYLOAD * 2
+    header[6:14] = len(payload).to_bytes(8, "little")
+    header[14], header[23] = 1, 0
+    first = bytearray(DOCUMENT[24:-16])
+    first[2] = 0
+    second = DOCUMENT[24:-16]
+    continuation = (
+        b"LRZC"
+        + len(PAYLOAD).to_bytes(8, "little")
+        + len(second).to_bytes(8, "little")
+        + b"\x01\x00\x00\x00"
+    )
+    return (
+        bytes(header)
+        + bytes(first)
+        + continuation
+        + second
+        + md5(payload, usedforsecurity=False).digest()
+    )
+
+
+def test_streaming_continuation_chunks_are_one_archive(lrzip: str) -> None:
+    data = continuation_archive()
+    result = decode(data, max_members=1, max_output=2 * len(PAYLOAD), helper_timeout=5)
+    assert result.data == PAYLOAD * 2
+    assert result.member_count == 1
+    with pytest.raises(DecodeError) as error:
+        decode(data, max_output=2 * len(PAYLOAD) - 1)
+    assert error.value.status == "limited"
+
+
+@pytest.mark.parametrize("relative_offset", (0, 20, 21))
+def test_corrupt_continuation_headers_are_invalid(
+    lrzip: str, relative_offset: int
+) -> None:
+    data = continuation_archive()
+    offset = data.index(b"LRZC") + relative_offset
+    corrupted = replace(data, offset, bytes([data[offset] ^ 0x80]))
+    with pytest.raises(DecodeError) as error:
+        decode(corrupted, helper_timeout=5)
+    assert error.value.status == "invalid"

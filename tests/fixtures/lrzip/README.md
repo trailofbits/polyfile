@@ -19,6 +19,8 @@ Every encoded fixture round-trips byte for byte through LRZIP 0.7.3 with
 header's decoded-size field to zero, the format's unknown-size representation, and exercise
 legacy CRC-only integrity by clearing the MD5 flag and removing the final digest from a genuine
 0.6 archive. These test mutations retain their original encoded payloads and archive versions.
+Continuation tests join two genuine 0.7 encoded chunk bodies with a specification-defined LRZC
+header and a recomputed whole-archive digest, then validate the result through the reference tool.
 
 The [LRZIP 0.7.3 release archive](https://github.com/ckolivas/lrzip/releases/download/v0.7.3/lrzip-0.7.3.tar.xz)
 SHA-256 is `6928862de7c4bbb3cfbcd12fae9fd0a7d230d5bbf27486e52c4de60717ebfdbb`.
