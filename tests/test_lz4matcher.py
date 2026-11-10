@@ -13,8 +13,8 @@ import pytest
 from polyfile.analysis import AnalysisLimits
 from polyfile.compression import DecodeError
 from polyfile.fileutils import FileStream
-from polyfile.lz4matcher import decode_lz4
-from polyfile.polyfile import Matcher
+from polyfile.lz4matcher import decode_lz4, parse_lz4
+from polyfile.polyfile import Match, Matcher, Submatch
 
 PAYLOAD = b'{"lz4_member": true}\n'
 
@@ -142,10 +142,16 @@ def test_zero_dictionary_identifier_needs_no_dictionary():
     assert decode(dictionary_frame(0)).data == PAYLOAD
 
 
-def test_legacy_frames_are_explicitly_unsupported():
+@pytest.mark.parametrize("version", [2, 3])
+@pytest.mark.parametrize("prefix", [b"", skip()])
+def test_legacy_frames_are_explicitly_unsupported(version, prefix):
+    data = prefix + bytes([version]) + b"\x21\x4c\x18" + bytes(20)
     with pytest.raises(DecodeError) as error:
-        decode(b"\x02\x21\x4c\x18" + bytes(20))
+        decode(data)
     assert error.value.status == "unsupported"
+    matches = list(Matcher().match(data))
+    wrapper = next(m for m in matches if m.name == "application/x-lz4")
+    assert wrapper.analysis_status == "unsupported"
 
 
 def test_output_and_entry_limits_include_concatenated_metadata():
@@ -208,3 +214,24 @@ def test_lz4_tar_json_keeps_tar_member_coordinates_in_the_decoded_buffer():
     document = next(m for m in matches if m.name == "application/json")
     assert archive.source == document.source == "decoded:0"
     assert document.offset == 512
+
+
+def test_failed_frames_consume_the_shared_entry_budget():
+    parent = Match("root", None, matcher=Matcher(limits=AnalysisLimits(max_members=2)))
+    first = Submatch("application/x-lz4", None, parent=parent)
+    with FileStream(frame() + frame()[:-1]) as stream:
+        list(parse_lz4(stream, first))
+    assert first.analysis_status == "invalid"
+    assert parent.analysis_context.members == 2
+    second = Submatch("application/x-lz4", None, parent=parent)
+    with FileStream(frame()) as stream:
+        list(parse_lz4(stream, second))
+    assert second.analysis_status == "limited"
+    assert not second.children
+
+
+def test_a_frame_limit_counts_only_entries_already_attempted():
+    with pytest.raises(DecodeError) as error:
+        decode(frame() + frame(), max_members=1)
+    assert error.value.status == "limited"
+    assert error.value.member_count == 1

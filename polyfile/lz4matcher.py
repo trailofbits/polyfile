@@ -26,10 +26,10 @@ from polyfile.magic import (
 from polyfile.polyfile import Match, register_parser
 
 LZ4_MAGIC = b"\x04\x22\x4d\x18"
-LEGACY_MAGIC = b"\x02\x21\x4c\x18"
+LEGACY_MAGICS = frozenset((b"\x02\x21\x4c\x18", b"\x03\x21\x4c\x18"))
 SKIPPABLE_BASE = 0x184D2A50
 FRAME_SIGNATURES = frozenset(
-    int.from_bytes(magic, "little") for magic in (LZ4_MAGIC, LEGACY_MAGIC)
+    int.from_bytes(magic, "little") for magic in LEGACY_MAGICS | {LZ4_MAGIC}
 )
 
 
@@ -83,6 +83,7 @@ def _backend() -> ModuleType:
         raise DecodeError(
             "LZ4 decoder is unavailable; reinstall the required lz4 dependency",
             status="unsupported",
+            member_count=0,
         ) from error
 
 
@@ -185,7 +186,7 @@ def _next_region(
         return _skippable(stream)
     if magic == LZ4_MAGIC:
         return _frame(stream, output, backend, max_memory)
-    if magic == LEGACY_MAGIC:
+    if magic in LEGACY_MAGICS:
         raise DecodeError("legacy LZ4 frames are unsupported", status="unsupported")
     raise DecodeError(f"invalid LZ4 frame signature at offset {stream.tell()}")
 
@@ -214,20 +215,25 @@ def decode_lz4(
     backend = _backend()
     output = OutputBuffer(max_output)
     regions: list[RawRegion] = []
+    members = 0
     while stream.tell() < len(stream):
         try:
-            if max_members is not None and len(regions) >= max_members:
+            if max_members is not None and members >= max_members:
                 raise DecodeError(
                     f"LZ4 frame count exceeds {max_members}", status="limited"
                 )
+            members += 1
             regions.append(_next_region(stream, output, backend, max_memory))
         except DecodeError as error:
             raise DecodeError(
-                str(error), status=error.status, regions=tuple(regions) + error.regions
+                str(error),
+                status=error.status,
+                regions=tuple(regions) + error.regions,
+                member_count=members,
             ) from error
     if not regions:
-        raise DecodeError("empty input contains no LZ4 frame")
-    return DecodeResult(output.finish(), tuple(regions), len(regions))
+        raise DecodeError("empty input contains no LZ4 frame", member_count=0)
+    return DecodeResult(output.finish(), tuple(regions), members)
 
 
 @register_parser("application/x-lz4")
