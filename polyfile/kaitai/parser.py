@@ -302,7 +302,7 @@ class KaitaiParser:
         if isinstance(input_file_path_or_content, Path):
             input_file_path_or_content = str(input_file_path_or_content)
         if isinstance(input_file_path_or_content, str):
-            struct = self.struct_type.from_file(input_file_path_or_content)
+            struct = self.struct_type.from_bytes(Path(input_file_path_or_content).read_bytes())
         elif isinstance(input_file_path_or_content, bytes):
             struct = self.struct_type.from_bytes(input_file_path_or_content)
         else:

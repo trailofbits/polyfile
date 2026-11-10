@@ -10,9 +10,9 @@ import unittest
 from tempfile import NamedTemporaryFile
 from typing import List, Tuple
 from unittest.mock import MagicMock, patch
-from polyfile.pdf import PDFList, parse_object, PDFDict
-from polyfile.polyfile import Match, Matcher
 
+from polyfile.pdf import PDFDict, PDFList, PSBytes, PSInt, parse_object
+from polyfile.polyfile import Match, Matcher
 
 WELL_FORMED_PDF: bytes = base64.b64decode(
     "JVBERi0xLjcKMSAwIG9iago8PCAvVHlwZSAvQ2F0YWxvZyAvUGFnZXMgMiAwIFIgPj4KZW5k"
@@ -400,6 +400,21 @@ class TestXRefRowCells(unittest.TestCase):
         """
         matches = self.match(RECONSTRUCTED_XREF_PDF)
         self.assertEqual([], [m.name for m in matches if m.name in ("Position", "Generation")])
+
+
+class TestIntegerTokens(unittest.TestCase):
+    """Numeric protocols return builtin integers while explicit conversion keeps provenance."""
+
+    def test_builtin_integer_conversion_returns_a_builtin_integer(self):
+        for token in (PSInt(42, pdf_offset=10, pdf_bytes=2),
+                      PSBytes(b"42", pdf_offset=10, pdf_bytes=2)):
+            self.assertIs(type(int(token)), int)
+            self.assertEqual(42, int(token))
+
+    def test_explicit_integer_token_conversion_keeps_provenance(self):
+        token = PSBytes(b"42", pdf_offset=10, pdf_bytes=2).as_int()
+        self.assertIsInstance(token, PSInt)
+        self.assertEqual((42, 10, 2), (token, token.pdf_offset, token.pdf_bytes))
 
 
 if __name__ == '__main__':

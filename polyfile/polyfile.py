@@ -10,7 +10,8 @@ from time import localtime
 import traceback
 from typing import Any, Callable, Dict, IO, Iterable, Iterator, List, Optional, Set, Tuple, Union
 
-from .fileutils import FileStream
+from polyfile.analysis import AnalysisContext, AnalysisLimits
+from polyfile.fileutils import FileStream, Streamable
 from . import logger
 from .magic import MagicMatcher, Match as MagicMatch, MatchContext, TestResult
 
@@ -26,15 +27,15 @@ mod_year = localtime(Path(__file__).stat().st_mtime).tm_year
 __copyright__: str = f"Copyright ©{mod_year} Trail of Bits"
 __license__: str = "Apache License Version 2.0 https://www.apache.org/licenses/"
 
-ParserFunction = Callable[[FileStream, "Match"], Iterator["Submatch"]]
+ParserFunction = Callable[[FileStream, "Match"], Iterator["Match"]]
 
 
 class Parser(ABC, ParserFunction):
     @abstractmethod
-    def parse(self, stream: FileStream, match: "Match") -> Iterator["Submatch"]:
+    def parse(self, stream: FileStream, match: "Match") -> Iterator["Match"]:
         raise NotImplementedError()
 
-    def __call__(self, stream: FileStream, match: "Match") -> Iterator["Submatch"]:
+    def __call__(self, stream: FileStream, match: "Match") -> Iterator["Match"]:
         yield from self.parse(stream, match)
 
     def __hash__(self):
@@ -51,7 +52,7 @@ class ParserFunctionWrapper(Parser):
     def __hash__(self):
         return hash(self.parser)
 
-    def parse(self, stream: FileStream, match: "Match") -> Iterator["Submatch"]:
+    def parse(self, stream: FileStream, match: "Match") -> Iterator["Match"]:
         yield from self.parser(stream, match)
 
     def __str__(self):
@@ -86,7 +87,10 @@ class Match:
             decoded: Optional[bytes] = None,
             extension: Optional[str] = None,
             *,
-            description: Optional[str] = None
+            description: Optional[str] = None,
+            analysis_context: Optional[AnalysisContext] = None,
+            analysis_depth: Optional[int] = None,
+            source: Optional[str] = None
     ):
         self._children: List[Match] = []
         self.name: str = name
@@ -98,6 +102,9 @@ class Match:
         self._offset: int = relative_offset
         self._length: Optional[int] = length
         self._parent: Optional[Match] = parent
+        self.source = source if source is not None else (
+            parent.source if parent is not None else "file"
+        )
         if parent is not None:
             if not isinstance(parent, Match):
                 raise ValueError("The parent must be an instance of a Match")
@@ -107,6 +114,16 @@ class Match:
         if matcher is None:
             raise(ValueError("A Match must be initialized with `parent` and/or `matcher` not being None"))
         self.matcher = matcher
+        if parent is not None:
+            analysis_context = parent.analysis_context
+        self.analysis_context = analysis_context or AnalysisContext(matcher.limits)
+        if analysis_depth is None:
+            analysis_depth = parent.analysis_depth if parent is not None else 0
+        self.analysis_depth = analysis_depth
+        self.analysis_member_counted = False
+        self.analysis_skip_parsers: Set[str] = set()
+        self.analysis_status: Optional[str] = None
+        self.analysis_message: Optional[str] = None
         if display_name is None:
             self.display_name: str = name
         else:
@@ -137,8 +154,8 @@ class Match:
 
     @property
     def offset(self) -> int:
-        """The global offset of this match with respect to the original file"""
-        if self.parent is not None:
+        """The offset within this match's physical or decoded source buffer."""
+        if self.parent is not None and self.parent.source == self.source:
             return self.parent.offset + self.relative_offset
         else:
             return self.relative_offset
@@ -152,7 +169,9 @@ class Match:
 
     @property
     def root_offset(self) -> int:
-        return self.offset - self.root.offset
+        if self.root.source == self.source:
+            return self.offset - self.root.offset
+        return self.offset
 
     @property
     def relative_offset(self) -> int:
@@ -164,7 +183,8 @@ class Match:
         """The number of bytes in the match"""
         if self._length is None:
             if self._children:
-                return max(c.offset + c.length for c in self._children) - self.offset
+                children = [c for c in self._children if c.source == self.source]
+                return max((c.offset + c.length for c in children), default=self.offset) - self.offset
             else:
                 return 0
         return self._length
@@ -174,9 +194,9 @@ class Match:
 
         An explicit `description` supplies the rendered value while retaining the original
         match object. A match with neither a description nor a `match_obj` describes no content
-        of its own, so the element it renders carries no `value` key. Any other match object becomes
-        the `value`
-        through `str`, so a match may only hold an object whose `str` derives from the bytes
+        of its own, so the element it renders carries no `value` key. Any other match object
+        becomes the `value` through `str`, so a match may only hold an object whose `str` derives
+        from the bytes
         it matched. The default `object.__str__` does not: it embeds a heap address, which
         differs between runs over the same input.
 
@@ -189,6 +209,7 @@ class Match:
             'size': self.length,
             'type': self.name,
             'name': self.display_name,
+            'source': self.source,
         }
         if self.description is not None:
             ret['value'] = self.description
@@ -201,6 +222,9 @@ class Match:
             ret['decoded'] = base64.b64encode(self.decoded).decode('utf-8')
         if self.extension is not None:
             ret['extension'] = self.extension
+        if self.analysis_status is not None:
+            ret['analysis_status'] = self.analysis_status
+            ret['analysis_message'] = self.analysis_message
         return ret
 
     def json(self) -> str:
@@ -228,12 +252,14 @@ def register_parser(*filetypes: str) -> Callable[[Union[Parser, ParserFunction]]
 
 
 class Matcher:
-    def __init__(self, parse: bool = True, matcher: Optional[MagicMatcher] = None):
+    def __init__(self, parse: bool = True, matcher: Optional[MagicMatcher] = None,
+                 *, limits: Optional[AnalysisLimits] = None):
         if matcher is None:
             self.magic_matcher: MagicMatcher = MagicMatcher.DEFAULT_INSTANCE
         else:
             self.magic_matcher = matcher
         self.parse: bool = parse
+        self.limits = limits or AnalysisLimits()
 
     def handle_mimetype(
             self, mimetype: str,
@@ -244,7 +270,9 @@ class Matcher:
             offset: int = 0,
             length: Optional[int] = None,
             *,
-            description: Optional[str] = None
+            description: Optional[str] = None,
+            analysis_context: Optional[AnalysisContext] = None,
+            analysis_depth: int = 0
     ) -> Iterator[Match]:
         if length is None:
             length = len(data) - offset
@@ -261,10 +289,12 @@ class Matcher:
             parent=parent,
             matcher=self,
             extension=extension,
-            description=description
+            description=description,
+            analysis_context=analysis_context,
+            analysis_depth=analysis_depth
         )
         yield m
-        if self.parse:
+        if self.parse and (parent is None or mimetype not in parent.analysis_skip_parsers):
             for parser in PARSERS[mimetype]:
                 # Don't yield this custom match until we've tried its submatch function
                 # (which may throw an InvalidMatch, meaning that this match is invalid)
@@ -294,36 +324,51 @@ class Matcher:
             context = MatchContext.load(f, only_match_mime=False)
             yield from self.magic_matcher.match(context)
 
-    def match(self, file_stream: Union[str, Path, IO, FileStream], parent: Optional[Match] = None) -> Iterator[Match]:
+    def match(self, file_stream: Streamable,
+              parent: Optional[Match] = None) -> Iterator[Match]:
+        analysis_context = (
+            parent.analysis_context if parent is not None else AnalysisContext(self.limits)
+        )
+        depth = parent.analysis_depth + 1 if parent is not None else 0
         with FileStream(file_stream) as f:
+            if parent is not None:
+                reason = analysis_context.claim_member(
+                    len(f), depth, count=not parent.analysis_member_counted,
+                )
+                if reason is not None:
+                    parent.analysis_status = "limited"
+                    parent.analysis_message = reason
+                    return
             matched_mimetypes: Set[str] = set()
-            context = MatchContext.load(f, only_match_mime=True)
-            if context.data.startswith(b"\x7fELF"):
-                context.only_match_mime = False
-            for magic_match in self.magic_matcher.match(context):
+            magic_context = MatchContext.load(f, only_match_mime=True)
+            is_elf = magic_context.data.startswith(b"\x7fELF")
+            magic_context.only_match_mime = not is_elf
+            for magic_match in self.magic_matcher.match(magic_context):
                 description = None
-                if context.data.startswith(b"\x7fELF") and (
-                    magic_match._soft_magic_message().startswith("ELF ")
-                ):
+                if is_elf and magic_match._soft_magic_message().startswith("ELF "):
                     description = magic_match.description()
                 for result in magic_match:
                     if result.test.mime is None:
                         continue
-                    mimetype = result.test.mime.resolve(context)
+                    mimetype = result.test.mime.resolve(magic_context)
                     if mimetype in matched_mimetypes:
                         continue
                     matched_mimetypes.add(mimetype)
                     yield from self.handle_mimetype(
-                        mimetype, result, context.data, f, parent, description=description
+                        mimetype, result, magic_context.data, f, parent,
+                        description=description,
+                        analysis_context=analysis_context, analysis_depth=depth,
                     )
 
 
 class Analyzer:
     def __init__(self, path: Union[str, Path], parse: bool = True,
-                 magic_matcher: Optional[MagicMatcher] = None):
+                 magic_matcher: Optional[MagicMatcher] = None,
+                 *, limits: Optional[AnalysisLimits] = None):
         self.path: Union[str, Path] = path
         self.parse: bool = parse
         self._magic_matcher: Optional[MagicMatcher] = magic_matcher
+        self.limits = limits or AnalysisLimits()
         self._matcher: Optional[Matcher] = None
         self._matches: Optional[List[Match]] = None
         self._match_iterator: Optional[Iterator[Match]] = None
@@ -352,7 +397,8 @@ class Analyzer:
     @property
     def matcher(self) -> Matcher:
         if self._matcher is None:
-            self._matcher = Matcher(parse=self.parse, matcher=self.magic_matcher)
+            self._matcher = Matcher(parse=self.parse, matcher=self.magic_matcher,
+                                    limits=self.limits)
         return self._matcher
 
     @property

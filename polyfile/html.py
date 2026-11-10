@@ -5,6 +5,8 @@ import mimetypes
 import os
 import unicodedata
 
+from markupsafe import escape
+
 jinja2 = None
 
 
@@ -25,7 +27,7 @@ def assign_ids(sbud):
     return matches
 
 
-def _leaf_extents(matches, length):
+def _leaf_extents(matches, length, source='file'):
     """Yields the ``(start, end)`` byte extent of every match that has no children.
 
     A match with children spans all of them, so it says nothing about the bytes its children
@@ -41,9 +43,11 @@ def _leaf_extents(matches, length):
     stack = list(matches)
     while stack:
         match = stack.pop()
-        children = match.get('subEls')
-        if children:
-            stack.extend(children)
+        children = match.get('subEls', [])
+        stack.extend(children)
+        if match.get('source', 'file') != source:
+            continue
+        if any(child.get('source', 'file') == source for child in children):
             continue
         start = min(max(match['offset'], 0), length)
         end = min(max(start + match['size'], start), length)
@@ -51,7 +55,7 @@ def _leaf_extents(matches, length):
             yield start, end
 
 
-def undescribed_regions(matches, length):
+def undescribed_regions(matches, length, source='file'):
     """Finds the byte ranges of a file that no match describes.
 
     Args:
@@ -64,13 +68,39 @@ def undescribed_regions(matches, length):
     """
     regions = []
     position = 0
-    for start, end in sorted(_leaf_extents(matches, length)):
+    for start, end in sorted(_leaf_extents(matches, length, source)):
         if start > position:
             regions.append((position, start - position))
         position = max(position, end)
     if position < length:
         regions.append((position, length - position))
     return regions
+
+
+def source_buffers(sbud):
+    """Collects the encoded bytes and coverage of physical and decoded sources.
+
+    Args:
+        sbud: The analyzed file and its source-aware structure.
+
+    Returns:
+        A mapping from source identifiers to base64 contents and undescribed extents.
+    """
+    sources = {'file': sbud['b64contents']}
+    stack = list(sbud['struc'])
+    while stack:
+        match = stack.pop()
+        source = match.get('source', 'file')
+        if source != 'file' and 'decoded' in match:
+            sources[source] = match['decoded']
+        stack.extend(reversed(match.get('subEls', [])))
+    return {
+        source: {
+            'encoded': encoded,
+            'regions': undescribed_regions(sbud['struc'], len(base64.b64decode(encoded)), source),
+        }
+        for source, encoded in sources.items()
+    }
 
 
 def encoded_contents(file_path, sbud):
@@ -174,13 +204,9 @@ def generate(file_path, sbud):
             if m is None:
                 return
             if 'decoded' in m:
-                decoded = ''
-                for b in base64.b64decode(m['decoded']).replace(b'\r\n', b'<br />') \
-                        .replace(b'\n', b'<br />').replace(b'\r', b'\xE2\x8F\x8E'):
-                    try:
-                        decoded += bytes([b]).decode('utf-8')
-                    except UnicodeDecodeError:
-                        decoded += f"\\x{int(b)}"
+                text = base64.b64decode(m['decoded']).decode('utf-8', errors='backslashreplace')
+                decoded = str(escape(text)).replace('\r\n', '\n').replace('\r', '⏎') \
+                    .replace('\n', '<br />')
                 yield m, decoded
             if 'subEls' in m:
                 for a in m['subEls']:
@@ -200,6 +226,7 @@ def generate(file_path, sbud):
             read_unicode=ReadUnicode(),
             mime_type=mime_type,
             decoded_matches=decoded_matches,
+            source_buffers=source_buffers(sbud),
             undescribed_regions=json.dumps(regions, separators=(',', ':')),
             undescribed_bytes=undescribed_bytes,
             undescribed_percent=undescribed_bytes * 100.0 / max(input_bytes, 1)

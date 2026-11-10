@@ -1,12 +1,13 @@
+import struct
+import zipfile
 from contextlib import contextmanager
 from io import BytesIO
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import Dict, Iterator, List, Optional, Set, Tuple
 from unittest import TestCase
-import struct
-import zipfile
 
+from polyfile.analysis import AnalysisLimits
 from polyfile.fileutils import FileStream
 from polyfile.magic import MagicMatcher, MatchContext
 from polyfile.polyfile import Match, Matcher
@@ -72,6 +73,45 @@ def temporary_file(data: bytes) -> Iterator[Path]:
 
 
 class TestZipMatcher(TestCase):
+    def test_invalid_lzma_member_does_not_drop_later_valid_members(self):
+        data = bytearray(build_zip(
+            members={"bad.json": b'{"bad": true}', "good.json": b'{"good": true}'},
+            compression=zipfile.ZIP_LZMA,
+        ))
+        body = 30 + len("bad.json")
+        data[body + 4] = 0xFF
+        matches = list(Matcher().match(bytes(data)))
+        invalid = [m for m in matches if m.analysis_status == "invalid"]
+        self.assertTrue(invalid)
+        self.assertTrue(any(m.name == "application/json" for m in matches))
+        self.assertEqual(2, sum(m.name == "CentralDirectory" for m in matches))
+
+    def test_unknown_compression_method_is_explicitly_unsupported(self):
+        data = bytearray(build_zip(members={"document.json": b"{}"}))
+        struct.pack_into("<H", data, 8, 99)
+        central_directory = data.index(b"PK\x01\x02")
+        struct.pack_into("<H", data, central_directory + 10, 99)
+        matches = list(Matcher().match(bytes(data)))
+        unsupported = [m for m in matches if m.analysis_status == "unsupported"]
+        self.assertEqual(1, len(unsupported))
+        self.assertEqual("compressed_data", unsupported[0].name)
+
+    def test_entry_limit_counts_a_member_once_despite_raw_field_scans(self):
+        payload = b'{"zip_member": true}'
+        data = build_zip(members={"document.json": payload})
+        matches = list(Matcher(limits=AnalysisLimits(max_members=1)).match(data))
+        wrapper = next(match for match in matches if match.name == "application/zip")
+        self.assertEqual(1, wrapper.analysis_context.members)
+        self.assertTrue(any(match.name == "application/json" for match in matches))
+
+    def test_entry_limit_includes_directories(self):
+        data = build_zip(members={"directory/": b"", "document.json": b"{}"})
+        matches = list(Matcher(limits=AnalysisLimits(max_members=1)).match(data))
+        wrapper = next(match for match in matches if match.name == "application/zip")
+        self.assertEqual(1, wrapper.analysis_context.members)
+        self.assertEqual("limited", wrapper.analysis_status)
+        self.assertFalse(any(match.name == "application/json" for match in matches))
+
     def member_names(self, data: bytes) -> List[bytes]:
         with temporary_file(data) as path, FileStream(str(path)) as stream:
             eocd = EndOfCentralDirectory.load(stream)

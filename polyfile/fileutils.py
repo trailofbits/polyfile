@@ -239,21 +239,33 @@ class FileStream(IO):
         ls = len(self)
         if pos >= ls:
             return b''
-        elif n is None:
-            return self._stream.read()[:ls - pos]
-        else:
-            return self._stream.read(min(n, ls - pos))
+        if n is None or n < 0:
+            n = ls - pos
+        return self._stream.read(min(n, ls - pos))
 
     def contains_all(self, *args):
         if args:
-            with mmap.mmap(self.fileno(), 0, access=mmap.ACCESS_READ) as filecontent:
+            try:
+                descriptor = self.fileno()
+            except UnsupportedOperation:
+                data = self.content
+                return all(string in data for string in args)
+            if not len(self):
+                return all(not string for string in args)
+            with mmap.mmap(descriptor, 0, access=mmap.ACCESS_READ) as filecontent:
                 for string in args:
                     if filecontent.find(string, self.offset(), self.offset() + len(self)) < 0:
                         return False
         return True
 
     def first_index_of(self, byte_sequence: bytes) -> int:
-        with mmap.mmap(self.fileno(), 0, access=mmap.ACCESS_READ) as filecontent:
+        if not len(self):
+            return 0 if not byte_sequence else -1
+        try:
+            descriptor = self.fileno()
+        except UnsupportedOperation:
+            return self.content.find(byte_sequence)
+        with mmap.mmap(descriptor, 0, access=mmap.ACCESS_READ) as filecontent:
             start_offset = self.offset()
             end_offset = start_offset + len(self)
             index = filecontent.find(byte_sequence, start_offset, end_offset)

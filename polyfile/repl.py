@@ -9,7 +9,7 @@ import sys
 import traceback
 from typing import Any, Callable, Dict, Iterable, Iterator, List, Optional, Set, Tuple, Type, TypeVar, Union
 
-from .fileutils import make_stream, Streamable
+from polyfile.fileutils import FileStream, Streamable
 from .profiling import Unprofiled
 
 if os.name == "posix":
@@ -102,11 +102,13 @@ class ANSIWriter:
         if max_num_bytes is not None and num_bytes > max_num_bytes:
             ellipsis = "⋯"
             num_bytes = max_num_bytes - 1
-        file = make_stream(file)
-        bytes_before = min(offset, context_bytes)
-        context_before = string_escape(file[offset - bytes_before:offset].content)
-        current_byte = string_escape(file[offset:offset + num_bytes].content)
-        context_after = string_escape(file[offset + num_bytes:offset + num_bytes + context_bytes].content)
+        with FileStream(file) as stream:
+            bytes_before = min(offset, context_bytes)
+            context_before = string_escape(stream[offset - bytes_before:offset].content)
+            current_byte = string_escape(stream[offset:offset + num_bytes].content)
+            context_after = string_escape(
+                stream[offset + num_bytes:offset + num_bytes + context_bytes].content
+            )
         self.write(indent)
         self.write(context_before)
         self.write(f"{current_byte}", bold=True)

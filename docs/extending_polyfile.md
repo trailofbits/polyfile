@@ -286,3 +286,54 @@ step ............... step through a single magic test
 test ............... test the following libmagic DSL test at the current position
 where .............. print the context of the current magic test (aliases: backtrace and info stack)
 ```
+
+## Limit recursive analysis
+
+Pass an `AnalysisLimits` instance through the keyword-only `limits` argument of `Matcher` or
+`Analyzer` to limit recursive content analysis. All fields default to `None`, meaning unlimited.
+A configured codec memory limit must be positive; zero remains valid for the other controls.
+The command line exposes the same controls as `--max-depth`, `--max-member-bytes`,
+`--max-total-bytes`, `--max-members`, and `--max-codec-memory`. Values are nonnegative integers;
+zero prevents the corresponding recursive work except for codec memory, which must be positive. Codec memory limits apply where a decoder
+supports them; they do not limit the Python process's total memory.
+
+ZIP DEFLATE requires a 64 KiB codec-memory allowance when that control is configured. ZIP
+bzip2/LZMA members report unsupported analysis when byte or memory limits are configured,
+because the standard-library ZIP backend cannot bound their incremental decoder output.
+Without configured limits, those backends retain their normal decoding behavior. ZIP entry
+counts exclude structural field probes and count each archive member once.
+
+The original input has depth zero and does not consume the recursive member or byte budgets.
+Depth counts transitions into content, including archive members and decoded streams, rather
+than structural nodes. Byte counts are cumulative across an analysis, including siblings. Member
+counts include container entries without payloads, such as directories and links, and codec
+members. Parsers admit entries with `AnalysisContext.claim_entry()` and mark their content region
+with `analysis_member_counted = True` before recursive matching to avoid counting it twice. A skipped region remains in the output with `analysis_status: "limited"` and an
+`analysis_message` naming the limit. A new top-level analysis starts a new budget even when you
+reuse a `Matcher`.
+
+## TAR member analysis
+
+The native TAR matcher validates the first header checksum and recognizes V7, POSIX, and GNU
+headers. A valid native checksum verdict replaces generic soft-magic TAR aliases with
+`application/x-tar`, preventing repeated traversal of nested archives. Specialized soft-magic
+matches remain available, including Gentoo GPKG. The parser handles
+all emitted TAR MIME variants and GPKG containers. An all-zero empty archive is not classified
+as TAR because it has no checksum-bearing header, but the TAR parser can map its end markers
+when invoked explicitly.
+
+Regular members are analyzed recursively in physical `FileStream` slices. TAR headers, data,
+padding, end markers, and trailing data retain offsets in their containing buffer. Header field
+names follow their variant: USTAR prefixes, old GNU timestamps and sparse descriptors, and V7
+reserved padding remain distinct. PAX local and
+global names and sizes, USTAR prefixes, and GNU long names and link names are applied while the
+original extension records remain visible. Effective archive paths and link targets are escaped
+metadata; no path is extracted or followed. Directories, links, devices, and FIFOs have no nested
+file analysis. A non-file entry that declares a payload is invalid.
+
+Invalid checksums, truncated records, malformed extensions, missing end markers, and incomplete
+payloads report an invalid region while preserving preceding valid structure. Two consecutive
+zero blocks end the archive; remaining bytes are retained as trailing data. Old GNU and PAX
+sparse members stop structural traversal with an unsupported status. Their logical contents are
+never reconstructed or allocated. Compressed TAR wrappers require a decoder for the wrapper;
+plain TAR parsing does not automatically run an external decompressor.

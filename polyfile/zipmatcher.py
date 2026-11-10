@@ -1,12 +1,25 @@
+import zlib
 from io import BytesIO
 from itertools import chain
+from lzma import LZMAError
 from pathlib import Path
 from typing import Iterator, Optional
-from zipfile import BadZipFile, ZipFile as PythonZip
+from zipfile import BadZipFile
+from zipfile import ZipFile as PythonZip
+
+from polyfile.compression import CHUNK_SIZE, DecodeError, OutputBuffer, match_decoded
 
 from .fileutils import ExactNamedTempfile, FileStream, Tempfile
 from .logger import StatusLogger
-from .magic import AbsoluteOffset, FailedTest, MagicMatcher, MagicTest, MatchedTest, TestResult, TestType
+from .magic import (
+    AbsoluteOffset,
+    FailedTest,
+    MagicMatcher,
+    MagicTest,
+    MatchedTest,
+    TestResult,
+    TestType,
+)
 from .polyfile import InvalidMatch, Match, register_parser
 from .structmatcher import PolyFileStruct
 from .structs import ByteField, Constant, Endianness, StructError, UInt16, UInt32
@@ -351,6 +364,23 @@ def open_archive(
             return None
 
 
+
+def _zip_decode_policy(fh: LocalFileHeader, parent: Match) -> tuple[str, str] | None:
+    limits = parent.analysis_context.limits
+    if limits.max_depth is not None and parent.analysis_depth >= limits.max_depth:
+        return "limited", "ZIP member decoding exceeds the configured recursive depth"
+    memory = limits.max_codec_memory
+    if memory is not None and fh.compression_method == 8 and memory < 64 * 1024:
+        return "limited", "ZIP DEFLATE requires a 64 KiB codec-memory allowance"
+    output_limited = parent.analysis_context.member_limit is not None
+    if fh.compression_method in (12, 14) and (output_limited or memory is not None):
+        return (
+            "unsupported",
+            "The ZIP bzip2/LZMA backend cannot enforce configured decoder limits",
+        )
+    return None
+
+
 def member_data(
         zf: Optional[PythonZip], fh: LocalFileHeader, match: Match, parent: Match
 ) -> Optional[bytes]:
@@ -368,11 +398,62 @@ def member_data(
     """
     if zf is None or match.name != "compressed_data" or match.parent.parent != parent:
         return None
-    try:
-        return zf.read(fh.file_name.decode("utf-8"))
-    except Exception:
-        log.warning(f"Error decompressing file {fh.file_name!r} at byte offset {match.offset}")
+    policy = _zip_decode_policy(fh, parent)
+    if policy is not None:
+        match.analysis_status, match.analysis_message = policy
         return None
+    try:
+        output = OutputBuffer(parent.analysis_context.member_limit)
+        encoding = "utf-8" if fh.general_purpose_bit_flag & 0x800 else "cp437"
+        with zf.open(fh.file_name.decode(encoding)) as member:
+            while True:
+                data = member.read(min(CHUNK_SIZE, output.next_size))
+                if not data:
+                    break
+                output.append(data)
+        return output.finish()
+    except DecodeError as error:
+        match.analysis_status = error.status
+        match.analysis_message = str(error)
+        return None
+    except NotImplementedError as error:
+        match.analysis_status = "unsupported"
+        match.analysis_message = str(error)
+        return None
+    except (BadZipFile, EOFError, KeyError, LZMAError, OSError, RuntimeError,
+            UnicodeError, zlib.error) as error:
+        match.analysis_status = "invalid"
+        match.analysis_message = f"Cannot decode ZIP member {fh.file_name!r}: {error}"
+        return None
+
+
+
+
+def _decoded_zip_parsers(header: LocalFileHeader, match: Match) -> set[str]:
+    """Identify raw interpretations whose decoded contents were already analyzed."""
+    if header.compression_method == 12:
+        return {"application/x-bzip2"}
+    if header.compression_method == 0:
+        return {
+            child.name
+            for source in match.children if source.name == "decoded_content"
+            for child in source.children
+        }
+    return set()
+
+
+def _member_matches(
+    header: LocalFileHeader, archive: Optional[PythonZip], parent: Match
+) -> Iterator[Match]:
+    """Map one member header and its admitted decoded payload."""
+    assert parent.matcher is not None
+    for match in header.match(matcher=parent.matcher, parent=parent):
+        match.analysis_member_counted = True
+        decoded = member_data(archive, header, match, parent)
+        yield match
+        if decoded is not None:
+            yield from match_decoded(match, decoded, member_counted=True)
+            match.analysis_skip_parsers.update(_decoded_zip_parsers(header, match))
 
 
 def parse_archive(
@@ -388,22 +469,27 @@ def parse_archive(
     Yields:
         A match for each record of the archive, and for the files its members contain.
     """
+    if parent.analysis_context.remaining_members == 0:
+        parent.analysis_status = "limited"
+        parent.analysis_message = "ZIP member count exceeds its analysis allowance"
+        return
     cds = list(eocd.central_directories(file_stream))
     fhs = list(cd.local_file_header(file_stream) for cd in cds)
     zf = open_archive(file_stream, eocd, fhs[0].start_offset) if fhs else None
-    for fh in fhs:
-        for match in fh.match(matcher=parent.matcher, parent=parent):
-            decoded = member_data(zf, fh, match, parent)
-            if decoded is None:
+    try:
+        for fh in fhs:
+            reason = parent.analysis_context.claim_entry()
+            if reason is not None:
+                parent.analysis_status, parent.analysis_message = "limited", reason
+                return
+            yield from _member_matches(fh, zf, parent)
+        for record in [*cds, eocd]:
+            for match in record.match(matcher=parent.matcher, parent=parent):
+                match.analysis_member_counted = True
                 yield match
-                continue
-            match.decoded = decoded
-            yield match
-            with Tempfile(decoded) as tmp:
-                yield from parent.matcher.match(tmp, parent=match)
-    for cd in cds:
-        yield from cd.match(matcher=parent.matcher, parent=parent)
-    yield from eocd.match(matcher=parent.matcher, parent=parent)
+    finally:
+        if zf is not None:
+            zf.close()
 
 
 @register_parser("application/zip")

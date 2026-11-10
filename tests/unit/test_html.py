@@ -4,7 +4,7 @@ import re
 from unittest import TestCase
 
 from polyfile.fileutils import Tempfile
-from polyfile.html import generate, undescribed_regions
+from polyfile.html import generate, source_buffers, undescribed_regions
 
 
 def match(offset, size, sub_els=()):
@@ -76,6 +76,16 @@ class UndescribedRegionTests(TestCase):
     def test_a_match_running_past_the_end_is_clamped(self):
         self.assertEqual([], undescribed_regions([match(0, 1024)], 16))
 
+    def test_decoded_children_do_not_cover_physical_gaps(self):
+        decoded = {**match(0, 100), 'source': 'decoded:0'}
+        parent = match(0, 16, [match(0, 4, [decoded]), match(12, 4)])
+        self.assertEqual([(4, 8)], undescribed_regions([parent], 16))
+
+    def test_decoded_coverage_is_computed_in_its_own_source(self):
+        decoded = {**match(0, 12), 'source': 'decoded:0',
+                   'subEls': [{**match(4, 4), 'source': 'decoded:0'}]}
+        self.assertEqual([(0, 4), (8, 4)], undescribed_regions([decoded], 12, 'decoded:0'))
+
 
 class GeneratedHtmlTests(TestCase):
     """Test that the generated hex viewer carries the data it needs to mark undescribed bytes."""
@@ -138,3 +148,37 @@ class GeneratedHtmlTests(TestCase):
         with self.assertRaises(ValueError) as refused:
             self.render(bytes(16), [match(0, 16)], include_contents=False)
         self.assertIn("no 'b64contents' key", str(refused.exception))
+
+    def test_decoded_sources_are_available_to_highlights_and_downloads(self):
+        payload = b'decoded bytes'
+        decoded = {**match(0, len(payload)), 'source': 'decoded:0',
+                   'decoded': base64.b64encode(payload).decode('ascii')}
+        structure = [match(0, 4, [decoded])]
+        buffers = source_buffers(sbud(b'file', structure))
+        self.assertEqual({'file', 'decoded:0'}, set(buffers))
+        html = self.render(b'file', structure)
+        self.assertIn('matchsource="decoded:0"', html)
+        self.assertIn('value="decoded:0"', html)
+        self.assertIn('SOURCE_BUFFERS[source].encoded', html)
+        self.assertIn('selectSource($(this).attr(\'matchsource\'))', html)
+
+    def test_decoded_text_and_names_are_escaped(self):
+        payload = b'<script>alert("decoded")</script>'
+        decoded = {**match(0, len(payload)), 'source': 'decoded:0',
+                   'name': '<img src=x onerror=alert(1)>',
+                   'decoded': base64.b64encode(payload).decode('ascii')}
+        html = self.render(b'file', [match(0, 4, [decoded])])
+        self.assertIn('&lt;script&gt;', html)
+        self.assertNotIn('<script>alert', html)
+        self.assertNotIn('<img src=x onerror=', html)
+
+    def test_analysis_failure_status_and_reason_are_visible_and_escaped(self):
+        node = {
+            **match(0, 4),
+            "analysis_status": "unsupported",
+            "analysis_message": '<img src=x onerror=alert("reason")>',
+        }
+        html = self.render(b"file", [node])
+        self.assertIn('class="analysis-status">unsupported:', html)
+        self.assertIn("&lt;img src=x", html)
+        self.assertNotIn('<img src=x onerror=', html)

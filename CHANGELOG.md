@@ -15,6 +15,32 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
   The command line, Python identification API, and SBuD root values share these descriptions;
   malformed metadata retains the ELF classification and reports a diagnostic.
 
+- Optional recursive analysis controls through `AnalysisLimits` and `--max-depth`,
+  `--max-member-bytes`, `--max-total-bytes`, `--max-members`, and `--max-codec-memory`.
+  Defaults are unlimited; skipped regions report their reason in JSON output.
+- Native checksum-based TAR detection and recursive analysis of regular TAR members, including
+  nested archives. Headers, PAX/GNU name extensions, padding, and end markers retain physical
+  offsets. Links remain metadata, and sparse reconstruction reports unsupported status.
+  **Breaking:** valid TAR headers that soft magic misses now report `application/x-tar`, and
+  TAR JSON/HTML output includes member structure and nested classifications. Native TAR verdicts
+  replace generic soft-magic TAR aliases to avoid repeated recursive analysis. Specialized
+  GPKG verdicts also supersede redundant generic TAR aliases.
+
+- **Breaking:** Gzip members are decoded and recursively analyzed, with validated framing,
+  checksums, concatenated-member semantics, and optional resource limits. Raw member fields
+  remain available alongside decoded content.
+
+### Changed
+
+- **Breaking:** JSON elements identify their physical or decoded `source`; offsets stop at
+  decoded-buffer boundaries. ZIP and PDF decoded content uses explicit `decoded_content` nodes.
+  HTML highlighting, downloads, and coverage use the selected source, and decoded text is escaped.
+
+### Fixed
+
+- Bounded file regions now limit reads before allocating data, including `read()` and
+  `read(-1)`, so archive members cannot expose neighboring bytes or copy the remaining archive.
+
 ## [0.6.0] - 2026-09-12
 
 This release is seven months of work: 253 commits and 67 pull requests since v0.5.6, which was
@@ -628,3 +654,5 @@ No release notes were recorded for this release.
 [0.1.4]: https://github.com/trailofbits/polyfile/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/trailofbits/polyfile/compare/v0.1.2-SafeDocs-Internal...v0.1.3
 [0.1.2-SafeDocs-Internal]: https://github.com/trailofbits/polyfile/releases/tag/v0.1.2-SafeDocs-Internal
+
+[Unreleased]: https://github.com/trailofbits/polyfile/compare/v0.6.0...HEAD
