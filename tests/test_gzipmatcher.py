@@ -2,6 +2,7 @@
 
 import gzip
 import struct
+import tarfile
 import zlib
 from io import BytesIO
 from zipfile import ZIP_DEFLATED, ZipFile
@@ -267,3 +268,17 @@ def test_a_decoded_pdf_keeps_its_structure_in_the_decoded_source(caplog):
     assert objects
     assert all(m.source == "decoded:0" for m in objects)
     assert not [record for record in caplog.records if record.levelno >= 30]
+
+
+def test_gzip_tar_json_keeps_tar_member_offsets_in_the_decoded_buffer():
+    buffer = BytesIO()
+    with tarfile.open(fileobj=buffer, mode="w", format=tarfile.USTAR_FORMAT) as archive:
+        info = tarfile.TarInfo("document.json")
+        info.size = len(PAYLOAD)
+        archive.addfile(info, BytesIO(PAYLOAD))
+    matches = analyzed(member(buffer.getvalue()))
+    archive = next(m for m in matches if m.name == "application/x-tar")
+    document = next(m for m in matches if m.name == "application/json")
+    assert archive.source == document.source == "decoded:0"
+    assert document.offset == 512
+    assert document.length == len(PAYLOAD)
