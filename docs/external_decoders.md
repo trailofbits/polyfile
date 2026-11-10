@@ -61,3 +61,23 @@ not establish an original size or checksum that the format does not store.
 
 [Project-owned SCO fixtures](../tests/fixtures/sco/README.md) include literal and back-reference
 blocks, JSON, TAR recursion, and empty content, verified against the pinned reference decoder.
+
+## UNIX pack
+
+The `1f 1e` UNIX pack signature dispatches through `application/x-unix-pack`, replacing the
+bundled generic `application/octet-stream` alias. File descriptions retain their declared-size
+text and appear once. The parser validates complete canonical Huffman trees with code lengths
+from 1 through 25 bits, at most 256 literal bytes, and an explicit EOF code. It preserves the
+physical signature, declared size, code-length counts, literal table, and encoded body.
+The declared decoded size is checked against configured output limits before helper execution
+and against the complete decoded buffer before recursive analysis.
+
+GNU gzip 1.15 is the reference decoder; the same helper availability and optional resource
+controls apply. It checks decoded length, as documented in the
+[GNU gzip manual](https://www.gnu.org/software/gzip/manual/gzip.html). UNIX pack has no CRC, so
+length-preserving corruption can remain undetected. Historical `1f 1f` pack files also receive
+the format-specific MIME type but report `unsupported`, because GNU gzip does not decode that
+variant. Other generic binary data never dispatches this parser.
+
+[Project-owned pack fixtures](../tests/fixtures/pack/README.md) cover all byte values, JSON/TAR
+recursion, empty and one-byte content, and complete trees reaching the 1-bit and 25-bit limits.

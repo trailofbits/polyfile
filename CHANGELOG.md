@@ -39,6 +39,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 - **Breaking:** XZ streams are decoded and recursively analyzed, with complete integrity checks,
   concatenated-stream and four-byte padding semantics, source-aware archive recursion, and
   optional native memory, decoded output, depth, and stream-count limits.
+- **Breaking:** UNIX pack streams now emit `application/x-unix-pack` and recursively analyze
+  decoded content through the supported installed GNU gzip helper. Headers and canonical Huffman
+  trees retain physical offsets; decoded sizes are validated before publishing nested content.
+  Historical `1f 1f` pack files keep their description and report unsupported decoding status.
 - **Breaking:** SCO compress -H (LZH) streams now emit `application/x-sco-compress` and recursively
   analyze decoded content using the supported installed GNU gzip helper. Physical signature/body
   regions and decoded coordinates remain distinct; unavailable helpers and configured limits
