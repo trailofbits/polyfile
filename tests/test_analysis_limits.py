@@ -170,3 +170,8 @@ def test_cli_rejects_invalid_helper_timeout(value: str) -> None:
     with contextlib.redirect_stderr(io.StringIO()), pytest.raises(SystemExit) as exc:
         main(["polyfile", "--helper-timeout", value])
     assert exc.value.code == 2
+
+
+def test_unrepresentable_integer_helper_timeout_is_rejected() -> None:
+    with pytest.raises(ValueError, match="helper_timeout"):
+        AnalysisLimits(helper_timeout=10**10000)

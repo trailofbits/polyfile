@@ -24,7 +24,11 @@ _Event = tuple[str, bytes | Exception | None]
 def _deadline(timeout: float | None) -> float | None:
     if timeout is None:
         return None
-    if not math.isfinite(timeout) or timeout <= 0:
+    try:
+        finite = math.isfinite(timeout)
+    except OverflowError as error:
+        raise ValueError("helper_timeout must be positive finite seconds or None") from error
+    if not finite or timeout <= 0:
         raise ValueError("helper_timeout must be positive finite seconds or None")
     return time.monotonic() + timeout
 
@@ -35,7 +39,7 @@ def _remaining(deadline: float | None) -> float | None:
     remaining = deadline - time.monotonic()
     if remaining <= 0:
         raise DecodeError("external decoder exceeded its helper timeout", status="limited")
-    return remaining
+    return min(remaining, threading.TIMEOUT_MAX)
 
 
 def _command(command: tuple[str, ...], max_memory: int | None) -> tuple[str, ...]:
@@ -143,10 +147,9 @@ class _Pump:
 
 
 def _terminate(process: subprocess.Popen[bytes]) -> None:
-    if process.poll() is not None:
-        return
     if os.name != "posix":
-        process.kill()
+        if process.poll() is None:
+            process.kill()
         return
     try:
         os.killpg(process.pid, signal.SIGKILL)
@@ -182,10 +185,8 @@ def _collect(
     while completed < len(pump.threads):
         try:
             name, value = pump.events.get(timeout=_remaining(deadline))
-        except queue.Empty as error:
-            raise DecodeError(
-                "external decoder exceeded its helper timeout", status="limited"
-            ) from error
+        except queue.Empty:
+            continue
         if name == "done":
             completed += 1
         elif name == "stdout":
@@ -215,12 +216,12 @@ def _finish(
     diagnostic: bytes,
     broken: Exception | None,
 ) -> bytes:
-    try:
-        returncode = process.wait(timeout=_remaining(deadline))
-    except subprocess.TimeoutExpired as error:
-        raise DecodeError(
-            "external decoder exceeded its helper timeout", status="limited"
-        ) from error
+    while True:
+        try:
+            returncode = process.wait(timeout=_remaining(deadline))
+            break
+        except subprocess.TimeoutExpired:
+            _remaining(deadline)
     if returncode:
         raise _failure(returncode, bytes(diagnostic), max_memory)
     if broken is not None:

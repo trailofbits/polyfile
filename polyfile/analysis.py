@@ -29,10 +29,13 @@ class AnalysisLimits:
         if self.max_codec_memory == 0:
             raise ValueError("max_codec_memory must be a positive integer or None")
         timeout = self.helper_timeout
-        if timeout is not None and (
-            not isinstance(timeout, (int, float)) or not math.isfinite(timeout) or timeout <= 0
-        ):
-            raise ValueError("helper_timeout must be positive finite seconds or None")
+        if timeout is not None:
+            try:
+                valid = isinstance(timeout, (int, float)) and math.isfinite(timeout) and timeout > 0
+            except OverflowError:
+                valid = False
+            if not valid:
+                raise ValueError("helper_timeout must be positive finite seconds or None")
 
 
 @dataclass

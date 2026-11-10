@@ -3,6 +3,7 @@
 import json
 import os
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -191,3 +192,27 @@ def test_input_read_failure_is_reported_and_helper_is_reaped(
     with FileStream(b"input") as stream, pytest.raises(DecodeError, match="unreadable input"):
         monkeypatch.setattr(stream, "read", failed_read)
         run_helper(stream, python_helper("import sys; sys.stdout.write(sys.stdin.read())"))
+
+
+@pytest.mark.parametrize("timeout", (1e20, 1e308))
+def test_large_finite_timeout_is_supported(timeout: float) -> None:
+    with FileStream(b"") as stream:
+        assert run_helper(stream, python_helper("pass"), helper_timeout=timeout) == b""
+
+
+def test_unrepresentable_integer_timeout_is_rejected() -> None:
+    with FileStream(b"") as stream, pytest.raises(ValueError, match="helper_timeout"):
+        run_helper(stream, python_helper("pass"), helper_timeout=10**10000)
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX decoder process group")
+def test_timeout_closes_pipes_inherited_by_a_descendant_after_leader_exit() -> None:
+    code = (
+        "import subprocess,sys; subprocess.Popen([sys.executable,'-I','-c',"
+        "'import time; time.sleep(2)'])"
+    )
+    started = time.monotonic()
+    with FileStream(b"") as stream, pytest.raises(DecodeError) as error:
+        run_helper(stream, python_helper(code), helper_timeout=0.2)
+    assert error.value.status == "limited"
+    assert time.monotonic() - started < 1.5
