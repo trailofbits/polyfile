@@ -125,8 +125,11 @@ class BFProgram:
 
 
 def _bf_missing_commands(data: bytes) -> Optional[Tuple[int, str]]:
-    positions = [(data.find(bytes((byte,))), command) for byte, command in _BF_COMMAND_TYPES.items()]
-    if all(offset >= 0 for offset, command in positions if command != BFCommandType.INPUT):
+    # INPUT is optional, so it is located only once a required command is
+    # known to be missing; otherwise its absence would cost a full scan.
+    positions = [(data.find(bytes((byte,))), command) for byte, command in _BF_COMMAND_TYPES.items()
+                 if command != BFCommandType.INPUT]
+    if all(offset >= 0 for offset, _ in positions):
         return None
     # Syntax errors take precedence over missing commands, including an
     # unmatched opening bracket whose reported offset is the end of the input.
@@ -137,6 +140,7 @@ def _bf_missing_commands(data: bytes) -> Optional[Tuple[int, str]]:
             raise BFParseError("unbalanced square brackets", offset=bracket.start())
     if opened:
         raise BFParseError("unbalanced square brackets", offset=len(data) - 1)
+    positions.append((data.find(b","), BFCommandType.INPUT))
     present = sorted((offset, command) for offset, command in positions if offset >= 0)
     # Preserve insertion order in the original set, including INPUT. The
     # difference's iteration order determines the failure message's order.
