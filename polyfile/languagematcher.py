@@ -12,7 +12,10 @@ log = StatusLogger("polyfile")
 
 # Every other byte is a comment. Searching for commands lets the regex engine
 # skip those bytes without an Enum lookup and a ValueError for each one.
-_BF_COMMAND = re.compile(rb"[\[\],.><+\-]+")
+# Runs are capped so that a long run is consumed in chunks: the parser may
+# reject the input at its first command, and must not copy the whole run first.
+_BF_MAX_RUN = 4096
+_BF_COMMAND = re.compile(rb"[\[\],.><+\-]{1,%d}" % _BF_MAX_RUN)
 _BF_BRACKET = re.compile(rb"[\[\]]")
 
 

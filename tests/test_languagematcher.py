@@ -1,3 +1,4 @@
+import tracemalloc
 from unittest import TestCase
 
 from polyfile.languagematcher import BFCommandType, BFMatcher, BFParseError, BFProgram
@@ -124,3 +125,38 @@ class TestBFCommandRuns(TestCase):
         with self.assertRaises(BFParseError) as error:
             BFProgram.parse(data)
         self.assertEqual(error.exception.offset, data.index(b"]ignored"))
+
+
+class TestBFEarlyRejection(TestCase):
+    # A long command run that the parser rejects at its first byte.
+    DATA = b"]><+-.[" + b"+" * 4_000_000 + b"x"
+
+    def assert_small_peak(self, call):
+        tracemalloc.start()
+        try:
+            tracemalloc.reset_peak()
+            call()
+            _, peak = tracemalloc.get_traced_memory()
+        finally:
+            tracemalloc.stop()
+        self.assertLess(peak, 256 * 1024)
+
+    def test_parse_does_not_copy_the_whole_run(self):
+        def parse():
+            with self.assertRaises(BFParseError) as raised:
+                BFProgram.parse(self.DATA)
+            self.assertEqual(raised.exception.offset, 0)
+        self.assert_small_peak(parse)
+
+    def test_matcher_does_not_copy_the_whole_run(self):
+        def match():
+            result = BFMatcher().test(self.DATA, 0, None)
+            self.assertFalse(result)
+            self.assertEqual(result.offset, 0)
+        self.assert_small_peak(match)
+
+    def test_runs_longer_than_one_chunk_keep_offsets(self):
+        data = b"xx[" + b"+" * 10_000 + b"]x" + b"><-." * 6
+        program = BFProgram.parse(data)
+        self.assertEqual([c.offset for c in program.commands],
+                         [i for i, b in enumerate(data) if b != ord("x")])
