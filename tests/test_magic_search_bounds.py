@@ -4,6 +4,10 @@ from unittest import TestCase
 from polyfile.magic import DataTypeMatch, StringMatch
 
 
+class SearchedWholeBuffer(Exception):
+    pass
+
+
 class SearchForbidden:
     """Wraps a compiled pattern and fails if `StringMatch.search` scans the whole buffer.
 
@@ -20,7 +24,7 @@ class SearchForbidden:
         return self.wrapped.match(*args)
 
     def search(self, *args):
-        raise AssertionError("searched the whole buffer instead of only the permitted starts")
+        raise SearchedWholeBuffer("searched the whole buffer instead of only the permitted starts")
 
 
 def bounded(test: StringMatch) -> StringMatch:
@@ -67,7 +71,13 @@ class TestBoundedSearch(TestCase):
         self.assertEqual(result.raw_match, b"TOKEN")
 
     def test_unbounded_shapes_keep_the_native_search(self):
-        # A literal prefix gains nothing from the bounded path, so it must still use `search`.
-        test = bounded(StringMatch("TOKEN", num_bytes=10))
-        with self.assertRaises(AssertionError):
-            test.search(b"x" * 140000)
+        # CPython skips ahead to a literal prefix quickly. A case-sensitive one always keeps
+        # `search`; a case-insensitive non-letter keeps it unless the buffer is far longer than
+        # the range of permitted starts.
+        ci = dict(case_insensitive_lower=True, case_insensitive_upper=True)
+        for test in (StringMatch("TOKEN", num_bytes=10), StringMatch("<?xml", num_bytes=1000, **ci)):
+            with self.subTest(pattern=test.pattern.pattern):
+                with self.assertRaises(SearchedWholeBuffer):
+                    bounded(test).search(b"x" * 140000)
+        self.assertIs(bounded(StringMatch("<?xml", num_bytes=10, **ci)).search(b"x" * 140000),
+                      DataTypeMatch.INVALID)
