@@ -59,6 +59,27 @@ jobs:
         make -j2
         make install
         echo "$helper_root/bin" >> "$GITHUB_PATH"
+    - name: Install the LRZIP reference decoder
+      shell: bash
+      run: |
+        set -euo pipefail
+        sudo apt-get update
+        sudo apt-get install --no-install-recommends --yes liblzo2-dev liblz4-dev libbz2-dev zlib1g-dev
+        helper_root="$RUNNER_TEMP/polyfile-helpers"
+        mkdir -p "$helper_root"
+        curl --fail --location --silent --show-error \
+          --output "$helper_root/lrzip-0.7.3.tar.xz" \
+          https://github.com/ckolivas/lrzip/releases/download/v0.7.3/lrzip-0.7.3.tar.xz
+        lrzip_sha256="6928862de7c4bbb3cfbcd12fae9fd0a7d230d5bbf27486e52c4de60717ebfdbb"
+        printf '%s  %s\n' "$lrzip_sha256" "$helper_root/lrzip-0.7.3.tar.xz" \
+          | sha256sum --check --status
+        tar -xJf "$helper_root/lrzip-0.7.3.tar.xz" -C "$helper_root"
+        cd "$helper_root/lrzip-0.7.3"
+        ./configure --prefix="$helper_root"
+        make -j2
+        make install
+        LRZIP=NOCONFIG "$helper_root/bin/lrzip" --version
+        echo "$helper_root/bin" >> "$GITHUB_PATH"
     - name: Scan with pip-audit
       uses: trailofbits/gh-action-pip-audit@1220774d901786e6f652ae159f7b6bc8fea6d266 # v1.1.0
     - name: Lint with flake8

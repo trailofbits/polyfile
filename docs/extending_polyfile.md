@@ -305,6 +305,11 @@ banner identifies GNU gzip 1.15 or newer. Other gzip implementations and older r
 and output, without a shell, inherited codec options, or extraction into the filesystem. See
 [external decoder behavior](external_decoders.md) for setup, resource controls, and integrity limits.
 
+LRZIP decoding automatically uses `lrzip` 0.7.3 or newer from `PATH` for unencrypted archive
+versions 0.6 and 0.7. It preserves encoded framing and recursively analyzes validated output with
+a separate source. Encrypted archives, unsupported versions, and missing helpers report explicit
+status. See [LRZIP decoder behavior](external_decoders.md#lrzip) for compatibility and limits.
+
 ZIP DEFLATE requires a 64 KiB codec-memory allowance when that control is configured. ZIP
 bzip2/LZMA members report unsupported analysis when byte or memory limits are configured,
 because the standard-library ZIP backend cannot bound their incremental decoder output.

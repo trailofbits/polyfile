@@ -42,6 +42,35 @@ reference decoder from the [GNU gzip 1.15 source archive](https://ftp.gnu.org/gn
 and verifies its SHA-256 before compiling it. GNU gzip remains a separately installed executable;
 no GNU gzip source or binaries are included in PolyFile distributions.
 
+## LRZIP
+
+LRZIP decoding automatically uses `lrzip` from `PATH` when its version banner identifies version
+0.7.3 or newer. Install LRZIP separately; Python installation does not install the executable.
+PolyFile supports unencrypted LRZIP archive versions 0.6 and 0.7, with known or unknown decoded
+sizes. Other archive versions and encrypted archives report `unsupported` before decoder startup.
+The adapter invokes fixed `-Q -d -o - -p 1` arguments and supplies `LRZIP=NOCONFIG` to disable
+configuration files. It passes no `-m` option: that option changes LRZIP's available-memory
+assumption and does not impose a hard process-memory ceiling. The optional output, timeout, and
+Linux address-space controls described above apply to LRZIP.
+
+The parser preserves the 24-byte physical header, first RZIP chunk framing, remaining encoded
+chunks, and optional final MD5 digest. Unused version 0.6 header bytes remain metadata; version
+0.7 streaming flags and its reserved byte follow their version-specific validation. The chunk's
+capacity can exceed its decoded payload size; output limits use the archive's decoded-size field
+when known and bound helper output in all cases. Internal chunk records are part of one archive and do not consume separate member entries.
+The installed decoder validates secondary compression, RZIP backward references, and per-chunk
+CRC when MD5 is absent. PolyFile also verifies a declared decoded size and final MD5
+before publishing any decoded source. Archives can require substantial native memory; configure
+`--max-codec-memory` on Linux to impose a hard ceiling. No codec-memory ceiling applies by default.
+
+LRZIP's linked internal streams are not fully represented as physical AST fields. Framing and
+trailing-data acceptance follow the installed decoder; successful decoding does not imply that
+every encoded byte was referenced. Concatenated archives are not treated as independent members.
+See [the LRZIP fixture provenance](../tests/fixtures/lrzip/README.md) for the two reference archive
+versions and [the upstream header description](https://github.com/ckolivas/lrzip/blob/v0.7.3/doc/magic.header.txt)
+for header semantics. The 0.7 chunk prefilter byte is defined by the
+[reference decoder](https://github.com/ckolivas/lrzip/blob/v0.7.3/runzip.c).
+
 ## SCO compress -H (LZH)
 
 The exact `1f a0` signature now dispatches through `application/x-sco-compress`. Its existing

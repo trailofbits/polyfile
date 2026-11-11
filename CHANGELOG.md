@@ -10,6 +10,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 
 ### Added
 
+- **Breaking:** Unencrypted LRZIP 0.6 and 0.7 archives are recursively analyzed through an
+  installed LRZIP 0.7.3 or newer helper, preserving physical framing and decoded source
+  coordinates. Missing helpers and unsupported archive variants report explicit status; declared
+  sizes, integrity, optional output limits, and helper resource controls gate recursive analysis.
 - **Breaking:** Lzip version 1 payloads are recursively analyzed with native header, raw-LZMA,
   CRC32, decoded-size, and member-size validation. Concatenated members preserve physical
   structure and share optional resource limits. Older versions report unsupported status;
