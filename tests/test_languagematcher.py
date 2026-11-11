@@ -132,14 +132,21 @@ class TestBFEarlyRejection(TestCase):
     DATA = b"]><+-.[" + b"+" * 4_000_000 + b"x"
 
     def assert_small_peak(self, call):
-        tracemalloc.start()
+        # Measure growth during the call, so that tracing already enabled by the
+        # caller (PYTHONTRACEMALLOC, -X tracemalloc) neither counts earlier
+        # allocations nor gets switched off here.
+        started = not tracemalloc.is_tracing()
+        if started:
+            tracemalloc.start()
         try:
             tracemalloc.reset_peak()
+            before, _ = tracemalloc.get_traced_memory()
             call()
             _, peak = tracemalloc.get_traced_memory()
         finally:
-            tracemalloc.stop()
-        self.assertLess(peak, 256 * 1024)
+            if started:
+                tracemalloc.stop()
+        self.assertLess(peak - before, 256 * 1024)
 
     def test_parse_does_not_copy_the_whole_run(self):
         def parse():
