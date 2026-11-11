@@ -350,3 +350,73 @@ zero blocks end the archive; remaining bytes are retained as trailing data. Old 
 sparse members stop structural traversal with an unsupported status. Their logical contents are
 never reconstructed or allocated. Compressed TAR wrappers require a decoder for the wrapper;
 plain TAR parsing does not automatically run an external decompressor.
+
+## Bzip2 decoded content
+
+Bzip2 uses Python's standard-library `bz2.BZ2Decompressor`; no helper executable or additional
+package is required. If Python lacks its optional `bz2` module, classification remains available
+and decoding reports unsupported status. Each complete concatenated stream contributes to one
+decoded buffer, so a JSON document or archive can span streams. Block and combined checksums are
+validated before the decoded buffer is published. Truncation, invalid headers, corrupted data,
+and trailing bytes, including zero bytes, report invalid status instead of publishing partial
+content.
+
+The physical tree maps each stream's signature, declared block size, and first block checksum.
+An empty stream's aligned end marker and combined checksum are mapped directly. Later blocks
+and the nonempty stream footer can be bit-aligned, so their encoded bytes remain in the
+`compressed_data` region rather than receiving invented byte offsets.
+
+Optional output and stream-count limits are checked incrementally. Before constructing each
+codec instance, its header is checked against the configured codec-memory allowance using
+libbz2's ordinary workspace estimate of `100000 + 4 * block_size` bytes. Python does not expose
+libbz2's alternative small-memory mode. This allowance governs libbz2 workspace, separately
+from Python's input/output buffers and report storage. See the [bzip2 memory-management
+manual](https://sourceware.org/bzip2/manual/manual.html) for the workspace model. Limits are
+unlimited when omitted.
+
+## XZ decoded content
+
+XZ uses Python's standard-library `lzma.LZMADecompressor` with explicit `FORMAT_XZ` framing.
+No helper executable or additional dependency is required. Missing `lzma` support and integrity
+check IDs unavailable in the installed liblzma report unsupported status. Header CRC32, stream
+flags, block checks, index, and footer integrity are validated before publishing decoded content.
+Check types supported by the backend include no check, CRC32, CRC64, and SHA-256.
+
+Complete concatenated streams contribute to one decoded buffer, including documents split
+between streams. Zero padding between or after streams must have a length divisible by four;
+leading padding and other trailing bytes are invalid. The physical tree retains each stream's
+header, encoded blocks, index, footer, and padding with exact byte offsets. Invalid or truncated
+input keeps its wrapper and available raw structure without publishing partial decoded children.
+
+Decoded output is requested from liblzma in bounded chunks. A configured codec-memory allowance
+is passed to native `memlimit` before dictionary allocation; an omitted allowance passes `None`
+and sets no application limit. Memory-limit failures report limited status. The output, total
+byte, depth, and stream-count controls share the containing analysis's budget. Padding does not
+consume a stream entry. See the [Python lzma incremental-decoding
+reference](https://docs.python.org/3/library/lzma.html#lzma.LZMADecompressor) for backend semantics.
+
+## LZMA-alone decoded content
+
+Legacy LZMA-alone uses the standard-library `lzma` backend and explicit `FORMAT_ALONE` framing.
+Its 13-byte header retains the properties byte, unsigned 32-bit dictionary size, and unsigned
+64-bit decoded size. An all-ones decoded size means unknown length and requires an end marker.
+Known-size streams can omit the marker; a marker with a known size requires liblzma 5.2.6 or
+newer. The decoder follows the installed backend's ending support and checks declared sizes.
+LZMA-alone has no checksum.
+
+Property bytes above 224 are invalid. Valid properties with `lc + lp > 4` report unsupported
+status because liblzma cannot decode them. Other valid properties and unsigned dictionary
+values, including noncanonical dictionary sizes, use native validation and memory admission.
+No auto-detection dictionary or 256 GiB size heuristic is applied by the explicit decoder.
+Automatic classification continues to follow bundled libmagic rules, which can miss valid
+small-dictionary or nondefault-property headers.
+
+LZMA-alone does not define concatenated files. Trailing bytes, including another stream or zero
+padding, are rejected using XZ Utils' strict policy. Complete decoded bytes receive their own
+source and recursive JSON/archive analysis; malformed input never publishes partial children.
+Known sizes are checked against an optional output allowance before codec construction, and
+unknown-size output requests are bounded incrementally. Native memory, depth, and member
+controls use the shared optional analysis limits; omitted limits remain unlimited.
+
+See the [XZ project's LZMA file-format specification](https://github.com/tukaani-project/xz/blob/master/doc/lzma-file-format.txt)
+for legacy properties and ending rules.

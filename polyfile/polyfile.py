@@ -87,6 +87,7 @@ class Match:
             decoded: Optional[bytes] = None,
             extension: Optional[str] = None,
             *,
+            description: Optional[str] = None,
             analysis_context: Optional[AnalysisContext] = None,
             analysis_depth: Optional[int] = None,
             source: Optional[str] = None
@@ -95,6 +96,7 @@ class Match:
         self.name: str = name
         self.matcher: Optional[Matcher] = None
         self.match = match_obj
+        self.description: Optional[str] = description
         self.img_data: Optional[str] = img_data
         self.decoded: Optional[bytes] = decoded
         self._offset: int = relative_offset
@@ -190,9 +192,11 @@ class Match:
     def to_obj(self):
         """Renders this match as the SBUD element that `docs/json_format.md` describes.
 
-        A match built with a `match_obj` of `None` describes no content of its own, so the
-        element it renders carries no `value` key. Any other match object becomes the `value`
-        through `str`, so a match may only hold an object whose `str` derives from the bytes
+        An explicit `description` supplies the rendered value while retaining the original
+        match object. A match with neither a description nor a `match_obj` describes no content
+        of its own, so the element it renders carries no `value` key. Any other match object
+        becomes the `value` through `str`, so a match may only hold an object whose `str` derives
+        from the bytes
         it matched. The default `object.__str__` does not: it embeds a heap address, which
         differs between runs over the same input.
 
@@ -207,7 +211,9 @@ class Match:
             'name': self.display_name,
             'source': self.source,
         }
-        if self.match is not None:
+        if self.description is not None:
+            ret['value'] = self.description
+        elif self.match is not None:
             ret['value'] = str(self.match)
         ret['subEls'] = [c.to_obj() for c in self]
         if self.img_data is not None:
@@ -264,6 +270,7 @@ class Matcher:
             offset: int = 0,
             length: Optional[int] = None,
             *,
+            description: Optional[str] = None,
             analysis_context: Optional[AnalysisContext] = None,
             analysis_depth: int = 0
     ) -> Iterator[Match]:
@@ -282,6 +289,7 @@ class Matcher:
             parent=parent,
             matcher=self,
             extension=extension,
+            description=description,
             analysis_context=analysis_context,
             analysis_depth=analysis_depth
         )
@@ -318,11 +326,13 @@ class Matcher:
 
     def match(self, file_stream: Streamable,
               parent: Optional[Match] = None) -> Iterator[Match]:
-        context = parent.analysis_context if parent is not None else AnalysisContext(self.limits)
+        analysis_context = (
+            parent.analysis_context if parent is not None else AnalysisContext(self.limits)
+        )
         depth = parent.analysis_depth + 1 if parent is not None else 0
         with FileStream(file_stream) as f:
             if parent is not None:
-                reason = context.claim_member(
+                reason = analysis_context.claim_member(
                     len(f), depth, count=not parent.analysis_member_counted,
                 )
                 if reason is not None:
@@ -331,7 +341,12 @@ class Matcher:
                     return
             matched_mimetypes: Set[str] = set()
             magic_context = MatchContext.load(f, only_match_mime=True)
+            is_elf = magic_context.data.startswith(b"\x7fELF")
+            magic_context.only_match_mime = not is_elf
             for magic_match in self.magic_matcher.match(magic_context):
+                description = None
+                if is_elf and magic_match._soft_magic_message().startswith("ELF "):
+                    description = magic_match.description()
                 for result in magic_match:
                     if result.test.mime is None:
                         continue
@@ -341,7 +356,8 @@ class Matcher:
                     matched_mimetypes.add(mimetype)
                     yield from self.handle_mimetype(
                         mimetype, result, magic_context.data, f, parent,
-                        analysis_context=context, analysis_depth=depth,
+                        description=description,
+                        analysis_context=analysis_context, analysis_depth=depth,
                     )
 
 
@@ -443,7 +459,9 @@ class Analyzer:
 
         Args:
             matches: the matches to record. Defaults to running the analysis with
-                :meth:`Analyzer.matches`.
+                :meth:`Analyzer.matches`. Whatever is passed is materialized before the tree is
+                built, so this is an optimization for a caller that already has the matches, never
+                a precondition.
             include_contents: whether to base64 encode the whole input into the ``b64contents`` key.
                 Pass ``False`` to skip the encoding, which omits the key rather than emitting an
                 empty one, so a caller that needs the contents fails with a ``KeyError`` instead of
@@ -452,8 +470,11 @@ class Analyzer:
         Returns:
             The SBuD object, ready to serialize as JSON.
         """
-        if matches is None:
-            matches = self.matches()
+        # `Analyzer.matches` yields a top-level match as soon as it is found and attaches its
+        # children as it goes, so `to_obj` has to run after the whole analysis rather than against
+        # a half-drained generator. A supplied iterable is materialized for the same reason: a
+        # caller cannot know how far this needs it drained.
+        matches = list(self.matches() if matches is None else matches)
         md5 = hashlib.md5()
         sha1 = hashlib.sha1()
         sha256 = hashlib.sha256()

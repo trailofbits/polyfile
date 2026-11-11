@@ -103,6 +103,44 @@ member keeps its raw bzip2 classification while the validated decoded tree appea
 the ZIP member's decoded-content region. Other raw polyglot interpretations remain eligible
 for their own parsers.
 
+Lzip analysis supports version 1 members using the standard-library raw-LZMA1 decoder. Each
+member preserves its six-byte header, compressed stream, and 20-byte trailer. The decoder checks
+the end marker, CRC32, decoded size, and complete member size before publishing concatenated
+decoded bytes. Version 0 and unknown versions report `unsupported`.
+
+Coded dictionary sizes are validated against the format's 4 KiB through 512 MiB range before
+constructing the decoder. An optional `--max-codec-memory` allowance must cover the dictionary
+plus a conservative 128 KiB allowance for decoder state. Output and attempted-member limits also apply across concatenated
+members, including invalid members. All limits remain unlimited by default.
+
+Following the [lzip version 1 file format](https://lzip.nongnu.org/manual/lzip_manual.html#File-format),
+a single empty member is accepted, while empty members in multimember files are invalid.
+Trailing bytes outside complete members are invalid. Decoding requires no external command.
+LZ4 analysis supports modern frames, concatenated frames, and skippable metadata frames. Header,
+block, and content checksums are validated before decoded children are published. Legacy frames
+and nonzero external dictionary IDs report `unsupported`; a zero dictionary ID needs no dictionary.
+The required `lz4==4.4.5` dependency supplies bounded incremental decoding on supported Python
+runtimes. No external decoder command is needed.
+
+For LZ4, `--max-codec-memory` is checked before decompression against a conservative native-buffer
+allowance: twice the frame's maximum block size, 128 KiB for linked-block history when present,
+and 4 KiB for context metadata. Output and frame-count limits apply across concatenated and
+skippable frames. All limits remain unlimited by default.
+
+The buffer allowance follows the
+[LZ4 frame decoder's input, output, and history allocations](https://github.com/lz4/lz4/blob/v1.9.4/lib/lz4frame.c).
+Zstandard analysis decodes modern frames (v0.8 and later), validates content checksums, and
+concatenates decoded bytes across frames. Skippable frames retain physical extents and count
+toward `--max-members`, including frames before the first compressed frame. Historical versions
+and frames declaring an external dictionary report `unsupported`; no dictionary-loading API is
+provided. Trailing non-frame bytes and incomplete frames report `invalid` without decoded children.
+
+Python 3.14 uses `compression.zstd`. Python 3.11 through 3.13 installs the required
+`backports.zstd==1.8.0` dependency, which exposes the same incremental API. For Zstandard,
+`--max-codec-memory` limits the declared decoder window. An omitted limit uses the largest window
+supported by the runtime, rather than imposing an application memory cap. Output and frame limits
+are also optional and unlimited by default.
+
 UNIX compress analysis preserves the physical `compress_header` and `lzw_data` regions and
 publishes a separate decoded source only after its supported GNU gzip helper succeeds. Missing
 or incompatible helpers report `unsupported`. A configured hard helper memory ceiling is
@@ -116,3 +154,23 @@ or 0.7 decoding publishes a new decoded source only after the qualified LRZIP he
 integrity checks succeed. Missing helpers, encryption, and other archive versions report
 `unsupported`; corrupt framing or integrity reports `invalid`; configured resource limits report
 `limited`. Internal RZIP chunks count as one containing archive for member admission.
+
+Freeze 1.x and gzip 0.5 share `1f 9e` and emit `application/x-freeze`, preserving the existing
+`frozen file 1.0 (or gzip 0.5)` description once. A gzip candidate must pass complete framing,
+CRC32, and decoded-size checks; otherwise analysis tries freeze 1.x. A third byte of `08` alone
+does not identify gzip. Gzip framing appears as `gzip_0_5_member`; freeze framing appears as
+`freeze_1_header` and `adaptive_huffman_data`. Each selected format publishes one decoded source,
+concatenating gzip members before recursive analysis.
+If both variants fail, their physical fields remain under `gzip_0_5_candidate` and
+`freeze_1_candidate` regions; neither candidate publishes decoded content.
+
+Freeze requires an end marker and consumes every encoded byte, allowing unused bits in the final
+byte. Its initial 4 KiB dictionary contains spaces, so early backreferences are valid. Freeze has
+no checksum: a truncated gzip candidate that is independently a complete freeze stream remains
+valid as freeze. Gzip 0.5 multipart continuations report `unsupported` when freeze also fails.
+Freeze 2.x uses a different signature and is outside this decoder.
+
+Both variants use a conservative 64 KiB codec-state allowance when a codec-memory limit is set;
+all analysis limits remain unlimited by default. A limited gzip candidate stops analysis without
+falling back or resetting resource allowances. Candidate probing of concatenated gzip members
+retains the attempted member count even when a subsequent freeze interpretation is selected.

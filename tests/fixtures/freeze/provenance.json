@@ -1,0 +1,127 @@
+{
+  "source": "https://utzoo.superglobalmegacorp.com/usenet/b190/alt/sources/2631.txt",
+  "posting_sha256": "bfe693be94ab5845142b37c196db097c8e0b1f96954086b9a3e5c1a63e3ac5c4",
+  "encoder_source_sha256": "c09b7aa5e41dfdb240d109c663aad35a95c958a7071d190992b3957e332ba11b",
+  "compile_command": "cc -O2 -std=gnu89 -fno-builtin -Wno-return-mismatch -Wno-implicit-function-declaration -Wno-incompatible-function-pointer-types -o freeze-1.1 freeze-1.1.c",
+  "ancient_tar_sha256": "5d1d71f0fb8c69955bb4ec01ed9ffd2b5bf546b10463030dda85d949ea422bc9",
+  "payload_provenance": "project-owned JSON, stdlib USTAR, and random.Random(3631).randbytes(80000)",
+  "fixtures": [
+    {
+      "fixture": "document.json.F",
+      "payload": "document.json",
+      "encoded_size": 54,
+      "decoded_size": 50,
+      "encoded_sha256": "d1550d1c7a1b7dc3847f9fd7971d8b5e01cc5af7a188e37ea19289f8a632fb79",
+      "decoded_sha256": "5fc93cef47a56330366993e487841a886189068fa20a838c9d0e274217d82037",
+      "encoder": "freeze 1.1 1990-11-24",
+      "encoder_args": [
+        "-c",
+        "-f"
+      ],
+      "reference_decoder": "Ancient 2.3.0",
+      "reference_result": "Files match!"
+    },
+    {
+      "fixture": "archive.tar.F",
+      "payload": "archive.tar",
+      "encoded_size": 360,
+      "decoded_size": 10240,
+      "encoded_sha256": "39c063747eed59ad38029759e71d4dfb68046ca7c1bb73597add353c442cd7d8",
+      "decoded_sha256": "d56c4df5fd997da2179b6a88fddc8089323ac510e4376e151820031be6dd79c1",
+      "encoder": "freeze 1.1 1990-11-24",
+      "encoder_args": [
+        "-c",
+        "-f"
+      ],
+      "reference_decoder": "Ancient 2.3.0",
+      "reference_result": "Files match!"
+    },
+    {
+      "fixture": "frequency-rebuild.bin.F",
+      "payload": "frequency-rebuild.bin",
+      "encoded_size": 80164,
+      "decoded_size": 80000,
+      "encoded_sha256": "056f981d23ed3312880709990918c8d9838e7d32294f79de649e067a8fe54801",
+      "decoded_sha256": "e60d26746d215f0e4bee984ef8ef755ff6484b1c83355cb1eaa911ce6adedc3c",
+      "encoder": "freeze 1.1 1990-11-24",
+      "encoder_args": [
+        "-c",
+        "-f"
+      ],
+      "reference_decoder": "Ancient 2.3.0",
+      "reference_result": "Files match!"
+    },
+    {
+      "fixture": "empty.bin.F",
+      "payload": "empty.bin",
+      "encoded_size": 3,
+      "decoded_size": 0,
+      "encoded_sha256": "95d06b433ce0ab3b85c2357328b4183b92c6ece3f9b0a8ddb40b1b73d1bf9a37",
+      "decoded_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "encoder": "freeze 1.1 1990-11-24",
+      "encoder_args": [
+        "-c",
+        "-f"
+      ],
+      "reference_decoder": "Ancient 2.3.0",
+      "reference_result": "Files match!"
+    },
+    {
+      "fixture": "initial-spaces.F",
+      "payload": "initial-spaces.decoded",
+      "encoded_sha256": "d0a25563aef1f39e2f340fd2790a62702dd309c63da9b0d8fe3d0758f4affa6f",
+      "decoded_sha256": "ce7bfdc8ec698f68bd7205b8c2f9af1d5dec2fcf52f18bd358f0c598a989d744",
+      "decoded_size": 100,
+      "payload_provenance": "b'                                ' repeated as needed",
+      "encoder": "freeze 1.1 1990-11-24",
+      "encoder_args": [
+        "-c",
+        "-f"
+      ]
+    },
+    {
+      "fixture": "ring-wrap.F",
+      "payload": "ring-wrap.decoded",
+      "encoded_sha256": "ee51fc2d0472d83bbf61dcd212966ea12833ec9dc280d9dc949c1e21b8875e59",
+      "decoded_sha256": "13b77af908a78a94f2e21cf8fc137ea16c8020873eeee7b6b96b6b0975555a02",
+      "decoded_size": 30000,
+      "payload_provenance": "b'abcabcabcabcabcabcabcabcabcabcab' repeated as needed",
+      "encoder": "freeze 1.1 1990-11-24",
+      "encoder_args": [
+        "-c",
+        "-f"
+      ]
+    },
+    {
+      "fixture": "method-collision.F",
+      "payload": "method-collision.decoded",
+      "encoded_sha256": "1bf5ef279615d81d9d95ca4313165d15836f7966af87cdea04a5ad230569f312",
+      "decoded_sha256": "5da853d455675bfae66cf3dfde2f4b212a0ed74493c5c915c8333107bf4668ea",
+      "decoded_size": 26,
+      "payload_provenance": "b'~freeze collision fixture\\n' repeated as needed",
+      "encoder": "freeze 1.1 1990-11-24",
+      "encoder_args": [
+        "-c",
+        "-f"
+      ]
+    },
+    {
+      "fixture": "document.gz05",
+      "payload": "document.json",
+      "encoded_sha256": "953865feb2bc13436b743c1a7b11871b8bfef15b03d2c887b1f3b7b228bccdb4",
+      "decoded_sha256": "5fc93cef47a56330366993e487841a886189068fa20a838c9d0e274217d82037",
+      "decoded_size": 50,
+      "payload_provenance": "project-owned JSON; gzip 0.5 framing generated with stdlib gzip and historical signature; dual-prefix is first37bytes, independently decodes as freeze",
+      "reference_decoder": "GNU gzip 1.15"
+    },
+    {
+      "fixture": "dual-prefix.F",
+      "payload": "dual-prefix.decoded",
+      "encoded_sha256": "08f86de72b511b2c59993aa5c00d7ce7b5e51d5c09cad484a3cc9141b52ea08d",
+      "decoded_sha256": "5ad72e1a12b054ea5702721b0566ce06ddc7ab43d39a8a085c539b0805db833b",
+      "decoded_size": 286,
+      "payload_provenance": "project-owned JSON; gzip 0.5 framing generated with stdlib gzip and historical signature; dual-prefix is first37bytes, independently decodes as freeze",
+      "reference_decoder": "Ancient 2.3.0"
+    }
+  ]
+}

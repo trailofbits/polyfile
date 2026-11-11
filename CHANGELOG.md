@@ -14,13 +14,53 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
   installed LRZIP 0.7.3 or newer helper, preserving physical framing and decoded source
   coordinates. Missing helpers and unsupported archive variants report explicit status; declared
   sizes, integrity, optional output limits, and helper resource controls gate recursive analysis.
-
+- **Breaking:** Lzip version 1 payloads are recursively analyzed with native header, raw-LZMA,
+  CRC32, decoded-size, and member-size validation. Concatenated members preserve physical
+  structure and share optional resource limits. Older versions report unsupported status;
+  the decoder uses the Python standard library and requires no external helper.
+- **Breaking:** Decode zlib streams and recursively map validated content, preserving source-aware
+  offsets and reporting checksum, dictionary, trailing-data, and resource-limit failures (#3625).
+- **Breaking:** Modern LZ4 payloads are recursively analyzed after validating frame headers,
+  block/content checksums, and concatenated/skippable frames. The required `lz4==4.4.5` backend
+  honors optional output, frame, depth, and native-buffer limits. Legacy frames and declared
+  external dictionaries report unsupported status.
+- **Breaking:** Zstandard payloads are recursively analyzed after validating concatenated and
+  skippable frames. Optional output, frame, depth, and decoder-window limits preserve explicit
+  failure status. Python 3.11 through 3.13 requires `backports.zstd==1.8.0`; Python 3.14 uses its
+  standard-library backend. External dictionaries and historical frames report unsupported status.
+- **Breaking:** Bzip2 streams are decoded and recursively analyzed using Python's standard
+  library. Concatenated streams retain their physical framing and produce one validated decoded
+  buffer; integrity errors, truncation, and configured resource limits report explicit status.
+- **Breaking:** Identify SIMH tape images with native record checks, map their records and
+  markers, and recursively analyze independently recognizable record payloads (#3619).
+- **Breaking:** ELF identification descriptions now include validated linkage, interpreter,
+  GNU/Go build IDs, ABI versions, stripping/debug information, and supported core-file details.
+  The command line, Python identification API, and SBuD root values share these descriptions;
+  malformed metadata retains the ELF classification and reports a diagnostic.
+- **Breaking:** LZMA-alone files are decoded and recursively analyzed using the standard
+  library, preserving their physical header and decoded coordinate source. Known and streamed
+  sizes, supported properties, malformed endings, and optional resource limits are validated.
+- **Breaking:** XZ streams are decoded and recursively analyzed, with complete integrity checks,
+  concatenated-stream and four-byte padding semantics, source-aware archive recursion, and
+  optional native memory, decoded output, depth, and stream-count limits.
+- **Breaking:** UNIX pack streams now emit `application/x-unix-pack` and recursively analyze
+  decoded content through a bounded native canonical Huffman decoder. Each concatenated member
+  retains physical header/tree/body offsets and is size-checked and counted before nested analysis.
+  Historical `1f 1f` pack files keep their description and report unsupported decoding status.
+- **Breaking:** Freeze 1.x and gzip 0.5 streams now emit `application/x-freeze` and recursively
+  analyze validated decoded content without external helpers. Native freeze decoding handles
+  adaptive Huffman rebuilding and its space-filled 4 KiB dictionary. Gzip 0.5 candidates require
+  valid framing, CRC32, and decoded size before selection; both formats preserve physical fields
+  and honor optional analysis limits.
+- **Breaking:** SCO compress -H (LZH) streams now emit `application/x-sco-compress` and recursively
+  analyze decoded content using the supported installed GNU gzip helper. Physical signature/body
+  regions and decoded coordinates remain distinct; unavailable helpers and configured limits
+  report explicit analysis status.
 - **Breaking:** UNIX compress (`.Z`) payloads are recursively analyzed through an automatically
   discovered GNU gzip 1.15 or newer, preserving physical framing and decoded source coordinates.
   Missing or incompatible helpers report unsupported status. Optional `--helper-timeout` /
   `AnalysisLimits.helper_timeout` limits each external decoder invocation; helper memory ceilings
   use Linux address-space limits and report unsupported status on other platforms when requested.
-
 - Optional recursive analysis controls through `AnalysisLimits` and `--max-depth`,
   `--max-member-bytes`, `--max-total-bytes`, `--max-members`, and `--max-codec-memory`.
   Defaults are unlimited; skipped regions report their reason in JSON output.
@@ -31,7 +71,6 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
   TAR JSON/HTML output includes member structure and nested classifications. Native TAR verdicts
   replace generic soft-magic TAR aliases to avoid repeated recursive analysis. Specialized
   GPKG verdicts also supersede redundant generic TAR aliases.
-
 - **Breaking:** Gzip members are decoded and recursively analyzed, with validated framing,
   checksums, concatenated-member semantics, and optional resource limits. Raw member fields
   remain available alongside decoded content.

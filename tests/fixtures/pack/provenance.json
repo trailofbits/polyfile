@@ -1,0 +1,100 @@
+[
+  {
+    "fixture": "document.z",
+    "payload": "document.decoded",
+    "encoded_sha256": "8256b6c904b05ec32e1f66bb46c102d6fec2bee3f646b5b8e908c27a5124c928",
+    "decoded_sha256": "5fc93cef47a56330366993e487841a886189068fa20a838c9d0e274217d82037",
+    "encoded_size": 324,
+    "decoded_size": 50,
+    "encoder": "project-owned UNIX pack fixed canonical Huffman tree generator",
+    "reference_decoder": "GNU gzip 1.15",
+    "decoder_args": [
+      "-d",
+      "-c"
+    ]
+  },
+  {
+    "fixture": "archive.z",
+    "payload": "archive.decoded",
+    "encoded_sha256": "e5a7d916ce57af12948e89cc39452ef8364119b7637e343fa25d09b820f8cc5a",
+    "decoded_sha256": "d56c4df5fd997da2179b6a88fddc8089323ac510e4376e151820031be6dd79c1",
+    "encoded_size": 10514,
+    "decoded_size": 10240,
+    "encoder": "project-owned UNIX pack fixed canonical Huffman tree generator",
+    "reference_decoder": "GNU gzip 1.15",
+    "decoder_args": [
+      "-d",
+      "-c"
+    ]
+  },
+  {
+    "fixture": "all-bytes.z",
+    "payload": "all-bytes.decoded",
+    "encoded_sha256": "bc7e075f65e91eba3f47dbbb56cfa180addbcb2773d7b53e3e0ae66ff42bbf47",
+    "decoded_sha256": "40aff2e9d2d8922e47afd4648e6967497158785fbd1da870e7110266bf944880",
+    "encoded_size": 530,
+    "decoded_size": 256,
+    "encoder": "project-owned UNIX pack fixed canonical Huffman tree generator",
+    "reference_decoder": "GNU gzip 1.15",
+    "decoder_args": [
+      "-d",
+      "-c"
+    ]
+  },
+  {
+    "fixture": "empty.z",
+    "payload": "empty.decoded",
+    "encoded_sha256": "39312529206d0a3072dfeea42ae2f2f14f3f34f49b4e86836c78f19a4fbc58b1",
+    "decoded_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "encoded_size": 274,
+    "decoded_size": 0,
+    "encoder": "project-owned UNIX pack fixed canonical Huffman tree generator",
+    "reference_decoder": "GNU gzip 1.15",
+    "decoder_args": [
+      "-d",
+      "-c"
+    ]
+  },
+  {
+    "fixture": "one-byte.z",
+    "payload": "one-byte.decoded",
+    "encoded_sha256": "ac737159ec9cb5b0de40a567823a6ef75a0dbdc5a503a004e27916aff383d469",
+    "decoded_sha256": "559aead08264d5795d3909718cdd05abd49572e84fe55590eef31a88a08fdffd",
+    "encoded_size": 275,
+    "decoded_size": 1,
+    "encoder": "project-owned UNIX pack fixed canonical Huffman tree generator",
+    "reference_decoder": "GNU gzip 1.15",
+    "decoder_args": [
+      "-d",
+      "-c"
+    ]
+  },
+  {
+    "fixture": "deep-tree.z",
+    "payload": "deep-tree.decoded",
+    "encoded_sha256": "71ceb04d072feed7658315c3ff389826f238b024b13eb3f85244b7349f75d097",
+    "decoded_sha256": "b729ce724d9a48d3884dbfcbee1d3793d922b29fa9d639e7290af4978263772b",
+    "encoded_size": 101,
+    "decoded_size": 25,
+    "encoder": "project-owned UNIX pack canonical Huffman tree generator",
+    "reference_decoder": "GNU gzip 1.15",
+    "decoder_args": [
+      "-d",
+      "-c"
+    ]
+  },
+  {
+    "fixture": "shallow-tree.z",
+    "payload": "shallow-tree.decoded",
+    "encoded_sha256": "5e69fe6fe903e0fa178b60aec17fe2ef775f191397c176e9c83ea5553529eea0",
+    "decoded_sha256": "509ddb85fdf92f197d32570c005cdcb6dffa398f088bd1a013459f6fb1f730ef",
+    "encoded_size": 16,
+    "decoded_size": 50,
+    "encoder": "project-owned UNIX pack canonical Huffman tree generator",
+    "reference_decoder": "GNU gzip 1.15",
+    "decoder_args": [
+      "-d",
+      "-c"
+    ]
+  }
+]

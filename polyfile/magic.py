@@ -4948,6 +4948,7 @@ class Match:
         self.text_encoding: Optional[TextEncodingDescription] = text_encoding
         self._result_iter: Optional[Iterator[TestResult]] = iter(results)
         self._results: List[TestResult] = []
+        self._elf_description: Optional[str] = None
 
     @property
     def data(self) -> bytes:
@@ -5066,6 +5067,21 @@ class Match:
             msg = f"{msg}{result_str}"
         return msg
 
+    def description(self) -> str:
+        """Returns the magic description with native ELF identification metadata.
+
+        Returns:
+            The shared identification description, with ELF metadata cached after its first read.
+        """
+        message = self._soft_magic_message()
+        if not message.startswith("ELF "):
+            return message
+        if self._elf_description is None:
+            from polyfile.elfmetadata import describe_elf
+
+            self._elf_description = describe_elf(self.data, message)
+        return self._elf_description
+
     def message(self) -> str:
         """Describes this match the way `file` describes it.
 
@@ -5073,7 +5089,7 @@ class Match:
             What soft magic printed, followed by the text description libmagic appends to a text
             file's description when it applies.
         """
-        msg = self._soft_magic_message()
+        msg = self.description()
         if self.text_encoding is None:
             return msg
         return self.text_encoding.describe(msg)
@@ -5133,7 +5149,7 @@ def join_matches(matches: Iterable[Match], raw: bool = False) -> str:
     text_encoding: Optional[TextEncodingDescription] = None
     parts: List[str] = []
     for match in matches:
-        parts.append(match._soft_magic_message())
+        parts.append(match.description())
         if match.text_encoding is not None:
             text_encoding = match.text_encoding
     joined = MATCH_SEPARATOR.join(parts)
@@ -5334,6 +5350,37 @@ class MagicMatcher:
                     return True
         return False
 
+    def _superseded_compression_alias(self, test: MagicTest, match: Match, data: bytes) -> bool:
+        if test.source_info is None or test.source_info.path.name != "compress":
+            return False
+        aliases = {
+            b"\x1f\x9e": (
+                "application/x-freeze",
+                "frozen file 1.0 (or gzip 0.5)",
+                "FrozenCompressionMimeMatcher",
+            ),
+            b"\x1f\xa0": (
+                "application/x-sco-compress",
+                "SCO compress -H (LZH) data",
+                "SCOCompressionMimeMatcher",
+            ),
+            b"\x1f\x1e": ("application/x-unix-pack", "packed data", "UnixPackMimeMatcher"),
+            b"\x1f\x1f": ("application/x-unix-pack", "old packed data", "UnixPackMimeMatcher"),
+        }
+        alias = aliases.get(data[:2])
+        if alias is None:
+            return False
+        mime, description, source = alias
+        if str(test.message).lstrip() != description:
+            return False
+        native = any(
+            candidate.source_info is not None
+            and candidate.source_info.path.name == source
+            and any(candidate.match(match.context))
+            for candidate in self.tests_by_mime.get(mime, ())
+        )
+        return native and not set(match.mimetypes) - {"application/octet-stream"}
+
     def _run_tests(
             self,
             tests: Iterable[MagicTest],
@@ -5366,7 +5413,8 @@ class MagicMatcher:
             # the description is how a match is rendered, so it must not make an empty message
             # look like a match
             if m and (not test_context.only_match_mime or any(t is not None for t in m.mimetypes)):
-                if self._superseded_tar_alias(test, m, test_context.data):
+                if (self._superseded_tar_alias(test, m, test_context.data)
+                        or self._superseded_compression_alias(test, m, test_context.data)):
                     continue
                 if test.appends_text_encoding:
                     m.text_encoding = text_encoding

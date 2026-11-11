@@ -12,8 +12,9 @@ import pytest
 from polyfile import AnalysisLimits
 from polyfile.__main__ import main
 from polyfile.compression import DecodeError, DecodeResult
-from polyfile.compressmatcher import decode_compress, find_gnu_gzip
+from polyfile.compressmatcher import decode_compress
 from polyfile.fileutils import FileStream
+from polyfile.gziphelper import find_gnu_gzip
 from polyfile.polyfile import Match, Matcher
 from tests.compress_fixture import literal_lzw
 
@@ -206,7 +207,7 @@ def test_recursive_limits_preserve_wrapper_and_reason(
 def test_missing_helper_reports_unsupported_with_physical_framing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr("polyfile.compressmatcher.shutil.which", lambda name: None)
+    monkeypatch.setattr("polyfile.gziphelper.shutil.which", lambda name: None)
     matches = analyzed(FIXTURES / "document-block-16.Z")
     wrapper = next(match for match in matches if match.name == "application/x-compress")
     assert wrapper.analysis_status == "unsupported"
@@ -226,8 +227,8 @@ def test_missing_helper_reports_unsupported_with_physical_framing(
     ],
 )
 def test_incompatible_helpers_are_explicit(monkeypatch: pytest.MonkeyPatch, version: bytes) -> None:
-    monkeypatch.setattr("polyfile.compressmatcher.shutil.which", lambda name: sys.executable)
-    monkeypatch.setattr("polyfile.compressmatcher.run_helper", lambda *args, **kwargs: version)
+    monkeypatch.setattr("polyfile.gziphelper.shutil.which", lambda name: sys.executable)
+    monkeypatch.setattr("polyfile.gziphelper.run_helper", lambda *args, **kwargs: version)
     with pytest.raises(DecodeError) as error:
         find_gnu_gzip()
     assert error.value.status == "unsupported"
@@ -247,8 +248,8 @@ def test_current_and_newer_gnu_versions_are_supported(
     monkeypatch: pytest.MonkeyPatch, minor: int
 ) -> None:
     banner = f"gzip 1.{minor}\nCopyright (C) 2026 Free Software Foundation, Inc.\n".encode()
-    monkeypatch.setattr("polyfile.compressmatcher.shutil.which", lambda name: sys.executable)
-    monkeypatch.setattr("polyfile.compressmatcher.run_helper", lambda *args, **kwargs: banner)
+    monkeypatch.setattr("polyfile.gziphelper.shutil.which", lambda name: sys.executable)
+    monkeypatch.setattr("polyfile.gziphelper.run_helper", lambda *args, **kwargs: banner)
     assert find_gnu_gzip() == str(Path(sys.executable).resolve())
 
 
@@ -256,8 +257,8 @@ def test_version_query_timeout_is_limited(monkeypatch: pytest.MonkeyPatch) -> No
     def timeout(*args: object, **kwargs: object) -> bytes:
         raise DecodeError("version query timeout", status="limited")
 
-    monkeypatch.setattr("polyfile.compressmatcher.shutil.which", lambda name: sys.executable)
-    monkeypatch.setattr("polyfile.compressmatcher.run_helper", timeout)
+    monkeypatch.setattr("polyfile.gziphelper.shutil.which", lambda name: sys.executable)
+    monkeypatch.setattr("polyfile.gziphelper.run_helper", timeout)
     with pytest.raises(DecodeError) as error:
         find_gnu_gzip(helper_timeout=0.1)
     assert error.value.status == "limited"
@@ -266,7 +267,7 @@ def test_version_query_timeout_is_limited(monkeypatch: pytest.MonkeyPatch) -> No
 def test_nine_bit_ceiling_reports_backend_limitation_before_helper_query(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr("polyfile.compressmatcher.shutil.which", lambda name: None)
+    monkeypatch.setattr("polyfile.gziphelper.shutil.which", lambda name: None)
     with pytest.raises(DecodeError, match="9-bit") as error:
         decode(b"\x1f\x9d\x09")
     assert error.value.status == "unsupported"
