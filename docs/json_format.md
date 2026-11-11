@@ -140,3 +140,10 @@ Python 3.14 uses `compression.zstd`. Python 3.11 through 3.13 installs the requi
 `--max-codec-memory` limits the declared decoder window. An omitted limit uses the largest window
 supported by the runtime, rather than imposing an application memory cap. Output and frame limits
 are also optional and unlimited by default.
+
+UNIX compress analysis preserves the physical `compress_header` and `lzw_data` regions and
+publishes a separate decoded source only after its supported GNU gzip helper succeeds. Missing
+or incompatible helpers report `unsupported`. A configured hard helper memory ceiling is
+supported on Linux; other platforms report `unsupported` when you request that ceiling.
+`helper_timeout` and decoded-output limits report `limited`. UNIX compress has no checksum or
+decoded-size field, so some complete-code prefixes remain valid shorter files.

@@ -1,0 +1,125 @@
+[
+  {
+    "fixture": "document-block-16.Z",
+    "payload": "document.json",
+    "block": true,
+    "maxbits": 16,
+    "encoded_size": 55,
+    "decoded_size": 50,
+    "encoded_sha256": "b21b7e569974cad7830a04042a53ba72ea6427faa907da23fdffd1c34123fe9b",
+    "decoded_sha256": "5fc93cef47a56330366993e487841a886189068fa20a838c9d0e274217d82037",
+    "reference_decoder": "GNU gzip 1.15",
+    "decoder_args": [
+      "-d",
+      "-c"
+    ],
+    "encoder": "ncompress 4.2.4.6",
+    "args": [
+      "-c",
+      "-f",
+      "-b",
+      "16"
+    ]
+  },
+  {
+    "fixture": "document-nonblock-16.Z",
+    "payload": "document.json",
+    "block": false,
+    "maxbits": 16,
+    "encoded_size": 60,
+    "decoded_size": 50,
+    "encoded_sha256": "b435eb84013d1e1712dc7b5910f29360c40b6f8cce68c6daa761765106124022",
+    "decoded_sha256": "5fc93cef47a56330366993e487841a886189068fa20a838c9d0e274217d82037",
+    "reference_decoder": "GNU gzip 1.15",
+    "decoder_args": [
+      "-d",
+      "-c"
+    ],
+    "encoder": "project-owned literal LZW fixture generator",
+    "args": [
+      16
+    ]
+  },
+  {
+    "fixture": "archive-block-16.Z",
+    "payload": "archive.tar",
+    "block": true,
+    "maxbits": 16,
+    "encoded_size": 271,
+    "decoded_size": 10240,
+    "encoded_sha256": "c54e79ec488fc941229a12746e8337c609aafd342781d028d8a65d7327e531cd",
+    "decoded_sha256": "d56c4df5fd997da2179b6a88fddc8089323ac510e4376e151820031be6dd79c1",
+    "reference_decoder": "GNU gzip 1.15",
+    "decoder_args": [
+      "-d",
+      "-c"
+    ],
+    "encoder": "ncompress 4.2.4.6",
+    "args": [
+      "-c",
+      "-f",
+      "-b",
+      "16"
+    ]
+  },
+  {
+    "fixture": "archive-nonblock-16.Z",
+    "payload": "archive.tar",
+    "block": false,
+    "maxbits": 16,
+    "encoded_size": 16107,
+    "decoded_size": 10240,
+    "encoded_sha256": "c0fd006ae2a9c4b570b55a659334af853b561a84b9535cf67567a848d3e28c1d",
+    "decoded_sha256": "d56c4df5fd997da2179b6a88fddc8089323ac510e4376e151820031be6dd79c1",
+    "reference_decoder": "GNU gzip 1.15",
+    "decoder_args": [
+      "-d",
+      "-c"
+    ],
+    "encoder": "project-owned literal LZW fixture generator",
+    "args": [
+      16
+    ]
+  },
+  {
+    "fixture": "transitions-block-16.Z",
+    "payload": "transitions.json",
+    "block": true,
+    "maxbits": 16,
+    "encoded_size": 318781,
+    "decoded_size": 349563,
+    "encoded_sha256": "909cc2ed6bf47e7d679f74dccd5a8c087613c03cc4d8b8d56d1c0265a65b1c99",
+    "decoded_sha256": "80a406cbfbf9a8899e40e4c742264449ee7115dacc4a5c922a919eb3eab3f9b2",
+    "reference_decoder": "GNU gzip 1.15",
+    "decoder_args": [
+      "-d",
+      "-c"
+    ],
+    "encoder": "ncompress 4.2.4.6",
+    "args": [
+      "-c",
+      "-f",
+      "-b",
+      "16"
+    ]
+  },
+  {
+    "fixture": "transitions-nonblock-16.Z",
+    "payload": "transitions.json",
+    "block": false,
+    "maxbits": 16,
+    "encoded_size": 691232,
+    "decoded_size": 349563,
+    "encoded_sha256": "cdea53635127ea8ec11f83e0edb3f9d32fb637bc61b15b56b2779ce12d5e5ac1",
+    "decoded_sha256": "80a406cbfbf9a8899e40e4c742264449ee7115dacc4a5c922a919eb3eab3f9b2",
+    "reference_decoder": "GNU gzip 1.15",
+    "decoder_args": [
+      "-d",
+      "-c"
+    ],
+    "encoder": "project-owned literal LZW fixture generator",
+    "args": [
+      16
+    ]
+  }
+]

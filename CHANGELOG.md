@@ -33,15 +33,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
   GNU/Go build IDs, ABI versions, stripping/debug information, and supported core-file details.
   The command line, Python identification API, and SBuD root values share these descriptions;
   malformed metadata retains the ELF classification and reports a diagnostic.
-
 - **Breaking:** LZMA-alone files are decoded and recursively analyzed using the standard
   library, preserving their physical header and decoded coordinate source. Known and streamed
   sizes, supported properties, malformed endings, and optional resource limits are validated.
-
 - **Breaking:** XZ streams are decoded and recursively analyzed, with complete integrity checks,
   concatenated-stream and four-byte padding semantics, source-aware archive recursion, and
   optional native memory, decoded output, depth, and stream-count limits.
-
+- **Breaking:** UNIX compress (`.Z`) payloads are recursively analyzed through an automatically
+  discovered GNU gzip 1.15 or newer, preserving physical framing and decoded source coordinates.
+  Missing or incompatible helpers report unsupported status. Optional `--helper-timeout` /
+  `AnalysisLimits.helper_timeout` limits each external decoder invocation; helper memory ceilings
+  use Linux address-space limits and report unsupported status on other platforms when requested.
 - Optional recursive analysis controls through `AnalysisLimits` and `--max-depth`,
   `--max-member-bytes`, `--max-total-bytes`, `--max-members`, and `--max-codec-memory`.
   Defaults are unlimited; skipped regions report their reason in JSON output.
@@ -52,7 +54,6 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
   TAR JSON/HTML output includes member structure and nested classifications. Native TAR verdicts
   replace generic soft-magic TAR aliases to avoid repeated recursive analysis. Specialized
   GPKG verdicts also supersede redundant generic TAR aliases.
-
 - **Breaking:** Gzip members are decoded and recursively analyzed, with validated framing,
   checksums, concatenated-member semantics, and optional resource limits. Raw member fields
   remain available alongside decoded content.

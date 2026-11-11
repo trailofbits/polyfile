@@ -1,5 +1,6 @@
 """Optional resource controls shared by one recursive file analysis."""
 
+import math
 from dataclasses import dataclass, field, fields
 
 
@@ -16,14 +17,25 @@ class AnalysisLimits:
     max_total_bytes: int | None = None
     max_members: int | None = None
     max_codec_memory: int | None = None
+    helper_timeout: float | None = None
 
     def __post_init__(self) -> None:
         for item in fields(self):
+            if item.name == "helper_timeout":
+                continue
             value = getattr(self, item.name)
             if value is not None and (not isinstance(value, int) or value < 0):
                 raise ValueError(f"{item.name} must be a nonnegative integer or None")
         if self.max_codec_memory == 0:
             raise ValueError("max_codec_memory must be a positive integer or None")
+        timeout = self.helper_timeout
+        if timeout is not None:
+            try:
+                valid = isinstance(timeout, (int, float)) and math.isfinite(timeout) and timeout > 0
+            except OverflowError:
+                valid = False
+            if not valid:
+                raise ValueError("helper_timeout must be positive finite seconds or None")
 
 
 @dataclass

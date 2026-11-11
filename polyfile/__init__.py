@@ -8,6 +8,7 @@ from . import (
     lzipmatcher,
     lz4matcher,
     zstdmatcher,
+    compressmatcher,
     nitf,
     http,
     kaitaimatcher,

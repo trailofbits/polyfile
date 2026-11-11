@@ -1,0 +1,43 @@
+# External decoders
+
+PolyFile automatically decodes UNIX compress (`.Z`) streams when `ggzip` or `gzip` on your `PATH`
+identifies itself as GNU gzip 1.15 or newer. Install GNU gzip separately using your platform's
+package manager. Python installation does not install this native executable. GNU gzip 1.15 is the
+reference version used by the test suite. Other gzip implementations and older versions preserve
+the file's classification and physical structure and report `analysis_status: "unsupported"` with
+an installation message.
+
+The adapter invokes the selected executable directly with fixed `-d -c` arguments and encoded
+bytes on standard input. It drains standard output and error concurrently, retains only the first
+4 KiB of diagnostic text, and analyzes decoded bytes only after successful exit. The helper runs
+in a temporary working directory with locale and temporary-directory settings supplied by
+PolyFile. Inherited options such as `GZIP`, Python import paths, and loader configuration are
+excluded. No archive paths or file-supplied arguments are passed to the helper.
+
+All analysis limits default to unlimited. You can configure decoded-output, member, depth, and
+aggregate limits through `AnalysisLimits` or the corresponding command-line arguments.
+`helper_timeout` / `--helper-timeout` accepts positive finite seconds and applies separately to
+version queries and decoding invocations. A timeout or decoded-output limit stops and reaps the
+helper and reports `limited`, without publishing partial decoded content.
+
+`max_codec_memory` / `--max-codec-memory` sets a hard helper address-space ceiling on Linux. An
+isolated Python launcher applies `RLIMIT_AS` before executing the decoder; this ceiling includes
+the native executable's libraries and allocations. The helper may need more memory than its
+codec dictionary alone. Other platforms support ordinary helper decoding and report `unsupported`
+if you configure this hard ceiling. The ceiling does not constrain PolyFile's own memory use.
+
+The UNIX compress adapter supports block and non-block LZW with maximum code widths from 10
+through 16; codes begin at 9 bits and grow to the declared maximum. A declared 9-bit maximum
+reports unsupported status because GNU gzip 1.15 does not handle dictionary saturation correctly
+for that variant. Reserved header bits and smaller widths are invalid; larger widths report
+unsupported status.
+GNU gzip validates the code stream. The format has no checksum or decoded-size field, and some
+truncations at complete-code boundaries decode successfully as shorter files. PolyFile cannot
+infer the intended original size in those cases. Concatenated `.Z` files are not treated as
+independent members: UNIX compress has no framed member terminator.
+
+The project-owned fixtures and their encoder/decoder versions, hashes, and commands are recorded
+in [the fixture provenance](../tests/fixtures/compress/README.md). The CI workflow builds the
+reference decoder from the [GNU gzip 1.15 source archive](https://ftp.gnu.org/gnu/gzip/gzip-1.15.tar.xz)
+and verifies its SHA-256 before compiling it. GNU gzip remains a separately installed executable;
+no GNU gzip source or binaries are included in PolyFile distributions.

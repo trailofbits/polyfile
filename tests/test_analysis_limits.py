@@ -96,7 +96,7 @@ def test_analyzer_forwards_limits(tmp_path: Path) -> None:
     [
         name
         for name in AnalysisLimits.__dataclass_fields__
-        if name != "max_codec_memory"
+        if name not in ("max_codec_memory", "helper_timeout")
     ],
 )
 def test_cli_accepts_explicit_zero_limits(name: str, tmp_path: Path) -> None:
@@ -153,3 +153,25 @@ def test_cli_rejects_zero_codec_memory() -> None:
     with contextlib.redirect_stderr(io.StringIO()), pytest.raises(SystemExit) as exc:
         main(["polyfile", "--max-codec-memory", "0"])
     assert exc.value.code == 2
+
+
+@pytest.mark.parametrize("value", (0, -1, float("nan"), float("inf"), -float("inf")))
+def test_helper_timeout_must_be_positive_and_finite(value: float) -> None:
+    with pytest.raises(ValueError, match="helper_timeout"):
+        AnalysisLimits(helper_timeout=value)
+
+
+def test_helper_timeout_accepts_fractional_seconds() -> None:
+    assert AnalysisLimits(helper_timeout=0.25).helper_timeout == 0.25
+
+
+@pytest.mark.parametrize("value", ("0", "nan", "inf", "-inf"))
+def test_cli_rejects_invalid_helper_timeout(value: str) -> None:
+    with contextlib.redirect_stderr(io.StringIO()), pytest.raises(SystemExit) as exc:
+        main(["polyfile", "--helper-timeout", value])
+    assert exc.value.code == 2
+
+
+def test_unrepresentable_integer_helper_timeout_is_rejected() -> None:
+    with pytest.raises(ValueError, match="helper_timeout"):
+        AnalysisLimits(helper_timeout=10**10000)

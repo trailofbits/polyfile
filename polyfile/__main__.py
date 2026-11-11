@@ -2,6 +2,7 @@ import argparse
 from contextlib import ExitStack
 import json
 import logging
+import math
 import re
 import signal
 import sys
@@ -144,6 +145,14 @@ def positive_integer(value: str) -> int:
     return parsed
 
 
+def positive_seconds(value: str) -> float:
+    """Parse a finite positive external-helper timeout in seconds."""
+    parsed = float(value)
+    if not math.isfinite(parsed) or parsed <= 0:
+        raise argparse.ArgumentTypeError("helper timeouts must be positive finite seconds")
+    return parsed
+
+
 def add_analysis_limits(parser: argparse.ArgumentParser) -> None:
     """Expose opt-in resource limits with unlimited defaults."""
     descriptions = {
@@ -157,6 +166,9 @@ def add_analysis_limits(parser: argparse.ArgumentParser) -> None:
         value_type = positive_integer if name == "max-codec-memory" else nonnegative_integer
         parser.add_argument("--" + name, type=value_type, default=None,
                             help=description + " (default: unlimited)")
+    parser.add_argument("--helper-timeout", type=positive_seconds, default=None,
+                        help="maximum seconds for each external decoder invocation "
+                             "(default: unlimited)")
 
 
 def main(argv=None):
@@ -363,7 +375,7 @@ viewer is built from the contents."""))
         limits = AnalysisLimits(
             max_depth=args.max_depth, max_member_bytes=args.max_member_bytes,
             max_total_bytes=args.max_total_bytes, max_members=args.max_members,
-            max_codec_memory=args.max_codec_memory,
+            max_codec_memory=args.max_codec_memory, helper_timeout=args.helper_timeout,
         )
         analyzer = Analyzer(file_path, parse=not args.only_match, magic_matcher=magic_matcher,
                             limits=limits)
