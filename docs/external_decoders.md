@@ -61,3 +61,6 @@ not establish an original size or checksum that the format does not store.
 
 [Project-owned SCO fixtures](../tests/fixtures/sco/README.md) include literal and back-reference
 blocks, JSON, TAR recursion, and empty content, verified against the pinned reference decoder.
+
+UNIX pack is decoded natively and does not require an external helper. See
+[UNIX pack analysis](unix_pack.md) for supported variants, framing, and resource controls.

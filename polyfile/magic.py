@@ -5354,18 +5354,26 @@ class MagicMatcher:
         if test.source_info is None or test.source_info.path.name != "compress":
             return False
         aliases = {
-            b"\x1f\xa0": ("application/x-sco-compress", "SCO compress -H (LZH) data",
-                            "SCOCompressionMimeMatcher"),
+            b"\x1f\xa0": (
+                "application/x-sco-compress",
+                "SCO compress -H (LZH) data",
+                "SCOCompressionMimeMatcher",
+            ),
+            b"\x1f\x1e": ("application/x-unix-pack", "packed data", "UnixPackMimeMatcher"),
+            b"\x1f\x1f": ("application/x-unix-pack", "old packed data", "UnixPackMimeMatcher"),
         }
         alias = aliases.get(data[:2])
         if alias is None:
             return False
         mime, description, source = alias
-        if str(test.message) != description:
+        if str(test.message).lstrip() != description:
             return False
-        native = any(candidate.source_info is not None
-                     and candidate.source_info.path.name == source
-                     for candidate in self.tests_by_mime.get(mime, ()))
+        native = any(
+            candidate.source_info is not None
+            and candidate.source_info.path.name == source
+            and any(candidate.match(match.context))
+            for candidate in self.tests_by_mime.get(mime, ())
+        )
         return native and not set(match.mimetypes) - {"application/octet-stream"}
 
     def _run_tests(

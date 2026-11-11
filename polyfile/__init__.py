@@ -10,6 +10,7 @@ from . import (
     zstdmatcher,
     compressmatcher,
     scomatcher,
+    packmatcher,
     nitf,
     http,
     kaitaimatcher,
