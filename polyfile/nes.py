@@ -18,6 +18,8 @@ def parse_ines_header(header, parent=None):
     magic = header[:4]
     if magic != b'NES\x1A':
         raise InvalidMatch(f"Expected \"NES\\x1A\" magic at the beginning of the file, but found {magic!r}")
+    if len(header) < 16:
+        raise InvalidMatch(f"Expected a 16 byte iNES header, but the file only contains {len(header)} bytes")
     parent = Submatch(
         name='iNESHeader',
         match_obj=header,

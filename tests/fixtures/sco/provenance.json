@@ -1,0 +1,58 @@
+[
+  {
+    "fixture": "document.lzh",
+    "payload": "document.decoded",
+    "encoded_sha256": "618b5396677f7b9684c66d30e98998c1a4f5ce30ea715a07689618156d82dab7",
+    "decoded_sha256": "5fc93cef47a56330366993e487841a886189068fa20a838c9d0e274217d82037",
+    "encoded_size": 329,
+    "decoded_size": 50,
+    "encoder": "project-owned SCO constant-symbol Huffman block generator",
+    "reference_decoder": "GNU gzip 1.15",
+    "decoder_args": [
+      "-d",
+      "-c"
+    ]
+  },
+  {
+    "fixture": "archive.lzh",
+    "payload": "archive.decoded",
+    "encoded_sha256": "2dc37942df0855dbfc44703448301218b3e342b44a613bc9f682f214e3dfb433",
+    "decoded_sha256": "d56c4df5fd997da2179b6a88fddc8089323ac510e4376e151820031be6dd79c1",
+    "encoded_size": 66564,
+    "decoded_size": 10240,
+    "encoder": "project-owned SCO constant-symbol Huffman block generator",
+    "reference_decoder": "GNU gzip 1.15",
+    "decoder_args": [
+      "-d",
+      "-c"
+    ]
+  },
+  {
+    "fixture": "backreference.lzh",
+    "payload": "backreference.decoded",
+    "encoded_sha256": "492ebaed528da701c2a929205d143b562aefd4c5b9be8eeb0265e18ad88f21c0",
+    "decoded_sha256": "63c1dd951ffedf6f7fd968ad4efa39b8ed584f162f46e715114ee184f8de9201",
+    "encoded_size": 17,
+    "decoded_size": 4,
+    "encoder": "project-owned SCO constant-symbol Huffman block generator",
+    "reference_decoder": "GNU gzip 1.15",
+    "decoder_args": [
+      "-d",
+      "-c"
+    ]
+  },
+  {
+    "fixture": "empty.lzh",
+    "payload": "empty.decoded",
+    "encoded_sha256": "b1100e92db374cf237c0f3a983be318bc74eb80fd9864695801a885e81cc0096",
+    "decoded_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "encoded_size": 4,
+    "decoded_size": 0,
+    "encoder": "project-owned SCO constant-symbol Huffman block generator",
+    "reference_decoder": "GNU gzip 1.15",
+    "decoder_args": [
+      "-d",
+      "-c"
+    ]
+  }
+]
