@@ -41,3 +41,23 @@ in [the fixture provenance](../tests/fixtures/compress/README.md). The CI workfl
 reference decoder from the [GNU gzip 1.15 source archive](https://ftp.gnu.org/gnu/gzip/gzip-1.15.tar.xz)
 and verifies its SHA-256 before compiling it. GNU gzip remains a separately installed executable;
 no GNU gzip source or binaries are included in PolyFile distributions.
+
+## SCO compress -H (LZH)
+
+The exact `1f a0` signature now dispatches through `application/x-sco-compress`. Its existing
+`SCO compress -H (LZH) data` description remains unchanged and appears once in file output.
+The parser supports the SCO LZH variant implemented by GNU gzip 1.15, with an 8 KiB history
+window. Other LHA/LZH container signatures do not use this adapter. All helper availability,
+output, timeout, recursion, and Linux hard-memory controls described above apply.
+
+Physical `sco_lzh_header` and `lzh_data` regions remain in the original source. Successful
+helper output becomes a separate decoded source, so TAR contents are recursively scanned.
+Malformed Huffman tables reported by the helper retain invalid status and publish no partial
+content. As the [GNU gzip manual](https://www.gnu.org/software/gzip/manual/gzip.html) explains,
+SCO LZH has no CRC and permits only limited consistency checking. The decoder zero-pads its
+bit lookahead at EOF, so some truncated streams can be accepted as shorter or complete files.
+PolyFile validates minimum framing and preserves this format limitation; successful exit does
+not establish an original size or checksum that the format does not store.
+
+[Project-owned SCO fixtures](../tests/fixtures/sco/README.md) include literal and back-reference
+blocks, JSON, TAR recursion, and empty content, verified against the pinned reference decoder.
