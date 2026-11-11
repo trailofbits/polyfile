@@ -5354,6 +5354,11 @@ class MagicMatcher:
         if test.source_info is None or test.source_info.path.name != "compress":
             return False
         aliases = {
+            b"\x1f\x9e": (
+                "application/x-freeze",
+                "frozen file 1.0 (or gzip 0.5)",
+                "FrozenCompressionMimeMatcher",
+            ),
             b"\x1f\xa0": (
                 "application/x-sco-compress",
                 "SCO compress -H (LZH) data",
