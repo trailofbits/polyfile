@@ -7,7 +7,7 @@ on:
   push:
     branches: [ master ]
   pull_request:
-    branches: [master, 'feat/issue-*']
+    branches: [master, 'feat/issue-*', 'fix/issue-*', 'refactor/matcher-types']
 
 permissions: {}
 
@@ -91,6 +91,8 @@ jobs:
         # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide. Generated
         # code will never satisfy the style and complexity checks, so it stays excluded here.
         flake8 polyfile polymerge tests build_backend.py compile_kaitai_parsers.py --exclude polyfile/kaitai/parsers --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+    - name: Check matcher types
+      run: ty check polyfile/magic.py --python "$(command -v python)" --error-on-warning
     - name: Test with pytest
       run: |
         pytest tests

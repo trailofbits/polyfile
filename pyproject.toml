@@ -49,7 +49,7 @@ dependencies = [
 
 [project.optional-dependencies]
 demangle = ["cxxfilt"]
-dev = ["mypy", "pytest", "flake8"]
+dev = ["pytest", "flake8", "ty==0.0.98"]
 
 [project.scripts]
 polyfile = "polyfile.__main__:main"
@@ -78,3 +78,6 @@ namespaces = false
 polyfile = ["templates/*", "CHANGELOG.md"]
 "polyfile.kaitai.parsers" = ["*.py", "manifest.json"]
 "polyfile.magic_defs" = ["*"]
+
+[tool.ty.rules]
+unused-type-ignore-comment = "error"

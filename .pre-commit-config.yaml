@@ -1,0 +1,17 @@
+repos:
+  - repo: local
+    hooks:
+      - id: blocking-python-lint
+        name: Check Python syntax and names
+        language: system
+        entry: >-
+          uv run flake8 polyfile polymerge tests build_backend.py compile_kaitai_parsers.py
+          --count --select=E9,F63,F7,F82 --show-source --statistics
+        pass_filenames: false
+        types: [python]
+      - id: matcher-types
+        name: Check matcher types
+        language: system
+        entry: uv run ty check polyfile/magic.py --error-on-warning
+        pass_filenames: false
+        files: ^(polyfile/.*\.py|pyproject\.toml)$
