@@ -5335,8 +5335,10 @@ class MagicMatcher:
         from polyfile.tarmatcher import TarMatcher, _tar_variant
 
         aliases = {"application/x-tar", "application/x-ustar", "application/x-gtar"}
-        mimetypes = set(match.mimetypes)
-        if isinstance(test, TarMatcher) or not mimetypes or not mimetypes <= aliases:
+        mimetypes = match.mimetypes
+        if (isinstance(test, TarMatcher)
+                or any(mime not in aliases for mime in mimetypes)
+                or not mimetypes):
             return False
         variant = _tar_variant(data[:512])
         native_tests = self.tests_by_mime.get("application/x-tar", ())
