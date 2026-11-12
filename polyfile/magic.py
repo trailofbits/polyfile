@@ -2359,6 +2359,7 @@ class StringMatch(StringTest):
         return self._is_always_text
 
     def matches(self, data: bytes) -> DataTypeMatch:
+        available_length = len(data)
         if self.compact_whitespace or self.optional_blanks:
             # libmagic compares a `string` value against the bytes it copied into its
             # `MAXstring`-byte value union, and it NUL-terminates the last byte of that
@@ -2369,12 +2370,14 @@ class StringMatch(StringTest):
             # (`file/src/softmagic.c:1480-1481`).
             limit = MAX_STRING_BYTES - 1 if self.num_bytes is None else min(
                 self.num_bytes, MAX_STRING_BYTES - 1)
-            data = data[:limit].ljust(MAX_STRING_BYTES, b"\x00")
+            data = data[:limit]
+            available_length = len(data)
+            data = data.ljust(MAX_STRING_BYTES, b"\x00")
         elif self.num_bytes is not None:
             data = data[:self.num_bytes]
         m = self.pattern.match(data)
         if m:
-            return self.post_process(bytes(m.group(0)))
+            return self.post_process(bytes(m.group(0))[:available_length])
         return DataTypeMatch.INVALID
 
     def last_start_offset(self, buffer_length: int) -> int:
