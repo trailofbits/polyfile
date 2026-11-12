@@ -9,7 +9,7 @@
 [![Slack Status](https://slack.empirehacking.nyc/badge.svg)](https://slack.empirehacking.nyc)
 
 A utility to identify and map the semantic and syntactic structure of files,
-including polyglots, chimeras, and schizophrenic files. It has [a pure-Python implementation of libmagic](#file-support) and can act as a drop-in replacement for the [`file` command](https://github.com/file/file). However, unlike `file`, PolyFile recurses into the files it identifies: the ZIP parser matches every decompressed member, the PDF parser matches every decoded stream, and every non-constant byte field of a parsed structure is matched again on its own. A few matchers also search for their magic anywhere in the input, so a ZIP archive that does not start at byte offset zero is still found. PolyFile does not scan every offset the way [binwalk](https://github.com/ReFirmLabs/binwalk) does; [issue #3532](https://github.com/trailofbits/polyfile/issues/3532) tracks that.
+including polyglots, chimeras, and schizophrenic files. It has [a Python implementation of libmagic](#file-support) and can act as a drop-in replacement for the [`file` command](https://github.com/file/file). However, unlike `file`, PolyFile recurses into the files it identifies: the ZIP parser matches every decompressed member, the PDF parser matches every decoded stream, and every non-constant byte field of a parsed structure is matched again on its own. A few matchers also search for their magic anywhere in the input, so a ZIP archive that does not start at byte offset zero is still found. PolyFile does not scan every offset the way [binwalk](https://github.com/ReFirmLabs/binwalk) does; [issue #3532](https://github.com/trailofbits/polyfile/issues/3532) tracks that.
 
 PolyFile can be used in conjunction with its sister tool
 [PolyTracker](https://github.com/trailofbits/polytracker) for
@@ -26,6 +26,10 @@ You can install the latest stable version of PolyFile from PyPI with
 ```
 uv tool install polyfile
 ```
+
+Regex matching uses the native [`google-re2`](https://pypi.org/project/google-re2/) dependency,
+which the installer installs automatically. If your platform has no compatible wheel, building
+that dependency requires a C++ compiler, RE2 headers and libraries, and pybind11.
 
 To run PolyFile once without installing it:
 ```
@@ -84,7 +88,7 @@ You can run PolyFile with the debugger enabled using the `-db` option.
 
 ### File Support
 
-PolyFile has a cleanroom, [pure Python implementation of the libmagic file classifier](#libmagic-implementation), and supports all 896 MIME types that it can identify.
+PolyFile has a cleanroom, [Python implementation of the libmagic file classifier](#libmagic-implementation), and supports all 896 MIME types that it can identify.
 
 It currently has support for parsing and semantically mapping the following formats:
 * PDF, using [pdfminer.six](https://github.com/pdfminer/pdfminer.six) to decode objects and streams

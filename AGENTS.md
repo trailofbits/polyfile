@@ -5,7 +5,7 @@
 PolyFile is a file analysis utility that identifies and maps the semantic and syntactic structure of files—including polyglots, chimeras, and "schizophrenic" files that are validly multiple types simultaneously.
 
 **Key capabilities:**
-- Pure-Python libmagic implementation (896 MIME types, from libmagic 5.48)
+- Python libmagic implementation with RE2 regex matching (896 MIME types, from libmagic 5.48)
 - Recursive embedded file detection: ZIP members, PDF streams, non-`Constant` `bytes` fields
   re-matched by `structmatcher.py`, and matchers that `search` for their magic at any offset, such
   as the relaxed ZIP matcher in `zipmatcher.py`. There is no binwalk-style scan of every offset;
@@ -47,7 +47,7 @@ PARSERS["application/pdf"].add(_LazyPDFParser())
 | Module | Purpose | Size |
 |--------|---------|------|
 | `polyfile.py` | Core engine—Match, Parser, Submatch classes | 15 KB |
-| `magic.py` | Pure-Python libmagic DSL implementation | 117 KB |
+| `magic.py` | Python libmagic DSL implementation with RE2 | 117 KB |
 | `pdf.py` | PDF parser with embedded file detection | 48 KB |
 | `debugger.py` | Interactive GDB-style debugger | 42 KB |
 | `kaitaimatcher.py` | Kaitai Struct format bridge | — |
@@ -263,17 +263,12 @@ def parse_myformat(file_stream, parent):
 ### Updating the libmagic Definitions
 
 `polyfile/magic_defs/` is a hand-maintained copy of `file/magic/Magdir/` from the `file` submodule.
-Nothing automates the copy, and two bundled definitions carry PolyFile-specific patches: `c-lang`
-(#3411) and `gentoo` (#3473). Both rewrite a regular expression that backtracks superlinearly in
-Python's `re` but is safe for libmagic's POSIX engine; #3547 tracks fixing that at the engine level,
-which would let both patches be reverted.
+Nothing automates the copy. The bundled definitions match upstream byte for byte; RE2 handles
+the original `c-lang` and `gentoo` patterns without the former backtracking workarounds.
 
-`tests/test_magic_defs_drift.py` enforces the copy. It fails when a bundled definition drifts from
-upstream, when upstream ships one PolyFile does not, and when a patch listed in its `LOCAL_PATCHES`
-allowlist has been reverted by a mirroring copy.
-
-See `docs/updating_libmagic_defs.md` for the procedure, including how to find local patches before
-you overwrite them.
+`tests/test_magic_defs_drift.py` enforces the copy, including any explicitly allowlisted local
+patch. See `docs/updating_libmagic_defs.md` for the sync procedure. User-defined regex tests must
+use RE2-supported syntax; lookaround assertions and backreferences produce a source-located error.
 
 ### Adding Kaitai Struct Format
 1. Add the `.ksy` file to the `kaitai_struct_formats/` submodule (upstream, or a local commit)

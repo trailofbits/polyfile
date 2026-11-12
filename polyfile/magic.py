@@ -1,5 +1,5 @@
 """
-A pure Python implementation of libmagic.
+A Python implementation of libmagic with linear-time regular expressions.
 
 This is to avoid having libmagic be a dependency, as well as to add the ability for searching for matches at arbitrary
 byte offsets.
@@ -15,7 +15,7 @@ import functools
 from datetime import datetime
 from enum import Enum, IntFlag
 from importlib import resources
-from itertools import chain
+from itertools import chain, groupby
 import json
 import logging
 from pathlib import Path
@@ -29,6 +29,8 @@ from typing import (
     NamedTuple, Optional, Protocol, Set, Tuple, Type, TypeVar, Union
 )
 from uuid import UUID
+
+import re2
 
 from .arithmetic import CStyleInt, make_c_style_int
 from .der import DERHeader, DERSpecification, InvalidDER, mime_type_for_message
@@ -73,21 +75,10 @@ MAGIC_DEFS: List[Path] = sorted([
 
 
 WHITESPACE: bytes = b" \r\t\n\v\f"
-# a whitespace byte of an `re.escape`-ed pattern, with or without the backslash that escaped it
-BLANK_IN_PATTERN: Pattern[bytes] = re.compile(rb"\\?[ \t\n\v\f\r]")
 # a wildcard string value ends at the first of these, per `file/src/softmagic.c:683-684`
 VALUE_TERMINATOR: Pattern[bytes] = re.compile(rb"[\0\r\n]")
 # `MAXstring`, the size of the buffer libmagic copies a string value into: `file/src/file.h:179`
 MAX_STRING_BYTES: int = 128
-# what the `f` flag requires after a match: `file/src/softmagic.c:2127-2130`
-FULL_WORD_TERMINATOR: bytes = rb"(?=[\0\s]|\Z)"
-# what a blank of a `W` or `w` value accepts: any byte C `isspace` accepts in the `C` locale, never
-# the value's own whitespace byte (`file/src/softmagic.c:2102-2121`)
-BLANK_CLASS: bytes = rb"[ \t\n\v\f\r]"
-# a blank run at the very end of a value, which is the only thing `pattern_string` emits that can
-# match more than one length: `W` compiles a run to `+` or `{n,}` and `w` compiles it to `*`, while
-# every other atom is a literal, a class, or an exact `{n}`
-UNBOUNDED_BLANK_RUN: Pattern[bytes] = re.compile(re.escape(BLANK_CLASS) + rb"(?:\*|\+|\{\d+,\})$")
 ESCAPES = {
     "n": ord("\n"),
     "r": ord("\r"),
@@ -96,49 +87,6 @@ ESCAPES = {
     "t": ord("\t"),
     "f": ord("\f")
 }
-
-
-def compact_blanks(pattern: bytes, value: bytes) -> bytes:
-    """Renders the blanks of an `re.escape`-ed pattern the way the `W` string flag asks for.
-
-    Runs of an identical byte are collapsed into a counted repetition, and every blank counts as
-    the same byte however the value spelled it, so `A\\t\\ B` asks for two blanks of any kind.
-
-    Args:
-        pattern: The escaped value, which may already carry case-insensitive character classes.
-        value: The unescaped value, for the error message.
-
-    Returns:
-        The pattern with each run of *n* blanks replaced by *n* or more blanks of any kind.
-
-    Raises:
-        ValueError: If `pattern` ends in a backslash that escapes nothing.
-    """
-    runs: List[Tuple[bytes, int]] = []
-    escaped = False
-    for c in (bytes([b]) for b in pattern):
-        if escaped:
-            c = b"\\" + c
-            escaped = False
-        elif c == b"\\":
-            escaped = True
-            continue
-        if c[-1:] in WHITESPACE:
-            c = BLANK_CLASS
-        if runs and runs[-1][0] == c:
-            runs[-1] = (c, runs[-1][1] + 1)
-        else:
-            runs.append((c, 1))
-    if escaped:
-        raise ValueError(f"Error parsing search pattern {value!r}")
-    compacted = bytearray()
-    for c, count in runs:
-        compacted.extend(c)
-        if c == BLANK_CLASS:
-            compacted.extend(b"+" if count == 1 else f"{{{count},}}".encode("utf-8"))
-        elif count > 1:
-            compacted.extend(f"{{{count}}}".encode("utf-8"))
-    return bytes(compacted)
 
 
 def unescape(to_unescape: Union[str, bytes]) -> bytes:
@@ -2230,11 +2178,6 @@ class StringLengthTest(StringWildcard):
         return f"{['>', '<'][self.test_smaller]}{repr(self.to_match)}"
 
 
-# A search whose last permitted start is at most this far in is tried start by start once the buffer
-# is much longer than that range (see `StringMatch.search`).
-SEARCH_EACH_START_LIMIT: int = 8192
-
-
 class StringMatch(StringTest):
     def __init__(self,
                  to_match: str,
@@ -2256,8 +2199,9 @@ class StringMatch(StringTest):
         self.full_word_match: bool = full_word_match
         self.has_string_flags: bool = has_string_flags
         self._is_always_text: Optional[bool] = None
-        self._pattern: Optional[re.Pattern] = None
-        _ = self.pattern
+        self._blanks = compact_whitespace or optional_blanks
+        self._fold_case = case_insensitive_lower or case_insensitive_upper
+        self._parts = self._comparison_parts()
 
     @property
     def value_length(self) -> int:
@@ -2267,79 +2211,58 @@ class StringMatch(StringTest):
     def relation(self) -> str:
         return "="
 
-    def pattern_string(self) -> bytes:
-        """Builds the regular expression that implements this test's string flags.
+    def _comparison_parts(self) -> List[Tuple[bytes, int]]:
+        parts = []
+        for blank, group in groupby(self.string, lambda byte: byte in WHITESPACE):
+            value = bytes(group)
+            if blank and self._blanks:
+                parts.append((b"", len(value) if self.compact_whitespace else 0))
+            else:
+                parts.append((value, 0))
+        return parts
 
-        A definition may set both ``W`` (compact whitespace) and ``w`` (optional blanks). libmagic
-        keeps both bits and lets ``W`` win, because ``file_strncmp`` tests it first
-        (``file/src/softmagic.c:2103-2120``).
+    def _accepts_byte(self, expected: int, actual: int) -> bool:
+        if expected == actual:
+            return True
+        if self.case_insensitive_lower and 97 <= expected <= 122:
+            return actual == expected - 32
+        if self.case_insensitive_upper and 65 <= expected <= 90:
+            return actual == expected + 32
+        return False
 
-        Neither flag compares the value's own whitespace byte. Each blank of a ``W`` value asks for
-        one byte that C ``isspace`` accepts, and after the last blank of a run libmagic skips
-        whatever whitespace is left (``file/src/softmagic.c:2102-2115``), so a run of *n* blanks
-        compiles to *n* or more blanks. ``w`` drops the lower bound and compiles to zero or more
-        (``file/src/softmagic.c:2116-2121``). Both take their byte set from `BLANK_CLASS`.
+    @staticmethod
+    def _blank_end(data: bytes, start: int) -> int:
+        while start < len(data) and data[start] in WHITESPACE:
+            start += 1
+        return start
 
-        ``f`` (full word) constrains only what follows the match, and it asks for whitespace rather
-        than a word boundary: ``file_strncmp`` runs ``if (*b && !isspace(*b)) v = 1;`` once the
-        comparison has succeeded (``file/src/softmagic.c:2127-2130``). Nothing constrains what
-        precedes the match, the byte after it has to be a C ``isspace`` byte or a null byte, and
-        the end of the buffer qualifies because ``file_or_fd`` null-terminates it
-        (``file/src/magic.c:534``).
+    def _literal_end(self, data: bytes, start: int, value: bytes) -> Optional[int]:
+        end = start + len(value)
+        if end > len(data):
+            return None
+        if not self._fold_case:
+            return end if data.startswith(value, start) else None
+        for expected, actual in zip(value, data[start:end]):
+            if not self._accepts_byte(expected, actual):
+                return None
+        return end
 
-        That check reads the byte the comparison stopped on, and ``file_strncmp`` runs the
-        comparison in a single left-to-right pass: a blank consumes the rest of its whitespace
-        run and is never revisited. A backtracking engine can return a byte the run consumed so
-        that the terminator accepts it, matching ``A\\ B\\ `` against ``A B  x`` where libmagic
-        stops on the ``x`` and fails. Pinning the match inside a lookahead and replaying it with
-        a backreference makes it atomic, which is the one pass libmagic runs.
+    def _word_terminated(self, data: bytes, end: int) -> bool:
+        return (not self.full_word_match or end == len(data)
+                or data[end] == 0 or data[end] in WHITESPACE)
 
-        Only a value ending in a blank run needs that, because a run is the only thing this method
-        emits that can match more than one length. Wrapping the rest would cost them the literal
-        prefix CPython searches for, which for a `search` test means scanning the whole buffer
-        rather than skipping to the next plausible start.
-
-        The wrapper opens the first capturing group in the pattern, so ``\\1`` refers to it whatever
-        the value compiles to. What the idiom does require is that the value's own pattern carry no
-        backreference, which the wrap would renumber: an inner ``\\1`` raises at compile time, but an
-        inner ``\\2`` would silently come to mean something else. Everything emitted here is a
-        literal, a character class, or a repetition, so there is none to renumber.
-
-        Returns:
-            The pattern to compile, with the flags folded into it.
-        """
-        pattern = re.escape(self.string)
-        if self.case_insensitive_lower and not self.case_insensitive_upper:
-            # treat lower case letters as either lower or upper case
-            delta = ord('A') - ord('a')
-            for ordinal in range(ord('a'), ord('z') + 1):
-                pattern = pattern.replace(bytes([ordinal]), f"[{chr(ordinal)}{chr(ordinal+delta)}]".encode("utf-8"))
-        elif not self.case_insensitive_lower and self.case_insensitive_upper:
-            # treat upper case letters as either lower or upper case
-            delta = ord('a') - ord('A')
-            for ordinal in range(ord('A'), ord('Z') + 1):
-                pattern = pattern.replace(bytes([ordinal]), f"[{chr(ordinal)}{chr(ordinal+delta)}]".encode("utf-8"))
-        if self.compact_whitespace:
-            pattern = compact_blanks(pattern, self.string)
-        elif self.optional_blanks:
-            pattern = BLANK_IN_PATTERN.sub(lambda _: BLANK_CLASS + b"*", pattern)
-        if self.full_word_match:
-            if UNBOUNDED_BLANK_RUN.search(pattern) is not None:
-                pattern = rb"(?=(" + pattern + rb"))\1"
-            pattern += FULL_WORD_TERMINATOR
-        return pattern
-
-    def pattern_flags(self) -> int:
-        flags: int = 0
-        if self.case_insensitive_upper and self.case_insensitive_lower:
-            flags |= re.IGNORECASE
-        return flags
-
-    @property
-    def pattern(self) -> re.Pattern:
-        if self._pattern is None:
-            self._pattern = re.compile(self.pattern_string(), flags=self.pattern_flags())
-        return self._pattern
+    def _match_end(self, data: bytes, start: int) -> Optional[int]:
+        for value, minimum in self._parts:
+            if value:
+                end = self._literal_end(data, start, value)
+                if end is None:
+                    return None
+            else:
+                end = self._blank_end(data, start)
+                if end - start < minimum:
+                    return None
+            start = end
+        return start if self._word_terminated(data, start) else None
 
     def is_always_text(self) -> bool:
         r"""Whether libmagic classifies a test looking for this value as a text test.
@@ -2357,6 +2280,7 @@ class StringMatch(StringTest):
         return self._is_always_text
 
     def matches(self, data: bytes) -> DataTypeMatch:
+        available_length = len(data)
         if self.compact_whitespace or self.optional_blanks:
             # libmagic compares a `string` value against the bytes it copied into its
             # `MAXstring`-byte value union, and it NUL-terminates the last byte of that
@@ -2367,12 +2291,14 @@ class StringMatch(StringTest):
             # (`file/src/softmagic.c:1480-1481`).
             limit = MAX_STRING_BYTES - 1 if self.num_bytes is None else min(
                 self.num_bytes, MAX_STRING_BYTES - 1)
-            data = data[:limit].ljust(MAX_STRING_BYTES, b"\x00")
+            data = data[:limit]
+            available_length = len(data)
+            data = data.ljust(MAX_STRING_BYTES, b"\x00")
         elif self.num_bytes is not None:
             data = data[:self.num_bytes]
-        m = self.pattern.match(data)
-        if m:
-            return self.post_process(bytes(m.group(0)))
+        end = self._match_end(data, 0)
+        if end is not None:
+            return self.post_process(data[:min(end, available_length)])
         return DataTypeMatch.INVALID
 
     def last_start_offset(self, buffer_length: int) -> int:
@@ -2400,53 +2326,67 @@ class StringMatch(StringTest):
             return self.num_bytes - 1
         return self.num_bytes
 
+    def _first_bytes(self) -> Tuple[bytes, ...]:
+        first = self.string[0]
+        if self.case_insensitive_lower and 97 <= first <= 122:
+            return bytes([first]), bytes([first - 32])
+        if self.case_insensitive_upper and 65 <= first <= 90:
+            return bytes([first]), bytes([first + 32])
+        return (bytes([first]),)
+
+    def _literal_starts(self, data: bytes, last: int) -> Iterator[int]:
+        choices = self._first_bytes()
+        start = 0
+        while start <= last:
+            positions = [data.find(choice, start, last + 1) for choice in choices]
+            found = [position for position in positions if position >= 0]
+            if not found:
+                return
+            start = min(found)
+            yield start
+            start += 1
+
+    def _candidate_starts(self, data: bytes, last: int) -> Iterator[int]:
+        if last < 0:
+            return
+        if not self.string:
+            yield from range(last + 1)
+        elif self._blanks and self.string[0] in WHITESPACE:
+            start = 0
+            while start <= last:
+                yield start
+                start = max(start + 1, self._blank_end(data, start))
+        else:
+            yield from self._literal_starts(data, last)
+
     def search(self, data: bytes) -> DataTypeMatch:
-        """Finds the first start offset at which this value matches.
+        """Finds the leftmost match whose declared value fits at an allowed start offset.
 
-        libmagic bounds every candidate start offset of a search, not only the start of the test:
-        it abandons the remaining offsets as soon as the declared length of the value no longer
-        fits in what is left of the buffer (``file/src/softmagic.c:2357-2361``). The leftmost match
-        is the one libmagic takes, so a leftmost match that starts past either bound rules out
-        every later offset too.
-
-        Both bounds are on where a match starts rather than on where it ends, because ``W`` and
-        ``w`` both let a value consume more bytes than it declares, by matching a run of blanks of
-        any length against one declared blank (``file/src/softmagic.c:2102-2121``).
+        The range bounds start offsets, so greedy blank runs may extend beyond it. A leading
+        blank consumes its whole run before the next comparison; later starts within that same
+        run cannot change a failure and are skipped rather than rescanning the run.
 
         Args:
             data: The bytes at the offset being tested.
 
         Returns:
-            The match, or `DataTypeMatch.INVALID` if no start offset that fits the value matches.
+            The match, or `DataTypeMatch.INVALID` if no permitted start matches.
         """
-        pattern = self.pattern
-        last_start = self.last_start_offset(len(data))
-        # `pattern.search` would look for a match across the whole buffer and only then find that
-        # it starts too late. CPython cannot skip ahead to a character class, a case-insensitive
-        # letter or a lookahead (the full-word wrapper), so for those it is much cheaper to try
-        # each permitted start in turn. It does skip ahead quickly to any other case-insensitive
-        # first byte, so that pays off only on a far longer buffer; and a case-sensitive literal
-        # prefix always keeps the native search. Each attempt still sees the whole buffer, because
-        # a blank run or a word terminator can extend past the last start.
-        first = pattern.pattern[:1]
-        if first == b"[" or (pattern.flags & re.IGNORECASE and (first.isalpha() or first == b"(")):
-            bytes_per_start = 64
-        elif pattern.flags & re.IGNORECASE:
-            bytes_per_start = 1024
-        else:
-            bytes_per_start = 0
-        if (bytes_per_start and 0 <= last_start <= SEARCH_EACH_START_LIMIT
-                and len(data) > max(65536, last_start * bytes_per_start)):
-            m = None
-            for start in range(last_start + 1):
-                m = pattern.match(data, start)
-                if m is not None:
-                    break
-        else:
-            m = pattern.search(data)
-        if m is None or m.start() > last_start or m.start() + self.value_length > len(data):
+        last = min(self.last_start_offset(len(data)), len(data) - self.value_length)
+        if not self._blanks and not self._fold_case:
+            limit = last + self.value_length
+            start = data.find(self.string, 0, limit)
+            while 0 <= start <= last:
+                end = start + self.value_length
+                if self._word_terminated(data, end):
+                    return self.post_process(data[start:end], initial_offset=start)
+                start = data.find(self.string, start + 1, limit)
             return DataTypeMatch.INVALID
-        return self.post_process(bytes(m.group(0)), initial_offset=m.start())
+        for start in self._candidate_starts(data, last):
+            end = self._match_end(data, start)
+            if end is not None:
+                return self.post_process(data[start:end], initial_offset=start)
+        return DataTypeMatch.INVALID
 
     def __str__(self):
         return repr(self.string)
@@ -2906,7 +2846,15 @@ class PascalStringType(DataType[StringTest]):
         )
 
 
-def posix_to_python_re(match: bytes) -> bytes:
+def expand_posix_classes(match: bytes) -> bytes:
+    """Expands POSIX classes using the matcher's locale-independent byte ranges.
+
+    Args:
+        match: The unescaped regular expression.
+
+    Returns:
+        The expression with POSIX classes replaced by explicit byte ranges.
+    """
     for match_from, replace_with in (
             ("upper", "A-Z"),
             ("lower", "a-z"),
@@ -2968,32 +2916,49 @@ def nonmagic(pattern: bytes) -> int:
     return max(count, 1)
 
 
-class MagicRegex:
-    """A definition's regular expression, alongside the literal count libmagic scores it by.
+class RegexMatch(Protocol):
+    """The byte range returned by the magic regular expression engine."""
 
-    libmagic counts literals on the value as its own unescaping left it
-    (``file/src/apprentice.c:1015``), which is before PolyFile rewrites POSIX character classes
-    into their Python equivalents. The rewrite drops the inner ``:]`` that ends libmagic's bracket
-    scan, so the count is one lower per class unless it is taken first.
-    """
+    def group(self) -> bytes:
+        ...
+
+    def start(self) -> int:
+        ...
+
+
+class MagicRegex:
+    """A definition's linear-time regex and the literal count libmagic scores it by."""
 
     def __init__(self, specification: bytes, flags: int = 0, negated: bool = False):
-        """Compiles `specification`, counting its literals before the POSIX rewrite.
+        """Compiles a byte-oriented RE2 pattern, counting literals before class expansion.
 
         Args:
             specification: The unescaped pattern, as libmagic would hold it.
-            flags: The regular expression flags to compile with.
+            flags: Python's multiline and ignore-case flags.
             negated: Whether the definition uses libmagic's ``!`` relation.
 
         Raises:
-            re.error: If `specification` is not a valid regular expression.
+            ValueError: If RE2 cannot compile the pattern.
         """
         self.literal_count: int = nonmagic(specification)
-        self.pattern: bytes = posix_to_python_re(specification)
-        self.compiled: Pattern[bytes] = re.compile(self.pattern, flags)
+        self.pattern: bytes = expand_posix_classes(specification)
+        options = re2.Options()
+        options.encoding = re2.Options.Encoding.LATIN1
+        options.case_sensitive = not bool(flags & re.IGNORECASE)
+        options.longest_match = True
+        options.log_errors = False
+        pattern = b"(?m)" + self.pattern if flags & re.MULTILINE else self.pattern
+        try:
+            self.compiled = re2.compile(pattern, options=options)
+        except re2.error as error:
+            detail = error.args[0]
+            if isinstance(detail, bytes):
+                detail = detail.decode("utf-8", errors="replace")
+            raise ValueError(f"Invalid RE2 regular expression {specification!r}: {detail}; "
+                             "use supported syntax without lookaround or backreferences") from error
         self.negated: bool = negated
 
-    def search(self, data: bytes) -> Optional["re.Match[bytes]"]:
+    def search(self, data: bytes) -> Optional[RegexMatch]:
         return self.compiled.search(data)
 
     def __str__(self):
@@ -3152,12 +3117,9 @@ class RegexType(DataType[MagicRegex]):
         flags = re.MULTILINE
         if self.case_insensitive:
             flags |= re.IGNORECASE
-        try:
-            return MagicRegex(unescape(specification), flags, negated=negated)
-        except re.error as e:
-            raise ValueError(str(e))
+        return MagicRegex(unescape(specification), flags, negated=negated)
 
-    def matched_extent(self, m: "re.Match[bytes]", subject_offset: int) -> DataTypeMatch:
+    def matched_extent(self, m: RegexMatch, subject_offset: int) -> DataTypeMatch:
         """Builds the match that libmagic reports for a regular expression match.
 
         libmagic reports only the bytes between `pmatch.rm_so` and `pmatch.rm_eo`, positioned at

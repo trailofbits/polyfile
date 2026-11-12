@@ -31,6 +31,7 @@ dependencies = [
     "cint>=1.0.0",
     "fickling>=0.0.8",
     "filelock==4.2.7",
+    "google-re2==1.1.20251105",
     "graphviz>=0.20.1",
     "intervaltree>=2.4.0",
     "jinja2>=2.1.0",

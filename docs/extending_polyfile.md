@@ -33,6 +33,13 @@ with ExactNamedTempfile(b"""# The default libmagic test for NITF does not associ
     nitf_matcher = MagicMatcher.DEFAULT_INSTANCE.add(Path(t), test_type=TestType.BINARY)[0]
 ```
 
+Regex tests use [RE2 syntax](https://github.com/google/re2/wiki/Syntax) and select the
+leftmost, longest byte match. Matching is independent of the caller's locale; case-insensitive
+flags fold ASCII letters. Lookaround assertions and backreferences are unsupported. A custom
+definition containing unsupported syntax fails with its filename and line number. Rewrite it
+using supported expressions or a Python matcher. Regex tests never fall back to a backtracking
+engine.
+
 ### Pure Python Matchers
 
 The `libmagic` DSL can be eschewed by programmatically defining a matcher using PolyFile’s `MagicTest` API.

@@ -1,9 +1,9 @@
 from pathlib import Path
 
-from ..ast import Node as ASTNode
-from ..fileutils import ExactNamedTempfile, FileStream
-from ..magic import MagicMatcher
-from ..polyfile import register_parser, Match
+from polyfile.ast import Node as ASTNode
+from polyfile.fileutils import ExactNamedTempfile, FileStream
+from polyfile.magic import MagicMatcher
+from polyfile.polyfile import register_parser, Match
 
 
 Http11RequestGrammar = None
@@ -12,17 +12,8 @@ HTTP_MIME_TYPE: str = "message/x-http"
 HTTP_11_MIME_TYPE: str = f"{HTTP_MIME_TYPE}; version=1.1"
 
 
-# Register a magic matcher for HTTP 1.1 headers.
-#
-# The pattern reads "a line whose last whitespace-separated token is HTTP/1.1". A carriage return
-# satisfies both `[^\n]` and `\s`, so without the anchor and the lookbehind a run of them splits
-# between the two quantifiers in quadratically many ways, and Python's backtracking engine tries
-# every one (issue #3527). `\^` keeps the search from restarting inside a line it has already
-# rejected, and `(?<!\s)` pins `\s+` to the whole whitespace run. Neither changes which byte ranges
-# the pattern matches: a match that starts mid-line can always be extended left to the line start,
-# and a split that leaves whitespace at the end of `[^\n]*?` is reached earlier by the shorter one
-# that gives that whitespace to `\s+`.
-with ExactNamedTempfile(b"""0 regex/s \\^[^\\\\n]*?(?<!\\\\s)\\\\s+HTTP/1.1\\\\s*$ HTTP 1.1
+# Register a magic matcher for a line ending in the HTTP/1.1 token.
+with ExactNamedTempfile(b"""0 regex/s \\^[^\\n]*[[:space:]]+HTTP/1.1[[:space:]]*$ HTTP 1.1
 !:mime """ + HTTP_11_MIME_TYPE.encode("utf-8") + b"""
 >0 string GET GET request header
 >0 string POST POST request header
@@ -39,7 +30,7 @@ def parse_http_11(file_stream: FileStream, parent: Match):
     if Http11RequestGrammar is None:
         # the http_11 module takes a _really_ long time to load/parse the grammar, so do this lazily
 
-        from .http_11 import Http11RequestGrammar as Grammar
+        from polyfile.http.http_11 import Http11RequestGrammar as Grammar
         Http11RequestGrammar = Grammar
     http_ast, _ = Http11RequestGrammar("request").parse(file_stream.read().decode("utf-8"), start=offset)
     root_node = ASTNode.load(http_ast)
