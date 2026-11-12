@@ -3399,24 +3399,15 @@ class UCSTextBufferTest(TestCase):
         self.assertEqual(b"<?xml", data[result.offset:result.offset + result.length])
         self.assertNotIn("decoded from this file", match.explain(file=data, ansi_color=False))
 
-    def test_the_json_and_csv_checks_read_the_files_own_bytes(self):
-        """Tests that the checks `file_buffer` runs before soft magic never see decoded text.
+    def test_the_json_check_reads_the_files_own_bytes(self):
+        """The preliminary JSON check keeps its separate UTF-16 compatibility behavior.
 
-        `file_buffer` runs `file_is_json` and `file_is_csv` against the buffer it was handed
-        (`file/src/funcs.c:412-429`), so `file -b -k` reports only `Unicode text, UTF-16,
-        little-endian text` for a UTF-16 JSON document. PolyFile models both as text soft magic
-        tests, so decoding the text buffer would have handed them the decoded text and reported a
-        CSV match libmagic does not report.
-
-        The `JSON text data` this expects for the UTF-16 document is a separate divergence that
-        predates the decoding: `parse_json` reads the bytes through `json.detect_encoding`, which
-        sniffs a UTF-16 byte order mark, and `file_is_json` does not. PolyFile reports the encoding
-        description alongside it, which is the decision recorded in trailofbits/polyfile#3500.
+        `file_is_json` does not decode a UTF-16 document, while PolyFile's `parse_json` reads it
+        through `json.detect_encoding`. PolyFile reports the encoding description alongside that
+        extra match, as recorded in trailofbits/polyfile#3500. A single completed row does not
+        satisfy the byte-oriented CSV detector, regardless of its comma count.
         """
         document = '{"a": 1, "b": 2}\n'
-        self.assertIn("CSV text (excel dialect)", {
-            str(match) for match in MagicMatcher.DEFAULT_INSTANCE.match(document.encode("utf-8"))
-        })
         self.assertEqual(
             {"JSON text data", "Unicode text, UTF-16, little-endian text"},
             {str(match) for match in

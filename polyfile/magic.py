@@ -11,12 +11,10 @@ details about the file.
 from abc import ABC, abstractmethod
 import codecs
 from collections import defaultdict
-import csv
 import functools
 from datetime import datetime
 from enum import Enum, IntFlag
 from importlib import resources
-from io import StringIO
 from itertools import chain
 import json
 import logging
@@ -4243,39 +4241,60 @@ class NDJSONTest(JSONTest):
 
 
 class CSVTest(MagicTest):
-    def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
-        try:
-            text = data[absolute_offset:].decode("utf-8")
-        except UnicodeDecodeError as e:
-            return FailedTest(test=self, offset=absolute_offset, parent=parent_match, message=str(e))
-        for dialect in csv.list_dialects():
-            string_data = StringIO(text, newline="")
-            reader = csv.reader(string_data, dialect=dialect)
-            valid = False
-            try:
-                for i, row in enumerate(reader):
-                    if i == 0:
-                        num_cols = len(row)
-                        if num_cols < 2:
-                            # CSVs should have at least two rows:
-                            break
-                        valid = True
-                    elif len(row) != num_cols:
-                        # every row of the CSV should have the same number of columns
-                        valid = False
-                        break
-            except csv.Error:
-                continue
-            if valid:
-                # every row was valid, and we had at least one row
-                return MatchedTest(self, offset=absolute_offset, length=len(data) - absolute_offset, value=dialect,
-                                   parent=parent_match)
-        return FailedTest(
-            test=self,
-            offset=absolute_offset,
-            parent=parent_match,
-            message=f"the input did not match a known CSV dialect ({', '.join(csv.list_dialects())})"
-        )
+    """Match CSV delimiters in the file's bytes, as libmagic's builtin detector does."""
+
+    @staticmethod
+    def _row_comma_counts(data: bytes) -> Iterator[int]:
+        """Yield comma counts for completed rows, excluding quoted delimiters."""
+        quoted = False
+        commas = 0
+        for byte in data:
+            if byte == 0x22:
+                quoted = not quoted
+            elif not quoted:
+                if byte == 0x2C:
+                    commas += 1
+                elif byte == 0x0A:
+                    yield commas
+                    commas = 0
+
+    @classmethod
+    def _matches_rows(cls, data: bytes) -> bool:
+        """Check libmagic's row counts, including its stricter ten-row boundary."""
+        rows = cls._row_comma_counts(data)
+        expected = next(rows, 0)
+        if expected == 0:
+            return False
+        completed = 1
+        for completed, commas in enumerate(rows, 2):
+            if commas != expected:
+                return False
+            if completed == 10:
+                return expected > 1
+        return completed >= 2
+
+    def test(self, data: bytes, absolute_offset: int,
+             parent_match: Optional[TestResult]) -> TestResult:
+        """Match raw CSV bytes and name their detected text encoding.
+
+        Args:
+            data: The file's original bytes.
+            absolute_offset: The first byte to inspect.
+            parent_match: The result containing this test, if any.
+
+        Returns:
+            A match over the original bytes, or a failure explaining the rejected input.
+        """
+        candidate = data[absolute_offset:]
+        encoding = detect_text_encoding(candidate)
+        if encoding is None:
+            return FailedTest(self, offset=absolute_offset, parent=parent_match,
+                              message="the CSV input is not recognized as text")
+        if not self._matches_rows(candidate):
+            return FailedTest(self, offset=absolute_offset, parent=parent_match,
+                              message="the input does not meet CSV field and row requirements")
+        return MatchedTest(self, offset=absolute_offset, length=len(candidate),
+                           value=LIBMAGIC_ENCODING_NAMES[encoding], parent=parent_match)
 
     def subtest_type(self) -> TestType:
         return TestType.TEXT
