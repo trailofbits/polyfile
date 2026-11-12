@@ -3336,17 +3336,10 @@ class UCSTextBufferTest(TestCase):
                 buffer = self.text_buffer(self.encode(self.SVG, encoding))
                 self.assertEqual(self.SVG.encode("utf-8"), buffer)
 
-    def test_an_eight_bit_input_is_not_decoded(self):
-        """Tests that only a UCS input gets a second buffer, so every other offset stays honest.
-
-        A buffer that differs from the file's bytes costs the offsets its tests report, and
-        decoding costs time on every input, so an encoding whose characters libmagic copies
-        straight into its UCS-4 buffer keeps the context it already had.
-        """
+    def test_an_unchanged_input_keeps_its_context(self):
+        """ASCII and unmarked UTF-8 already hold the bytes text tests expect."""
         inputs = ((b"plain ascii text\n", "ascii"),
-                  ("café naïve\n".encode("utf-8"), "utf-8"),
-                  ("café naïve\n".encode("latin-1"), "iso-8859-1"),
-                  (b"caf\x85 na\x8bve\n", "unknown-8bit"))
+                  ("café naïve\n".encode("utf-8"), "utf-8"))
         for data, expected_encoding in inputs:
             with self.subTest(encoding=expected_encoding):
                 self.assertEqual(expected_encoding, polyfile.magic.detect_text_encoding(data))

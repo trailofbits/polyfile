@@ -962,18 +962,20 @@ class MatchContext:
 
         libmagic decodes its input into a UCS-4 buffer, drops the byte order mark, re-encodes that
         buffer as UTF-8, and runs its text tests against the result rather than against the file's
-        bytes (``file_ascmagic_with_encoding`` in ``file/src/ascmagic.c``). That only changes the
-        bytes for a UCS encoding, so every other input keeps this context and the offsets its tests
-        report stay offsets into the file.
+        bytes (``file_ascmagic_with_encoding`` in ``file/src/ascmagic.c``). ASCII and unmarked
+        UTF-8 keep this context. Every other recognized encoding gets a UTF-8 rendering whose
+        offsets are identified by `decoded_from` rather than presented as offsets into the file.
 
         Args:
             encoding: the encoding `detect_text_encoding` named for this context's data, or None if
                 it is not text.
 
         Returns:
-            This context, or a context over the decoded text when the data are UCS-encoded.
+            This context when no conversion is needed or the encoding is unknown; otherwise, a
+            context over the decoded text.
         """
-        if encoding is None or encoding not in _UCS_BOM_LENGTHS:
+        if (encoding is None or encoding not in LIBMAGIC_ENCODING_NAMES
+                or encoding in ("ascii", "utf-8")):
             return self
         return MatchContext(data=_decode_text(self.data, encoding).encode("utf-8"), path=self.path,
                             only_match_mime=self.only_match_mime, decoded_from=encoding)
