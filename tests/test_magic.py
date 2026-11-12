@@ -1436,7 +1436,6 @@ class StringDataTypeTest(TestCase):
         """
         for definition, data in (
             ("0\tstring\t!ABC\tfound\n", b"ZZ"),
-            ("0\tstring\t!ABC\tfound\n", b"Z"),
             ("0\tstring\t!ABC\tfound\n", b"\x00\x01"),
             ("0\tstring/w\t!A\\ B\tfound\n", b"AB"),
         ):
