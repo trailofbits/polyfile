@@ -27,8 +27,8 @@ import sys
 from time import gmtime, localtime, strftime
 from types import GeneratorType
 from typing import (
-    Any, BinaryIO, Callable, Collection, Dict, FrozenSet, Generic, Iterable, Iterator, KeysView, List,
-    NamedTuple, Optional, Protocol, Set, Tuple, Type, TypeVar, Union
+    Any, BinaryIO, Callable, Collection, Dict, FrozenSet, Generic, Iterable, Iterator, KeysView,
+    List, NamedTuple, Optional, Protocol, Set, Tuple, Type, TypeVar, Union
 )
 from uuid import UUID
 
