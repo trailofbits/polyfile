@@ -178,7 +178,12 @@ class TestResult(ABC):
         self.offset: int = offset
         self.parent: Optional["TestResult"] = parent
         self.child_matched: bool = False
+        self._message_children: Optional[List[TestResult]] = None
+        self._message_matched: bool = True
         if parent is not None and bool(self):
+            if parent._message_children is None:
+                parent._message_children = []
+            parent._message_children.append(self)
             assert self.test.named_test is self.test or parent.test.level == self.test.level - 1
             if not isinstance(self.test, (NamedTest, UseTest)):
                 parent.child_matched = True
@@ -3985,6 +3990,7 @@ class UseTest(MagicTest):
         use_match = MatchedTest(self, None, absolute_offset, 0, parent=parent_match)
         named_results = self._match_referenced_test(context, use_match, flip_endianness)
         matched = any(prints_a_message(result, context) for result in named_results)
+        use_match._message_matched = matched
         log.trace(
             f"{self.source_info!s}\t{matched}\t{absolute_offset}\t"
             f"{context.data[absolute_offset:absolute_offset + 20]!r}"
@@ -4902,6 +4908,111 @@ def printf_to_python(message: str) -> str:
     )
 
 
+class _MagicMessageRenderer:
+    """Replay cached calls in libmagic's output order without rerunning tests."""
+
+    def __init__(self):
+        self.parts: List[str] = []
+        self.firstline: bool = True
+        self.printed: bool = False
+        self.need_separator: bool = False
+        self.visible: Set[int] = set()
+
+    def render(self, match: "Match") -> None:
+        visible = self.visible
+        self.visible = {id(result) for result in match}
+        for root in match._message_roots():
+            self._call(root, match)
+        self.visible = visible
+
+    def _message(self, result: TestResult, match: "Match") -> str:
+        if id(result) not in self.visible:
+            return ""
+        return result.test.message.resolve(match.context).lstrip()
+
+    def _separator(self) -> None:
+        if not self.firstline:
+            self.parts.append(MATCH_SEPARATOR)
+
+    def _emit(self, result: MatchedTest, match: "Match", print_value: bool) -> None:
+        message = self._message(result, match)
+        text = message.removeprefix("\b")
+        if not text:
+            return
+        if result.test.level == 0:
+            self.printed = True
+            self.need_separator = True
+            self._separator()
+        else:
+            if not self.printed:
+                self.printed = True
+                self._separator()
+            if self.need_separator and not message.startswith("\b"):
+                self.parts.append(" ")
+        if print_value:
+            self.parts.append(self._format(text, result))
+        self.need_separator = True
+
+    def _format(self, message: str, result: MatchedTest) -> str:
+        value = result.offset if isinstance(result, IndirectResult) else result.value
+        if "%u" in message and value < 0:
+            message = message % (value + 2**(8 * result.length),)
+        elif "%" in message.replace("%%", ""):
+            message = printf_to_python(message)
+            try:
+                message = message % (value,)
+            except ValueError as error:
+                log.error(f"Error formatting message {message!r} with value {value!r}: {error!s}")
+        return message.replace("%%", "%")
+
+    def _call(self, result: TestResult, match: "Match") -> None:
+        assert isinstance(result, MatchedTest)
+        if isinstance(result.test, UseTest):
+            self._use(result, match)
+        elif isinstance(result, IndirectResult):
+            self._indirect(result, match)
+        else:
+            named = isinstance(result.test, NamedTest)
+            if named:
+                self.parts.append(self._message(result, match).removeprefix("\b"))
+            self._emit(result, match, print_value=not named)
+            for child in result._message_children or ():
+                self._call(child, match)
+        if result.test.level == 0 and self.printed:
+            self.firstline = False
+
+    def _use(self, result: MatchedTest, match: "Match") -> None:
+        if result.test.message.resolve(match.context).lstrip().startswith("\b"):
+            self.need_separator = False
+        children = result._message_children or ()
+        for child in children:
+            if isinstance(child.test, NamedTest):
+                self._call(child, match)
+        if result._message_matched:
+            self._emit(result, match, print_value=False)
+            for child in children:
+                if not isinstance(child.test, NamedTest):
+                    self._call(child, match)
+
+    def _indirect(self, result: IndirectResult, match: "Match") -> None:
+        nested_matches = match._indirect_matches.get(id(result), [])
+        if not nested_matches:
+            return
+        parts = self.parts
+        self.parts = []
+        for index, nested in enumerate(nested_matches):
+            if index:
+                self.printed = False
+            self.render(nested)
+        nested_text = "".join(self.parts)
+        self.parts = parts
+        self.parts.append(self._format(self._message(result, match).removeprefix("\b"), result))
+        self.parts.append(nested_text)
+        self._emit(result, match, print_value=False)
+        for child in result._message_children or ():
+            self._call(child, match)
+
+
 class Match:
     """One level 0 test's verdict on a buffer, and the results of the subtests it reached."""
 
@@ -4925,6 +5036,8 @@ class Match:
         self.text_encoding: Optional[TextEncodingDescription] = text_encoding
         self._result_iter: Optional[Iterator[TestResult]] = iter(results)
         self._results: List[TestResult] = []
+        self._indirect_matches: Dict[int, List[Match]] = {}
+        self._indirect_results: Set[int] = set()
         self._elf_description: Optional[str] = None
 
     @property
@@ -4997,8 +5110,11 @@ class Match:
                     # the file dispatches nothing instead of reporting the empty file
                     if indirect.data:
                         indirect._is_indirect = True
+                        nested_matches = self._indirect_matches.setdefault(id(result), [])
                         for match in self.matcher.match(indirect):
+                            nested_matches.append(match)
                             self._results.extend(match)
+                            self._indirect_results.update(id(nested) for nested in match)
             except StopIteration:
                 self._result_iter = None
         return self._results[index]
@@ -5015,36 +5131,27 @@ class Match:
                 break
             i += 1
 
+    def _message_roots(self) -> Iterator[TestResult]:
+        seen: Set[int] = set()
+        for result in self._results:
+            if id(result) in self._indirect_results:
+                continue
+            root = result
+            while root.parent is not None:
+                root = root.parent
+            if result is root or id(root) not in seen:
+                seen.add(id(root))
+                yield root
+
     def _soft_magic_message(self) -> str:
-        """Concatenates the message of every test that matched.
+        """Render cached calls with libmagic's shared recursive separator state.
 
         Returns:
-            The description soft magic alone produces, which is empty when nothing printed.
+            The soft-magic description, without a trailing match separator.
         """
-        msg = ""
-        for result in self:
-            assert isinstance(result, MatchedTest)
-            m = result.test.message.resolve(self.context).lstrip()
-            if not m:
-                continue
-            elif m.startswith("\b"):
-                result_str = m[1:]
-            else:
-                result_str = m
-                if msg and not msg[-1] in " \t\r\n\v\f":
-                    msg = f"{msg} "
-            if "%u" in result_str and result.value < 0:
-                # sometimes we parsed a negative value and want to print it as an unsigned int:
-                result_str = result_str % (result.value + 2**(8 * result.length),)
-            elif "%" in result_str.replace("%%", ""):
-                result_str = printf_to_python(result_str)
-                try:
-                    result_str = result_str % (result.value,)
-                except ValueError as e:
-                    log.error(f"Error formatting message {result_str!r} with value {result.value!r}: {e!s}")
-            result_str = result_str.replace("%%", "%")
-            msg = f"{msg}{result_str}"
-        return msg
+        renderer = _MagicMessageRenderer()
+        renderer.render(self)
+        return "".join(renderer.parts).removesuffix(MATCH_SEPARATOR)
 
     def description(self) -> str:
         """Returns the magic description with native ELF identification metadata.
