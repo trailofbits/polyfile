@@ -1,5 +1,7 @@
 from enum import Enum
-from typing import List, Optional, Sequence
+from itertools import chain
+import re
+from typing import Iterable, List, Optional, Sequence, Tuple
 
 from .logger import StatusLogger
 from .polyfile import Match, Submatch, register_parser
@@ -7,6 +9,14 @@ from .magic import AbsoluteOffset, FailedTest, MagicMatcher, MagicTest, MatchedT
 
 
 log = StatusLogger("polyfile")
+
+# Every other byte is a comment. Searching for commands lets the regex engine
+# skip those bytes without an Enum lookup and a ValueError for each one.
+# Runs are capped so that a long run is consumed in chunks: the parser may
+# reject the input at its first command, and must not copy the whole run first.
+_BF_MAX_RUN = 4096
+_BF_COMMAND = re.compile(rb"[\[\],.><+\-]{1,%d}" % _BF_MAX_RUN)
+_BF_BRACKET = re.compile(rb"[\[\]]")
 
 
 class BFCommandType(Enum):
@@ -18,6 +28,19 @@ class BFCommandType(Enum):
     SHIFT_LEFT = "<"
     INCREMENT = "+"
     DECREMENT = "-"
+
+
+_BF_COMMAND_TYPES = {ord(command.value): command for command in BFCommandType}
+
+
+def _bf_tokens(data: bytes) -> Iterable[Tuple[int, int]]:
+    if type(data) is bytes:
+        # Scan whole command runs, so dense programs need only one regex
+        # match per run, even when they start with a long comment header.
+        return chain.from_iterable(enumerate(m[0], m.start()) for m in _BF_COMMAND.finditer(data))
+    # Also preserves iteration (including overrides and errors) for subclasses
+    # and other iterable inputs accepted by the original parser.
+    return enumerate(data)
 
 
 class BFCommand:
@@ -76,9 +99,13 @@ class BFProgram:
         opened = 0
         offset = 0
         commands: List[BFCommand] = []
-        for offset, c in enumerate(data):
+        native_bytes = type(data) is bytes
+        for offset, c in _bf_tokens(data):
             try:
-                command = BFCommand(BFCommandType(chr(c)), offset)
+                command_type = _BF_COMMAND_TYPES.get(c) if native_bytes else BFCommandType(chr(c))
+                if command_type is None:
+                    continue
+                command = BFCommand(command_type, offset)
             except ValueError:
                 continue
             commands.append(command)
@@ -89,8 +116,46 @@ class BFProgram:
                 if opened < 0:
                     break
         if opened != 0:
+            if opened > 0 and native_bytes:
+                # An unmatched opening bracket is reported at EOF, including
+                # trailing comments that the command iterator skipped.
+                offset = len(data) - 1
             raise BFParseError("unbalanced square brackets", offset=offset)
         return BFProgram(tuple(commands))
+
+
+def _bf_missing_commands(data: bytes) -> Optional[Tuple[int, str]]:
+    # INPUT is optional, so it is located only once a required command is
+    # known to be missing; otherwise its absence would cost a full scan.
+    positions = [(data.find(bytes((byte,))), command) for byte, command in _BF_COMMAND_TYPES.items()
+                 if command != BFCommandType.INPUT]
+    if all(offset >= 0 for offset, _ in positions):
+        return None
+    # Syntax errors take precedence over missing commands, including an
+    # unmatched opening bracket whose reported offset is the end of the input.
+    opened = 0
+    for bracket in _BF_BRACKET.finditer(data):
+        opened += 1 if bracket[0] == b"[" else -1
+        if opened < 0:
+            raise BFParseError("unbalanced square brackets", offset=bracket.start())
+    if opened:
+        raise BFParseError("unbalanced square brackets", offset=len(data) - 1)
+    positions.append((data.find(b","), BFCommandType.INPUT))
+    present = sorted((offset, command) for offset, command in positions if offset >= 0)
+    # Preserve insertion order in the original set, including INPUT. The
+    # difference's iteration order determines the failure message's order.
+    unique_commands = {command for _, command in present}
+    important_commands = frozenset(BFCommandType) - {BFCommandType.INPUT}
+    return (present[0][0] if present else 0,
+            f"missing commands {', '.join(cmd.value for cmd in important_commands - unique_commands)}")
+
+
+def _bf_match_program(matcher: "BFMatcher", data: bytes) -> BFProgram:
+    if type(matcher) is BFMatcher and type(data) is bytes:
+        missing = _bf_missing_commands(data)
+        if missing is not None:
+            raise BFParseError(missing[1], offset=missing[0])
+    return BFProgram.parse(data)
 
 
 class BFMatcher(MagicTest):
@@ -129,7 +194,7 @@ class BFMatcher(MagicTest):
 
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
         try:
-            program = BFProgram.parse(data[absolute_offset:])
+            program = _bf_match_program(self, data[absolute_offset:])
         except BFParseError as e:
             return FailedTest(self, offset=e.offset, message=str(e))
         important_commands = frozenset(BFCommandType) - {BFCommandType.INPUT}
