@@ -2228,6 +2228,11 @@ class StringLengthTest(StringWildcard):
         return f"{['>', '<'][self.test_smaller]}{repr(self.to_match)}"
 
 
+# A search whose last permitted start is at most this far in is tried start by start once the buffer
+# is much longer than that range (see `StringMatch.search`).
+SEARCH_EACH_START_LIMIT: int = 8192
+
+
 class StringMatch(StringTest):
     def __init__(self,
                  to_match: str,
@@ -2412,9 +2417,32 @@ class StringMatch(StringTest):
         Returns:
             The match, or `DataTypeMatch.INVALID` if no start offset that fits the value matches.
         """
-        m = self.pattern.search(data)
-        if (m is None or m.start() > self.last_start_offset(len(data))
-                or m.start() + self.value_length > len(data)):
+        pattern = self.pattern
+        last_start = self.last_start_offset(len(data))
+        # `pattern.search` would look for a match across the whole buffer and only then find that
+        # it starts too late. CPython cannot skip ahead to a character class, a case-insensitive
+        # letter or a lookahead (the full-word wrapper), so for those it is much cheaper to try
+        # each permitted start in turn. It does skip ahead quickly to any other case-insensitive
+        # first byte, so that pays off only on a far longer buffer; and a case-sensitive literal
+        # prefix always keeps the native search. Each attempt still sees the whole buffer, because
+        # a blank run or a word terminator can extend past the last start.
+        first = pattern.pattern[:1]
+        if first == b"[" or (pattern.flags & re.IGNORECASE and (first.isalpha() or first == b"(")):
+            bytes_per_start = 64
+        elif pattern.flags & re.IGNORECASE:
+            bytes_per_start = 1024
+        else:
+            bytes_per_start = 0
+        if (bytes_per_start and 0 <= last_start <= SEARCH_EACH_START_LIMIT
+                and len(data) > max(65536, last_start * bytes_per_start)):
+            m = None
+            for start in range(last_start + 1):
+                m = pattern.match(data, start)
+                if m is not None:
+                    break
+        else:
+            m = pattern.search(data)
+        if m is None or m.start() > last_start or m.start() + self.value_length > len(data):
             return DataTypeMatch.INVALID
         return self.post_process(bytes(m.group(0)), initial_offset=m.start())
 
