@@ -38,6 +38,11 @@ too.
 
 ## Local patches
 
+There are currently no local patches. The `c-lang` and `gentoo` definitions match the pinned
+upstream files again because RE2 evaluates their original expressions without backtracking.
+For reference comparisons, exclude PolyFile's `csv` and `json` definitions: their test types are
+implemented by PolyFile and cannot be loaded by libmagic. `gentoo` needs no exclusion.
+
 A definition file copied from `Magdir` may still carry a PolyFile-specific patch. `LOCAL_PATCHES` in
 [`tests/test_magic_defs_drift.py`](../tests/test_magic_defs_drift.py) is the list of them, and it is
 the one place that list lives. Each name maps to the issue that justifies the patch, and the test
@@ -50,9 +55,9 @@ against the submodule commit you are moving away from:
 ```bash
 # Compare each definition against the Magdir of the *currently pinned* submodule commit.
 # Anything that differs carries a local patch you must re-apply after the sync.
-rm -rf /tmp/old-magdir && mkdir /tmp/old-magdir
-git -C file archive HEAD magic/Magdir | tar -x -C /tmp/old-magdir --strip-components=2
-for f in /tmp/old-magdir/*; do
+old_magdir=$(mktemp -d)
+git -C file archive HEAD magic/Magdir | tar -x -C "$old_magdir" --strip-components=2
+for f in "$old_magdir"/*; do
   cmp -s "$f" "polyfile/magic_defs/$(basename "$f")" || echo "LOCAL PATCH: $(basename "$f")"
 done
 ```
@@ -62,13 +67,10 @@ print exactly the names in `LOCAL_PATCHES`.
 
 ### Adding an allowlist entry
 
-Patch a definition only when PolyFile cannot match upstream's text as written, such as a regex that
-a POSIX engine runs in linear time and Python's `re` does not. Then:
+Patch a definition only when PolyFile cannot match upstream's text as written. Then:
 
 1. File an issue, or use the one that sent you here, explaining what the patch changes and why
-   upstream's text does not work. `c-lang` carries the rewrite from
-   [#3411](https://github.com/trailofbits/polyfile/issues/3411), and `gentoo` the one from
-   [#3473](https://github.com/trailofbits/polyfile/issues/3473).
+   upstream's text does not work. Fix engine incompatibilities before changing a vendored definition.
 2. Add one line to `LOCAL_PATCHES`, mapping the definition's file name to that issue's URL.
 3. Run `pytest tests/test_magic_defs_drift.py`. The entry fails until the patch is actually in the
    file, which is the point: the allowlist records patches that exist, not intentions.

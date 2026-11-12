@@ -19,10 +19,7 @@ POLYFILE_OWNED: FrozenSet[str] = frozenset({
 })
 """The entries of `polyfile/magic_defs` that PolyFile writes rather than copies from upstream."""
 
-LOCAL_PATCHES: Dict[str, str] = {
-    "c-lang": "https://github.com/trailofbits/polyfile/issues/3411",
-    "gentoo": "https://github.com/trailofbits/polyfile/issues/3473",
-}
+LOCAL_PATCHES: Dict[str, str] = {}
 """Definitions that deliberately differ from upstream, each mapped to the issue that justifies it.
 
 Add an entry only alongside the issue explaining why the patch has to exist, and delete it in the
