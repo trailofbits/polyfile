@@ -33,7 +33,7 @@ def test_matches_include_the_last_command_and_physical_comment_span(
     assert result.offset == offset + len(PREAMBLE)
     assert result.length == len(body)
     assert result.relative_base == result.offset + len(body)
-    assert data[result.offset : result.relative_base] == body
+    assert data.startswith(body, result.offset)
     assert result.value == PROGRAM
 
 

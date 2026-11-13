@@ -196,15 +196,15 @@ class BFMatcher(MagicTest):
         try:
             program = _bf_match_program(self, data[absolute_offset:])
         except BFParseError as e:
-            return FailedTest(self, offset=e.offset, message=str(e))
+            return FailedTest(self, offset=absolute_offset + e.offset, message=str(e))
         important_commands = frozenset(BFCommandType) - {BFCommandType.INPUT}
         unique_commands = {c.command_type for c in program.commands}
         if program.commands:
-            first_command = program.commands[0].offset
-            last_command = program.commands[-1].offset
+            first_command = absolute_offset + program.commands[0].offset
+            last_command = absolute_offset + program.commands[-1].offset
         else:
-            first_command = 0
-            last_command = 0
+            first_command = absolute_offset
+            last_command = absolute_offset
         if important_commands - unique_commands:
             return FailedTest(self, offset=first_command,
                               message=f"missing commands "
@@ -219,11 +219,13 @@ class BFMatcher(MagicTest):
             for c1, c2 in zip(program.commands, program.commands[1:]):
                 if c2.offset == c1.offset + 1 and \
                         {c1.command_type, c2.command_type} == {BFCommandType.INCREMENT, BFCommandType.DECREMENT}:
-                    return FailedTest(self, offset=c1.offset, message="BrainFu program contains arithmetic that "
-                                                                      "cancels itself out")
-        assert 0 <= first_command <= last_command
+                    return FailedTest(
+                        self, offset=absolute_offset + c1.offset,
+                        message="BrainFu program contains arithmetic that cancels itself out",
+                    )
+        assert absolute_offset <= first_command <= last_command
         return MatchedTest(self, value=bytes(program), offset=first_command,
-                           length=last_command - first_command)
+                           length=last_command - first_command + 1)
 
 
 MagicMatcher.DEFAULT_INSTANCE.add(BFMatcher())
