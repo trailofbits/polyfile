@@ -1,5 +1,6 @@
 """Structure filtering and expansion preserve byte inspection state."""
 
+import base64
 import re
 from typing import TYPE_CHECKING
 
@@ -15,10 +16,12 @@ expect = pytest.importorskip(
 ).expect
 
 
-def tree_nodes() -> list[dict[str, object]]:
+def tree_nodes(*, source: str = "file") -> list[dict[str, object]]:
     """Build a nested tree with independent name, type, and message matches."""
-    needle = match(20, 4, name="Needle field", type="application/x-secret",
-                   analysis_message="Parser limit reached")
+    needle = match(20, 4, name="Needle field", source=source,
+                   type="application/x-secret", analysis_message="Parser limit reached")
+    if source != "file":
+        needle["decoded"] = base64.b64encode(bytes(128)).decode("ascii")
     branch = match(16, 64, name="Payload group", children=[needle])
     return [match(0, 128, name="Root", children=[
         branch, match(100, 8, name="Trailer"), match(112, 8, name="Unrelated")
@@ -66,10 +69,11 @@ def test_clearing_filter_restores_the_first_expansion_snapshot(
     expect(viewer_page.locator("#tree-filter-info")).to_have_text("5 nodes")
 
 
+@pytest.mark.parametrize("source", ["file", "decoded:0"])
 def test_expand_and_collapse_preserve_selection_source_and_byte_range(
-    viewer_page: "Page", report_factory: ReportFactory
+    viewer_page: "Page", report_factory: ReportFactory, source: str
 ) -> None:
-    open_report(viewer_page, report_factory(bytes(128), tree_nodes()))
+    open_report(viewer_page, report_factory(bytes(128), tree_nodes(source=source)))
     viewer_page.locator("#expand-all").click()
     node_label(viewer_page, "Needle field").click()
     selected_uid = node_label(viewer_page, "Needle field").get_attribute("data-uid")
@@ -80,7 +84,7 @@ def test_expand_and_collapse_preserve_selection_source_and_byte_range(
     expect(viewer_page.locator(".tree_label.manually-focused")).to_have_attribute(
         "data-uid", selected_uid
     )
-    expect(viewer_page.locator("#source")).to_have_value("file")
+    expect(viewer_page.locator("#source")).to_have_value(source)
     assert viewer_page.locator("#selection-details").text_content() == details
     assert viewer_page.locator("#hexdump .byte.manually-focused").all_text_contents() == highlights
     viewer_page.locator("#expand-all").click()

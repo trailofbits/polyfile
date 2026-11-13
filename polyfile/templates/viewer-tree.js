@@ -143,7 +143,8 @@ function createTreeTools() {
   status.id = 'tree-filter-info';
   status.setAttribute('role', 'status');
   status.setAttribute('aria-live', 'polite');
-  tools.append(label, actions, status);
+  actions.append(status);
+  tools.append(label, actions);
   return tools;
 }
 

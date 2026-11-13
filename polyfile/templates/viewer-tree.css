@@ -21,6 +21,7 @@
 .tree-tools-actions {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 6px;
 }
 .tree-tools-actions button {
@@ -29,6 +30,7 @@
   font-size: 11px;
 }
 #tree-filter-info {
+  margin-inline-start: auto;
   color: var(--muted);
   font-size: 11px;
 }
