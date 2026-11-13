@@ -104,9 +104,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 - **Breaking:** PDF, Kaitai, and HTTP AST offsets stay within their sources across nested stream
   views and decoded data. Parser debugger locations distinguish backing-file, stream, and
   analysis-source coordinates (#3665).
-- `--max-matches 0` no longer starts recursive analysis while preparing structured output.
-- Restore terminal, logging, and signal state when scanning ends or stops early, and close
-  unfinished Analyzer iterators explicitly through `Analyzer.close()`.
+- **Breaking:** `--max-matches 0` no longer starts recursive analysis while preparing structured
+  output.
+- **Breaking:** The CLI restores terminal, logging, and signal state after scanning. The new
+  `Analyzer.close()` method releases unfinished scan iterators.
 
 - Bounded file regions now limit reads before allocating data, including `read()` and
   `read(-1)`, so archive members cannot expose neighboring bytes or copy the remaining archive.
