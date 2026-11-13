@@ -1,5 +1,9 @@
 """Parser positions belong to analysis sources independently of backing stream views."""
 
+import gzip
+from io import BytesIO
+import tarfile
+
 import pytest
 
 from polyfile.fileutils import FileStream
@@ -110,3 +114,35 @@ def test_selected_pdf_view_keeps_analysis_positions_zero_based() -> None:
         (9, 49),
         (58, 52),
     ]
+
+
+@pytest.mark.parametrize(
+    ("data", "mimetype", "field_name", "field_start", "field_bytes"),
+    [
+        (PNG, "image/png", "Png", 0, PNG),
+        (b"ignored\n" + WELL_FORMED_PDF, "application/pdf", "PDFObject", 17, WELL_FORMED_PDF[9:58]),
+    ],
+)
+def test_decoded_tar_members_keep_their_analysis_source_positions(
+    data: bytes,
+    mimetype: str,
+    field_name: str,
+    field_start: int,
+    field_bytes: bytes,
+) -> None:
+    archive = BytesIO()
+    with tarfile.open(fileobj=archive, mode="w") as output:
+        member = tarfile.TarInfo("input")
+        member.size = len(data)
+        output.addfile(member, BytesIO(data))
+    matches = list(Matcher().match(gzip.compress(archive.getvalue())))
+    decoded = next(m for m in matches if m.name == "decoded_content")
+    parsed = next(m for m in matches if m.name == mimetype)
+    field = next(m for m in matches if m.name == field_name)
+    assert decoded.source != "file"
+    assert decoded.offset == 0
+    assert parsed.offset == 512
+    assert field.offset == 512 + field_start
+    assert field.source == parsed.source == decoded.source
+    assert decoded.decoded is not None
+    assert decoded.decoded[field.offset : field.offset + field.length] == field_bytes

@@ -94,6 +94,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 - **Breaking:** FileStream accepts readable binary inputs and rejects text streams and destructive
   or text path modes before opening a file. Unnamed binary buffers are supported, and public
   docstrings specify parent, view, backing-buffer, cursor, and ownership semantics (#3664).
+- **Breaking:** PDF and Kaitai offsets stay within their analysis sources across nested stream
+  views and decoded data. Parser debugger locations distinguish backing-file, stream, and
+  analysis-source coordinates (#3665).
 - Bounded file regions now limit reads before allocating data, including `read()` and
   `read(-1)`, so archive members cannot expose neighboring bytes or copy the remaining archive.
 
