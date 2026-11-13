@@ -8,8 +8,9 @@ import zlib
 from itertools import chain
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Callable, Dict, Iterable, Iterator, List, Optional, Set, Tuple
+from typing import Dict, Iterable, Iterator, List, Optional, Set, Tuple
 from unittest import TestCase
+from unittest.mock import patch
 from uuid import UUID
 
 # from polyfile import logger
@@ -17,7 +18,8 @@ import polyfile.der
 import polyfile.magic
 from polyfile.http.matcher import HTTP_11_MIME_TYPE
 from polyfile.magic import (
-    DataType, MagicMatcher, MagicTest, MAGIC_DEFS, Match, MatchContext, RegexType, SearchType,
+    DataType, MagicMatcher, MagicTest as MagicRule, MAGIC_DEFS, Match, MatchContext, RegexType,
+    SearchType,
     StringType, TestResult
 )
 
@@ -27,14 +29,14 @@ from polyfile.magic import (
 FILE_TEST_DIR: Path = Path(__file__).parent.parent / "file" / "tests"
 
 
-def every_bundled_test() -> Iterator[MagicTest]:
+def every_bundled_test() -> Iterator[MagicRule]:
     """Walks the default matcher, including the subtests nested under each level 0 test.
 
     Yields:
         Each test once, in no particular order.
     """
     seen: Set[int] = set()
-    stack: List[MagicTest] = list(MagicMatcher.DEFAULT_INSTANCE)
+    stack: List[MagicRule] = list(MagicMatcher.DEFAULT_INSTANCE)
     while stack:
         test = stack.pop()
         if id(test) in seen:
@@ -147,18 +149,12 @@ def corpus_result_matches(expected: str, matches: Set[str]) -> bool:
 
 
 class MagicTest(TestCase):
-    _old_local_date: Optional[Callable[[int], str]] = None
-
     @classmethod
     def setUpClass(cls):
         # the libmagic test corpus assumes the local time zone is UTC, so hack magic to get it to work:
-        cls._old_local_date = polyfile.magic.local_date
-        polyfile.magic.local_date = polyfile.magic.utc_date
-
-    @classmethod
-    def tearDownClass(cls):
-        # undo our UTC hack
-        polyfile.magic.local_date = cls._old_local_date
+        date_patch = patch.object(polyfile.magic, "local_date", polyfile.magic.utc_date)
+        date_patch.start()
+        cls.addClassCleanup(date_patch.stop)
 
     def test_parsing(self):
         matcher = MagicMatcher.parse(*MAGIC_DEFS)
@@ -187,6 +183,7 @@ class MagicTest(TestCase):
                                ("beguid", file_order)):
             with self.subTest(data_type=name):
                 data_type = polyfile.magic.DataType.parse(name)
+                assert isinstance(data_type, polyfile.magic.GUIDType)
                 match = data_type.match(data, polyfile.magic.UUIDWildcard())
                 self.assertEqual(expected, match.value)
                 self.assertEqual(expected, data_type.match(data, expected).value)
@@ -480,6 +477,7 @@ class MagicTest(TestCase):
             with self.subTest(data=data[:16]):
                 description = polyfile.magic.TextEncodingDescription.detect(data)
                 self.assertIsNotNone(description)
+                assert description is not None
                 self.assertEqual(expected_encoding, description.encoding)
                 mimetypes = {
                     mimetype
@@ -499,6 +497,7 @@ class MagicTest(TestCase):
         """
         description = polyfile.magic.TextEncodingDescription.detect(b"hello world" + b"\x00" * 400)
         self.assertIsNotNone(description)
+        assert description is not None
         self.assertEqual("ASCII text, with no line terminators", description.describe(""))
 
     def test_an_even_buffer_that_trims_odd_keeps_a_nul(self):
@@ -513,7 +512,9 @@ class MagicTest(TestCase):
         detect = polyfile.magic.TextEncodingDescription.detect
         self.assertIsNone(detect(b"abc\x00"))
         self.assertIsNone(detect(b"The quick brown fox.\n" + b"\x00" * 491))
-        self.assertEqual("ascii", detect(b"abc\x00\x00").encoding)
+        description = detect(b"abc\x00\x00")
+        assert description is not None
+        self.assertEqual("ascii", description.encoding)
         self.assertEqual({"data"},
                          {str(m) for m in MagicMatcher.DEFAULT_INSTANCE.match(b"abc\x00")})
         self.assertEqual({"ASCII text, with no line terminators"},
@@ -530,6 +531,7 @@ class MagicTest(TestCase):
         data = b"\xff\xfe" + "hi\n".encode("utf-16le")
         description = polyfile.magic.TextEncodingDescription.detect(data)
         self.assertIsNotNone(description)
+        assert description is not None
         self.assertEqual(1, description.lf)
         self.assertEqual("Unicode text, UTF-16, little-endian text", description.describe(""))
 
@@ -583,6 +585,7 @@ class MagicTest(TestCase):
                 self.assertEqual(expected_encoding, polyfile.magic.detect_text_encoding(data))
                 description = polyfile.magic.TextEncodingDescription.detect(data)
                 self.assertIsNotNone(description)
+                assert description is not None
                 self.assertEqual(expected_description, description.describe(""))
                 mimetypes = {
                     mimetype
@@ -1305,6 +1308,7 @@ class StringDataTypeTest(TestCase):
         shebang = StringType.parse("string/wt")
         self.assertTrue(shebang.optional_blanks)
         expected = shebang.parse_expected("#!\\ ")
+        assert isinstance(expected, polyfile.magic.StringMatch)
         self.assertTrue(expected.optional_blanks)
         for data in (b"#!/usr/bin/x", b"#! /usr/bin/x", b"#!\t/usr/bin/x", b"#!  \t/usr/bin/x"):
             self.assertTrue(shebang.match(data, expected), repr(data))
@@ -1660,8 +1664,10 @@ class StringDataTypeTest(TestCase):
         libmagic accepts the string modifiers on `pstring` (`file/src/apprentice.c:1943-2020`).
         """
         trimming = DataType.parse("pstring/BT")
+        assert isinstance(trimming, polyfile.magic.PascalStringType)
         self.assertEqual("hi", trimming.match(b"\x06  hi  ", trimming.parse_expected("x")).value)
         verbatim = DataType.parse("pstring/B")
+        assert isinstance(verbatim, polyfile.magic.PascalStringType)
         untrimmed = verbatim.match(b"\x06  hi  ", verbatim.parse_expected("x"))
         self.assertEqual("  hi  ", untrimmed.value)
 
@@ -1968,8 +1974,11 @@ class SearchTextClassificationTest(TestCase):
         adopt its flags.
         """
         flagged = DataType.parse("search/21/b")
+        assert isinstance(flagged, SearchType)
+        unflagged = DataType.parse("search/21")
+        assert isinstance(unflagged, SearchType)
         self.assertTrue(flagged.force_binary)
-        self.assertFalse(DataType.parse("search/21").force_binary)
+        self.assertFalse(unflagged.force_binary)
         self.assertIs(flagged, DataType.parse("search/b/21"))
 
     def test_a_gimp_animated_brush_is_still_detected(self):
@@ -2449,6 +2458,7 @@ class TextEncodingDescriptionTest(TestCase):
         """
         description = polyfile.magic.TextEncodingDescription.detect(data)
         self.assertIsNotNone(description, f"{data!r} was not classified as text")
+        assert description is not None
         return description.describe(message)
 
     def test_a_text_suffix_is_replaced_by_the_encoding(self):
@@ -3318,6 +3328,7 @@ class UCSTextBufferTest(TestCase):
         match = matches["XML document, Unicode text, UTF-16, little-endian text"]
         self.assertEqual("utf-16le", match.context.decoded_from)
         result = match[0]
+        assert isinstance(result, polyfile.magic.MatchedTest)
         self.assertEqual(b"<?xml", match.context.data[result.offset:result.offset + result.length])
         self.assertEqual(b"\xff\xfe<\x00?", data[result.offset:result.offset + result.length])
         explanation = match.explain(file=data, ansi_color=False)
@@ -3334,6 +3345,7 @@ class UCSTextBufferTest(TestCase):
         match = matches["XML document, ASCII text"]
         self.assertIsNone(match.context.decoded_from)
         result = match[0]
+        assert isinstance(result, polyfile.magic.MatchedTest)
         self.assertEqual(b"<?xml", data[result.offset:result.offset + result.length])
         self.assertNotIn("decoded from this file", match.explain(file=data, ansi_color=False))
 
@@ -3398,12 +3410,11 @@ class DataTypeNameTest(TestCase):
 
         DataType.parse("string")
         try:
-            polyfile.magic.StringType = ForgetfulStringType
-            polyfile.magic.TYPES_BY_NAME.pop("string/f", None)
-            with self.assertRaises(ValueError):
-                DataType.parse("string/f")
+            with patch.object(polyfile.magic, "StringType", ForgetfulStringType):
+                polyfile.magic.TYPES_BY_NAME.pop("string/f", None)
+                with self.assertRaises(ValueError):
+                    DataType.parse("string/f")
         finally:
-            polyfile.magic.StringType = StringType
             polyfile.magic.TYPES_BY_NAME.pop("string/f", None)
 
     def test_whole_word_match_survives_parsing(self):
@@ -3414,9 +3425,12 @@ class DataTypeNameTest(TestCase):
         `string` and shared the unflagged type's instance.
         """
         whole_word = DataType.parse("string/f")
+        assert isinstance(whole_word, StringType)
+        plain = DataType.parse("string")
+        assert isinstance(plain, StringType)
         self.assertIsNot(whole_word, DataType.parse("string"))
         self.assertTrue(whole_word.full_word_match)
-        self.assertFalse(DataType.parse("string").full_word_match)
+        self.assertFalse(plain.full_word_match)
         expected = whole_word.parse_expected("if")
         self.assertTrue(whole_word.match(b"if x then", expected))
         self.assertFalse(whole_word.match(b"iffy", expected))
@@ -3467,7 +3481,9 @@ class SearchFlagTableTest(TestCase):
             with self.subTest(declaration=declaration):
                 with self.assertRaises(ValueError):
                     DataType.parse(declaration)
-        self.assertEqual(1, DataType.parse("pstring/B").byte_length)
+        pascal = DataType.parse("pstring/B")
+        assert isinstance(pascal, polyfile.magic.PascalStringType)
+        self.assertEqual(1, pascal.byte_length)
 
     def test_flags_may_precede_an_undocumented_repetition_count(self):
         """Tests that `ber`'s `search/b64` is `search/64` with the binary flag set.
@@ -3476,7 +3492,9 @@ class SearchFlagTableTest(TestCase):
         as a flag, in one loop, so the two orders mean the same thing.
         """
         self.assertIs(DataType.parse("search/b64"), DataType.parse("search/64/b"))
-        self.assertEqual(64, DataType.parse("search/b64").repetitions)
+        search = DataType.parse("search/b64")
+        assert isinstance(search, SearchType)
+        self.assertEqual(64, search.repetitions)
 
 
 class PassSelectionTest(TestCase):
