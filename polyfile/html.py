@@ -166,7 +166,6 @@ def generate(file_path: str, sbud: dict[str, Any]) -> str:
         jinja2 = j2
     if TEMPLATE is None:
         environment = jinja2.Environment(loader=jinja2.FileSystemLoader(TEMPLATE_DIR))
-        environment.globals['asset'] = _template_asset
         TEMPLATE = environment.get_template('template.html')
     matches = assign_ids(sbud)
     sources = source_buffers(sbud)
@@ -174,6 +173,7 @@ def generate(file_path: str, sbud: dict[str, Any]) -> str:
     undescribed_bytes = sum(size for _, size in sources['file']['regions'])
     filename = os.path.basename(file_path)
     return TEMPLATE.render(
+        asset=_template_asset,
         filename=filename,
         matches=matches,
         source_buffers=sources,
