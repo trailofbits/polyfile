@@ -1,10 +1,11 @@
 import struct
 import zipfile
+from collections.abc import Generator
 from contextlib import contextmanager
 from io import BytesIO
 from pathlib import Path
 from tempfile import NamedTemporaryFile
-from typing import Dict, Iterator, List, Optional, Set, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 from unittest import TestCase
 
 from polyfile.analysis import AnalysisLimits
@@ -61,7 +62,7 @@ def build_zip(
 
 
 @contextmanager
-def temporary_file(data: bytes) -> Iterator[Path]:
+def temporary_file(data: bytes) -> Generator[Path, None, None]:
     """Writes bytes to a temporary file that is removed when the context exits."""
     with NamedTemporaryFile("wb", suffix=".bin", delete=False) as f:
         f.write(data)
@@ -116,6 +117,7 @@ class TestZipMatcher(TestCase):
         with temporary_file(data) as path, FileStream(str(path)) as stream:
             eocd = EndOfCentralDirectory.load(stream)
             self.assertIsNotNone(eocd)
+            assert eocd is not None
             return [
                 cd.local_file_header(stream).file_name for cd in eocd.central_directories(stream)
             ]
@@ -165,9 +167,13 @@ class TestZipMatcher(TestCase):
 
     def test_archive_offset(self):
         with temporary_file(build_zip()) as path, FileStream(str(path)) as stream:
-            self.assertEqual(0, EndOfCentralDirectory.load(stream).archive_offset)
+            eocd = EndOfCentralDirectory.load(stream)
+            assert eocd is not None
+            self.assertEqual(0, eocd.archive_offset)
         with temporary_file(build_zip(PNG)) as path, FileStream(str(path)) as stream:
-            self.assertEqual(len(PNG), EndOfCentralDirectory.load(stream).archive_offset)
+            eocd = EndOfCentralDirectory.load(stream)
+            assert eocd is not None
+            self.assertEqual(len(PNG), eocd.archive_offset)
 
     def test_members_at_offset_zero(self):
         expected = [name.encode("utf-8") for name in MEMBERS]
