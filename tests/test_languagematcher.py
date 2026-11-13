@@ -2,6 +2,7 @@ import tracemalloc
 from unittest import TestCase
 
 from polyfile.languagematcher import BFCommandType, BFMatcher, BFParseError, BFProgram
+from polyfile.magic import FailedTest, MatchedTest
 
 
 class TestBFProgram(TestCase):
@@ -96,6 +97,46 @@ class TestBFMatcher(TestCase):
         self.assertTrue(result)
         self.assertEqual(result.value, data)
         self.assertEqual(result.length, len(data) - 1)
+
+    def test_noop_validation_returns_successful_matches(self) -> None:
+        matcher = BFMatcher()
+        matcher.reject_arithmetical_noops = True
+        for data, commands in (
+            (b"[->+<]." * 4, b"[->+<]." * 4),
+            (b"[]><+comment-." * 4, b"[]><+-." * 4),
+        ):
+            with self.subTest(data=data):
+                result = matcher.test(data, 0, None)
+                self.assertIsInstance(result, MatchedTest)
+                self.assertEqual(result.value, commands)
+                self.assertEqual(result.offset, 0)
+                self.assertEqual(result.length, len(data) - 1)
+
+    def test_noop_validation_rejects_both_adjacent_cancelling_pairs(self) -> None:
+        matcher = BFMatcher()
+        matcher.reject_arithmetical_noops = True
+        for pair in (b"+-", b"-+"):
+            with self.subTest(pair=pair):
+                result = matcher.test((b"[]><" + pair + b".") * 4, 0, None)
+                self.assertIsInstance(result, FailedTest)
+                self.assertEqual(result.offset, 4)
+                self.assertEqual(
+                    result.message, "BrainFu program contains arithmetic that cancels itself out"
+                )
+
+    def test_noop_validation_preserves_earlier_validation(self) -> None:
+        matcher = BFMatcher()
+        matcher.reject_arithmetical_noops = True
+        for data, message in (
+            (b"]", "unbalanced square brackets"),
+            (b"[]", "missing commands"),
+            (b"[]><+-.", "expected at least 2 BrainFu loops but only found 1"),
+            (b"[]><+-." * 2, "expected at least 24 BrainFu commands but only found 14"),
+        ):
+            with self.subTest(data=data):
+                result = matcher.test(data, 0, None)
+                self.assertIsInstance(result, FailedTest)
+                self.assertIn(message, result.message)
 
     def test_subclass_slice_iteration_is_preserved(self):
 
