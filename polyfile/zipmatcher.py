@@ -3,15 +3,16 @@ from io import BytesIO
 from itertools import chain
 from lzma import LZMAError
 from pathlib import Path
-from typing import Iterator, Optional
+from typing import Optional
+from collections.abc import Iterator
 from zipfile import BadZipFile
 from zipfile import ZipFile as PythonZip
 
 from polyfile.compression import CHUNK_SIZE, DecodeError, OutputBuffer, match_decoded
 
-from .fileutils import ExactNamedTempfile, FileStream, Tempfile
-from .logger import StatusLogger
-from .magic import (
+from polyfile.fileutils import ExactNamedTempfile, FileStream, Tempfile
+from polyfile.logger import StatusLogger
+from polyfile.magic import (
     AbsoluteOffset,
     FailedTest,
     MagicMatcher,
@@ -20,9 +21,9 @@ from .magic import (
     TestResult,
     TestType,
 )
-from .polyfile import InvalidMatch, Match, register_parser
-from .structmatcher import PolyFileStruct
-from .structs import ByteField, Constant, Endianness, StructError, UInt16, UInt32
+from polyfile.polyfile import InvalidMatch, Match, register_parser
+from polyfile.structmatcher import PolyFileStruct
+from polyfile.structs import ByteField, Constant, Endianness, StructError, UInt16, UInt32
 
 log = StatusLogger("polyfile")
 
@@ -52,7 +53,7 @@ class RelaxedJarMatcher(MagicTest):
     def subtest_type(self) -> TestType:
         return TestType.BINARY
 
-    def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
+    def test(self, data: bytes, absolute_offset: int, parent_match: TestResult | None) -> TestResult:
         if parent_match is None:
             return FailedTest(self, offset=absolute_offset, message="file is not a ZIP")
         bstream = BytesIO(data)
@@ -76,7 +77,7 @@ MagicMatcher.DEFAULT_INSTANCE.add(RelaxedJarMatcher())
 class LocalFileHeader(PolyFileStruct):
     endianness = Endianness.LITTLE
 
-    magic: Constant[LOCAL_FILE_HEADER_SIGNATURE]
+    magic: Constant[LOCAL_FILE_HEADER_SIGNATURE]  # ty: ignore[invalid-type-form]  # Runtime DSL.
     version_needed_to_extract: UInt16
     general_purpose_bit_flag: UInt16
     compression_method: UInt16
@@ -87,15 +88,15 @@ class LocalFileHeader(PolyFileStruct):
     uncompressed_size: UInt32
     file_name_length: UInt16
     extra_field_length: UInt16
-    file_name: ByteField["file_name_length"]
-    extra_field: ByteField["extra_field_length"]
-    compressed_data: ByteField["compressed_size"]
+    file_name: ByteField["file_name_length"]  # ty: ignore[invalid-type-form]  # Runtime DSL.
+    extra_field: ByteField["extra_field_length"]  # ty: ignore[invalid-type-form]  # Runtime DSL.
+    compressed_data: ByteField["compressed_size"]  # ty: ignore[invalid-type-form]  # Runtime DSL.
 
 
 class CentralDirectory(PolyFileStruct):
     endianness = Endianness.LITTLE
 
-    magic: Constant[CENTRAL_DIRECTORY_SIGNATURE]
+    magic: Constant[CENTRAL_DIRECTORY_SIGNATURE]  # ty: ignore[invalid-type-form]  # Runtime DSL.
     version_made_by: UInt16
     version_needed_to_extract: UInt16
     general_bit_flag: UInt16
@@ -112,9 +113,9 @@ class CentralDirectory(PolyFileStruct):
     internal_file_attrs: UInt16
     external_file_attrs: UInt32
     file_header_offset: UInt32
-    file_name: ByteField["file_name_length"]
-    extra_field: ByteField["extra_field_length"]
-    file_comment: ByteField["file_comment_length"]
+    file_name: ByteField["file_name_length"]  # ty: ignore[invalid-type-form]  # Runtime DSL.
+    extra_field: ByteField["extra_field_length"]  # ty: ignore[invalid-type-form]  # Runtime DSL.
+    file_comment: ByteField["file_comment_length"]  # ty: ignore[invalid-type-form]  # Runtime DSL.
 
     archive_offset: int = 0
     """Byte offset at which the containing archive starts within the file."""
@@ -139,7 +140,7 @@ class CentralDirectory(PolyFileStruct):
 class EndOfCentralDirectory(PolyFileStruct):
     endianness = Endianness.LITTLE
 
-    magic: Constant[EOCD_SIGNATURE]
+    magic: Constant[EOCD_SIGNATURE]  # ty: ignore[invalid-type-form]  # Runtime DSL.
     disk_number: UInt16
     start_disk: UInt16
     num_records: UInt16
@@ -147,7 +148,7 @@ class EndOfCentralDirectory(PolyFileStruct):
     central_directory_bytes: UInt32
     central_directory_offset: UInt32
     comment_length: UInt16
-    comment: ByteField["comment_length"]
+    comment: ByteField["comment_length"]  # ty: ignore[invalid-type-form]  # Runtime DSL.
 
     @property
     def archive_offset(self) -> int:
@@ -211,15 +212,15 @@ class EndOfCentralDirectory(PolyFileStruct):
         elif self.total_records == 0:
             return self.central_directory_bytes == 0
         try:
-            with file_stream.save_pos() as f:
-                f.seek(archive_offset + self.central_directory_offset)
-                return f.read(len(CENTRAL_DIRECTORY_SIGNATURE)) == CENTRAL_DIRECTORY_SIGNATURE
+            with file_stream.save_pos():
+                file_stream.seek(archive_offset + self.central_directory_offset)
+                return file_stream.read(len(CENTRAL_DIRECTORY_SIGNATURE)) == CENTRAL_DIRECTORY_SIGNATURE
         except IndexError:
             # FileStream.seek rejects a position past the end of the stream
             return False
 
     @staticmethod
-    def read_at(file_stream: FileStream, offset: int) -> Optional["EndOfCentralDirectory"]:
+    def read_at(file_stream: FileStream, offset: int) -> 'EndOfCentralDirectory | None':
         """Reads a record at a byte offset.
 
         Args:
@@ -239,7 +240,7 @@ class EndOfCentralDirectory(PolyFileStruct):
     @staticmethod
     def read_before(
             file_stream: FileStream, data: bytes, base: int, search_end: int
-    ) -> Optional["EndOfCentralDirectory"]:
+    ) -> 'EndOfCentralDirectory | None':
         """Reads the last record that starts before a byte offset.
 
         Args:
@@ -326,7 +327,7 @@ class EndOfCentralDirectory(PolyFileStruct):
             yield eocd
 
     @staticmethod
-    def load(file_stream: FileStream) -> Optional["EndOfCentralDirectory"]:
+    def load(file_stream: FileStream) -> 'EndOfCentralDirectory | None':
         """Reads the end of central directory record of the last archive in the file.
 
         Args:
@@ -342,7 +343,7 @@ class EndOfCentralDirectory(PolyFileStruct):
 
 def open_archive(
         file_stream: FileStream, eocd: EndOfCentralDirectory, start: int
-) -> Optional[PythonZip]:
+) -> PythonZip | None:
     """Opens an archive with Python's zipfile module, so that its members can be decompressed.
 
     Args:
@@ -382,8 +383,8 @@ def _zip_decode_policy(fh: LocalFileHeader, parent: Match) -> tuple[str, str] | 
 
 
 def member_data(
-        zf: Optional[PythonZip], fh: LocalFileHeader, match: Match, parent: Match
-) -> Optional[bytes]:
+        zf: PythonZip | None, fh: LocalFileHeader, match: Match, parent: Match
+) -> bytes | None:
     """Decompresses the member of an archive whose compressed data a match covers.
 
     Args:
@@ -396,7 +397,10 @@ def member_data(
         The decompressed contents of the member, or None if `match` covers another field or
         the member cannot be decompressed.
     """
-    if zf is None or match.name != "compressed_data" or match.parent.parent != parent:
+    if zf is None or match.name != "compressed_data":
+        return None
+    assert match.parent is not None
+    if match.parent.parent != parent:
         return None
     policy = _zip_decode_policy(fh, parent)
     if policy is not None:
@@ -443,7 +447,7 @@ def _decoded_zip_parsers(header: LocalFileHeader, match: Match) -> set[str]:
 
 
 def _member_matches(
-    header: LocalFileHeader, archive: Optional[PythonZip], parent: Match
+    header: LocalFileHeader, archive: PythonZip | None, parent: Match
 ) -> Iterator[Match]:
     """Map one member header and its admitted decoded payload."""
     assert parent.matcher is not None
@@ -469,6 +473,7 @@ def parse_archive(
     Yields:
         A match for each record of the archive, and for the files its members contain.
     """
+    assert parent.matcher is not None
     if parent.analysis_context.remaining_members == 0:
         parent.analysis_status = "limited"
         parent.analysis_message = "ZIP member count exceeds its analysis allowance"

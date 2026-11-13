@@ -1,1 +1,1 @@
-from .polymerge import merge
+from polymerge.polymerge import merge as merge
