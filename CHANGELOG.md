@@ -97,7 +97,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 - **Breaking:** PDF, Kaitai, and HTTP AST offsets stay within their sources across nested stream
   views and decoded data. Parser debugger locations distinguish backing-file, stream, and
   analysis-source coordinates (#3665).
-- **Breaking:** Brainfuck matching returns successful results after optional arithmetic noop
+- **Breaking:** BrainFu matching returns successful results after optional arithmetic noop
   validation, while retaining cancelling-pair rejection and existing thresholds (#3668).
 - **Breaking:** JPEG2000 image previews encode PNG bytes into the data URL without raising
   `TypeError` (#3667).
