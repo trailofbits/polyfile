@@ -83,6 +83,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
   status and ordinary informational messages are suppressed. Quiet mode suppresses all logging.
   MIME descriptions move from interleaved stderr fragments into the match display. Scan scope
   and result formats are unchanged.
+
+- Modernize handwritten Python annotations for Python 3.11 with native generics, unions, and
+  subclass-preserving `Self` returns, and enforce modernization rules with Ruff (#3670).
+
+- Debugger and command callbacks, generated command subclasses, and command-line output state
+  have explicit Python 3.11 type contracts while retaining existing behavior (#3673).
+- Build helper annotations describe compiler results, parser manifests, and optional progress
+  output while retaining standard-library-only initialization (#3673).
+- PolyMerge annotations describe trace sources, structured documents, and graph nodes. JSON
+  inputs use context-managed streams after argument parsing (#3673).
+
+- Core Python annotations describe nullable analysis caches, callable parsers, generic matchers,
+  search and serialization traversal, and native decoder boundaries without changing their
+  runtime behavior (#3671).
+
 - Remove compatibility imports and runtime bases for Python versions older than 3.11.
 - **Breaking:** JSON elements identify their physical or decoded `source`; offsets stop at
   decoded-buffer boundaries. ZIP and PDF decoded content uses explicit `decoded_content` nodes.
@@ -91,6 +106,39 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
   CI tests Python 3.11 through 3.14 independently so a failing job preserves other results.
 
 ### Fixed
+
+- **Breaking:** HTTP AST spans use original UTF-8 byte positions rather than character
+  positions, including multibyte headers and bodies within nested or decoded sources (#3712).
+  Request-start cursors count bytes and reject positions inside a UTF-8 character.
+
+- **Breaking:** Nested BrainFu loops use their immediate parent's source coordinates, keeping
+  loop and command offsets aligned in bounded stream views (#3711).
+
+- **Breaking:** PDF concatenation retains nonlinear source mappings and combines the full spans
+  of contiguous instrumented operands, including when a later slice or split consumes the result
+  (#3666).
+- **Breaking:** Prefix concatenation preserves nonlinear PDF token spans. Aligned values retain
+  the existing inferred positions for native prefixes, and contiguous token prefixes retain
+  their full recorded source spans (#3666).
+- **Breaking:** Text and byte wrappers constructed from numeric PDF tokens retain conservative
+  whole-token spans instead of inferring an exact byte map from matching value lengths (#3666).
+- **Breaking:** PDF codec conversions retain exact byte mappings only when a native codec and
+  representable input establish one-to-one positions. Lossy and custom conversions keep whole
+  source spans even when their input and output lengths match. Codec registry changes during
+  conversion and custom codecs with altered metadata preserve conservative source spans (#3666).
+- **Breaking:** PDF token splitting rejects incompatible separator families, accepts contiguous
+  byte-buffer separators, and checks platform-sized integer overflow for `maxsplit` (#3666).
+- **Breaking:** PDF slices, split parts, and stripped values report bounded source spans.
+  Byte-aligned selections identify their source interval; nonlinear values without a byte map
+  retain the whole original token span. Structured selections preserve recorded element spans
+  (#3666).
+
+- **Breaking:** PDF token splitting respects finite split limits, empty separator fields, and
+  integer-index protocol arguments without losing unsplit suffixes (#3666).
+
+- **Breaking:** PDF numeric protocols return native values without conversion errors or
+  deprecation warnings. Use `as_int()` and `as_float()` to retain byte provenance on converted
+  tokens. Text encoding and stripping support built-in defaults (#3666).
 
 - **Breaking:** PolyMerge returns an empty association map for an empty PolyFile structure,
   including when the program trace contains tainted bytes (#3682).
@@ -118,7 +166,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
   output.
 - **Breaking:** The CLI restores terminal, logging, and signal state after scanning. The new
   `Analyzer.close()` method releases unfinished scan iterators.
-- **Breaking:** BrainFu matching returns successful results after optional arithmetic noop
+- **Breaking:** Brainfuck matching returns successful results after optional arithmetic noop
   validation, while retaining cancelling-pair rejection and existing thresholds (#3668).
 - **Breaking:** JPEG2000 image previews encode PNG bytes into the data URL without raising
   `TypeError` (#3667).

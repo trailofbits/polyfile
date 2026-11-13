@@ -2,130 +2,209 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>PolyFile | {{ filename|e }}</title>
     <style>
 {% include "hexdump.css" %}
+{{ asset("viewer-inspect.css")|safe }}
+{{ asset("viewer-tree.css")|safe }}
     </style>
-    <script type="text/javascript">
-        /* BEGIN JQUERY */
-{% include "jquery-3.4.1.min.js" %}
-        /* END JQUERY */
-    </script>
-    <script type="text/javascript">
-        /* BEGIN download.js */
-{% include "download.js" %}
-        /* END download.js */
-    </script>
-    <script type="text/javascript">
-{% include "hexdump.js" %}
-    </script>
 </head>
 <body>
-<input type="button" onclick="downloadFile()" value="Download File" />
-<label>Source <select id="source" onchange="selectSource(this.value)">
+<div class="app-shell">
+<header class="app-header">
+    <div class="brand" aria-label="PolyFile">
+        <span class="brand-mark" aria-hidden="true">
+            <img src="data:image/svg+xml;base64,{{ brand_logo }}" alt="">
+        </span>
+        <span class="brand-name"><span class="brand-poly">Poly</span><span
+            class="brand-file">File</span></span>
+    </div>
+    <div class="report-heading">
+        <h1 title="{{ filename|e }}">{{ filename|e }}</h1>
+        <p>Binary structure inspector</p>
+    </div>
+    <div class="header-actions">
+        <label class="field-label source-field">Source <select id="source">
 {% for source in source_buffers %}<option value="{{ source|e }}">{{ source|e }}</option>{% endfor %}
-</select></label>
-<input type="search" placeholder="search" id="search" onsearch="pageSearch()" />
-<span id="searchinfo"></span>
-<span id="searchbuttons" style="display:none;">
-    <input type="button" value="⬆" id="searchup" onclick="searchUp()" />
-    <input type="button" value="⬇" id="searchdown" onclick="searchDown()" />
-</span>
-<span style="display:none;" id="clickinfo">Double-click to jump to an address</span>
-
-<div class="coverage">
-{% if undescribed_bytes %}<span class="swatch undescribed"></span>Hatched, gray bytes are undescribed:
-    no match covers them. {{ '{:,}'.format(undescribed_bytes) }} of
-    {{ '{:,}'.format(input_bytes) }} bytes ({{ '%.1f' % undescribed_percent }}%) are
-    undescribed.{% else %}Every one of the {{ '{:,}'.format(input_bytes) }} bytes is described by
-    a match.{% endif %}
-</div>
+        </select></label>
+        <label class="field-label theme-field">Theme <select id="theme">
+            <option value="system">System</option>
+            <option value="light">Light</option><option value="dark">Dark</option>
+        </select></label>
+        <button type="button" class="primary-button download-primary" data-action="download-file">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"
+                 stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+                <path d="M12 3v12m-4-4 4 4 4-4M5 17v4h14v-4" />
+            </svg>
+            Download File
+        </button>
+    </div>
+</header>
+<section class="search-toolbar" aria-label="Search and navigation">
+    <label class="field-label search-field" for="search">Search
+        <span class="search-input">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"
+                 stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+                <circle cx="10.5" cy="10.5" r="6.5" /><path d="m16 16 4.5 4.5" />
+            </svg>
+            <input type="search" placeholder="Search bytes or structure…" id="search"
+                   autocomplete="off" spellcheck="false">
+        </span>
+    </label>
+    <label class="field-label search-mode">Mode <select id="searchmode">
+        <option value="combined">Combined</option><option value="text">Text</option>
+        <option value="hex">Hex bytes</option><option value="structure">Structure</option>
+    </select></label>
+    <label class="field-label search-scope">Scope <select id="searchscope">
+        <option value="all">All sources</option><option value="current">Current source</option>
+    </select></label>
+    <label class="case-field"><input type="checkbox" id="matchcase"> Match case</label>
+    <span id="searchinfo" role="status" aria-live="polite"></span>
+    <span id="searchbuttons" class="search-navigation" hidden>
+        <button type="button" class="icon-button" id="searchup"
+                aria-label="Previous search result" title="Previous result (Shift+Enter)">↑</button>
+        <button type="button" class="icon-button" id="searchdown"
+                aria-label="Next search result" title="Next result (Enter)">↓</button>
+    </span>
+    <form id="goto-form" class="goto-form" hidden>
+        <label class="field-label">Go to offset
+            <input id="goto" type="text" placeholder="0x0000" autocomplete="off"
+                   spellcheck="false" aria-describedby="goto-error">
+        </label>
+        <button type="submit" class="icon-button" aria-label="Go to offset">↵</button>
+        <p id="goto-error" role="status" aria-live="polite"></p>
+    </form>
+</section>
 
 {% macro render_match_name(match, first) -%}
-<a href="#" class="download" title="download" onclick='downloadFile({{ match["offset"] }}, {{ match["size"] }}, {{ match["type"]|tojson }}, {{ match.get("extension")|tojson }}, {{ match.get("source", "file")|tojson }}); return false'>⇩</a>
-{{ match['name']|e }}{% if match.get('analysis_status') %}<br />
-<small class="analysis-status">{{ match['analysis_status']|e }}: {{ match.get('analysis_message', '')|e }}</small>
-{% endif %}{% if not first %}<br />
-<small style="color: gray;">{{ match['size'] }} bytes @ {{ '0x%0X' % match['offset'] }} ({{ match.get('source', 'file')|e }})</small>
-{% endif %}{% if match['decoded'] %}<br />
-[<a href="#decoded{{ match['uid'] }}">Decode</a>]{% endif %}{% if match['img_data'] %}
-        <span class="tree_custom">
-            <img src="{{ match['img_data'] }}" style="max-width: 8em;" />
-        </span>{% endif %}
+<span class="node-name">{{ match['name']|e }}</span>
+{% if match.get('analysis_status') %}<br>
+<small class="analysis-status">{{ match['analysis_status']|e }}:
+    {{ match.get('analysis_message', '')|e }}</small>
+{% endif %}{% if not first %}<br>
+<small>{{ match['size'] }} bytes @ {{ '0x%0X' % match['offset'] }}
+    ({{ match.get('source', 'file')|e }})</small>
+{% endif %}
+{% if match.get('img_data') %}<span class="tree_custom"
+    data-image-uid="{{ match['uid'] }}"></span>{% endif %}
 {%- endmacro %}
 
 {% macro render_match(match, first) -%}
-<li>
-    {% if 'subEls' in match and match['subEls'] %}
-    <input type="checkbox" {{'checked="checked" ' if first}}id="match{{ match['uid'] }}" />
-    <label class="tree_label" for="match{{ match['uid'] }}" matchbyte="{{ match['offset'] }}" matchlength="{{ match['size'] }}" matchsource="{{ match.get('source', 'file')|e }}">
-        {{ render_match_name(match, first) }}
-    </label>
-    <ul>
-        {% for child in match['subEls'] %}
-        {{ render_match(child, False) }}
-        {% endfor %}
-    </ul>
+<li data-node-uid="{{ match['uid'] }}">
+    <div class="tree-row">
+    {% if match.get('subEls') %}
+    <button type="button" class="tree-toggle" data-action="toggle-node"
+            data-node-uid="{{ match['uid'] }}" aria-controls="children{{ match['uid'] }}"
+            aria-expanded="{{ 'true' if first else 'false' }}"
+            aria-label="{{ 'Collapse' if first else 'Expand' }} {{ match['name']|e }}">
+        {{ '▾' if first else '▸' }}
+    </button>
     {% else %}
-    <span class="tree_label" matchbyte="{{ match['offset'] }}" matchlength="{{ match['size'] }}" matchsource="{{ match.get('source', 'file')|e }}">
+    <span class="tree-toggle-spacer" aria-hidden="true"></span>
+    {% endif %}
+    <button type="button" class="tree_label" data-uid="{{ match['uid'] }}"
+            data-offset="{{ match['offset'] }}" data-size="{{ match['size'] }}"
+            data-source="{{ match.get('source', 'file')|e }}" aria-pressed="false">
         {{ render_match_name(match, first) }}
-    </span>
+    </button>
+    <button type="button" class="download" title="Download this range" data-action="download"
+            data-uid="{{ match['uid'] }}" aria-label="Download {{ match['name']|e }}">⇩</button>
+    {% if match.get('decoded') %}
+    <button type="button" class="decode-action" data-action="decode"
+            data-uid="{{ match['uid'] }}" aria-label="View decoded text for {{ match['name']|e }}">
+        Text
+    </button>
+    {% endif %}
+    </div>
+    {% if match.get('subEls') %}
+    <ul id="children{{ match['uid'] }}" {{ 'hidden' if not first }}>
+        {% for child in match['subEls'] %}{{ render_match(child, False) }}{% endfor %}
+    </ul>
     {% endif %}
 </li>
 {%- endmacro %}
 
-<ul class="tree">
-    {% for match in matches %}
-        {{ render_match(match, True) }}
-    {% endfor %}
-</ul>
-
-<div class="hexeditor">
-    <div class="scrollcapture">
-        <div class="hexdump">
-            <center id="loading" style="cursor: wait;">
-                <br />Loading…<br />
-            </center>
-            <span class="byterow">{% for i in range(address_digits) %}&nbsp;{% endfor %}</span>{% for col in range(16) %}<span class="byte" style="color:gray">{{ '%x' % col }}</span>{% endfor %}
-            <br />
-            {#
-    {% for row in range(input_bytes // 16 + 1) %}
-    <div class="byteline"><span class="byterow">{{ '%05x' % row }}</span>
-        {% for col in range(16) %}<span class="byte" byteid="{{ input_file.tell() }}">{{ input_file.read(1).hex() }}</span>{% endfor %}</div>
-    {% endfor %}
-            #}
+<main class="workspace" id="workspace" data-active-pane="bytes">
+<div class="workspace-tabs" role="tablist" aria-label="Inspector panes">
+    <button type="button" id="structure-tab" role="tab" aria-controls="structure-pane"
+            aria-selected="false" tabindex="-1">Structure</button>
+    <button type="button" id="bytes-tab" role="tab" aria-controls="bytes-pane"
+            aria-selected="true">Bytes</button>
+</div>
+<section class="pane structure-pane" id="structure-pane" aria-labelledby="structure-title">
+    <header class="pane-header">
+        <div class="pane-heading">
+            <svg class="pane-icon" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                 aria-hidden="true" stroke="currentColor" stroke-width="1.6">
+                <path d="M4 4h6v5H4zM14 15h6v5h-6zM14 4h6v5h-6zM7 9v8h7M10 6h4" />
+            </svg>
+            <h2 id="structure-title">Structure</h2>
         </div>
-        <div class="bytes">
-            <br />
-    {#{% for row in range(input_bytes // 16 + 1) %}
-            <div class="byteline">{% for col in range(16) %}<span class="byte" byteid="{{ read_unicode.tell() }}">{{ read_unicode() }}</span>{% endfor %}</div>
-    {% endfor %}#}
+        <span class="count-badge">{{ viewer_data['nodes']|length }} nodes</span>
+    </header>
+    <ul class="tree" aria-label="File structure">
+{% for match in matches %}{{ render_match(match, True) }}{% endfor %}
+    </ul>
+    <aside class="selection-details" id="selection-details" aria-label="Selection details">
+        <p>Select a structure node to inspect its byte range.</p>
+    </aside>
+</section>
+<div class="pane-separator" id="pane-separator" role="separator" tabindex="0"
+     aria-label="Resize structure pane" aria-orientation="vertical" aria-controls="structure-pane"
+     title="Drag or use the arrow keys to resize"
+     aria-valuemin="20" aria-valuemax="60" aria-valuenow="30"></div>
+<section class="pane bytes-pane" id="bytes-pane" aria-labelledby="bytes-title">
+    <header class="pane-header">
+        <div class="pane-heading">
+            <h2 id="bytes-title">Bytes</h2>
+            <span class="source-badge" id="active-source">file</span>
         </div>
+        <span class="byte-position" id="byte-position"></span>
+        <div class="segmented-control" role="group" aria-label="Byte display">
+            <button type="button" id="byte-view" aria-pressed="true"
+                    aria-controls="scrollcapture">Bytes</button>
+            <button type="button" id="text-view" aria-pressed="false"
+                    aria-controls="text-pane">Text</button>
+        </div>
+    </header>
+<div class="hexeditor" id="byte-pane">
+    <div class="scrollcapture" id="scrollcapture">
+        <div class="hexdump" id="hexdump"><span class="byte">00</span></div>
+        <div class="bytes" id="ascii"></div>
     </div>
-    <div class="scrollcontainer">
-        <div class="scrollheightproxy"></div>
+    <div class="scrollcontainer" id="scrollcontainer" tabindex="0" aria-label="Byte position">
+        <div class="scrollheightproxy" id="scrollheightproxy"></div>
     </div>
-    <div class="readablebyteswrapper">
-        <br />
-        <div class="readablebytes"></div>
+    <div class="readablebyteswrapper" id="text-pane" hidden>
+        <div class="readablebytes" id="readablebytes"></div>
     </div>
 </div>
-
-{% for match, decoded in decoded_matches() %}
-<div id="decoded{{ match['uid'] }}" class="overlay">
-    <div class="popup">
-        <h2>Decoded {{ match['name']|e }}</h2>
-		<a class="close" href="#">&times;</a>
-        <div class="content rawdump">{{ decoded|safe }}</div>
-    </div>
+<div class="coverage">
+{% if undescribed_bytes %}<span class="swatch undescribed"></span>Hatched bytes are undescribed.
+    {{ '{:,}'.format(undescribed_bytes) }} of {{ '{:,}'.format(input_bytes) }} bytes
+    ({{ '%.1f' % undescribed_percent }}%) are undescribed.{% else %}Every one of the
+    {{ '{:,}'.format(input_bytes) }} bytes is described by a match.{% endif %}
 </div>
-{% endfor %}
-
-{#
-<div class="rawdump">
-{% for i, byte in read_unicode %}<span class="byte" byteid="{{ i }}">{{ byte|safe }}</span>{% endfor %}
+</section>
+</main>
+<footer class="app-footer">
+    <p>Generated with <a href="https://github.com/trailofbits/polyfile">PolyFile</a></p>
+    <p class="footer-hint"><kbd>/</kbd> Search <span aria-hidden="true">·</span>
+        Hover to explore, click to select</p>
+</footer>
 </div>
-#}
-
+<p id="loading" role="status">Loading…</p>
+<script id="viewer-data" type="application/json">{{ viewer_data|tojson }}</script>
+<script type="module">
+{{ asset("viewer-state.js")|safe }}
+{{ asset("viewer-index.js")|safe }}
+{{ asset("viewer-render.js")|safe }}
+{{ asset("viewer-download.js")|safe }}
+{{ asset("viewer-search.js")|safe }}
+{{ asset("viewer-inspect.js")|safe }}
+{{ asset("viewer-tree.js")|safe }}
+{{ asset("viewer-shell.js")|safe }}
+</script>
 </body>
 </html>

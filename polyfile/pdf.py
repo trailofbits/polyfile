@@ -1,5 +1,23 @@
-from typing import Callable, Dict, Iterator, List, Optional, Tuple, Type, TypeVar, Union
+import codecs
+from encodings.utf_8 import decode as decode_utf8
+from typing import (
+    TYPE_CHECKING,
+    BinaryIO,
+    Generic,
+    Protocol,
+    Self,
+    SupportsIndex,
+    TypeGuard,
+    TypeVar,
+    cast,
+    overload,
+)
+from collections.abc import Callable, Iterator
+from collections.abc import Container, Iterable, Sized
+from operator import contains
 import zlib
+import operator
+import sys
 
 from pdfminer.ascii85 import ascii85decode, asciihexdecode
 from pdfminer.ccitt import ccittfaxdecode
@@ -8,32 +26,66 @@ from pdfminer.pdfparser import PDFSyntaxError
 from pdfminer.pdftypes import PDFNotImplementedError
 from pdfminer.runlength import rldecode
 from pdfminer.pdfparser import PDFParser as PDFMinerParser, PDFStream, PDFObjRef
-from pdfminer.psparser import ExtraT, PSBaseParserToken, PSKeyword, PSObject, PSLiteral, PSStackEntry, PSSyntaxError
+from pdfminer.psparser import (
+    PSBaseParserToken,
+    PSKeyword,
+    PSObject,
+    PSLiteral,
+    PSStackEntry,
+    PSSyntaxError,
+)
 from pdfminer.pdfdocument import (
-    PDFDocument, PDFXRef, KWD, PDFNoValidXRef, PSEOF, dict_value, LITERAL_XREF, LITERAL_OBJSTM, LITERAL_CATALOG,
-    DecipherCallable, PDFObjectNotFound
+    PDFDocument,
+    PDFXRef,
+    KWD,
+    PDFNoValidXRef,
+    PSEOF,
+    dict_value,
+    LITERAL_XREF,
+    LITERAL_OBJSTM,
+    LITERAL_CATALOG,
+    DecipherCallable,
+    PDFObjectNotFound,
 )
 from pdfminer.pdftypes import (
-    LIT, LITERALS_FLATE_DECODE, LITERALS_ASCIIHEX_DECODE, LITERALS_CCITTFAX_DECODE, LITERALS_RUNLENGTH_DECODE,
-    LITERAL_CRYPT, LITERALS_LZW_DECODE, LITERALS_DCT_DECODE, LITERALS_JBIG2_DECODE, LITERALS_ASCII85_DECODE,
-    int_value, apply_png_predictor
+    LIT,
+    LITERALS_FLATE_DECODE,
+    LITERALS_ASCIIHEX_DECODE,
+    LITERALS_CCITTFAX_DECODE,
+    LITERALS_RUNLENGTH_DECODE,
+    LITERAL_CRYPT,
+    LITERALS_LZW_DECODE,
+    LITERALS_DCT_DECODE,
+    LITERALS_JBIG2_DECODE,
+    LITERALS_ASCII85_DECODE,
+    int_value,
+    apply_png_predictor,
 )
 
 from polyfile.compression import match_decoded
 
-from .fileutils import FileStream
-from .fileutils import Tempfile
-from .logger import getStatusLogger
-from .magic import AbsoluteOffset, FailedTest, MagicMatcher, MagicTest, MatchedTest, TestResult, TestType
-from .polyfile import Match, Matcher, Submatch, register_parser
+from polyfile.fileutils import FileStream
+from polyfile.fileutils import Tempfile
+from polyfile.logger import getStatusLogger
+from polyfile.magic import (
+    AbsoluteOffset,
+    FailedTest,
+    MagicMatcher,
+    MagicTest,
+    MatchedTest,
+    TestResult,
+    TestType,
+)
+from polyfile.polyfile import Match, Matcher, Submatch
 
 log = getStatusLogger("PDF")
 
 
-def load_trailer(self, parser: "PDFParser") -> None:
+def load_trailer(self: PDFXRef, parser: PDFMinerParser) -> None:
+    assert isinstance(parser, PDFParser)
     try:
         (_, kwd) = parser.nexttoken()
-        assert kwd == KWD(b'trailer'), f"{kwd!s} != {KWD(b'trailer')!s}"
+        assert kwd == KWD(b"trailer"), f"{kwd!s} != {KWD(b'trailer')!s}"
         flush_before = parser.auto_flush
         try:
             # This might be a bug in pdfminer, or it's just that we are using it wrong, but we need to
@@ -45,14 +97,14 @@ def load_trailer(self, parser: "PDFParser") -> None:
     except PSEOF:
         x = parser.pop(1)
         if not x:
-            raise PDFNoValidXRef('Unexpected EOF - file corrupted')
+            raise PDFNoValidXRef("Unexpected EOF - file corrupted")
         (_, dic) = x[0]
     self.trailer.update(dict_value(dic))
-    log.debug('trailer=%r', self.trailer)
+    log.debug("trailer=%r", self.trailer)
     return
 
 
-def load_xref(self: PDFXRef, parser: "PDFParser"):
+def load_xref(self: PDFXRef, parser: PDFMinerParser) -> None:
     while True:
         try:
             (pos, line) = parser.nextline()
@@ -66,12 +118,12 @@ def load_xref(self: PDFXRef, parser: "PDFParser"):
             break
         f = line.split(b" ")
         if len(f) != 2:
-            error_msg = "Trailer not found: {!r}: line={!r}".format(parser, line)
+            error_msg = f"Trailer not found: {parser!r}: line={line!r}"
             raise PDFNoValidXRef(error_msg)
         try:
             (start, nobjs) = map(int, f)
         except ValueError:
-            error_msg = "Invalid line: {!r}: line={!r}".format(parser, line)
+            error_msg = f"Invalid line: {parser!r}: line={line!r}"
             raise PDFNoValidXRef(error_msg)
         for objid in range(start, start + nobjs):
             try:
@@ -81,13 +133,12 @@ def load_xref(self: PDFXRef, parser: "PDFParser"):
                 raise PDFNoValidXRef("Unexpected EOF - file corrupted?")
             f = line.split(b" ")
             if len(f) != 3:
-                error_msg = "Invalid XRef format: {!r}, line={!r}".format(
-                    parser, line
-                )
+                error_msg = f"Invalid XRef format: {parser!r}, line={line!r}"
                 raise PDFNoValidXRef(error_msg)
             (pos_b, genno_b, use_b) = f
             if use_b != b"n":
                 continue
+            assert isinstance(pos_b, PSBytes) and isinstance(genno_b, PSBytes)
             self.offsets[objid] = (None, pos_b.as_int(), genno_b.as_int())
     log.debug("xref objects: %r", self.offsets)
     self.load_trailer(parser)
@@ -97,34 +148,79 @@ PDFXRef.load_trailer = load_trailer
 PDFXRef.load = load_xref
 
 
+class Provenance(Protocol):
+    """The byte span carried by instrumented PDF values."""
+
+    @property
+    def pdf_offset(self) -> int: ...
+
+    @property
+    def pdf_bytes(self) -> int: ...
+
+
 class PSToken:
+    """A parsed value whose wrappers carry its original PDF byte span.
+
+    Python's numeric conversion protocols return native values without provenance. Use
+    ``as_int()`` or ``as_float()`` when the converted value must retain ``pdf_offset`` and
+    ``pdf_bytes`` for subsequent structure mapping.
+
+    These attributes describe a token's source span. Inherited numeric arithmetic can return
+    native values and does not combine the provenance of its operands.
+    """
+
     pdf_offset: int
     pdf_bytes: int
+    _pdf_byte_aligned: bool
 
-    def __new__(cls, *args, **kwargs):
+    def __new__(cls, *args, **kwargs) -> Self:
         ret = super().__new__(cls, *args)
         ret.pdf_offset = kwargs["pdf_offset"]
         ret.pdf_bytes = kwargs["pdf_bytes"]
+        if args and isinstance(args[0], PSToken):
+            source = args[0]
+            ret._pdf_byte_aligned = isinstance(source, PSSequence) and source._is_byte_aligned()
         return ret
 
     def __int__(self):
         if isinstance(self, int):
             return int.__int__(self)
-        return int(self, base=10)
+        if isinstance(self, float):
+            return float.__int__(self)
+        if isinstance(self, (str, bytes, bytearray)):
+            return int(self, base=10)
+        raise TypeError("int() can't convert non-string with explicit base")
 
     def as_int(self):
         """Converts a numeric token to an integer while retaining its byte provenance."""
         return PSInt(int(self), pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes)
 
-    def __float__(self):
+    def as_float(self) -> "PSFloat":
+        """Convert a numeric token to a float while preserving its original source span.
+
+        Returns:
+            A PSFloat carrying this token's pdf_offset and pdf_bytes.
+
+        Raises:
+            ValueError: If a text or byte token does not represent a floating-point number.
+            OverflowError: If an integer token is too large to convert to a float.
+        """
+        return PSFloat(float(self), pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes)
+
+    def __float__(self) -> float:
+        """Return a native float; use as_float() to retain PDF byte provenance.
+
+        Python's float() strips float-subclass metadata and warns when this method returns
+        a strict subclass. The explicit conversion method preserves a tagged result.
+        """
         if isinstance(self, float):
-            return self
+            return float.__float__(self)
         elif isinstance(self, int):
-            return PSFloat(int(self, base=10), pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes)
+            return float(int(self))
         elif isinstance(self, bytes):
-            return PSFloat(self.decode(), pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes)
+            return float(self.decode())
         elif isinstance(self, PSStr):
-            return PSFloat(str(self), pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes)
+            return float(str(self))
         else:
             raise NotImplementedError()
 
@@ -134,16 +230,14 @@ class PSToken:
         else:
             return PSBytes(self, pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes)
 
-    def __hex__(self):
-        return PSStr(super().__hex__(), pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes)
-
     def __str__(self):
         raise NotImplementedError()
-        # return PSStr(super().__str__(), pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes)
 
     def __repr__(self):
-        return f"{self.__class__.__name__}({super().__repr__()}, pdf_offset={self.pdf_offset!r}, "\
-               f"pdf_bytes={self.pdf_bytes!r})"
+        return (
+            f"{self.__class__.__name__}({super().__repr__()}, pdf_offset={self.pdf_offset!r}, "
+            f"pdf_bytes={self.pdf_bytes!r})"
+        )
 
 
 class PSInt(PSToken, int):
@@ -154,109 +248,265 @@ class PSInt(PSToken, int):
         return str(int(self))
 
 
-C = TypeVar("C")
+ElementT = TypeVar("ElementT")
+SequenceT = TypeVar("SequenceT")
+BaseT_co = TypeVar("BaseT_co", covariant=True)
 
 
-class PSSequence(PSToken):
-    def split(self: Type[C], sep: Optional[C] = None, maxsplit: int = -1) -> List[C]:
-        remainder = self
-        current: Optional[C] = None
-        result: List[C] = []
+class PrimitiveSequence(Protocol[BaseT_co]):
+    def __add__(self, other: object, /) -> BaseT_co: ...
+
+    @overload
+    def __getitem__(self, index: SupportsIndex, /) -> object: ...
+
+    @overload
+    def __getitem__(self, index: slice, /) -> BaseT_co: ...
+
+
+class PSSequence(PSToken, Generic[ElementT, SequenceT]):
+    """Preserve provenance while retaining the underlying builtin sequence contracts."""
+
+    if TYPE_CHECKING:
+
+        def __len__(self) -> int: ...
+
+    def _slice(self, start: int | None, stop: int | None) -> "PSSequence[ElementT, SequenceT]":
+        return cast("PSSequence[ElementT, SequenceT]", self[slice(start, stop)])
+
+    def _is_byte_aligned(self) -> bool:
+        """Whether value positions still correspond to ascending individual source bytes.
+
+        Unmarked text and byte values are initially aligned when their value length equals
+        their source span. Transformed wrappers and explicitly nonlinear derived values stay
+        nonlinear even when their lengths happen to match again. This marker is internal;
+        it does not extend the output schema or provide a per-byte source map.
+
+        Codec conversions certify alignment only for native ASCII, ASCII-only UTF-8, and
+        representable Latin-1 values. Other conversions retain the original whole span.
+        Native codec identities come from immutable dispatch entries rather than mutable
+        codec attributes or overridden indexing.
+        """
+        return (
+            isinstance(self, (str, bytes))
+            and self.pdf_bytes == len(self)
+            and bool(getattr(self, "_pdf_byte_aligned", True))
+            and not hasattr(self, "original_bytes")
+        )
+
+    def _slice_span(self, selection: slice) -> tuple[int, int, bool]:
+        """Return an enclosing aligned interval, or the original whole nonlinear span.
+
+        Structured sequences do not have a byte-per-element map. Their slices conservatively
+        retain the whole source span; integer selection separately preserves an element's own
+        recorded provenance when it is available.
+        """
+        if not self._is_byte_aligned():
+            return self.pdf_offset, self.pdf_bytes, False
+        positions = range(*selection.indices(len(self)))
+        if not positions:
+            boundary = min(max(positions.start, 0), len(self))
+            return self.pdf_offset + boundary, 0, True
+        start = min(positions[0], positions[-1])
+        end = max(positions[0], positions[-1]) + 1
+        aligned = len(positions) == 1 or positions.step == 1
+        return self.pdf_offset + start, end - start, aligned
+
+    @staticmethod
+    def _byte_separator(separator) -> bytes:
+        """Validate a contiguous buffer and expose its raw bytes as a separator."""
+        if type(separator) is bytes:
+            return separator
+        with memoryview(separator) as buffer:
+            if not buffer.c_contiguous:
+                raise BufferError("split separator must be a C-contiguous buffer")
+            return buffer.tobytes()
+
+    def split(self, sep: object | None = None, maxsplit: SupportsIndex = -1) -> list[SequenceT]:
+        """Split token values while retaining their slice wrappers.
+
+        Args:
+            sep: Separator sequence, or None to use the token's whitespace rules. Text values
+                require str separators; byte values accept contiguous buffer providers.
+            maxsplit: Maximum splits; negative values split every separator. Values supporting
+                Python's integer index protocol are accepted, like builtin str and bytes.
+
+        Returns:
+            Token slices, retaining empty fields for explicit separators and respecting maxsplit.
+
+        Raises:
+            ValueError: If the separator is empty.
+            TypeError: If the separator has an incompatible type or maxsplit is not an index.
+            OverflowError: If maxsplit exceeds the platform's index-sized integer range.
+            BufferError: If a byte separator's buffer is not C-contiguous.
+        """
+        maximum = operator.index(maxsplit)
+        if not -sys.maxsize - 1 <= maximum <= sys.maxsize:
+            raise OverflowError("Python int too large to convert to C ssize_t")
         if sep is None:
-            remainder = remainder.strip()
-        while remainder and (maxsplit < 0 or len(result) <= maxsplit):
-            c = remainder[0:1]
-            remainder = remainder[1:]
-            if sep is None:
-                if not c.strip():
-                    if current is not None:
-                        result.append(current)
-                        current = None
-                else:
-                    if current is None:
-                        current = c
-                    else:
-                        current += c
-            else:
-                if current is None:
-                    current = c
-                else:
-                    current += c
-                if current[-len(sep):] == sep:
-                    result.append(current[:-len(sep)])
-                    current = None
-        if current is not None:
-            if not result or maxsplit < 0 or len(result) <= maxsplit:
-                result.append(current)
-            else:
-                result[-1] += current
+            return self._split_whitespace(maximum)
+        if isinstance(self, str):
+            if not isinstance(sep, str):
+                raise TypeError(f"must be str or None, not {type(sep).__name__}")
+        elif isinstance(self, bytes):
+            sep = self._byte_separator(sep)
+        if not sep:
+            raise ValueError("empty separator")
+        return self._split_separator(sep, maximum)
+
+    def _split_whitespace(self, maximum: int) -> list[SequenceT]:
+        result: list[SequenceT] = []
+        start = 0
+        while start < len(self):
+            while start < len(self) and not self._slice(start, start + 1).strip():
+                start += 1
+            if start == len(self):
+                break
+            if maximum == 0:
+                result.append(self[start:])
+                break
+            stop = start
+            while stop < len(self) and self._slice(stop, stop + 1).strip():
+                stop += 1
+            result.append(self[start:stop])
+            start = stop
+            maximum -= 1
         return result
 
-    def __add__(self: Type[C], other) -> C:
-        if isinstance(other, self.__class__) and other.pdf_offset == self.pdf_offset + self.pdf_bytes:
-            return self.__class__(super().__add__(other), pdf_offset=self.pdf_offset)
-        return self.__class__(super().__add__(other), pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes)
+    def _split_separator(self, separator: object, maximum: int) -> list[SequenceT]:
+        result: list[SequenceT] = []
+        start = 0
+        offset = 0
+        width = len(cast(Sized, separator))
+        while offset <= len(self) - width and maximum != 0:
+            if self[offset : offset + width] == separator:
+                result.append(self[start:offset])
+                start = offset + width
+                offset = start
+                maximum -= 1
+            else:
+                offset += 1
+        result.append(self[start:])
+        return result
 
-    def __radd__(self: Type[C], other) -> C:
-        return self.__class__(other, pdf_offset=self.pdf_offset - len(other)) + self
+    def __add__(self, other: object) -> SequenceT:
+        value = cast(PrimitiveSequence[SequenceT], super()).__add__(other)
+        length = self.pdf_bytes
+        aligned = self._is_byte_aligned() and not other
+        if (
+            isinstance(other, self.__class__)
+            and other.pdf_offset == self.pdf_offset + self.pdf_bytes
+        ):
+            length += other.pdf_bytes
+            aligned = self._is_byte_aligned() and other._is_byte_aligned()
+        result = self.__class__(value, pdf_offset=self.pdf_offset, pdf_bytes=length)
+        result._pdf_byte_aligned = aligned
+        return cast(SequenceT, result)
 
-    def lstrip(self: Type[C], chars: bytes = b" \t\n\r") -> C:
-        ret = self
-        while ret and ret[0] in chars:
-            ret = ret[1:]
-        return ret
+    def __radd__(self, other: object) -> SequenceT:
+        base = cast(PrimitiveSequence[SequenceT], super())
+        value = cast(PrimitiveSequence[SequenceT], other) + base.__getitem__(slice(None))
+        offset, length = self.pdf_offset, self.pdf_bytes
+        aligned = False
+        if (
+            isinstance(other, self.__class__)
+            and other.pdf_offset + other.pdf_bytes == offset
+        ):
+            offset = other.pdf_offset
+            length += other.pdf_bytes
+            aligned = other._is_byte_aligned() and self._is_byte_aligned()
+        elif not isinstance(other, PSSequence) and self._is_byte_aligned():
+            offset -= len(cast(Sized, other))
+            length += len(cast(Sized, other))
+            aligned = True
+        result = self.__class__(value, pdf_offset=offset, pdf_bytes=length)
+        result._pdf_byte_aligned = aligned
+        return cast(SequenceT, result)
 
-    def rstrip(self: Type[C], chars: bytes = b" \t\n\r") -> C:
-        ret = self
-        while ret and ret[-1] in chars:
-            ret = ret[:-1]
-        return ret
+    def lstrip(self, chars: object | None = None) -> SequenceT:
+        if chars is None:
+            chars = " \t\n\r" if isinstance(self, str) else b" \t\n\r"
+        ret: PSSequence[ElementT, SequenceT] = self
+        while ret and contains(cast(Container[object], chars), ret[0]):
+            ret = ret._slice(1, None)
+        return cast(SequenceT, ret)
 
-    def strip(self: Type[C], chars: bytes = b" \t\n\r") -> C:
-        return self.lstrip(chars).rstrip(chars)
+    def rstrip(self, chars: object | None = None) -> SequenceT:
+        if chars is None:
+            chars = " \t\n\r" if isinstance(self, str) else b" \t\n\r"
+        ret: PSSequence[ElementT, SequenceT] = self
+        while ret and contains(cast(Container[object], chars), ret[-1]):
+            ret = ret._slice(None, -1)
+        return cast(SequenceT, ret)
+
+    def strip(self, chars: object | None = None) -> SequenceT:
+        stripped = cast(PSSequence[ElementT, SequenceT], self.lstrip(chars))
+        return stripped.rstrip(chars)
+
+    @overload
+    def __getitem__(self, item: SupportsIndex) -> ElementT: ...
+
+    @overload
+    def __getitem__(self, item: slice) -> SequenceT: ...
 
     def __getitem__(self, item):
+        base = cast(PrimitiveSequence[SequenceT], super())
         if isinstance(item, int):
-            value = super().__getitem__(item)
-            return make_ps_object(value, pdf_offset=self.pdf_offset+item, pdf_bytes=self.pdf_bytes-item)
+            value = base.__getitem__(item)
+            if has_provenance(value):
+                return cast(ElementT, value)
+            index = item if item >= 0 else len(self) + item
+            offset, length, aligned = self._slice_span(slice(index, index + 1))
+            result = make_ps_object(value, pdf_offset=offset, pdf_bytes=length)
+            if isinstance(result, PSSequence):
+                result._pdf_byte_aligned = aligned
+            return cast(ElementT, result)
         elif isinstance(item, slice):
-            if item.start is None:
-                start = 0
-            else:
-                start = item.start
-            if item.stop is None:
-                stop = self.pdf_bytes
-            else:
-                stop = item.stop
+            value = base.__getitem__(item)
+            offset, length, aligned = self._slice_span(item)
             try:
-                return self.__class__(
-                    super().__getitem__(item),
-                    pdf_offset=self.pdf_offset+start,
-                    pdf_bytes=self.pdf_bytes-(stop - start)
-                )
+                result = self.__class__(value, pdf_offset=offset, pdf_bytes=length)
             except ValueError:
                 if isinstance(self, PSBytes):
-                    return PSBytes(
-                        super().__getitem__(item),
-                        pdf_offset=self.pdf_offset+start,
-                        pdf_bytes=self.pdf_bytes-(stop - start)
-                    )
+                    result = PSBytes(value, pdf_offset=offset, pdf_bytes=length)
                 else:
                     raise
+            result._pdf_byte_aligned = aligned
+            return cast(SequenceT, result)
         else:
-            return super().__getitem__(item)
+            return base.__getitem__(item)
 
 
-class PSStr(PSSequence, str):
-    def encode(self, encoding: str = ..., errors: str = ...) -> bytes:
-        return PSBytes(super().encode(encoding, errors), pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes)
+class PSStr(PSSequence[str, str], str):
+    def __getitem__(self, item: SupportsIndex | slice) -> str:
+        return super().__getitem__(item)
+
+    def encode(self, encoding: str = "utf-8", errors: str = "strict") -> "PSBytes":
+        if (
+            not isinstance(encoding, str) or not isinstance(errors, str)
+            or str.__contains__(encoding, "\x00") or str.__contains__(errors, "\x00")
+        ):
+            super().encode(encoding, errors)
+        encoder: object = tuple.__getitem__(codecs.lookup(encoding), 0)
+        result = PSBytes(
+            super().encode(encoding, errors), pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes
+        )
+        ascii_encoding = encoder is codecs.ascii_encode or encoder is codecs.utf_8_encode
+        one_byte_mapping = (
+            ascii_encoding and str.isascii(self)
+            or encoder is codecs.latin_1_encode
+            and all(ord(char) <= 0xFF for char in str.__iter__(self))
+        )
+        result._pdf_byte_aligned = (
+            self._is_byte_aligned() and one_byte_mapping and len(result) == len(self)
+        )
+        return result
 
     def __str__(self):
         return str.__str__(self)
 
 
-class PSBytes(PSSequence, bytes):
-    def __new__(cls, *args, **kwargs):
+class PSBytes(PSSequence[int, bytes], bytes):
+    def __new__(cls, *args, **kwargs) -> Self:
         kwargs = dict(kwargs)
         if "pdf_bytes" not in kwargs:
             kwargs["pdf_bytes"] = len(args[0])
@@ -264,11 +514,11 @@ class PSBytes(PSSequence, bytes):
 
     def __getitem__(self, item):
         if isinstance(item, slice):
-            if item.start is None:
-                start = 0
-            else:
-                start = item.start
-            return PSBytes(super().__getitem__(item), pdf_offset=self.pdf_offset + start)
+            value = bytes.__getitem__(self, item)
+            offset, length, aligned = self._slice_span(item)
+            result = PSBytes(value, pdf_offset=offset, pdf_bytes=length)
+            result._pdf_byte_aligned = aligned
+            return result
         else:
             ret = super().__getitem__(item)
             if isinstance(ret, PSInt):
@@ -277,7 +527,24 @@ class PSBytes(PSSequence, bytes):
                 return PSInt(ret, pdf_offset=self.pdf_offset + item)
 
     def decode(self, encoding: str = "utf-8", errors: str = "strict") -> PSStr:
-        return PSStr(super().decode(encoding, errors), pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes)
+        if (
+            not isinstance(encoding, str) or not isinstance(errors, str)
+            or str.__contains__(encoding, "\x00") or str.__contains__(errors, "\x00")
+        ):
+            super().decode(encoding, errors)
+        decoder: object = tuple.__getitem__(codecs.lookup(encoding), 1)
+        result = PSStr(
+            super().decode(encoding, errors), pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes
+        )
+        ascii_decoding = decoder is codecs.ascii_decode or decoder is decode_utf8
+        one_byte_mapping = (
+            ascii_decoding and bytes.isascii(self)
+            or decoder is codecs.latin_1_decode
+        )
+        result._pdf_byte_aligned = (
+            self._is_byte_aligned() and one_byte_mapping and len(result) == len(self)
+        )
+        return result
 
 
     def __str__(self):
@@ -287,7 +554,7 @@ class PSBytes(PSSequence, bytes):
 class PDFDeciphered(PSBytes):
     original_bytes: bytes
 
-    def __new__(cls, *args, **kwargs):
+    def __new__(cls, *args, **kwargs) -> Self:
         kwargs = dict(kwargs)
         if "pdf_bytes" not in kwargs:
             kwargs["pdf_bytes"] = len(args[0])
@@ -346,11 +613,15 @@ class PDFLiteral(PSLiteral):
 
     @property
     def pdf_bytes(self) -> int:
-        return self.name.pdf_bytes + 1  # add one to account for the leading "/"
+        name = self.name
+        assert has_provenance(name)
+        return name.pdf_bytes + 1
 
     @property
     def pdf_offset(self) -> int:
-        return self.name.pdf_offset - 1
+        name = self.name
+        assert has_provenance(name)
+        return name.pdf_offset - 1
 
     def __eq__(self, other):
         return isinstance(other, PSLiteral) and self.name == other.name
@@ -376,21 +647,21 @@ class PDFKeyword(PSKeyword):
         return f"/{self.name!s}"
 
 
-PDFBaseParserToken = Union[PSFloat, PSBool, PDFLiteral, PSKeyword, PSBytes, PSInt]
+PDFBaseParserToken = PSFloat | PSBool | PDFLiteral | PSKeyword | PSBytes | PSInt
 
 
 """
 pdfminer.pdfdocument unfortunately tests for equality with these literals using `is` rather than `==`, so we must
 return their singletons from a dict rather than our instrumented PDFLiteral objects:
 """
-PROTECTED_LITERALS: Dict[str, PSLiteral] = {
+PROTECTED_LITERALS: dict[str | bytes, PSLiteral] = {
     LITERAL_OBJSTM.name: LITERAL_OBJSTM,
     LITERAL_XREF.name: LITERAL_XREF,
     LITERAL_CATALOG.name: LITERAL_CATALOG
 }
 
 
-class PDFDict(dict[PSStr, "PDFBaseParserToken | PSStr | PDFDict | PDFList"]):
+class PDFDict(dict[str, object]):
     pdf_offset: int
     pdf_bytes: int
 
@@ -409,7 +680,7 @@ class PDFDict(dict[PSStr, "PDFBaseParserToken | PSStr | PDFDict | PDFList"]):
             return PROTECTED_LITERALS[result.name]
         return result
 
-    def __new__(cls, *args, pdf_offset: int, pdf_bytes: int, **kwargs):
+    def __new__(cls, *args, pdf_offset: int, pdf_bytes: int, **kwargs) -> Self:
         ret = super().__new__(cls, *args, **kwargs)
         ret.pdf_offset = pdf_offset
         ret.pdf_bytes = pdf_bytes
@@ -420,9 +691,12 @@ class PDFDict(dict[PSStr, "PDFBaseParserToken | PSStr | PDFDict | PDFList"]):
 
 
 
-class PDFList(PSSequence, list):
+class PDFList(PSSequence[object, list[object]], list[object]):
+    def __init__(self, items: Iterable[object] = (), *, pdf_offset: int, pdf_bytes: int):
+        list.__init__(self, items)
+
     @classmethod
-    def load(cls, items) -> "PDFList":
+    def load(cls, items: Iterable[object]) -> Self:
         """Load a PDFList from an iterable of items.
 
         Handles edge cases:
@@ -435,7 +709,7 @@ class PDFList(PSSequence, list):
         Returns:
             A PDFList with calculated offset and byte length based on contained items
         """
-        if not items:
+        if not cast(object, items):
             # Empty list case: return zero-length wrapper
             return cls([], pdf_offset=0, pdf_bytes=0)
 
@@ -444,7 +718,7 @@ class PDFList(PSSequence, list):
         # Filter to items that have position information
         items_with_offsets = [
             x for x in items_list
-            if hasattr(x, "pdf_offset") and hasattr(x, "pdf_bytes")
+            if has_provenance(x)
         ]
 
         if not items_with_offsets:
@@ -465,12 +739,12 @@ class PDFList(PSSequence, list):
 
 
 
-def make_ps_object(value, pdf_offset: int, pdf_bytes: int) -> Union[PDFBaseParserToken, PSStr, PDFDict]:
+def make_ps_object(
+    value: object, pdf_offset: int, pdf_bytes: int,
+) -> PDFBaseParserToken | PSStr | PDFDict | PSObject:
     if isinstance(value, PSLiteral):
         return PDFLiteral(value.name, pdf_offset=pdf_offset, pdf_bytes=pdf_bytes)
     # Unfortunately, we can't convert PSKeywords to PDFKeywords here because pdfminer requires them to be singletons
-    # elif isinstance(value, PSKeyword):
-    #     return PDFKeyword(value.name, pdf_offset=pdf_offset, pdf_bytes=pdf_bytes)
     elif isinstance(value, PDFDict):
         value.pdf_offset = pdf_offset
         value.pdf_bytes = pdf_bytes
@@ -488,8 +762,6 @@ def make_ps_object(value, pdf_offset: int, pdf_bytes: int) -> Union[PDFBaseParse
         supertype = PSInt
     elif isinstance(value, float):
         supertype = PSFloat
-    elif isinstance(value, bool):
-        supertype = PSBool
     elif isinstance(value, bytes):
         supertype = PSBytes
     elif isinstance(value, str):
@@ -500,9 +772,9 @@ def make_ps_object(value, pdf_offset: int, pdf_bytes: int) -> Union[PDFBaseParse
 
 
 class DecodingError(bytes):
-    message: Optional[str]
+    message: str | None
 
-    def __new__(cls, *args, **kwargs):
+    def __new__(cls, *args, **kwargs) -> Self:
         kwargs = dict(kwargs)
         if "message" in kwargs:
             message = kwargs["message"]
@@ -517,9 +789,9 @@ class DecodingError(bytes):
 class PDFStreamFilter(PSBytes):
     name: str
     original_bytes: bytes
-    error: Optional[DecodingError]
+    error: DecodingError | None
 
-    def __new__(cls, *args, **kwargs):
+    def __new__(cls, *args, **kwargs) -> Self:
         kwargs = dict(kwargs)
         if "pdf_bytes" not in kwargs:
             kwargs["pdf_bytes"] = len(args[0])
@@ -548,7 +820,7 @@ class PNGPredictor(PSBytes):
     params: PDFDict
     original_bytes: bytes
 
-    def __new__(cls, *args, **kwargs):
+    def __new__(cls, *args, **kwargs) -> Self:
         kwargs = dict(kwargs)
         if "pdf_bytes" not in kwargs:
             kwargs["pdf_bytes"] = len(args[0])
@@ -583,11 +855,11 @@ class PDFObjectStream(PDFStream):
         self.genno = parent.genno
 
     @property
-    def data(self) -> Optional[PSBytes]:
+    def data(self) -> PSBytes | None:
         return self._data
 
     @data.setter
-    def data(self, new_value: Optional[bytes]):
+    def data(self, new_value: bytes | None):
         if new_value is not None and not isinstance(new_value, PSBytes):
             self._data = PSBytes(new_value, pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes)
         else:
@@ -598,6 +870,7 @@ class PDFObjectStream(PDFStream):
         if self.data is not None:
             return self.data
         elif self.rawdata is not None:
+            assert isinstance(self.rawdata, PSBytes)
             return self.rawdata
         else:
             raise ValueError(f"PDFObjectStream {self!r} does not have any data")
@@ -605,19 +878,22 @@ class PDFObjectStream(PDFStream):
     def decode(self):
         assert self.data is None \
                and self.rawdata is not None, str((self.data, self.rawdata))
+        assert isinstance(self.rawdata, PSBytes)
         data = self.rawdata
         if self.decipher:
             # Handle encryption
             assert self.objid is not None
             assert self.genno is not None
-            data = self.decipher(self.objid, self.genno, data, self.attrs)
+            deciphered = self.decipher(self.objid, self.genno, data, self.attrs)
+            assert isinstance(deciphered, PSBytes)
+            data = deciphered
         filters = self.get_filters()
         if not filters:
             self.data = data
             self.rawdata = None
             return
         for (f, params) in filters:
-            decoded: Optional[bytes] = None
+            decoded: bytes | None = None
             if f in LITERALS_FLATE_DECODE:
                 # will get errors if the document is encrypted.
                 try:
@@ -645,7 +921,7 @@ class PDFObjectStream(PDFStream):
                 # not yet..
                 raise PDFNotImplementedError('/Crypt filter is unsupported')
             else:
-                raise PDFNotImplementedError('Unsupported filter: %r' % f)
+                raise PDFNotImplementedError(f"Unsupported filter: {f!r}")
             if decoded is not None:
                 if isinstance(f, PDFLiteral):
                     name = f.name
@@ -680,7 +956,7 @@ class PDFObjectStream(PDFStream):
                         params=params
                     )
                 else:
-                    error_msg = 'Unsupported predictor: %r' % pred
+                    error_msg = f"Unsupported predictor: {pred!r}"
                     raise PDFNotImplementedError(error_msg)
         self.data = data
         self.rawdata = None
@@ -691,7 +967,7 @@ class PDFParser(PDFMinerParser):
     auto_flush: bool = False
 
     @staticmethod
-    def string_escape(data: Union[bytes, int]) -> str:
+    def string_escape(data: bytes | int) -> str:
         if not isinstance(data, int):
             return "".join(PDFParser.string_escape(d) for d in data)
         elif data == ord('\n'):
@@ -709,7 +985,7 @@ class PDFParser(PDFMinerParser):
         else:
             return f"\\x{data:02X}"
 
-    def token_context(self, token: Union[PDFBaseParserToken, PSStr], padding_bytes: int = 10) -> str:
+    def token_context(self, token: Provenance, padding_bytes: int = 10) -> str:
         pos_before = self.fp.tell()
         try:
             bytes_before = min(token.pdf_offset, padding_bytes)
@@ -727,8 +1003,8 @@ class PDFParser(PDFMinerParser):
         finally:
             self.fp.seek(pos_before)
 
-    def push(self, *objs: PSStackEntry[ExtraT]):
-        transformed = []
+    def push(self, *objs: PSStackEntry[PSKeyword | PDFStream | PDFObjRef | None]):
+        transformed: list[PSStackEntry[PSKeyword | PDFStream | PDFObjRef | None]] = []
         for obj in objs:
             if len(obj) == 2 and isinstance(obj[1], dict):
                 length = self._curtokenpos + 1 - obj[0]
@@ -740,6 +1016,7 @@ class PDFParser(PDFMinerParser):
                 transformed.append((obj[0], PDFList(obj[1], pdf_offset=obj[0], pdf_bytes=length)))
             elif len(obj) == 2 and isinstance(obj[1], PDFStream):
                 stream: PDFStream = obj[1]
+                assert stream.rawdata is not None
                 pos = obj[0]
                 transformed.append((pos, PDFObjectStream(stream, pdf_offset=pos, pdf_bytes=len(stream.rawdata))))
             elif len(obj) == 2 and isinstance(obj[1], PSObject) and not isinstance(obj[1], PDFLiteral):
@@ -748,7 +1025,9 @@ class PDFParser(PDFMinerParser):
                 length = self._curtokenpos + 1 - obj[0]
                 if isinstance(psobj, PDFObjRef):
                     orig_pos = pos
-                    pos = min(pos, psobj.objid.pdf_offset)
+                    reference_id = psobj.objid
+                    assert has_provenance(reference_id)
+                    pos = min(pos, reference_id.pdf_offset)
                     length += orig_pos - pos
                 setattr(psobj, "pdf_offset", pos) 
                 setattr(psobj, "pdf_bytes", length)
@@ -758,19 +1037,18 @@ class PDFParser(PDFMinerParser):
         return super().push(*transformed)
 
     def _add_token(self, obj: PSBaseParserToken):
-        if hasattr(obj, "pdf_offset"):
+        if has_provenance(obj):
             pos = obj.pdf_offset
         else:
             pos = self._curtokenpos
-        if hasattr(obj, "pdf_bytes"):
+        if has_provenance(obj):
             length = obj.pdf_bytes
         elif isinstance(obj, PSLiteral):
             length = len(self._curtoken)
         else:
             length = len(self._curtoken)
-        obj = make_ps_object(obj, pdf_offset=pos, pdf_bytes=length)
-        # log.info(f"\n{self.token_context(obj)}")
-        return super()._add_token(obj)
+        token = make_ps_object(obj, pdf_offset=pos, pdf_bytes=length)
+        return super()._add_token(cast(PSBaseParserToken, token))
 
     def flush(self):
         if self.auto_flush:
@@ -783,6 +1061,7 @@ class PDFParser(PDFMinerParser):
             # reference to indirect object
             try:
                 ((_, objid), _) = self.pop(2)
+                assert isinstance(objid, int)
                 obj = PDFObjRef(self.doc, objid)
                 self.push((pos, obj))
             except PSSyntaxError:
@@ -790,41 +1069,24 @@ class PDFParser(PDFMinerParser):
         else:
             super().do_keyword(pos, token)
 
-    # def nexttoken(self) -> Tuple[int, PSBaseParserToken]:
-    #     pos, token = super().nexttoken()
-    #     if isinstance(token, PSObject):
-    #         setattr(token, "pdf_offset", pos)
-    #     elif isinstance(token, int):
-    #         token = PSInt(token, pdf_offset=pos)
-    #     elif isinstance(token, bytes):
-    #         token = PSBytes(token, pdf_offset=pos)
-    #     elif isinstance(token, float):
-    #         token = PSFloat(token, pdf_offset=pos)
-    #     elif isinstance(token, bool):
-    #         token - PSBool(token, pdf_offset=pos)
-    #     else:
-    #         raise NotImplementedError(f"Add support for tokens of type {type(token)}")
-    #     return pos, token
-
-    # def do_keyword(self, pos: int, token: PSKeyword) -> None:
 
 
 class RawPDFStream:
-    def __init__(self, file_stream):
+    """Delegate binary I/O while attaching view-relative provenance to bytes read."""
+
+    def __init__(self, file_stream: FileStream):
         self._file_stream = file_stream
 
-    def read(self, *args, **kwargs):
+    def read(self, *args, **kwargs) -> PSBytes:
         offset_before = self._file_stream.tell()
         ret = self._file_stream.read(*args, **kwargs)
-        if isinstance(ret, bytes):
-            ret = PSBytes(ret, pdf_offset=offset_before)
-        return ret
+        return PSBytes(ret, pdf_offset=offset_before)
 
     def __getattr__(self, item):
         return getattr(self._file_stream, item)
 
 
-def has_provenance(obj) -> bool:
+def has_provenance(obj: object) -> TypeGuard[Provenance]:
     """Reports whether a parsed object records where it came from in the file.
 
     Every submatch PolyFile emits is positioned from the `pdf_offset` and `pdf_bytes` that this
@@ -840,7 +1102,9 @@ def has_provenance(obj) -> bool:
     return hasattr(obj, "pdf_offset") and hasattr(obj, "pdf_bytes")
 
 
-def dict_value_with_provenance(dict_obj: "PDFDict", key, value):
+def dict_value_with_provenance(
+    dict_obj: PDFDict, key: str, value: object,
+) -> Provenance | None:
     """Resolves one PDF dictionary value to something that can be positioned in the file.
 
     A value pdfminer returned as a plain list is reloaded as a `PDFList`, which recovers the
@@ -871,7 +1135,9 @@ def dict_value_with_provenance(dict_obj: "PDFDict", key, value):
     return value
 
 
-def parse_dict(obj: "PDFDict", matcher: Matcher, parent: Optional[Match], pdf_header_offset: int):
+def parse_dict(
+    obj: PDFDict, matcher: Matcher, parent: Match, pdf_header_offset: int,
+) -> Iterator[Match]:
     """Yields the submatches that map a PDF dictionary and each of its key/value pairs.
 
     Keys and values that carry no byte provenance are logged and skipped, so one unmappable
@@ -924,7 +1190,14 @@ def parse_dict(obj: "PDFDict", matcher: Matcher, parent: Optional[Match], pdf_he
         yield from parse_object(value, matcher=matcher, parent=value_match, pdf_header_offset=pdf_header_offset)
 
 
-def parse_object(obj, matcher: Matcher, parent: Optional[Match] = None, pdf_header_offset: int = 0):
+def parse_object(
+    obj: object, matcher: Matcher, parent: Match | None = None, pdf_header_offset: int = 0,
+) -> Iterator[Match]:
+    if parent is None:
+        if isinstance(obj, (PDFStreamFilter, PDFList, PDFDict, PDFDeciphered, PSBytes)) \
+                or has_provenance(obj):
+            raise ValueError("Mapping an instrumented PDF value requires a parent match")
+        return
     if isinstance(obj, PDFStreamFilter):
         filter_obj = Submatch(
             f"{obj.name!s}",
@@ -1012,7 +1285,7 @@ def parse_object(obj, matcher: Matcher, parent: Optional[Match] = None, pdf_head
 class InstrumentedPDFDocument(PDFDocument):
     def __init__(self, *args, **kwargs):
         self._xrefs = []
-        self._decipher: Optional[DecipherCallable] = None
+        self._decipher: DecipherCallable | None = None
         try:
             super().__init__(*args, **kwargs)
         except PDFSyntaxError as pse:
@@ -1021,7 +1294,7 @@ class InstrumentedPDFDocument(PDFDocument):
             # this is a malformed PDF without a trailer root object
             old_get_trailer = PDFXRef.get_trailer
 
-            def get_trailer(_):
+            def get_trailer(self: PDFXRef) -> dict[str, object]:
                 return {"Root": {}}
 
             try:
@@ -1031,28 +1304,20 @@ class InstrumentedPDFDocument(PDFDocument):
             finally:
                 PDFXRef.get_trailer = old_get_trailer
 
-    # @property
-    # def xrefs(self):
-    #     if not self._xrefs:
-    #         pass
-    #     return self._xrefs
-    #
-    # @xrefs.setter
-    # def xrefs(self, new_value):
-    #     self._xrefs = new_value
 
     @property
-    def decipher(self) -> DecipherCallable:
+    def decipher(self) -> DecipherCallable | None:
         if self._decipher is None:
             return None
         else:
             return self.do_decipher
 
     @decipher.setter
-    def decipher(self, new_value: DecipherCallable):
+    def decipher(self, new_value: DecipherCallable | None):
         self._decipher = new_value
 
-    def do_decipher(self, *args, **kwargs) -> PSBytes:
+    def do_decipher(self, *args, **kwargs) -> bytes:
+        assert self._decipher is not None
         deciphered = self._decipher(*args, **kwargs)
         if isinstance(deciphered, bytes) and not isinstance(deciphered, PSBytes):
             for arg in args:
@@ -1080,7 +1345,9 @@ class RelaxedPDFMatcher(MagicTest):
     def subtest_type(self) -> TestType:
         return TestType.BINARY
 
-    def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
+    def test(
+        self, data: bytes, absolute_offset: int, parent_match: TestResult | None,
+    ) -> TestResult:
         if b"%PDF-" in data:
             return MatchedTest(self, value=data, offset=0, length=len(data))
         return FailedTest(self, offset=0, message="data did not contain \"%PDF-\"")
@@ -1118,7 +1385,9 @@ def skip_whitespace(file_stream) -> bool:
     return found_whitespace
 
 
-def reverse_expect(file_stream, expected: Union[bytes, Callable[[int, bytes], bool]]) -> bytes:
+def reverse_expect(
+    file_stream: FileStream, expected: bytes | Callable[[int, bytes], bool],
+) -> bytes:
     skipped_bytes = 0
     start_pos = file_stream.tell()
     with file_stream.save_pos():
@@ -1147,8 +1416,11 @@ def reverse_expect(file_stream, expected: Union[bytes, Callable[[int, bytes], bo
         file_stream.seek(start_pos - skipped_bytes)
 
 
-def pdf_obj_parser(file_stream, obj, objid: int, parent: Match, pdf_header_offset: int = 0) -> Iterator[Submatch]:
-    data: Optional[bytes] = None
+def pdf_obj_parser(
+    file_stream: FileStream, obj, objid: int, parent: Match, pdf_header_offset: int = 0,
+) -> Iterator[Match]:
+    assert parent.matcher is not None
+    data: bytes | None = None
     if isinstance(obj, PDFObjectStream):
         log.status(f"Parsing PDF obj {obj.objid!s} {obj.genno!s}")
         try:
@@ -1204,7 +1476,9 @@ def pdf_obj_parser(file_stream, obj, objid: int, parent: Match, pdf_header_offse
     log.clear_status()
 
 
-def parse_trailer(trailer, matcher: Matcher, parent: Match, pdf_header_offset: int):
+def parse_trailer(
+    trailer, matcher: Matcher, parent: Match, pdf_header_offset: int,
+) -> Iterator[Match]:
     """Yields the submatches that map a cross-reference section's trailer dictionary.
 
     `InstrumentedPDFDocument` recovers from a missing `/Root` by patching `PDFXRef.get_trailer`,
@@ -1261,7 +1535,7 @@ def parse_trailer(trailer, matcher: Matcher, parent: Match, pdf_header_offset: i
         yield from parse_object(v, matcher=matcher, parent=value_match, pdf_header_offset=pdf_header_offset)
 
 
-def xref_row_span(row) -> Optional[Tuple[int, int]]:
+def xref_row_span(row: tuple[object, object, object]) -> tuple[int, int] | None:
     """Measures the bytes that one cross-reference row occupies in the file.
 
     Args:
@@ -1273,13 +1547,19 @@ def xref_row_span(row) -> Optional[Tuple[int, int]]:
     _, pos, gen_no = row
     if not has_provenance(pos) or not has_provenance(gen_no):
         return None
-    cells = [c for c in row if c is not None]
-    if not all(has_provenance(c) for c in cells):
-        return None
+    cells: list[Provenance] = []
+    for cell in row:
+        if cell is None:
+            continue
+        if not has_provenance(cell):
+            return None
+        cells.append(cell)
     return min(c.pdf_offset for c in cells), max(c.pdf_offset + c.pdf_bytes for c in cells)
 
 
-def parse_xref(xref: PDFXRef, matcher: Matcher, parent: Match, pdf_header_offset: int):
+def parse_xref(
+    xref: PDFXRef, matcher: Matcher, parent: Match, pdf_header_offset: int,
+) -> Iterator[Match]:
     """Yields the submatches that map a cross-reference table and each of its rows.
 
     `PDFXRefFallback` subclasses `PDFXRef` but reconstructs the table with its own `load`, which
@@ -1322,7 +1602,9 @@ def parse_xref(xref: PDFXRef, matcher: Matcher, parent: Match, pdf_header_offset
                                   pdf_header_offset=pdf_header_offset)
 
 
-def parse_xref_row(row, row_start: int, matcher: Matcher, parent: Match, pdf_header_offset: int):
+def parse_xref_row(
+    row, row_start: int, matcher: Matcher, parent: Match, pdf_header_offset: int,
+) -> Iterator[Match]:
     """Yields the submatches that map the cells of one cross-reference row.
 
     Args:
@@ -1365,7 +1647,7 @@ def parse_xref_row(row, row_start: int, matcher: Matcher, parent: Match, pdf_hea
 
 
 # Note: PDF parser is registered lazily in __init__.py to defer pdfminer import
-def pdf_parser(file_stream, parent: Match):
+def pdf_parser(file_stream: FileStream, parent: Match) -> Iterator[Match]:
     """Map a PDF view into its parent's physical or decoded analysis source.
 
     Args:
@@ -1400,7 +1682,8 @@ def pdf_parser(file_stream, parent: Match):
             yield from pdf_parser(f, pdf_content)
         return
     pdf_header_offset = source_base
-    parser = PDFParser(RawPDFStream(file_stream))
+    assert parent.matcher is not None
+    parser = PDFParser(cast(BinaryIO, RawPDFStream(file_stream)))
     doc = InstrumentedPDFDocument(parser)
     yielded = set()
     for xref in doc.xrefs:

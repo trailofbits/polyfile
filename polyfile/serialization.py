@@ -1,6 +1,9 @@
 from enum import Enum
 import io
 from itertools import chain
+from typing import TypeVar
+
+SerializableT = TypeVar("SerializableT")
 
 
 def write_int(i:int, stream):
@@ -102,7 +105,7 @@ def decode_frozenset(*args, **kwargs):
     return frozenset(decode_list(*args, **kwargs))
 
 
-def encode_dict(d: dict, obj_ids, stream):
+def encode_dict(d: dict[object, object], obj_ids, stream):
     for k, v in d.items():
         write_int(obj_ids[id(k)], stream)
         write_int(obj_ids[id(v)], stream)
@@ -148,7 +151,7 @@ class _CustomObject:
     pass
 
 
-def serializable(SerializableClass):
+def serializable(SerializableClass: type[SerializableT]) -> type[SerializableT]:
     if not hasattr(SerializableClass, 'serialize'):
         raise ValueError(f'Serializable class {SerializableClass} must implement the `serialize` member function')
     new_id = len(CUSTOM_ENCODINGS)
@@ -201,9 +204,7 @@ class EncodingError(RuntimeError):
 def encode(obj, stream):
     stack = [obj]
     # Object ID 0 is reserved
-    obj_ids = {
-        0: None
-    }
+    obj_ids: dict[int, int] = {}
     objs = [
         (None, None)
     ]
@@ -218,14 +219,12 @@ def encode(obj, stream):
                 encoding = EncodeTypes.CUSTOM
             else:
                 raise EncodingError(f"No encoding implemented for objects of type {type(s)}")
-        already_expanded = id(s) in obj_ids
-        if already_expanded:
-            old_id = obj_ids[id(s)]
+        old_id = obj_ids.get(id(s))
         # We add one to new_id here because obj_id zero is reserved
         new_id = len(objs)
         obj_ids[id(s)] = new_id
         objs.append((s, encoding))
-        if already_expanded:
+        if old_id is not None:
             objs[old_id] = (None, None)
             # Remove all of the dependencies, since they now need to be added after:
             # TODO: eventually do cycle detection here, and throw an error instead of livelock

@@ -1,5 +1,6 @@
 import argparse
-from contextlib import ExitStack
+from collections.abc import Sequence
+from contextlib import AbstractContextManager, ExitStack
 import json
 import logging
 import math
@@ -7,7 +8,7 @@ import re
 import signal
 import sys
 from textwrap import dedent
-from typing import ContextManager, Optional, TextIO
+from typing import Any, TextIO, cast
 
 from polyfile.analysis import AnalysisLimits
 from polyfile import html, logger
@@ -72,18 +73,18 @@ class FormatOutput:
     valid_formats = ("file", "mime", "html", "json", "sbud", "explain")
     default_format = "file"
 
-    def __init__(self, output_format: Optional[str] = None, output_path: Optional[str] = None):
+    def __init__(self, output_format: str | None = None, output_path: str | None = None):
         if output_format is None:
             output_format = self.default_format
         self.output_format: str = output_format
-        self.output_path: Optional[str] = output_path
+        self.output_path: str | None = output_path
 
     @property
     def output_to_stdout(self) -> bool:
         return self.output_path is None or self.output_path == "-"
 
     @property
-    def output_stream(self) -> ContextManager[TextIO]:
+    def output_stream(self) -> AbstractContextManager[TextIO]:
         if self.output_path is None:
             return PathOrStdout("-")
         else:
@@ -121,8 +122,11 @@ class ValidateOutput(argparse.Action):
         else:
             existing_format.output_path = path
 
-    def __call__(self, parser, args, values, option_string=None):
-        ValidateOutput.add_output(args, values)
+    def __call__(
+        self, parser: argparse.ArgumentParser, namespace: argparse.Namespace, values: object,
+        option_string: str | None = None
+    ) -> None:
+        ValidateOutput.add_output(namespace, cast(str, values))
 
 
 def reject_html_without_contents(parser: argparse.ArgumentParser, args: argparse.Namespace):
@@ -181,7 +185,7 @@ def add_analysis_limits(parser: argparse.ArgumentParser) -> None:
                              "(default: unlimited)")
 
 
-def main(argv=None):
+def main(argv: Sequence[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description='A utility to recursively map the structure of a file.',
                                      formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument('FILE', nargs='?', default='-',
@@ -342,7 +346,7 @@ viewer is built from the contents."""))
         run_analysis(args)
 
 
-def selected_matcher(filetypes: Optional[list[str]]) -> Optional[MagicMatcher]:
+def selected_matcher(filetypes: list[str] | None) -> MagicMatcher | None:
     """Select requested MIME definitions without changing scan behavior."""
     if not filetypes:
         return None
@@ -410,14 +414,14 @@ def run_analysis(args: argparse.Namespace) -> None:
 
 
 def analyze_structure(args: argparse.Namespace, analyzer: Analyzer,
-                      signals: SIGTERMHandler) -> dict:
+                      signals: SIGTERMHandler) -> dict[str, Any]:
     """Collect recursive results, retaining discoveries if scanning stops early."""
     with KeyboardInterruptHandler():
         if args.max_matches is None or args.max_matches > 0:
             for match in analyzer.matches():
                 if signals.terminated:
                     break
-                if args.max_matches is not None and len(analyzer.matches_so_far) >= args.max_matches:
+                if args.max_matches is not None and len(analyzer.matches_so_far or ()) >= args.max_matches:
                     logger.partial("Match limit reached")
                     log.info("Found %s matches; stopping early", args.max_matches)
                     break
@@ -467,7 +471,7 @@ def write_mime_output(analyzer: Analyzer, output: TextIO, signals: SIGTERMHandle
     return found
 
 
-def write_outputs(args: argparse.Namespace, analyzer: Analyzer, sbud: Optional[dict],
+def write_outputs(args: argparse.Namespace, analyzer: Analyzer, sbud: dict[str, Any] | None,
                   signals: SIGTERMHandler) -> None:
     """Render each requested output while keeping all terminal status on stderr."""
     for fmt in args.format:
@@ -484,7 +488,7 @@ def write_outputs(args: argparse.Namespace, analyzer: Analyzer, sbud: Optional[d
                 assert sbud is not None
                 with logger.suspend_status():
                     if fmt.output_format == "html":
-                        output.write(html.generate(analyzer.path, sbud))
+                        output.write(html.generate(str(analyzer.path), sbud))
                     else:
                         json.dump(sbud, output)
                     output.flush()

@@ -1,15 +1,20 @@
 import argparse
+from collections.abc import Sequence
+from importlib import import_module
 import json
 import logging
 import shutil
 import sys
+from pathlib import Path
+from typing import Protocol, cast
 
 from argparse import RawTextHelpFormatter
-from contextlib import ExitStack
-from functools import reduce
+class _Demangler(Protocol):
+    def demangle(self, name: str) -> str: ...
+
 
 try:
-    import cxxfilt
+    cxxfilt = cast(_Demangler, import_module("cxxfilt"))
 except ModuleNotFoundError:
     cxxfilt = None
 
@@ -17,10 +22,23 @@ from intervaltree import IntervalTree
 
 from polyfile import logger, __version__
 
-from .polymerge import merge, polyfile_type_graph
-from . import polytracker
+from polymerge.polymerge import merge, polyfile_type_graph
+from polymerge import polytracker
+from polymerge.cfg import DAG
+from polymerge._types import PolyfileDocument
 
 log = logger.getStatusLogger("PolyMerge")
+
+
+def _read_json(path: Path, parser: argparse.ArgumentParser) -> dict[str, object]:
+    """Reads one JSON object while preserving standard input for the `-` path."""
+    if str(path) == "-":
+        return cast(dict[str, object], json.load(sys.stdin))
+    try:
+        with open(path) as stream:
+            return cast(dict[str, object], json.load(stream))
+    except OSError as error:
+        parser.error(f"can't open {str(path)!r}: {error}")
 
 
 def parse_dataflow_ranges(dataflow):
@@ -90,14 +108,19 @@ def parse_dataflow_ranges(dataflow):
     return dataflow_from_start, dataflow_to_end, dataflow_ranges
 
 
-def main(argv=None):
+def main(argv: Sequence[str] | None = None) -> int | None:
     parser = argparse.ArgumentParser(description='''A utility to merge the JSON output of `polyfile`
 with a polytracker.json file from PolyTracker.
 
 https://github.com/trailofbits/polyfile/
 https://github.com/trailofbits/polytracker/
 ''', formatter_class=RawTextHelpFormatter)
-    parser.add_argument('FILES', type=argparse.FileType('r'), nargs='+', help='Path to the PolyFile JSON output and/or the PolyTracker JSON output. Merging will only occur if both files are provided. The `--cfg` and `--type-hierarchy` options can be used if only a single file is provided, but no merging will occur.')
+    parser.add_argument('FILES', type=Path, nargs='+', help=(
+        'Path to the PolyFile JSON output and/or the PolyTracker JSON output. '
+        'Merging will only occur if both files are provided. The `--cfg` and '
+        '`--type-hierarchy` options can be used if only a single file is provided, '
+        'but no merging will occur.'
+    ))
     parser.add_argument('--cfg', '-c', type=str, default=None, help='Optional path to output a Graphviz .dot file representing the control flow graph of the program trace')
     parser.add_argument('--cfg-pdf', '-p', type=str, default=None, help='Similar to --cfg, but renders the graph to a PDF instead of outputting the .dot source')
     parser.add_argument('--dataflow', type=str, nargs='*', help='For the CFG generation options, only render functions that participated in dataflow. `--dataflow 10` means that only functions in the dataflow related to byte 10 should be included. `--dataflow 10:30` means that only functions operating on bytes 10 through 29 should be included. The beginning or end of a range can be omitted and will default to the beginning and end of the file, respectively. Multiple `--dataflow` ranges can be specified. `--dataflow :` will render the CFG only with functions that operated on tainted bytes. Omitting `--dataflow` will produce a CFG containing all functions.')
@@ -105,7 +128,10 @@ https://github.com/trailofbits/polytracker/
     parser.add_argument('--demangle', action='store_true', help='Demangle C++ function names in the CFG (requires that PolyFile was installed with the `demangle` option, or that the `cxxfilt` Python module is installed.)')
     parser.add_argument('--type-hierarchy', '-t', type=str, default=None, help='Optional path to output a Graphviz .dot file representing the type hierarchy extracted from PolyFile')
     parser.add_argument('--type-hierarchy-pdf', '-y', type=str, default=None, help='Similar to --type-hierarchy, but renders the graph to a PDF instead of outputting the .dot source')
-    parser.add_argument('--diff', type=argparse.FileType('r'), nargs='*', help='Diff an arbitrary number of input polytracker.json files, all treated as the same class, against one or more polytracker.json provided after `--diff` arguments')
+    parser.add_argument('--diff', type=Path, nargs='*', help=(
+        'Diff an arbitrary number of input polytracker.json files, all treated as the '
+        'same class, against one or more polytracker.json provided after `--diff` arguments'
+    ))
     parser.add_argument('--debug', '-d', action='store_true', help='Print debug information')
     parser.add_argument('--quiet', '-q', action='store_true', help='Suppress all log output (overrides --debug)')
     parser.add_argument('--version', '-v',
@@ -129,32 +155,27 @@ https://github.com/trailofbits/polytracker/
         return run_merge(args, parser)
 
 
-def run_merge(args, parser):
+def run_merge(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int | None:
     """Merge the requested inputs using the invocation's logging configuration."""
 
     build_cfg = args.cfg is not None or args.cfg_pdf is not None
     built_type_hierarchy = args.type_hierarchy is not None or args.type_hierarchy_pdf is not None
 
     if args.demangle and cxxfilt is None and (build_cfg or args.diff):
-        for input_file in args.FILES + (args.diff or []):
-            input_file.close()
         parser.error(
             "The `cxxfilt` package is not installed. Reinstall PolyFile with the "
             "`demangle` option enabled."
         )
 
     if args.diff:
-        with ExitStack() as inputs:
-            for input_file in args.FILES + args.diff:
-                inputs.enter_context(input_file)
-            input_program_traces = [polytracker.parse(json.load(diff_file)) for diff_file in args.FILES]
-            program_traces_to_diff = [polytracker.parse(json.load(diff_file)) for diff_file in args.diff]
+        input_program_traces = [polytracker.parse(_read_json(path, parser)) for path in args.FILES]
+        program_traces_to_diff = [polytracker.parse(_read_json(path, parser)) for path in args.diff]
 
-        def labeler(funcname):
+        def labeler(funcname: str) -> str:
             if args.demangle:
                 if funcname.startswith('dfs$'):
                     funcname = funcname[4:]
-                return cxxfilt.demangle(funcname)
+                return cast(_Demangler, cxxfilt).demangle(funcname)
             else:
                 return funcname
 
@@ -174,6 +195,7 @@ def run_merge(args, parser):
             else:
                 second_funcs &= fnames
 
+        assert first_funcs is not None and second_funcs is not None
         print('\n'.join(second_funcs ^ first_funcs))
         exit(0)
 
@@ -184,13 +206,19 @@ def run_merge(args, parser):
             log.critical("Error: Two input files (PolyFile, PolyTracker) are required when both `--cfg` and `--type-hierarchy` options are enabled.")
             parser.exit()
         elif build_cfg:
-            polyfile_json_file = None
-            polytracker_json_file = args.FILES[0]
+            polyfile_json_path = None
+            polytracker_json_path = args.FILES[0]
         elif built_type_hierarchy:
-            polyfile_json_file = args.FILES[0]
-            polytracker_json_file = None
+            polyfile_json_path = args.FILES[0]
+            polytracker_json_path = None
         else:
-            args.FILES[0].close()
+            path = args.FILES[0]
+            if str(path) != "-":
+                try:
+                    with open(path):
+                        pass
+                except OSError as error:
+                    parser.error(f"can't open {str(path)!r}: {error}")
             return 0
     elif len(args.FILES) != 2:
         parser.print_help()
@@ -198,8 +226,8 @@ def run_merge(args, parser):
         log.critical("Error: Expected at most two input files")
         parser.exit()
     else:
-        polyfile_json_file = args.FILES[0]
-        polytracker_json_file = args.FILES[1]
+        polyfile_json_path = args.FILES[0]
+        polytracker_json_path = args.FILES[1]
 
     try:
         dataflow_from_start, dataflow_to_end, dataflow_ranges = parse_dataflow_ranges(args.dataflow)
@@ -209,14 +237,12 @@ def run_merge(args, parser):
         log.critical(f"Error: {e!s}")
         parser.exit()
 
-    if polyfile_json_file is not None:
-        polyfile_json = json.load(polyfile_json_file)
-        polyfile_json_file.close()
+    if polyfile_json_path is not None:
+        polyfile_json = cast(PolyfileDocument, _read_json(polyfile_json_path, parser))
     else:
         polyfile_json = None
-    if polytracker_json_file is not None:
-        program_trace = polytracker.parse(json.load(polytracker_json_file))
-        polytracker_json_file.close()
+    if polytracker_json_path is not None:
+        program_trace = polytracker.parse(_read_json(polytracker_json_path, parser))
     else:
         program_trace = None
 
@@ -225,15 +251,16 @@ def run_merge(args, parser):
         print(json.dumps(merged))
 
     if build_cfg:
+        assert program_trace is not None
         log.status("Reconstructing the runtime control flow graph...")
-        cfg = program_trace.cfg
+        control_flow_graph = program_trace.cfg
 
-        def labeler(f):
+        def labeler(f: polytracker.FunctionInfo) -> str:
             if args.demangle:
                 funcname = f.name
                 if funcname.startswith('dfs$'):
                     funcname = funcname[4:]
-                return cxxfilt.demangle(funcname)
+                return cast(_Demangler, cxxfilt).demangle(funcname)
             else:
                 return f.name
 
@@ -271,7 +298,7 @@ def run_merge(args, parser):
         else:
             node_filter = None
 
-        dot = cfg.to_dot(labeler=labeler, node_filter=node_filter)#(merged_json_obj=merged)
+        dot = control_flow_graph.to_dot(labeler=labeler, node_filter=node_filter)
         log.clear_status()
         if args.cfg is not None:
             with open(args.cfg, 'w') as cfg_file:
@@ -286,8 +313,9 @@ def run_merge(args, parser):
             log.info(f"Saved CFG graph PDF to {args.cfg_pdf}")
 
     if built_type_hierarchy:
+        assert polyfile_json is not None
         log.status("Building the input file type hierarchy...")
-        type_dominators: cfg.DAG = polyfile_type_graph(polyfile_json).dominator_forest
+        type_dominators: DAG = polyfile_type_graph(polyfile_json).dominator_forest
         dot = type_dominators.to_dot()
         if args.type_hierarchy:
             with open(args.type_hierarchy, 'w') as dot_file:

@@ -1,0 +1,39 @@
+.structure-pane.tree-tools-enabled {
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+}
+.tree-tools {
+  display: grid;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.tree-filter-label {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+.tree-filter-label input {
+  width: 100%;
+  font-size: 12px;
+}
+.tree-tools-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.tree-tools-actions button {
+  min-height: 28px;
+  padding: 3px 8px;
+  font-size: 11px;
+}
+#tree-filter-info {
+  margin-inline-start: auto;
+  color: var(--muted);
+  font-size: 11px;
+}
+.tree_label.tree-filter-match .node-name {
+  color: var(--accent-text);
+}

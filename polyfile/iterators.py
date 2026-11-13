@@ -1,5 +1,6 @@
 from collections.abc import Sequence as AbstractSequence, Set as AbstractSet
-from typing import TypeVar, Iterable, Iterator, List, Optional, Set, overload
+from typing import TypeVar, overload
+from collections.abc import Iterable, Iterator
 
 T = TypeVar("T")
 
@@ -7,8 +8,8 @@ T = TypeVar("T")
 class LazyIterableSequence(AbstractSequence[T]):
     """A sequence that caches values requested from a source iterator."""
     def __init__(self, source: Iterable[T]):
-        self._source_iter: Optional[Iterator[T]] = iter(source)
-        self._items: List[T] = []
+        self._source_iter: Iterator[T] | None = iter(source)
+        self._items: list[T] = []
 
     def _get_next_source_item(self) -> T:
         if self._source_iter is None:
@@ -27,9 +28,9 @@ class LazyIterableSequence(AbstractSequence[T]):
     def __getitem__(self, index: int) -> T: ...
 
     @overload
-    def __getitem__(self, index: slice) -> List[T]: ...
+    def __getitem__(self, index: slice) -> list[T]: ...
 
-    def __getitem__(self, index: int | slice) -> T | List[T]:
+    def __getitem__(self, index: int | slice) -> T | list[T]:
         if isinstance(index, slice):
             if index.step == 0:
                 raise ValueError("slice step cannot be zero")
@@ -60,7 +61,7 @@ class LazyIterableSequence(AbstractSequence[T]):
                 break
 
 
-def unique(iterator: Iterator[T], elements: Optional[Set[T]] = None) -> Iterator[T]:
+def unique(iterator: Iterable[T], elements: set[T] | None = None) -> Iterator[T]:
     """Yields all of the unique elements of the input sequence"""
     if elements is None:
         elements = set()
@@ -75,7 +76,7 @@ class LazyIterableSet(LazyIterableSequence[T], AbstractSet[T]):
     A collection that is both a set and a sequence that
     """
     def __init__(self, source: Iterable[T]):
-        self._set: Set[T] = set()
+        self._set: set[T] = set()
         super().__init__(unique(iter(source), elements=self._set))
 
     def __contains__(self, x: object) -> bool:

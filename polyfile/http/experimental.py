@@ -1,10 +1,9 @@
 from abnf.grammars.misc import load_grammar_rules
-from abnf.grammars import rfc9110, rfc3986
-from . import structured_headers
+from abnf.grammars import rfc9110
+from polyfile.http import structured_headers
 from abnf import Rule as _Rule
-from typing import List, Tuple
 
-rulelist: List[Tuple[str, _Rule]] = [
+rulelist: list[tuple[str, _Rule]] = [
     ("OWS", rfc9110.Rule("OWS")),
     ("sh-list", structured_headers.Rule("sh-list")),
     ("sh-string", structured_headers.Rule("sh-string")),
@@ -22,7 +21,7 @@ class Rule(_Rule):
     Most of these also require only simple ABNF to string together the values, so they are collected here for brevity.
     """
 
-    grammar: List[str] = [
+    grammar: list[str] | str = [
         'experimental-header = "Device-Memory:" OWS Device-Memory OWS / "Downlink:" OWS Downlink OWS / "Early-Data:" OWS Early-Data OWS / "ECT:" OWS ECT OWS / "RTT:" OWS RTT OWS / "Save-Data:" OWS Save-Data OWS / "Sec-CH-UA-Arch:" OWS Sec-CH-UA-Arch OWS / "Sec-CH-UA-Bitness:" OWS Sec-CH-UA-Bitness OWS / "Sec-CH-UA-Form-Factor:" OWS Sec-CH-UA-Form-Factor / "Sec-CH-UA-Full-Version:" OWS Sec-CH-UA-Full-Version OWS / "Sec-CH-UA-Full-Version-List:" OWS Sec-CH-UA-Full-Version-List OWS / "Sec-CH-UA-Mobile:" OWS Sec-CH-UA-Mobile OWS / "Sec-CH-UA-Model:" OWS Sec-CH-UA-Model OWS / "Sec-CH-UA-Platform:" OWS Sec-CH-UA-Platform OWS / "Sec-CH-UA-Platform-Version:" OWS Sec-CH-UA-Platform-Version OWS / "Sec-GPC:" OWS Sec-GPC OWS / "Sec-CH-Prefers-Reduced-Motion:" OWS Sec-CH-Prefers-Reduced-Motion OWS',
         # https://www.w3.org/TR/device-memory/#iana-device-memory
         'Device-Memory = "0.25" / "0.5" / "1" / "2" / "4" / "8"',

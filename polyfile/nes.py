@@ -1,8 +1,8 @@
 import base64
 from io import BytesIO
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
-from .polyfile import register_parser, InvalidMatch, Submatch
+from polyfile.polyfile import register_parser, InvalidMatch, Submatch
 
 if TYPE_CHECKING:
     from PIL import Image as PILImage
@@ -140,9 +140,9 @@ def chr_values(chr_bytes: bytes):
                       ((((chr_bytes[offset + y + 8] >> shift) & 0b1)) << 1) | ((chr_bytes[offset + y] >> shift) & 0b1)
 
 
-def render_chr(chr_bytes: bytes) -> "PILImage":
+def render_chr(chr_bytes: bytes) -> "PILImage.Image":
     Image, ImageDraw = _get_pil()
-    img = Image.new(mode='L', size=(8*16, 8*32))
+    img = cast("PILImage.Image", Image.new(mode='L', size=(8*16, 8*32)))
     d = ImageDraw.Draw(img)
     for x, y, pixel in chr_values(chr_bytes):
         if pixel == 1:

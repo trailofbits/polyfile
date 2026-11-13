@@ -1,15 +1,17 @@
 import importlib
 from enum import StrEnum
 from string import hexdigits, whitespace
+from types import ModuleType
 
 from abnf.grammars.misc import load_grammar_rules
 
-from ..logger import getStatusLogger
+from polyfile.logger import getStatusLogger
 
 log = getStatusLogger("HTTP/1.1")
 
 # loading the following modules is _really_ slow, so log its status!
-for i, modname in enumerate(log.range((
+_grammars: dict[str, ModuleType] = {}
+for modname in log.range((
     "cors",
     "rfc9110",
     "rfc5322",
@@ -19,35 +21,23 @@ for i, modname in enumerate(log.range((
     "rfc7230",
     "rfc9111",
     "rfc6265",
-), desc="Importing HTTP/1.1", unit=" grammars")):
+), desc="Importing HTTP/1.1", unit=" grammars"):
     mod = importlib.import_module(f".{modname}", package="abnf.grammars")
-    if i == 0:
-        cors = mod
-    elif i == 1:
-        rfc9110 = mod
-    elif i == 2:
-        rfc5322 = mod
-    elif i == 3:
-        rfc3986 = mod
-    elif i == 4:
-        rfc7230 = mod
-    elif i == 5:
-        rfc9111 = mod
-    elif i == 6:
-        rfc6265 = mod
-    else:
-        raise NotImplementedError()
+    _grammars[modname] = mod
     log.debug(f"Loaded grammar for {modname}")
-del mod
-del modname
-del i
+cors = _grammars["cors"]
+rfc9110 = _grammars["rfc9110"]
+rfc5322 = _grammars["rfc5322"]
+rfc3986 = _grammars["rfc3986"]
+rfc7230 = _grammars["rfc7230"]
+rfc9111 = _grammars["rfc9111"]
+rfc6265 = _grammars["rfc6265"]
 log.clear_status()
 
 from abnf import Rule, parser, Node
 
-from . import defacto, deprecated, experimental, structured_headers
+from polyfile.http import defacto, deprecated, experimental, structured_headers
 
-from typing import Dict, List, Optional, Set, Tuple
 
 # The overall goal of this parser is to take in utf-8 textual representations
 # of http requests, and make sense of the headers, then make sense of the
@@ -61,7 +51,7 @@ from typing import Dict, List, Optional, Set, Tuple
 # Response headers are not included here, since this parser is intended to parse valid http/1.1 requests. If the header can be used in either a request or a response, or only in a request, it should/can be included here.
 # NB: the rfc9110.py class doesn't include all needed rules other specs and is missing HTTP headers used in practice but not defined in spec.
 # NB: NodeVisitor#visit() replaces all dashes here with underscores.
-request_rulelist: List[Tuple[str, Rule]] = [
+request_rulelist: list[tuple[str, Rule]] = [
     ("BWS", rfc9110.Rule("BWS")),
     ("OWS", rfc9110.Rule("OWS")),
     ("RWS", rfc9110.Rule("RWS")),
@@ -140,7 +130,7 @@ class Http11RequestGrammar(Rule):
        - Structured Header rules (even fancier than RFC 7230): https://datatracker.ietf.org/doc/html/rfc8941
     """
 
-    grammar: List[str] = [
+    grammar: list[str] | str = [
         # https://www.rfc-editor.org/rfc/rfc7230 defines start-line and request.
         "request = start-line 1*( header CR LF ) CR LF [ body ]",
         'request-path = absolute-path *( "?" query ) / "*"',
@@ -225,23 +215,23 @@ class HttpVisitor(parser.NodeVisitor):
     request_target: str
 
     # unprocessed headers (global)
-    headers: Dict[str, str] = None
+    headers: dict[str, str] | None = None
 
     # headers (specific)
-    content_type: Optional[str] = None
-    content_length: Optional[int] = None
-    host: Optional[str] = None
+    content_type: str | None = None
+    content_length: int | None = None
+    host: str | None = None
 
     # body
-    body_raw: str = None
-    body_parsed: List[str] = None
+    body_raw: str | None = None
+    body_parsed: list[str] | None = None
 
     def __init__(self):
         super().__init__()
 
     def _remove_header(self, name: str) -> None:
         """Required by RFC to support Transfer-Encoding and TE headers. Once the transfer encoding no longer applies to the message, it must be removed."""
-        if name in self.headers:
+        if self.headers is not None and name in self.headers:
             self.headers.pop(name)
 
     def visit_request(self, node: Node):
@@ -338,6 +328,7 @@ class HttpVisitor(parser.NodeVisitor):
                 # Append octets up to content-length if the body is not chunked encoding; the rest are still in the AST and may refer to various kinds of trailer(s) but should be ignored for purposes of content-length based body processing.
                 if octet_counter > 0 and child.name == "OCTET":
                     octet_counter -= 1
+                    assert self.body_parsed is not None
                     self.body_parsed.append(child.value)
 
                 self.visit(child)
@@ -403,7 +394,7 @@ class HttpVisitor(parser.NodeVisitor):
         """
 
         if hasattr(self, "trailer"):
-            disallowed_fields: Set = {
+            disallowed_fields: set[str] = {
                 "Transfer-Encoding",
                 "Content-Length",
                 "Host",
@@ -418,8 +409,8 @@ class HttpVisitor(parser.NodeVisitor):
                 "Trailer",
             }
 
-            trailer_field_names: Set = set(self.trailer.split(","))
-            allowed_trailer_field_names: Set = trailer_field_names - disallowed_fields
+            trailer_field_names: set[str] = set(self.trailer.split(","))
+            allowed_trailer_field_names: set[str] = trailer_field_names - disallowed_fields
             trailer_headers = trailer_data.split("\r\n")
 
             for header in trailer_headers:
@@ -435,10 +426,11 @@ class HttpVisitor(parser.NodeVisitor):
                     # its corresponding header field definition explicitly
                     # permits and instructs how the trailer field value can be
                     # safely merged.
+                    assert self.headers is not None
                     self.headers[name] = value.strip(whitespace)
                     self.__setattr__(name.lower(), value)
 
-    def _accumulate_chunks(self, node_children: List[Node]) -> int:
+    def _accumulate_chunks(self, node_children: list[Node]) -> int:
         """Decode complete chunks and retain available bytes from an incomplete final chunk.
 
         Args:
@@ -462,6 +454,7 @@ class HttpVisitor(parser.NodeVisitor):
                 self._accumulate_trailers(body[start:])
                 return length
             end = min(start + size, len(body))
+            assert self.body_parsed is not None
             self.body_parsed.extend(body[start:end])
             length += end - start
             if end < start + size or body[end:end + 2] != "\r\n":

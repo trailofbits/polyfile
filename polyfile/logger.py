@@ -424,7 +424,7 @@ def logging_context(
             root.setLevel(previous_level)
 
 
-class StatusLogger(logging.LoggerAdapter):
+class StatusLogger(logging.LoggerAdapter[logging.Logger]):
     """Add status and trace helpers to a standard Python logger."""
 
     def __init__(self, name: str):
