@@ -77,6 +77,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 
 ### Changed
 
+- Remove compatibility imports and runtime bases for Python versions older than 3.11.
+
 - **Breaking:** JSON elements identify their physical or decoded `source`; offsets stop at
   decoded-buffer boundaries. ZIP and PDF decoded content uses explicit `decoded_content` nodes.
   HTML highlighting, downloads, and coverage use the selected source, and decoded text is escaped.
@@ -85,6 +87,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
   CI tests Python 3.11 through 3.14 independently so a failing job preserves other results.
 
 ### Fixed
+
+- **Breaking:** Loading a serialized multi-sequence search returns its result without printing
+  or terminating the process, and rejects serialized values that are not search roots.
 
 - **Breaking:** FileStream seeks use bounded view-relative positions and return the new
   position. Negative view origins and lengths are rejected, and past-EOF origins consistently
@@ -97,6 +102,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 - **Breaking:** PDF, Kaitai, and HTTP AST offsets stay within their sources across nested stream
   views and decoded data. Parser debugger locations distinguish backing-file, stream, and
   analysis-source coordinates (#3665).
+- **Breaking:** BrainFu matching returns successful results after optional arithmetic noop
+  validation, while retaining cancelling-pair rejection and existing thresholds (#3668).
+- **Breaking:** JPEG2000 image previews encode PNG bytes into the data URL without raising
+  `TypeError` (#3667).
+- **Breaking:** HTTP chunk decoding accepts full hexadecimal sizes and extensions, counts each
+  decoded byte once, and retains available prefixes with their actual length on incomplete input.
+  Trailer fields stop at the terminating empty line, so subsequent pipelined request headers
+  cannot populate or overwrite trailer metadata (#3674).
+
 - Bounded file regions now limit reads before allocating data, including `read()` and
   `read(-1)`, so archive members cannot expose neighboring bytes or copy the remaining archive.
 

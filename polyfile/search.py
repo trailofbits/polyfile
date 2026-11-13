@@ -217,12 +217,24 @@ class MultiSequenceSearch:
         serialization.dump(self.trie, output_stream)
 
     @staticmethod
-    def load(input_stream: IO):
-        mss = MultiSequenceSearch()
-        mss.trie = serialization.load(input_stream)
-        print(mss.trie)
-        exit(0)
-        return mss
+    def load(input_stream: IO[bytes]) -> "MultiSequenceSearch":
+        """Load a serialized search root without writing to the terminal.
+
+        Args:
+            input_stream: A binary stream containing a serialized ACNode root.
+
+        Returns:
+            A search using the loaded root.
+
+        Raises:
+            ValueError: If the serialized value is not an ACNode root.
+        """
+        root = serialization.load(input_stream)
+        if not isinstance(root, ACNode):
+            raise ValueError(f"Cannot load search root: expected ACNode, got {type(root).__name__}")
+        search = MultiSequenceSearch()
+        search.trie = root
+        return search
 
     def search(self, source_sequence: Union[Sequence, IO]):
         """The Aho-Corasick Algorithm"""
@@ -284,27 +296,3 @@ class StartsWithMatcher:
 
             state = state[c]
             yield from ((0, s) for s in state.sources)
-
-
-if __name__ == '__main__':
-    root = TrieNode()
-    root.add('The quick brown fox jumps over the lazy dog')
-    root.add('The quick person')
-    root.add('The best')
-    assert len(list(root.find_prefix('The'))) == 3
-    assert len(list(root.find_prefix('The quick'))) == 2
-    assert not root.find('The')
-    assert root.find('The best')
-
-    mss = MultiSequenceSearch(b'hack', b'hacker', b'crack', b'ack', b'kool')
-    to_search = b'This is a test to see if hack or hacker is in this string.'\
-                b'Can you crack it? If so, please ack, \'cause that would be kool.'
-    for offset, match in mss.search(to_search):
-        print(offset, match)
-        assert to_search[offset:offset+len(match)] == match
-
-    swm = StartsWithMatcher(b'hack', b'hacker', b'crack', b'ack', b'kool')
-    for match in swm.search(b'hacker'):
-        print(match)
-
-    print(ACNode.load(mss.trie.serialize()))

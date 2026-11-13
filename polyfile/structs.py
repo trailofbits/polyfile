@@ -1,18 +1,8 @@
-import sys
 from abc import ABCMeta, abstractmethod
 from collections import OrderedDict
 from enum import Enum
 import struct as python_struct
 from typing import BinaryIO, Optional, Tuple, Type, TypeVar, Union
-
-if sys.version_info < (3, 7):
-    from typing import Dict as OrderedDictType
-elif sys.version_info < (3, 9):
-    # typing.OrderedDict was added in Python 3.7
-    from typing import OrderedDict as OrderedDictType
-else:
-    # In Python 3.9 and newer, collections.OrderedDict is subscriptable
-    OrderedDictType = OrderedDict
 
 
 class Endianness(Enum):
@@ -225,7 +215,7 @@ class Constant(ByteField):
 
 
 class StructMeta(ABCMeta):
-    fields: OrderedDictType[str, Type[Field]]
+    fields: OrderedDict[str, type[Field]]
 
     def __init__(cls, name, bases, clsdict):
         cls.fields = OrderedDict()
