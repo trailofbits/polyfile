@@ -1,9 +1,10 @@
+from collections.abc import Iterator
 from pathlib import Path
 
 from polyfile.ast import Node as ASTNode
 from polyfile.fileutils import ExactNamedTempfile, FileStream
 from polyfile.magic import MagicMatcher
-from polyfile.polyfile import register_parser, Match
+from polyfile.polyfile import register_parser, Match, Submatch
 
 
 Http11RequestGrammar = None
@@ -22,8 +23,40 @@ with ExactNamedTempfile(b"""0 regex/s \\^[^\\n]*[[:space:]]+HTTP/1.1[[:space:]]*
     http_11_matcher = MagicMatcher.DEFAULT_INSTANCE.add(Path(t))[0]
 
 
+def _use_byte_offsets(root: ASTNode, text: str) -> None:
+    """Translate ABNF literal positions before the AST infers container positions.
+
+    ABNF records character offsets only on literal nodes. Their containers infer offsets
+    from children or older siblings, so convert the explicit offsets before evaluating any
+    inferred positions. UTF-8 values and lengths are already preserved by ASTNode.load().
+    """
+    byte_offsets = [0]
+    for character in text:
+        byte_offsets.append(byte_offsets[-1] + len(character.encode("utf-8")))
+    stack = [root]
+    while stack:
+        node = stack.pop()
+        if node._offset is not None:
+            node._offset = byte_offsets[node._offset]
+        stack.extend(node.children)
+
+
 @register_parser(HTTP_11_MIME_TYPE)
-def parse_http_11(file_stream: FileStream, parent: Match):
+def parse_http_11(file_stream: FileStream, parent: Match) -> Iterator[Submatch]:
+    """Map one UTF-8 HTTP request from the current byte cursor into its analysis source.
+
+    Args:
+        file_stream: A bounded view whose current byte cursor identifies the request start.
+            Parsing reads the complete view and leaves the shared cursor at its EOF.
+        parent: The match whose analysis-source position identifies view byte zero. Its source
+            can be physical or decoded, independently of the backing buffer's byte origin.
+
+    Yields:
+        HTTP nodes whose offsets and lengths select their original encoded bytes.
+
+    Raises:
+        UnicodeDecodeError: If the view is not valid UTF-8, or its cursor splits a character.
+    """
     offset = file_stream.tell()
     file_stream.seek(0)
     global Http11RequestGrammar
@@ -32,6 +65,10 @@ def parse_http_11(file_stream: FileStream, parent: Match):
 
         from polyfile.http.http_11 import Http11RequestGrammar as Grammar
         Http11RequestGrammar = Grammar
-    http_ast, _ = Http11RequestGrammar("request").parse(file_stream.read().decode("utf-8"), start=offset)
+    data = file_stream.read()
+    text = data.decode("utf-8")
+    character_offset = len(data[:offset].decode("utf-8"))
+    http_ast, _ = Http11RequestGrammar("request").parse(text, start=character_offset)
     root_node = ASTNode.load(http_ast)
+    _use_byte_offsets(root_node, text)
     yield from root_node.to_matches(parent)

@@ -9,9 +9,28 @@ repos:
           --count --select=E9,F63,F7,F82 --show-source --statistics
         pass_filenames: false
         types: [python]
-      - id: matcher-types
-        name: Check matcher types
+      - id: modern-python
+        name: Check Python modernization
         language: system
-        entry: uv run ty check polyfile/magic.py --error-on-warning
+        entry: >-
+          uv run ruff check polyfile polymerge tests build_backend.py compile_kaitai_parsers.py
         pass_filenames: false
-        files: ^(polyfile/.*\.py|pyproject\.toml)$
+        files: |
+          (?x)^(
+              polyfile/.*\.py|polymerge/.*\.py|tests/.*\.py|
+              build_backend\.py|compile_kaitai_parsers\.py|
+              pyproject\.toml|\.pre-commit-config\.yaml|\.github/workflows/.*\.ya?ml
+          )$
+        exclude: ^polyfile/kaitai/(parsers/|kaitai-struct-compiler-[^/]+/)
+      - id: project-types
+        name: Check project types
+        language: system
+        entry: uv run ty check --error-on-warning
+        pass_filenames: false
+        files: |
+          (?x)^(
+              polyfile/.*\.py|polymerge/.*\.py|tests/.*\.py|
+              build_backend\.py|compile_kaitai_parsers\.py|
+              pyproject\.toml|\.pre-commit-config\.yaml|\.github/workflows/.*\.ya?ml
+          )$
+        exclude: ^polyfile/kaitai/(parsers/|kaitai-struct-compiler-[^/]+/)

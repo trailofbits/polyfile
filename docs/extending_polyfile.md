@@ -48,9 +48,9 @@ value boundaries, and deliberate differences from libmagic.
 The `libmagic` DSL can be eschewed by programmatically defining a matcher using PolyFile’s `MagicTest` API.
 
 ```python
-from typing import Optional
-
-from polyfile.magic import AbsoluteOffset, FailedTest, MagicMatcher, MagicTest, MatchedTest, TestResult, TestType
+from polyfile.magic import (
+    AbsoluteOffset, FailedTest, MagicMatcher, MagicTest, MatchedTest, TestResult, TestType,
+)
 
 class ExampleMatcher(MagicTest):
     def __init__(self):
@@ -64,7 +64,9 @@ class ExampleMatcher(MagicTest):
     def subtest_type(self) -> TestType:
         return TestType.BINARY  # use TestType.TEXT if this test only works on non-binary input
 
-    def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
+    def test(
+        self, data: bytes, absolute_offset: int, parent_match: TestResult | None,
+    ) -> TestResult:
         if data.startswith(b"example"):
             return MatchedTest(self, value=data, offset=0, length=len(data))
         else:
@@ -80,7 +82,7 @@ MagicMatcher.DEFAULT_INSTANCE.add(ExampleMatcher())
 
 Once a Matcher detects a Match, PolyFile checks to see if a Parser exists for the matche’s MIME type. This MIME-to-parser mapping is stored in the `polyfile.PARSERS` dict:
 ```python
-PARSERS: Dict[str, Set[polyfile.Parser]] = defaultdict(set)
+PARSERS: dict[str, set[polyfile.Parser]] = defaultdict(set)
 ```
 
 All PolyFile parsers extend off of the [`polyfile.Parser`](../polyfile/polyfile.py) abstract class.
@@ -158,7 +160,7 @@ The majority of PolyFile’s parsers are automatically generated from the [Kaita
 
 Unfortunately, the Kaitai Struct parsers are not currently tagged based upon the MIME type of the files they parse. Therefore, PolyFile maintains a manual mapping from MIME types to Kaitai parsers. This mapping lives in [`polyfile.kaitaimatcher.KAITAI_MIME_MAPPING`](../polyfile/kaitaimatcher.py):
 ```python
-KAITAI_MIME_MAPPING: Dict[str, str] = {
+KAITAI_MIME_MAPPING: dict[str, str] = {
     "image/gif": "image/gif.ksy",
     "image/png": "image/png.ksy",
     "image/jpeg": "image/jpeg.ksy",
@@ -265,6 +267,9 @@ print(test.foo, test.bar, test.data)
 ```
 
 This can be used for both matching and parsing, as is demonstrated in the [ZIP matcher](../polyfile/zipmatcher.py).
+`Struct.read()` preserves the subclass, so `Test.read()` returns a `Test`. Use `typing.Self` for
+this kind of return annotation in your own methods. Use a `TypeVar` for independent value types,
+such as the element type of a generic container.
 
 ## Debugging Matchers and Parsers
 

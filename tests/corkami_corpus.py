@@ -7,7 +7,7 @@ importing this module is cheap and has no side effects.
 from pathlib import Path
 import shutil
 from tempfile import TemporaryDirectory
-from typing import Iterator
+from collections.abc import Iterator
 import urllib.request
 from zipfile import ZipFile, ZipInfo
 

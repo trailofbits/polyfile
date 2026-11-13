@@ -1,4 +1,5 @@
 import base64
+from collections.abc import Iterator
 import contextlib
 import io
 import json
@@ -9,15 +10,15 @@ import subprocess
 import sys
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Dict, Iterator, List, Tuple
+from typing import cast
 from unittest import TestCase
 from zipfile import ZipFile
 
 from polyfile.__main__ import FormatOutput, main
 from polyfile.fileutils import Tempfile
 
-from .test_pdf import WELL_FORMED_PDF
-from .test_zipmatcher import MEMBERS, PNG, build_zip
+from tests.test_pdf import WELL_FORMED_PDF
+from tests.test_zipmatcher import MEMBERS, PNG, build_zip
 
 ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;]*m")
 """Matches a select-graphic-rendition escape, which is all argparse emits."""
@@ -43,7 +44,7 @@ def run_cli(*argv: str) -> str:
     return output.getvalue()
 
 
-def run_cli_until_exit(*argv: str) -> Tuple[int, str]:
+def run_cli_until_exit(*argv: str) -> tuple[int | str | None, str]:
     """Runs PolyFile's command line and returns its exit code and what it wrote to STDERR."""
     errors = io.StringIO()
     with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(errors):
@@ -99,7 +100,8 @@ class FormatArgumentTests(TestCase):
 
     def test_no_duplicate_choices(self):
         choices = USAGE_CHOICES.search(cli_help())
-        self.assertIsNotNone(choices, "the usage line does not list the `--format` choices")
+        if choices is None:
+            self.fail("the usage line does not list the `--format` choices")
         listed = choices.group(1).split(",")
         self.assertEqual(sorted(listed), sorted(set(listed)))
         self.assertEqual(sorted(listed), sorted(FormatOutput.valid_formats))
@@ -110,7 +112,8 @@ class FormatArgumentTests(TestCase):
 
     def test_help_example_runs(self):
         example = HELP_EXAMPLE.search(cli_help())
-        self.assertIsNotNone(example, "the `--format` help no longer contains a runnable example")
+        if example is None:
+            self.fail("the `--format` help no longer contains a runnable example")
         with Tempfile(self.zip_file, suffix=".zip") as path:
             output = run_cli(*shlex.split(example.group(1)), path)
         self.assertIn("application/zip", output)
@@ -131,9 +134,9 @@ class NoContentsTests(TestCase):
     def setUpClass(cls):
         cls.zip_file = zip_file()
 
-    def analyze(self, *argv: str) -> dict:
+    def analyze(self, *argv: str) -> dict[str, object]:
         with Tempfile(self.zip_file, suffix=".zip") as path:
-            return json.loads(run_cli(*argv, path))
+            return cast(dict[str, object], json.loads(run_cli(*argv, path)))
 
     def test_the_default_output_still_carries_the_contents(self):
         self.assertEqual(base64.b64encode(self.zip_file).decode("utf-8"),
@@ -206,7 +209,7 @@ combined with HTML output. The digest keeps a failure message short; what matter
 covers the bytes a consumer receives.
 """
 
-SAMPLES: Dict[str, bytes] = {
+SAMPLES: dict[str, bytes] = {
     "sample.zip": build_zip(),
     "sample.png": PNG,
     "sample.pdf": WELL_FORMED_PDF,
@@ -214,21 +217,21 @@ SAMPLES: Dict[str, bytes] = {
 """One input for each kind of match tree PolyFile builds: ZIP records come from a struct
 matcher, the PNG from a compiled Kaitai Struct parser, and the PDF from a hand-written one."""
 
-HASH_SEEDS: Tuple[str, ...] = ("0", "1", "12345")
+HASH_SEEDS: tuple[str, ...] = ("0", "1", "12345")
 """Values of `PYTHONHASHSEED`, so this also guards the match order that issue #3509 settled."""
 
 RENDER_TIMEOUT_SECONDS: int = 300
 
-ZIP_RECORDS: Tuple[str, ...] = ("LocalFileHeader", "CentralDirectory", "EndOfCentralDirectory")
+ZIP_RECORDS: tuple[str, ...] = ("LocalFileHeader", "CentralDirectory", "EndOfCentralDirectory")
 
 
-def elements(sbud: Dict) -> Iterator[Dict]:
+def elements(sbud: dict[str, object]) -> Iterator[dict[str, object]]:
     """Yields every element of an SBuD document, parents before children."""
-    stack: List[Dict] = list(reversed(sbud["struc"]))
+    stack = list(reversed(cast(list[dict[str, object]], sbud["struc"])))
     while stack:
         element = stack.pop()
         yield element
-        stack.extend(reversed(element["subEls"]))
+        stack.extend(reversed(cast(list[dict[str, object]], element["subEls"])))
 
 
 class ReproducibleOutputTests(TestCase):
@@ -242,7 +245,7 @@ class ReproducibleOutputTests(TestCase):
     runs over one file produced different JSON.
     """
 
-    paths: Dict[str, str]
+    paths: dict[str, str]
 
     @classmethod
     def setUpClass(cls):
@@ -261,7 +264,7 @@ class ReproducibleOutputTests(TestCase):
         stable within one process, and Python randomizes the hash seed per process as well.
         """
         command = [sys.executable, "-c", REPRODUCIBILITY_SCRIPT, *self.paths.values()]
-        reported: Dict[str, str] = {}
+        reported: dict[str, str] = {}
         for seed in HASH_SEEDS:
             result = subprocess.run(command, capture_output=True,
                                     env=dict(os.environ, PYTHONHASHSEED=seed),
@@ -291,7 +294,8 @@ class ReproducibleOutputTests(TestCase):
         self.assertEqual(2 * len(MEMBERS) + 1, len(records))
         for record in records:
             self.assertNotIn("value", record)
-            self.assertTrue(all("value" in field for field in record["subEls"]),
+            fields = cast(list[dict[str, object]], record["subEls"])
+            self.assertTrue(all("value" in field for field in fields),
                             f"a field of {record['type']} lost its value")
 
     def test_omitting_the_contents_omits_nothing_else(self):
@@ -306,5 +310,6 @@ class ReproducibleOutputTests(TestCase):
         records = [element for element in elements(without) if element["type"] in ZIP_RECORDS]
         self.assertEqual(2 * len(MEMBERS) + 1, len(records))
         for record in records:
-            self.assertTrue(all("value" in field for field in record["subEls"]),
+            fields = cast(list[dict[str, object]], record["subEls"])
+            self.assertTrue(all("value" in field for field in fields),
                             f"a field of {record['type']} lost its value")

@@ -1,9 +1,8 @@
 from abnf.grammars.misc import load_grammar_rules
-from abnf.grammars import rfc9110, rfc3986
+from abnf.grammars import rfc9110
 from abnf import Rule as _Rule
-from typing import List, Tuple
 
-rulelist: List[Tuple[str, _Rule]] = [
+rulelist: list[tuple[str, _Rule]] = [
     ("OWS", rfc9110.Rule("OWS")),
 ]
 
@@ -17,7 +16,7 @@ class Rule(_Rule):
     Also possibly of note: https://datatracker.ietf.org/doc/html/rfc8941#section-4.2
     """
 
-    grammar: List[str] = [
+    grammar: list[str] | str = [
         'sh-list        = list-member *( OWS "," OWS list-member )',
         "list-member    = sh-item / inner-list",
         'inner-list     = "(" *SP [ sh-item *( 1*SP sh-item ) *SP ] ")" *parameter',

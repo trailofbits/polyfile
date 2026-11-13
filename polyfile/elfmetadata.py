@@ -306,8 +306,9 @@ def _dynamic(view: _View, programs: Sequence[_Program], errors: list[str]) -> tu
             continue
         table_pie = table_needed = False
         for offset in range(0, len(data), size):
-            tag, value = struct.unpack_from(
-                view.order + ("QQ" if view.wide else "II"), data, offset
+            tag, value = cast(
+                tuple[int, int],
+                struct.unpack_from(view.order + ("QQ" if view.wide else "II"), data, offset),
             )
             if tag == 0:
                 pie |= table_pie

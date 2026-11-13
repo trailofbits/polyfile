@@ -1,6 +1,5 @@
 import json
 from pathlib import Path
-from typing import Set
 from unittest import TestCase, skipUnless
 
 from compile_kaitai_parsers import KAITAI_FORMAT_LIBRARY, MANIFEST_PATH, excluded_specs, spec_license
@@ -12,7 +11,7 @@ PARSERS_DIR: Path = MANIFEST_PATH.parent
 HAVE_FORMAT_LIBRARY: bool = KAITAI_FORMAT_LIBRARY.is_dir() and any(KAITAI_FORMAT_LIBRARY.glob("**/*.ksy"))
 
 
-def manifest_in_exclusions() -> Set[str]:
+def manifest_in_exclusions() -> set[str]:
     """Reads the specifications that MANIFEST.in keeps out of the source distribution."""
     prefix = "exclude kaitai_struct_formats/"
     return {
@@ -37,7 +36,7 @@ class TestKaitaiLicensing(TestCase):
         self.assertTrue(self.excluded, "expected at least one non-permissive specification")
 
     def test_manifest_lists_only_permissive_specs(self):
-        with open(MANIFEST_PATH, "r") as f:
+        with open(MANIFEST_PATH) as f:
             manifest = json.load(f)
         for relative_path in manifest:
             with self.subTest(spec=relative_path):

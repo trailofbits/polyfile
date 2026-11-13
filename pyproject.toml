@@ -50,7 +50,7 @@ dependencies = [
 
 [project.optional-dependencies]
 demangle = ["cxxfilt"]
-dev = ["pytest", "flake8", "ty==0.0.98"]
+dev = ["pytest", "flake8", "ruff==0.17.5", "ty==0.0.98"]
 viewer-test = ["playwright==1.64.1"]
 
 [project.scripts]
@@ -81,5 +81,27 @@ polyfile = ["templates/*", "CHANGELOG.md"]
 "polyfile.kaitai.parsers" = ["*.py", "manifest.json"]
 "polyfile.magic_defs" = ["*"]
 
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+force-exclude = true
+extend-exclude = [
+    "polyfile/kaitai/parsers",
+    "polyfile/kaitai/kaitai-struct-compiler-*",
+    "kaitai_struct_formats",
+    "file",
+]
+
+[tool.ruff.lint]
+select = ["UP"]
+
 [tool.ty.rules]
+dynamic-function-decorator-return = "error"
+missing-type-argument = "error"
+possibly-unresolved-reference = "error"
+unsound-return-statement = "error"
 unused-type-ignore-comment = "error"
+
+[tool.ty.src]
+include = ["polyfile", "polymerge", "tests", "build_backend.py", "compile_kaitai_parsers.py"]
+exclude = ["polyfile/kaitai/parsers", "polyfile/kaitai/kaitai-struct-compiler-*"]

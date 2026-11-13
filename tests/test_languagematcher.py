@@ -1,7 +1,10 @@
 import tracemalloc
+from collections.abc import Iterable
+from typing import cast
 from unittest import TestCase
 
 from polyfile.languagematcher import BFCommandType, BFMatcher, BFParseError, BFProgram
+from polyfile.magic import FailedTest, MatchedTest
 
 
 class TestBFProgram(TestCase):
@@ -47,7 +50,8 @@ class TestBFProgram(TestCase):
 
     def test_invalid_iterable_element_still_raises(self):
         with self.assertRaises(TypeError):
-            BFProgram.parse([1.5])
+            # An invalid element deliberately crosses the parser's typed input boundary.
+            BFProgram.parse(cast(Iterable[int], [1.5]))
 
     def test_dense_commands_with_trailing_comments(self):
         commands = b"[->+<]" * 100
@@ -62,12 +66,14 @@ class TestBFMatcher(TestCase):
             with self.subTest(data=data):
                 result = BFMatcher().test(data, 0, None)
                 self.assertFalse(result)
+                assert isinstance(result, FailedTest)
                 self.assertEqual(result.message, "unbalanced square brackets")
                 self.assertEqual(result.offset, offset)
 
     def test_missing_command_uses_first_command_including_input(self):
         result = BFMatcher().test(b"comment,[]><+-comment", 0, None)
         self.assertFalse(result)
+        assert isinstance(result, FailedTest)
         self.assertEqual(result.message, "missing commands .")
         self.assertEqual(result.offset, 7)
         self.assertIsNone(result.parent)
@@ -75,27 +81,75 @@ class TestBFMatcher(TestCase):
     def test_large_comment_region_preserves_offsets(self):
         prefix = b"a comment with no operators\n" * 10000
         result = BFMatcher().test(prefix + b"[]><+-", 0, None)
+        assert isinstance(result, FailedTest)
         self.assertEqual(result.message, "missing commands .")
         self.assertEqual(result.offset, len(prefix))
 
-    def test_offsets_remain_relative_to_slice(self):
+    def test_offsets_include_the_slice_base(self):
         for offset in (7, -6):
             result = BFMatcher().test(b"ignored[]><+-", offset, None)
+            assert isinstance(result, FailedTest)
             self.assertEqual(result.message, "missing commands .")
-            self.assertEqual(result.offset, 0)
+            self.assertEqual(result.offset, offset)
 
     def test_all_required_commands_still_use_thresholds(self):
         matcher = BFMatcher()
         result = matcher.test(b"[]><+-.", 0, None)
+        assert isinstance(result, FailedTest)
         self.assertEqual(result.message, "expected at least 2 BrainFu loops but only found 1")
         matcher.min_bf_loops = 0
         result = matcher.test(b"[]><+-.", 0, None)
+        assert isinstance(result, FailedTest)
         self.assertEqual(result.message, "expected at least 24 BrainFu commands but only found 7")
         data = b"[]><+-." * 4
         result = matcher.test(data, 0, None)
         self.assertTrue(result)
+        assert isinstance(result, MatchedTest)
         self.assertEqual(result.value, data)
-        self.assertEqual(result.length, len(data) - 1)
+        self.assertEqual(result.length, len(data))
+
+    def test_noop_validation_returns_successful_matches(self) -> None:
+        matcher = BFMatcher()
+        matcher.reject_arithmetical_noops = True
+        for data, commands in (
+            (b"[->+<]." * 4, b"[->+<]." * 4),
+            (b"[]><+comment-." * 4, b"[]><+-." * 4),
+        ):
+            with self.subTest(data=data):
+                result = matcher.test(data, 0, None)
+                self.assertIsInstance(result, MatchedTest)
+                assert isinstance(result, MatchedTest)
+                self.assertEqual(result.value, commands)
+                self.assertEqual(result.offset, 0)
+                self.assertEqual(result.length, len(data))
+
+    def test_noop_validation_rejects_both_adjacent_cancelling_pairs(self) -> None:
+        matcher = BFMatcher()
+        matcher.reject_arithmetical_noops = True
+        for pair in (b"+-", b"-+"):
+            with self.subTest(pair=pair):
+                result = matcher.test((b"[]><" + pair + b".") * 4, 0, None)
+                self.assertIsInstance(result, FailedTest)
+                assert isinstance(result, FailedTest)
+                self.assertEqual(result.offset, 4)
+                self.assertEqual(
+                    result.message, "BrainFu program contains arithmetic that cancels itself out"
+                )
+
+    def test_noop_validation_preserves_earlier_validation(self) -> None:
+        matcher = BFMatcher()
+        matcher.reject_arithmetical_noops = True
+        for data, message in (
+            (b"]", "unbalanced square brackets"),
+            (b"[]", "missing commands"),
+            (b"[]><+-.", "expected at least 2 BrainFu loops but only found 1"),
+            (b"[]><+-." * 2, "expected at least 24 BrainFu commands but only found 14"),
+        ):
+            with self.subTest(data=data):
+                result = matcher.test(data, 0, None)
+                self.assertIsInstance(result, FailedTest)
+                assert isinstance(result, FailedTest)
+                self.assertIn(message, result.message)
 
     def test_subclass_slice_iteration_is_preserved(self):
 
@@ -107,6 +161,7 @@ class TestBFMatcher(TestCase):
                 return iter(b"abc]comment")
 
         result = BFMatcher().test(DifferentBytes(b"[]><+-"), 0, None)
+        assert isinstance(result, FailedTest)
         self.assertEqual(result.message, "unbalanced square brackets")
         self.assertEqual(result.offset, 3)
 
