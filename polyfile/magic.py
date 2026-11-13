@@ -3657,6 +3657,38 @@ def libmagic_value(data_type: DataType, constant: Any) -> Tuple[int, bytes]:
     return 0, b""
 
 
+def _string_input_length(expected: StringTest) -> Optional[int]:
+    """Retains bounded wildcard output and one full-word terminator byte."""
+    if type(expected) is NegatedStringTest:
+        return _string_input_length(expected.parent)
+    if type(expected) not in (StringMatch, StringWildcard, StringLengthTest):
+        return None
+    if expected.num_bytes is not None and expected.num_bytes < 0:
+        return None
+    return max(MAX_STRING_BYTES, expected.value_length + 1)
+
+
+def _utf16_input_length(data_type: UTF16Type, expected: bytes) -> Optional[int]:
+    if data_type.num_bytes is not None and data_type.num_bytes < 0:
+        return None
+    return len(expected)
+
+
+def _bounded_input_length(data_type: DataType, expected: Any) -> Optional[int]:
+    """Returns proven inspection bounds, leaving extension types unbounded."""
+    if type(data_type) is NumericDataType:
+        return data_type.base_type.num_bytes
+    elif type(data_type) is GUIDType:
+        return 16
+    elif type(data_type) is UTF16Type and isinstance(expected, bytes):
+        return _utf16_input_length(data_type, expected)
+    elif type(data_type) is StringType and isinstance(expected, StringTest):
+        return _string_input_length(expected)
+    elif type(data_type) is RegexType:
+        return REGEX_MAX
+    return None
+
+
 class ConstantMatchTest(MagicTest, Generic[T]):
     def __init__(
             self,
@@ -3734,8 +3766,16 @@ class ConstantMatchTest(MagicTest, Generic[T]):
             result.relative_base = result.offset + self.data_type.declared_length(self.constant)
         return result
 
+    def _input_region(self, data: bytes, absolute_offset: int) -> bytes:
+        """Copies only the bytes an exact built-in type can inspect or report."""
+        length = _bounded_input_length(self.data_type, self.constant)
+        if length is None or type(data) is not bytes:
+            return data[absolute_offset:]
+        start, _, _ = slice(absolute_offset, None).indices(len(data))
+        return data[start:start + length]
+
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
-        match = self.data_type.match(data[absolute_offset:], self.constant)
+        match = self.data_type.match(self._input_region(data, absolute_offset), self.constant)
         if match:
             return self.matched_test(match, absolute_offset, parent_match)
         else:
@@ -3751,9 +3791,10 @@ class ConstantMatchTest(MagicTest, Generic[T]):
     ) -> TestResult:
         if isinstance(self.data_type, NumericDataType):
             assert isinstance(self.constant, NumericValue)
-            match = self.data_type.flip_endianness().match(data[absolute_offset:], self.constant)
+            match = self.data_type.flip_endianness().match(
+                self._input_region(data, absolute_offset), self.constant)
         else:
-            match = self.data_type.match(data[absolute_offset:], self.constant)
+            match = self.data_type.match(self._input_region(data, absolute_offset), self.constant)
         if match:
             return self.matched_test(match, absolute_offset, parent_match)
         else:
