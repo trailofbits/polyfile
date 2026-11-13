@@ -221,10 +221,9 @@ class BFMatcher(MagicTest):
                         {c1.command_type, c2.command_type} == {BFCommandType.INCREMENT, BFCommandType.DECREMENT}:
                     return FailedTest(self, offset=c1.offset, message="BrainFu program contains arithmetic that "
                                                                       "cancels itself out")
-        else:
-            assert 0 <= first_command <= last_command
-            return MatchedTest(self, value=bytes(program), offset=first_command,
-                               length=last_command - first_command)
+        assert 0 <= first_command <= last_command
+        return MatchedTest(self, value=bytes(program), offset=first_command,
+                           length=last_command - first_command)
 
 
 MagicMatcher.DEFAULT_INSTANCE.add(BFMatcher())
