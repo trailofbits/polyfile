@@ -88,6 +88,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 
 ### Fixed
 
+- **Breaking:** Aborting PDB while stepping through parser matches stops that debugging run
+  without printing or yielding an absent match (#3678).
+
 - **Breaking:** PolyMerge handles commands without `--diff` and compares the functions shared
   by each actual input group. Empty legacy traces and function source iteration work;
   unavailable optional demangling reports an argument error (#3675).
