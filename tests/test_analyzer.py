@@ -28,6 +28,11 @@ class AnalyzerSbudTest(TestCase):
     Regression test for trailofbits/polyfile#3584.
     """
 
+    def test_caches_are_absent_before_analysis_starts(self):
+        analyzer = Analyzer("not-opened-before-iteration")
+        self.assertIsNone(analyzer.matches_so_far)
+        self.assertIsNone(analyzer.magic_matches_so_far)
+
     def test_sbud_agrees_however_the_matches_are_supplied(self):
         with temporary_file(build_zip(members=MEMBERS)) as path:
             from_analysis = Analyzer(str(path)).sbud(include_contents=False)
@@ -58,6 +63,8 @@ class AnalyzerSbudTest(TestCase):
         with temporary_file(build_zip(members=MEMBERS)) as path:
             analyzer = Analyzer(str(path))
             first = analyzer.sbud(include_contents=False)
-            self.assertGreater(len(analyzer.matches_so_far), 0)
+            matches = analyzer.matches_so_far
+            assert matches is not None
+            self.assertGreater(len(matches), 0)
             second = analyzer.sbud(include_contents=False)
         self.assertEqual(first, second)

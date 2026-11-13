@@ -1,25 +1,28 @@
 from functools import wraps
 import time
-from typing import Optional
+from collections.abc import Callable
+from typing import Optional, ParamSpec, Self, TypeVar
 from . import logger
 
 log = logger.getStatusLogger(__file__)
 
 
-def current_time_ms():
+def current_time_ms() -> float:
     return time.process_time_ns() / 1000000.0
 
 
 # Note: This assumes single-threading, but that's basically the case as long as the GIL exists
-_PROFILER_STACK: ["Profiler"] = []
+_PROFILER_STACK: list["Profiler"] = []
+P = ParamSpec("P")
+ResultT = TypeVar("ResultT")
 
 
 class Profiler:
     def __init__(self, parent: Optional["Profiler"] = None):
-        self.start_time_ms: Optional[float] = None
-        self.end_time_ms: Optional[float] = None
-        self.parent: Optional[Profiler] = parent
-        self._paused_start_time_ms: [float] = []
+        self.start_time_ms: float | None = None
+        self.end_time_ms: float | None = None
+        self.parent: Profiler | None = parent
+        self._paused_start_time_ms: list[float] = []
         self._paused_ms: float = 0.0
 
     @property
@@ -37,14 +40,14 @@ class Profiler:
         return self._paused_ms + current_time_ms() - self._paused_start_time_ms[0]
 
     def pause(self):
-        profiler = self
+        profiler: Profiler | None = self
         while profiler is not None:
             if profiler.complete:
                 raise ValueError("You cannot pause a completed profiler")
             profiler._paused_start_time_ms.append(current_time_ms())
 
     def unpause(self):
-        profiler = self
+        profiler: Profiler | None = self
         while profiler is not None:
             if profiler.complete:
                 raise ValueError("You cannot unpause a completed profiler")
@@ -73,7 +76,7 @@ class Profiler:
             raise ValueError("A profiler cannot be stopped while it is paused")
         self.end_time_ms = current_time_ms()
 
-    def __enter__(self) -> "Profiler":
+    def __enter__(self) -> Self:
         self.start()
         if self.parent is None and _PROFILER_STACK:
             self.parent = _PROFILER_STACK[-1]
@@ -90,8 +93,8 @@ class Profiler:
 
 
 class Unprofiled:
-    def __init__(self, profiler: Optional[Profiler] = None):
-        self.profiler: Optional[Profiler] = profiler
+    def __init__(self, profiler: Profiler | None = None):
+        self.profiler: Profiler | None = profiler
         self._had_profiler = profiler is not None
 
     def __enter__(self):
@@ -107,9 +110,9 @@ class Unprofiled:
                 self.profiler = None
 
 
-def unprofiled(func):
+def unprofiled(func: Callable[P, ResultT]) -> Callable[P, ResultT]:
     @wraps(func)
-    def wrapped(*args, **kwargs):
+    def wrapped(*args: P.args, **kwargs: P.kwargs) -> ResultT:
         with Unprofiled():
             return func(*args, **kwargs)
     return wrapped

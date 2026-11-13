@@ -77,6 +77,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 
 ### Changed
 
+- Core Python annotations describe nullable analysis caches, callable parsers, AST traversal,
+  and generic profiling decorators without changing their runtime behavior (#3671).
+
 - Remove compatibility imports and runtime bases for Python versions older than 3.11.
 
 - **Breaking:** JSON elements identify their physical or decoded `source`; offsets stop at
