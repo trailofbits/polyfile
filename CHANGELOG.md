@@ -88,6 +88,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 
 ### Fixed
 
+- **Breaking:** Lazy sequences support negative indexes and slices over their complete input
+  while retaining lazy positive-index access and the Sequence interface.
+
 - **Breaking:** Loading a serialized multi-sequence search returns its result without printing
   or terminating the process, and rejects serialized values that are not search roots.
 
