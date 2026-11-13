@@ -397,6 +397,9 @@ class HttpVisitor(parser.NodeVisitor):
         forbidden to be sent in a trailer, since processing them as if they
         were present in the header section might bypass external security
         filters.
+
+        The first empty CRLF-delimited line ends the trailer section. Subsequent bytes may
+        belong to another request and must not contribute trailer fields.
         """
 
         if hasattr(self, "trailer"):
@@ -417,9 +420,11 @@ class HttpVisitor(parser.NodeVisitor):
 
             trailer_field_names: Set = set(self.trailer.split(","))
             allowed_trailer_field_names: Set = trailer_field_names - disallowed_fields
-            trailer_headers = filter(None, trailer_data.split("\r\n"))
+            trailer_headers = trailer_data.split("\r\n")
 
             for header in trailer_headers:
+                if not header:
+                    break
                 name, separator, value = header.strip(whitespace).partition(":")
                 if separator and name in allowed_trailer_field_names:
                     # A recipient that retains a received trailer field MUST

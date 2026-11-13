@@ -105,6 +105,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
   `TypeError` (#3667).
 - **Breaking:** HTTP chunk decoding accepts full hexadecimal sizes and extensions, counts each
   decoded byte once, and retains available prefixes with their actual length on incomplete input.
+  Trailer fields stop at the terminating empty line, so subsequent pipelined request headers
+  cannot populate or overwrite trailer metadata (#3674).
 
 - Bounded file regions now limit reads before allocating data, including `read()` and
   `read(-1)`, so archive members cannot expose neighboring bytes or copy the remaining archive.

@@ -56,3 +56,41 @@ def test_incomplete_trailer_keeps_decoded_body_and_ignores_incomplete_field() ->
     assert "".join(visitor.body_parsed) == "A"
     assert visitor.content_length == 1
     assert visitor.headers["Expires"] == "tomorrow"
+
+
+@pytest.mark.parametrize("initial_trailer", ["", "Expires: legitimate\r\n"])
+@pytest.mark.parametrize(
+    "following_data",
+    [
+        "Expires: attack\r\n",
+        "\r\nExpires: attack\r\n",
+        "GET /next HTTP/1.1\r\nHost: next.example\r\nExpires: attack\r\n\r\n",
+    ],
+)
+def test_trailers_stop_at_the_first_empty_line(initial_trailer: str, following_data: str) -> None:
+    body = "1\r\nA\r\n0\r\n" + initial_trailer + "\r\n" + following_data
+    visitor = visit_body(body, "Expires")
+    assert "".join(visitor.body_parsed) == "A"
+    assert visitor.content_length == 1
+    assert visitor.body_raw == body
+    assert visitor.headers["Host"] == "example.com"
+    assert "Transfer-Encoding" not in visitor.headers
+    if initial_trailer:
+        assert visitor.headers["Expires"] == "legitimate"
+    else:
+        assert "Expires" not in visitor.headers
+        assert not hasattr(visitor, "expires")
+
+
+def test_trailer_boundary_preserves_declared_and_forbidden_fields() -> None:
+    body = (
+        "1\r\nA\r\n0\r\nHost: attacker.example\r\nContent-Length: 999\r\n"
+        "Expires: tomorrow\r\nIgnored: undeclared\r\n\r\nExpires: attack\r\n"
+    )
+    visitor = visit_body(body, "Host,Content-Length,Expires")
+    assert "".join(visitor.body_parsed) == "A"
+    assert visitor.content_length == 1
+    assert visitor.headers["Host"] == "example.com"
+    assert visitor.headers["Expires"] == "tomorrow"
+    assert "Content-Length" not in visitor.headers
+    assert "Ignored" not in visitor.headers
