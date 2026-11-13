@@ -1,4 +1,6 @@
 import sys
+import codecs
+from encodings.utf_8 import decode as decode_utf8
 from typing import Callable, Dict, Iterator, List, Optional, SupportsIndex, Tuple, Type, TypeVar, Union
 import operator
 import zlib
@@ -194,6 +196,9 @@ class PSSequence(PSToken):
         their source span. Transformed wrappers and explicitly nonlinear derived values stay
         nonlinear even when their lengths happen to match again. This marker is internal;
         it does not extend the output schema or provide a per-byte source map.
+
+        Codec conversions certify alignment only for native ASCII, ASCII-only UTF-8, and
+        representable Latin-1 values. Other conversions retain the original whole span.
         """
         return (
             isinstance(self, (str, bytes))
@@ -381,7 +386,16 @@ class PSStr(PSSequence, str):
         result = PSBytes(
             super().encode(encoding, errors), pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes
         )
-        result._pdf_byte_aligned = self._is_byte_aligned() and len(result) == len(self)
+        encoder = codecs.lookup(encoding).encode
+        ascii_encoding = encoder is codecs.ascii_encode or encoder is codecs.utf_8_encode
+        one_byte_mapping = (
+            ascii_encoding and str.isascii(self)
+            or encoder is codecs.latin_1_encode
+            and all(ord(char) <= 0xFF for char in str.__iter__(self))
+        )
+        result._pdf_byte_aligned = (
+            self._is_byte_aligned() and one_byte_mapping and len(result) == len(self)
+        )
         return result
 
     def __str__(self):
@@ -413,7 +427,15 @@ class PSBytes(PSSequence, bytes):
         result = PSStr(
             super().decode(encoding, errors), pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes
         )
-        result._pdf_byte_aligned = self._is_byte_aligned() and len(result) == len(self)
+        decoder = codecs.lookup(encoding).decode
+        ascii_decoding = decoder is codecs.ascii_decode or decoder is decode_utf8
+        one_byte_mapping = (
+            ascii_decoding and bytes.isascii(self)
+            or decoder is codecs.latin_1_decode
+        )
+        result._pdf_byte_aligned = (
+            self._is_byte_aligned() and one_byte_mapping and len(result) == len(self)
+        )
         return result
 
 

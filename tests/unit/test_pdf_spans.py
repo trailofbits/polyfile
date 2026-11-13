@@ -1,6 +1,7 @@
 """PDF token operations retain byte-accurate or conservative whole-token source spans."""
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+import codecs
 import json
 from typing import cast
 
@@ -323,3 +324,76 @@ def test_numeric_roundtrip_retains_conservative_source_mapping(binary: bool, as_
     assert span(result[:1]) == (7, 4)
     assert span(source) == (7, 4)
 
+
+def test_equal_length_lossy_encoding_retains_the_whole_span() -> None:
+    source = PSStr(chr(0xD800) + "é", pdf_offset=7, pdf_bytes=2)
+    result = source.encode("utf-8", "ignore")
+    assert result == b"\xc3\xa9"
+    assert span(result[:1]) == (7, 2)
+    assert span(result.decode("latin-1").encode("latin-1")[:1]) == (7, 2)
+
+
+def test_decoding_replacements_do_not_infer_a_byte_map() -> None:
+    source = PSBytes(b"\xffa", pdf_offset=7, pdf_bytes=2)
+    result = source.decode("utf-8", "replace")
+    assert result == "\ufffda"
+    assert span(result[:1]) == (7, 2)
+
+
+@pytest.mark.parametrize("binary", [False, True])
+@pytest.mark.parametrize("encoding", ["ascii", "UTF8", "latin_1"])
+@pytest.mark.parametrize("errors", ["strict", "ignore", "replace"])
+def test_known_one_byte_codec_mappings_remain_exact(
+    binary: bool, encoding: str, errors: str,
+) -> None:
+    source = token(binary, "ab")
+    converted = (
+        source.decode(encoding, errors) if isinstance(source, PSBytes)
+        else source.encode(encoding, errors)
+    )
+    assert span(converted[1:2]) == (8, 1)
+
+
+def test_latin_one_non_ascii_mappings_remain_exact() -> None:
+    raw = PSBytes(b"\xe9x", pdf_offset=7, pdf_bytes=2)
+    decoded = raw.decode("latin-1")
+    assert decoded == "éx"
+    assert span(decoded[1:2]) == (8, 1)
+    encoded = decoded.encode("latin-1")
+    assert encoded == b"\xe9x"
+    assert span(encoded[1:2]) == (8, 1)
+
+
+@pytest.fixture
+def reversing_codec() -> Iterator[str]:
+    def encode(value: str, errors: str = "strict") -> tuple[bytes, int]:
+        return value[::-1].encode("ascii"), len(value)
+
+    def decode(value: object, errors: str = "strict") -> tuple[str, int]:
+        assert isinstance(value, (bytes, bytearray, memoryview))
+        raw = bytes(value)
+        return raw[::-1].decode("ascii"), len(raw)
+
+    def search(name: str) -> codecs.CodecInfo | None:
+        if name == "pdf_provenance_reverse":
+            return codecs.CodecInfo(name="utf-8", encode=encode, decode=decode)
+        return None
+
+    codecs.register(search)
+    try:
+        yield "pdf_provenance_reverse"
+    finally:
+        codecs.unregister(search)
+
+
+@pytest.mark.parametrize("binary", [False, True])
+def test_custom_codec_names_do_not_claim_native_byte_mappings(
+    binary: bool, reversing_codec: str,
+) -> None:
+    source = token(binary, "ab")
+    converted = (
+        source.decode(reversing_codec) if isinstance(source, PSBytes)
+        else source.encode(reversing_codec)
+    )
+    assert converted == ("ba" if binary else b"ba")
+    assert span(converted[:1]) == (7, 2)
