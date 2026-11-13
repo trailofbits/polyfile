@@ -87,8 +87,8 @@ function nodesAtByte(source, offset) {
   return sourceNodeIndexes.get(source)?.query(offset, offset + 1) ?? [];
 }
 
-/** @param {string} source @param {number} offset @returns {boolean} */
-function isByteUndescribed(source, offset) {
+/** @param {string} source @param {number} start @param {number} length @returns {boolean} */
+function isRangeUndescribed(source, start, length) {
   const regions = coverageIndexes.get(source) ?? [];
   let first = 0;
   let last = regions.length;
@@ -96,11 +96,16 @@ function isByteUndescribed(source, offset) {
     const middle = Math.floor((first + last) / 2);
     const region = regions[middle];
     if (!region) return false;
-    if (region[0] > offset) last = middle;
-    else if (offset >= region[0] + region[1]) first = middle + 1;
-    else return true;
+    if (region[0] + region[1] <= start) first = middle + 1;
+    else last = middle;
   }
-  return false;
+  const region = regions[first];
+  return Boolean(region && region[0] < start + length);
+}
+
+/** @param {string} source @param {number} offset @returns {boolean} */
+function isByteUndescribed(source, offset) {
+  return isRangeUndescribed(source, offset, 1);
 }
 
 /** @param {ViewerRange[]} ranges @returns {ViewerRange[]} */

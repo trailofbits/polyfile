@@ -130,7 +130,10 @@ function renderReadable() {
     span.dataset['cell'] = String(offset - start);
     span.dataset['offset'] = String(offset);
     span.dataset['length'] = String(length);
-    span.classList.toggle('undescribed', isByteUndescribed(viewerState.activeSource, offset));
+    span.classList.toggle(
+      'undescribed',
+      isRangeUndescribed(viewerState.activeSource, offset, length),
+    );
     span.textContent = readableCharacter(bytes, offset, length);
     fragment.append(span);
     readableRanges.push({ element: span, start: offset, end: offset + length });
@@ -174,7 +177,7 @@ function renderViewport() {
   });
   getElement('scrollheightproxy').style.height = `${byteHeight * (rowCount + 1)}px`;
   const scroll = getElement('scrollcontainer');
-  const top = byteHeight * viewerState.rowOffset;
+  const top = Math.ceil(byteHeight * viewerState.rowOffset);
   if (Math.abs(scroll.scrollTop - top) >= 1) scroll.scrollTop = top;
   renderReadable();
   renderHighlights();
@@ -253,14 +256,15 @@ function fittedColumns() {
 }
 
 function resizeViewport() {
+  const pane = document.getElementById('byte-pane');
+  const height = getElement('scrollcontainer').clientHeight;
+  if (pane && (!pane.clientWidth || !height)) return;
   const start = viewerState.rowOffset * viewerState.bytesPerRow;
   if (!hexCells.length) rebuildRows();
-  viewerState.bytesPerRow = fittedColumns();
-  const pane = document.getElementById('byte-pane');
+  if (!getElement('scrollcapture').hidden) viewerState.bytesPerRow = fittedColumns();
   pane?.style.setProperty('--byte-columns', String(viewerState.bytesPerRow));
   const row = document.querySelector('#hexdump .byteline');
   byteHeight = Math.max(1, row?.getBoundingClientRect().height || byteHeight);
-  const height = getElement('scrollcontainer').clientHeight;
   viewerState.visibleRows = Math.max(1, Math.floor(height / byteHeight));
   viewerState.rowOffset = Math.floor(start / viewerState.bytesPerRow);
   renderViewport();

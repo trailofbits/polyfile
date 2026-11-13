@@ -1,6 +1,7 @@
 """Behavior regressions for bounded source-aware byte and text rendering."""
 
 import base64
+from math import ceil
 from typing import TYPE_CHECKING
 
 from tests.browser.helpers import ReportFactory, match, open_report
@@ -11,9 +12,11 @@ if TYPE_CHECKING:
 
 def scroll_rows(page: "Page", rows: int) -> None:
     """Scroll the virtual byte viewport by its measured row height."""
-    height = page.locator("#hexdump .byteline").first.bounding_box()["height"]
+    bounds = page.locator("#hexdump .byteline").first.bounding_box()
+    assert bounds is not None
+    height = bounds["height"]
     page.locator("#scrollcontainer").evaluate(
-        "(element, top) => { element.scrollTop = top; }", rows * height
+        "(element, top) => { element.scrollTop = top; }", ceil(rows * height)
     )
     page.wait_for_timeout(50)
 
@@ -43,7 +46,7 @@ def test_padding_and_empty_files_have_no_hover_cursor(
 ) -> None:
     for contents in (b"", b"partial"):
         open_report(viewer_page, report_factory(contents))
-        viewer_page.locator("#byte12").hover()
+        viewer_page.locator("#byte12").dispatch_event("pointerover")
         assert viewer_page.locator(".byte.cursor").count() == 0
         assert viewer_page.locator(".tree_label.highlighted").count() == 0
 
@@ -102,7 +105,8 @@ def test_utf8_preview_maps_codepoints_and_malformed_sequences_to_bytes(
     assert euro.get_attribute("data-length") == "3"
     assert viewer_page.locator('#readablebytes [data-offset="18"]').text_content() == "🙂"
     assert viewer_page.locator('#readablebytes [data-offset="22"]').text_content() == "�"
-    assert viewer_page.locator('#readablebytes [data-offset="22"]').get_attribute("data-length") == "2"
+    malformed = viewer_page.locator('#readablebytes [data-offset="22"]')
+    assert malformed.get_attribute("data-length") == "2"
     viewer_page.locator("#byte17").hover()
     assert "cursor" in (euro.get_attribute("class") or "")
     scroll_rows(viewer_page, 1)
