@@ -39,7 +39,7 @@ dependencies = [
     "lz4==4.4.5",
     "networkx>=2.6.3",
     "packaging>=21.0",
-    "pdfminer.six>=20251230",
+    "pdfminer.six==20260107",
     "Pillow==13.0.0",
     "pyreadline3; platform_system == 'Windows'",
     "pyyaml>=3.13",
@@ -81,6 +81,11 @@ namespaces = false
 polyfile = ["templates/*", "CHANGELOG.md"]
 "polyfile.kaitai.parsers" = ["*.py", "manifest.json"]
 "polyfile.magic_defs" = ["*"]
+
+[tool.uv]
+exclude-newer = "7 days"
+# Qualify the existing Ruff pin and the setuptools security fix without the age delay.
+exclude-newer-package = { ruff = "2026-11-13T00:00:00Z", setuptools = "2026-11-14T00:00:00Z" }
 
 [tool.ruff]
 target-version = "py311"

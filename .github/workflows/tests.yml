@@ -40,7 +40,13 @@ jobs:
       # also the environment pip-audit scans. Installing into a virtualenv would hide every
       # dependency from it. setuptools no longer needs installing here: the isolated build
       # environment gets it from [build-system] requires in pyproject.toml.
-      run: uv pip install --system '.[dev,viewer-test]'
+      shell: bash
+      run: |
+        set -euo pipefail
+        uv export --locked --extra dev --extra viewer-test --no-emit-project \
+          --format requirements-txt --output-file "$RUNNER_TEMP/polyfile-requirements.txt"
+        uv pip install --system --require-hashes -r "$RUNNER_TEMP/polyfile-requirements.txt"
+        uv pip install --system --no-deps .
     - name: Install the GNU gzip reference decoder
       shell: bash
       run: |

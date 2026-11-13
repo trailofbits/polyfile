@@ -33,8 +33,20 @@ class _LazyPDFParser(Parser):
     _actual_parser = None
 
     def parse(self, stream, match):
+        from polyfile.pdf_compat import pdfminer_compatibility_error
+
+        error = pdfminer_compatibility_error()
+        if error is not None:
+            match.analysis_status = "unsupported"
+            match.analysis_message = error
+            return
         if _LazyPDFParser._actual_parser is None:
-            from polyfile import pdf
+            try:
+                from polyfile import pdf
+            except ImportError as error:
+                match.analysis_status = "unsupported"
+                match.analysis_message = f"PDFminer adapter API is unavailable: {error}"
+                return
             _LazyPDFParser._actual_parser = pdf.pdf_parser
         yield from _LazyPDFParser._actual_parser(stream, match)
 

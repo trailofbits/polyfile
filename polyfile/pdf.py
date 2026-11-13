@@ -19,24 +19,25 @@ import zlib
 import operator
 import sys
 
-from pdfminer.ascii85 import ascii85decode, asciihexdecode
-from pdfminer.ccitt import ccittfaxdecode
-from pdfminer.lzw import lzwdecode
-from pdfminer.pdfparser import PDFSyntaxError
-from pdfminer.pdftypes import PDFNotImplementedError
-from pdfminer.runlength import rldecode
-from pdfminer.pdfparser import PDFParser as PDFMinerParser, PDFStream, PDFObjRef
-from pdfminer.psparser import (
+from polyfile._pdfminer_adapter import (
+    ascii85decode,
+    asciihexdecode,
+    ccittfaxdecode,
+    lzwdecode,
+    PDFSyntaxError,
+    PDFNotImplementedError,
+    rldecode,
+    PDFMinerParser,
+    PDFStream,
+    PDFObjRef,
     PSBaseParserToken,
     PSKeyword,
     PSObject,
     PSLiteral,
     PSStackEntry,
     PSSyntaxError,
-)
-from pdfminer.pdfdocument import (
-    PDFDocument,
     PDFXRef,
+    PDFXRefFallback,
     KWD,
     PDFNoValidXRef,
     PSEOF,
@@ -46,8 +47,6 @@ from pdfminer.pdfdocument import (
     LITERAL_CATALOG,
     DecipherCallable,
     PDFObjectNotFound,
-)
-from pdfminer.pdftypes import (
     LIT,
     LITERALS_FLATE_DECODE,
     LITERALS_ASCIIHEX_DECODE,
@@ -60,6 +59,7 @@ from pdfminer.pdftypes import (
     LITERALS_ASCII85_DECODE,
     int_value,
     apply_png_predictor,
+    AdapterPDFDocument,
 )
 
 from polyfile.compression import match_decoded
@@ -144,8 +144,13 @@ def load_xref(self: PDFXRef, parser: PDFMinerParser) -> None:
     self.load_trailer(parser)
 
 
-PDFXRef.load_trailer = load_trailer
-PDFXRef.load = load_xref
+class InstrumentedPDFXRef(PDFXRef):
+    load_trailer = load_trailer
+    load = load_xref
+
+
+class InstrumentedPDFXRefFallback(PDFXRefFallback):
+    load_trailer = load_trailer
 
 
 class Provenance(Protocol):
@@ -1282,28 +1287,18 @@ def parse_object(
         )
 
 
-class InstrumentedPDFDocument(PDFDocument):
+class InstrumentedPDFDocument(AdapterPDFDocument):
+    xref_class = InstrumentedPDFXRef
+    fallback_xref_class = InstrumentedPDFXRefFallback
+
     def __init__(self, *args, **kwargs):
-        self._xrefs = []
         self._decipher: DecipherCallable | None = None
         try:
             super().__init__(*args, **kwargs)
-        except PDFSyntaxError as pse:
-            if "No /Root object" not in str(pse):
-                raise pse
-            # this is a malformed PDF without a trailer root object
-            old_get_trailer = PDFXRef.get_trailer
-
-            def get_trailer(self: PDFXRef) -> dict[str, object]:
-                return {"Root": {}}
-
-            try:
-                PDFXRef.get_trailer = get_trailer
-                # try it again with our patched trailer loading:
-                super().__init__(*args, **kwargs)
-            finally:
-                PDFXRef.get_trailer = old_get_trailer
-
+        except PDFSyntaxError as error:
+            if "No /Root object" not in str(error):
+                raise
+            log.debug("Mapping a malformed PDF without a /Root object")
 
     @property
     def decipher(self) -> DecipherCallable | None:

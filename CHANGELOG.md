@@ -77,6 +77,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 
 ### Changed
 
+- Pin PDFminer to the qualified 20260107 release, isolate document-local xref instrumentation,
+  and qualify future updates through locked dependencies and PDF contract tests. Unqualified
+  installations retain identification and report unsupported PDF instrumentation.
+
 - **Breaking:** Terminal logging uses Rich 15.0.0 on stderr, with live matcher-pass progress,
   a bounded file-type tree during analysis, and a complete tree and summary at completion.
   Redirected stderr retains plain warnings, errors, and explicitly requested debug/trace logs;
