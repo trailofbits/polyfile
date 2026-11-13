@@ -273,7 +273,7 @@ function showSearchResult() {
   if (!result) return;
   setSource(result.source, { preserveSearch: true, scroll: false });
   const uid = result.nodes[0];
-  if (uid !== undefined) selectNode(uid);
+  if (uid !== undefined) selectNode(uid, { focus: false });
   scrollToByte(result.start);
   setHighlight('search-current', result.source, result.start, result.length);
   const count = `${viewerSearch.current + 1} of ${viewerSearch.results.length}`;

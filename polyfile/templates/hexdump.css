@@ -433,23 +433,11 @@ svg {
   position: relative;
   padding: 2px 0;
 }
-.tree input[type='checkbox'] {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  opacity: 0;
-}
-.tree input ~ ul {
-  display: none;
-}
-.tree input:checked ~ ul {
-  display: block;
-}
 .tree_label {
   display: block;
   position: relative;
   min-height: 38px;
-  padding: 7px 32px 7px 23px;
+  padding: 7px 8px;
   border: 1px solid transparent;
   border-radius: 5px;
   overflow-wrap: anywhere;
@@ -467,44 +455,6 @@ svg {
   margin-top: 3px;
   color: var(--muted);
   font: 10px/1.5 var(--mono);
-}
-label.tree_label::before {
-  content: '›';
-  position: absolute;
-  left: 7px;
-  top: 7px;
-  color: var(--muted);
-  font-size: 16px;
-  line-height: 18px;
-}
-.tree input:checked ~ label.tree_label::before {
-  transform: rotate(90deg);
-}
-.tree input:focus-visible ~ .tree_label {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-.tree_label > .download {
-  position: absolute;
-  top: 6px;
-  right: 4px;
-  width: 24px;
-  min-height: 26px;
-  padding: 1px;
-  border-color: transparent;
-  background: transparent;
-  color: var(--muted);
-  opacity: 0;
-}
-.tree_label:hover > .download,
-.tree_label:focus-within > .download {
-  opacity: 1;
-}
-.tree_label [data-action='decode'] {
-  min-height: 22px;
-  margin-top: 5px;
-  padding: 1px 6px;
-  font-size: 10px;
 }
 .tree_custom {
   display: block;
@@ -714,32 +664,6 @@ kbd {
   padding: 0 4px;
   background: var(--surface);
   font: 10px/1.6 var(--mono);
-}
-.popup {
-  width: min(800px, calc(100vw - 32px));
-  max-height: calc(100dvh - 48px);
-  border: 1px solid var(--border-strong);
-  border-radius: 10px;
-  padding: 22px;
-  background: var(--surface);
-  color: var(--text);
-}
-.popup::backdrop {
-  background: #07152199;
-}
-.popup h2 {
-  margin: 0 35px 16px 0;
-  font-size: 16px;
-}
-.popup [data-action='close-preview'] {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-}
-.rawdump {
-  font: 12px/1.6 var(--mono);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
 }
 #loading {
   position: absolute;

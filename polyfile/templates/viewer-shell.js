@@ -1,12 +1,10 @@
 /** @param {number} row */
 function jumpFromRow(row) {
   const current = (viewerState.rowOffset + row) * viewerState.bytesPerRow;
-  const address = window.prompt(
-    'To what address would you like to jump? (hexadecimal)',
-    current.toString(16),
-  );
-  if (address === null || !/^(?:0x)?[0-9a-f]+$/i.test(address.trim())) return;
-  scrollToByte(Number.parseInt(address.trim().replace(/^0x/i, ''), 16));
+  const input = gotoInput();
+  input.value = `0x${current.toString(16)}`;
+  input.focus();
+  input.select();
 }
 
 /** @param {MouseEvent} event */
@@ -25,9 +23,6 @@ function handleViewerAction(event) {
       break;
     case 'decode':
       if (node) showDecoded(node.uid);
-      break;
-    case 'close-preview':
-      /** @type {HTMLDialogElement} */ (getElement('decoded-preview')).close();
       break;
     default:
       return;
@@ -207,15 +202,6 @@ function initShell() {
     if (!(target instanceof HTMLElement)) return;
     const row = target.closest('.byterow');
     if (row instanceof HTMLElement) jumpFromRow(Number(row.dataset['row']));
-  });
-  document.addEventListener('keydown', (event) => {
-    if (event.key !== 'Escape') return;
-    viewerState.selectedNode = null;
-    viewerState.selectedRange = null;
-    clearHighlight('manually-focused');
-    document.querySelectorAll('.tree_label.manually-focused').forEach((label) => {
-      label.classList.remove('manually-focused');
-    });
   });
 }
 

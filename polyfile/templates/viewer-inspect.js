@@ -2,6 +2,7 @@
 const hoveredNodeLabels = new Set();
 let detailsKey = '';
 let copyGeneration = 0;
+let clipboardWrites = Promise.resolve();
 /** @type {HTMLElement|null} */
 let copyReturnFocus = null;
 
@@ -50,16 +51,19 @@ function clearSelectedLabels() {
     });
 }
 
-function showSelectedBytes() {
+/** @param {boolean} [focus] */
+function showSelectedBytes(focus = true) {
   if (!window.matchMedia('(max-width: 899px)').matches) return;
   selectPane('bytes');
-  getElement('bytes-tab').focus();
+  if (focus) getElement('bytes-tab').focus();
 }
 
-/** @param {number} uid */
-function selectNode(uid) {
+/** @param {number} uid @param {{preserveSearch?:boolean, focus?:boolean}} [options] */
+function selectNode(uid, options = {}) {
   const node = nodesById.get(uid);
   if (!node) return;
+  const changedSource = node.source !== viewerState.activeSource;
+  clearHover();
   revealNode(uid);
   setSource(node.source);
   viewerState.selectedNode = uid;
@@ -71,7 +75,8 @@ function selectNode(uid) {
   setHighlight('manually-focused', node.source, node.offset, node.size);
   scrollToByte(node.offset);
   updateSelectionDetails();
-  showSelectedBytes();
+  showSelectedBytes(options.focus !== false);
+  if (changedSource && options.preserveSearch === false) runSearch();
 }
 
 /** @param {number} offset @param {number} [length] */
@@ -102,7 +107,7 @@ function clearHover() {
 function showDecoded(uid) {
   const node = nodesById.get(uid);
   if (!node) return;
-  selectNode(uid);
+  selectNode(uid, { preserveSearch: searchOptions().scope === 'all' });
   selectByteView('text');
   selectPane('bytes');
 }
@@ -119,12 +124,12 @@ function appendInspectionDetail(list, name, value) {
   list.append(inspectionText('dt', name), inspectionText('dd', value));
 }
 
-/** @param {string} label @param {() => void} action @returns {HTMLButtonElement} */
+/** @param {string} label @param {(button:HTMLButtonElement) => void} action */
 function inspectionButton(label, action) {
   const button = document.createElement('button');
   button.type = 'button';
   button.textContent = label;
-  button.addEventListener('click', action);
+  button.addEventListener('click', () => action(button));
   return button;
 }
 
@@ -136,11 +141,15 @@ function inspectionActions(range, node) {
     inspectionButton('Download selection', () => {
       downloadRange(range.source, range.start, range.length, node?.type, node?.extension);
     }),
-    inspectionButton('Copy offset', () => {
-      void copyInspectionText(`0x${range.start.toString(16)}`);
+    inspectionButton('Copy offset', (button) => {
+      copyReturnFocus = button;
+      copyGeneration += 1;
+      void copyInspectionText(`0x${range.start.toString(16)}`, copyGeneration);
     }),
-    inspectionButton('Copy bytes as hex', () => {
-      void copySelectedHex(range);
+    inspectionButton('Copy bytes as hex', (button) => {
+      copyReturnFocus = button;
+      copyGeneration += 1;
+      void copySelectedHex(range, copyGeneration);
     }),
   );
   return actions;
@@ -223,7 +232,9 @@ function copyDialog() {
 /** @param {string} text */
 function showCopyFallback(text) {
   const dialog = copyDialog();
-  copyReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  if (!copyReturnFocus?.isConnected) {
+    copyReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  }
   const input = dialog.querySelector('textarea');
   if (!input) throw new Error('The copy dialog is missing its text field.');
   input.value = text;
@@ -233,17 +244,27 @@ function showCopyFallback(text) {
   inspectionStatus('Clipboard access is unavailable. Copy the selected text in the dialog.');
 }
 
-/** @param {string} text */
-async function copyInspectionText(text) {
+/** @param {string} text @param {number} generation @returns {Promise<void>} */
+function writeInspectionClipboard(text, generation) {
+  const write = async () => {
+    if (generation === copyGeneration) await navigator.clipboard.writeText(text);
+  };
+  clipboardWrites = clipboardWrites.then(write, write);
+  return clipboardWrites;
+}
+
+/** @param {string} text @param {number} generation */
+async function copyInspectionText(text, generation) {
+  if (generation !== copyGeneration) return;
   if (!navigator.clipboard) {
     showCopyFallback(text);
     return;
   }
   try {
-    await navigator.clipboard.writeText(text);
-    inspectionStatus('Copied to clipboard.');
+    await writeInspectionClipboard(text, generation);
+    if (generation === copyGeneration) inspectionStatus('Copied to clipboard.');
   } catch {
-    showCopyFallback(text);
+    if (generation === copyGeneration) showCopyFallback(text);
   }
 }
 
@@ -256,10 +277,8 @@ function inspectionHexChunk(bytes, start, end) {
   return values.join(' ');
 }
 
-/** @param {ViewerRange} range */
-async function copySelectedHex(range) {
-  copyGeneration += 1;
-  const generation = copyGeneration;
+/** @param {ViewerRange} range @param {number} generation */
+async function copySelectedHex(range, generation) {
   const bytes = getSourceBytes(range.source);
   const end = range.start + range.length;
   if (range.start < 0 || end > bytes.length) {
@@ -273,7 +292,7 @@ async function copySelectedHex(range) {
     await new Promise((resolve) => setTimeout(resolve, 0));
     if (generation !== copyGeneration) return;
   }
-  await copyInspectionText(pieces.join(' '));
+  await copyInspectionText(pieces.join(' '), generation);
 }
 
 /** @returns {HTMLInputElement} */
@@ -332,7 +351,9 @@ function handleInspectionClick(event) {
     return;
   }
   const label = target.closest('.tree_label');
-  if (label instanceof HTMLElement) selectNode(Number(label.dataset['uid']));
+  if (label instanceof HTMLElement) {
+    selectNode(Number(label.dataset['uid']), { preserveSearch: searchOptions().scope === 'all' });
+  }
 }
 
 /** @param {PointerEvent} event */

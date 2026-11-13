@@ -92,6 +92,25 @@ def test_hover_preserves_source_and_persistent_selection(
     expect(viewer_page.locator("#hexdump .manually-focused")).to_have_count(4)
 
 
+def test_cross_source_selection_refreshes_current_source_search(
+    viewer_page: "Page", report_factory: ReportFactory
+) -> None:
+    decoded = match(0, 4, name="decoded node", source="decoded:0", decoded="ZGF0YQ==")
+    open_report(
+        viewer_page, report_factory(b"needle", [match(0, 6, children=[decoded])])
+    )
+    viewer_page.locator("#searchmode").select_option("text")
+    viewer_page.locator("#searchscope").select_option("current")
+    viewer_page.locator("#search").fill("needle")
+    expect(viewer_page.locator("#searchinfo")).to_contain_text("1 of 1 · file")
+    node_button(viewer_page, "decoded node").click()
+    expect(viewer_page.locator("#source")).to_have_value("decoded:0")
+    expect(viewer_page.locator("#searchinfo")).to_have_text("0 results")
+    expect(node_button(viewer_page, "decoded node")).to_have_attribute(
+        "aria-pressed", "true"
+    )
+
+
 @pytest.mark.parametrize(
     "offset", ["", "xyz", "12junk", "-1", "+1", "0x", "8192", "9007199254740992"]
 )
@@ -208,3 +227,63 @@ def test_mobile_selection_opens_bytes_pane(
     node_button(viewer_page, "select me").click()
     expect(viewer_page.locator("#bytes-tab")).to_have_attribute("aria-selected", "true")
     expect(viewer_page.locator("#bytes-pane")).to_be_visible()
+
+
+@pytest.mark.parametrize("mode", ["combined", "structure"])
+def test_mobile_search_preserves_focus_while_typing(
+    viewer_page: "Page", report_factory: ReportFactory, mode: str
+) -> None:
+    viewer_page.set_viewport_size({"width": 390, "height": 844})
+    open_report(
+        viewer_page, report_factory(b"data", [match(0, 4, name="alphabet field")])
+    )
+    viewer_page.locator("#searchmode").select_option(mode)
+    search = viewer_page.locator("#search")
+    search.focus()
+    for index, letter in enumerate("alphabet", 1):
+        viewer_page.keyboard.type(letter)
+        expect(search).to_be_focused()
+        expect(search).to_have_value("alphabet"[:index])
+    expect(viewer_page.locator("#searchinfo")).to_contain_text("1 of 1")
+
+
+def test_new_copy_request_cancels_pending_hex_preparation(
+    viewer_page: "Page", report_factory: ReportFactory
+) -> None:
+    viewer_page.add_init_script("""globalThis.copyWrites = [];
+        Object.defineProperty(navigator, 'clipboard', {value: {
+            writeText: async text => { globalThis.copyWrites.push(text); }
+        }});""")
+    viewer_page.clock.install()
+    open_report(
+        viewer_page, report_factory(bytes(1024 * 1024), [match(0, 1024 * 1024)])
+    )
+    viewer_page.locator(".tree_label").click()
+    viewer_page.evaluate("""() => {
+        const buttons = [...document.querySelectorAll('#selection-details button')];
+        buttons.find(button => button.textContent === 'Copy bytes as hex').click();
+        buttons.find(button => button.textContent === 'Copy offset').click();
+    }""")
+    viewer_page.clock.run_for(1000)
+    assert viewer_page.evaluate("globalThis.copyWrites") == ["0x0"]
+
+
+def test_mobile_details_leave_room_for_the_tree(
+    viewer_page: "Page", report_factory: ReportFactory
+) -> None:
+    viewer_page.set_viewport_size({"width": 390, "height": 844})
+    node = match(
+        0,
+        16,
+        name="selected node",
+        analysis_status="unsupported",
+        analysis_message="Long analysis detail. " * 100,
+    )
+    open_report(viewer_page, report_factory(bytes(16), [node]))
+    viewer_page.locator("#structure-tab").click()
+    viewer_page.locator(".tree_label").click()
+    viewer_page.locator("#structure-tab").click()
+    tree = viewer_page.locator(".tree").bounding_box()
+    details = viewer_page.locator("#selection-details").bounding_box()
+    assert tree is not None and tree["height"] >= 80
+    assert details is not None and details["height"] <= 140
