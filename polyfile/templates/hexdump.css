@@ -519,6 +519,7 @@ svg {
 .scrollcapture {
   display: flex;
   align-items: start;
+  column-gap: 1.5ch;
   overflow-x: auto;
   overflow-y: hidden;
   min-width: 0;
@@ -741,6 +742,9 @@ kbd {
   }
 }
 @media (max-width: 620px) {
+  .hexeditor {
+    column-gap: 4px;
+  }
   .app-shell {
     padding: 12px 12px 8px;
     gap: 10px;

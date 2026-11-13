@@ -251,10 +251,12 @@ function fittedColumns() {
     pane?.clientWidth ??
     document.documentElement.clientWidth - measuredWidth(document.querySelector('.tree'), 0) - 80;
   const style = getComputedStyle(pane ?? getElement('scrollcapture'));
+  const captureStyle = getComputedStyle(getElement('scrollcapture'));
   const padding = Number.parseFloat(style.paddingLeft) + Number.parseFloat(style.paddingRight);
   const chrome =
     measuredWidth(getElement('scrollcontainer'), 20) +
     (Number.parseFloat(style.columnGap) || 0) +
+    (Number.parseFloat(captureStyle.columnGap) || 0) +
     padding;
   const hex = measuredWidth(document.querySelector('#hexdump .byte'), 30);
   const ascii = measuredWidth(document.querySelector('#ascii .byte'), 10);
