@@ -34,12 +34,15 @@ def test_workspace_fits_viewport(
         "document.documentElement.scrollHeight <= innerHeight"
     )
     if width >= 900:
+        expect(viewer_page.locator("#bytes-pane")).to_have_attribute("role", "region")
         structure = viewer_page.locator("#structure-pane").bounding_box()
         byte_pane = viewer_page.locator("#bytes-pane").bounding_box()
         assert structure is not None and byte_pane is not None
         assert structure["y"] == byte_pane["y"]
         assert structure["x"] + structure["width"] < byte_pane["x"]
     else:
+        expect(viewer_page.locator("#bytes-pane")).to_have_attribute("role", "tabpanel")
+        expect(viewer_page.locator("#bytes-pane")).to_have_attribute("aria-labelledby", "bytes-tab")
         expect(viewer_page.get_by_role("tab", name="Bytes", exact=True)).to_be_visible()
         expect(viewer_page.locator("#structure-pane")).to_be_hidden()
         viewer_page.get_by_role("tab", name="Structure", exact=True).click()
