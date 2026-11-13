@@ -1,19 +1,10 @@
 import importlib
-from string import whitespace
-import sys
+from enum import StrEnum
+from string import hexdigits, whitespace
 
 from abnf.grammars.misc import load_grammar_rules
 
 from ..logger import getStatusLogger
-
-if sys.version_info < (3, 11):
-    # StrEnum is only available in Python 3.11 or newer
-    from enum import Enum
-    class StrEnum(str, Enum):
-        pass
-else:
-    from enum import StrEnum
-
 
 log = getStatusLogger("HTTP/1.1")
 
@@ -229,29 +220,6 @@ class HttpVisitor(parser.NodeVisitor):
     method which can be called to visit only the section(s) of the AST of interest. Add (or edit) additional visitor methods for additional AST sections of interest.
     """
 
-    _hex_without_zero = [
-        "1",
-        "2",
-        "3",
-        "4",
-        "5",
-        "6",
-        "7",
-        "8",
-        "9",
-        "a",
-        "b",
-        "c",
-        "d",
-        "e",
-        "f",
-        "A",
-        "B",
-        "C",
-        "D",
-        "E",
-    ]
-
     # start-line
     method: HttpMethod
     request_target: str
@@ -277,6 +245,7 @@ class HttpVisitor(parser.NodeVisitor):
             self.headers.pop(name)
 
     def visit_request(self, node: Node):
+        body_seen = False
         for child in node.children:
             if child.name == "header":
                 if self.headers is None:
@@ -286,11 +255,19 @@ class HttpVisitor(parser.NodeVisitor):
                 header_name, header_value = child.value.strip(whitespace).split(":", 1)
                 self.headers[header_name] = header_value.strip(whitespace)
             if child.name == "body":
+                body_seen = True
                 self.body_raw = child.value
                 if self.body_parsed is None:
                     self.body_parsed = list()
 
             self.visit(child)
+
+        encoding = getattr(self, "transfer_encoding", None) or getattr(self, "te", None)
+        if not body_seen and encoding == "chunked":
+            self.body_raw = ""
+            self.body_parsed = []
+            self.content_length = 0
+            self._remove_header("Transfer-Encoding")
 
     def visit_start_line(self, node: Node):
         for child in node.children:
@@ -375,36 +352,26 @@ class HttpVisitor(parser.NodeVisitor):
         else:
             return  # do nothing
 
-    def _chunk_size(self, node_children: List[Node]) -> Tuple[int, int]:
-        """There is no max chunk size defined in spec. Therefore, read until the semicolon which would start a chunk extension, or until CR (for CR LF). The index returned is either the index of the first extension field semicolon, or the CR of the CR LF which indicates hte chunk body starts next. If there are trailers, we'll return the index of the first trailer, and chunk_size of 0."""
-        chunk_size_acc: List[str] = []
-        for child in node_children:
-            # https://stackoverflow.com/a/7058854
-            if child.value in self._hex_without_zero:
-                chunk_size_acc.append(child.value)
-            elif child.value == "0":
-                return (0, 1)
-            elif child.value == "\r":
-                # the chunk size and the index of the first non-chunk-size thing
-                return (int("".join(chunk_size_acc), 16), node_children.index(child))
-            else:
-                return (0, node_children.index(child))
+    @staticmethod
+    def _chunk_header(body: str, offset: int) -> tuple[int, int, str] | None:
+        """Read a complete chunk-size line without consuming partial headers.
 
-    def _accumulate_chunk_extensions(
-        self, node_children: List[Node], starting_index: int
-    ) -> Tuple[List[str], int]:
-        """Returns the chunk extensions and the first index after the following CRLF.
-        TODO kaoudis: handle chunk extensions more better according to RFC."""
-        chunk_ext: List[str] = []
-        for child in node_children[starting_index:]:
-            if child.value != "\r":
-                chunk_ext.append(child.value)
-            else:
-                index = node_children.index(child)
-                if len(node_children) >= index + 2 and node_children[index + 1] == "\n":
-                    return (chunk_ext, index + 2)
+        Args:
+            body: The raw chunked body.
+            offset: The beginning of the size line within the body.
 
-    def _accumulate_trailers(self, node_children: List[Node]):
+        Returns:
+            The size, data start, and extension text, or None for invalid or incomplete input.
+        """
+        line_end = body.find("\r\n", offset)
+        if line_end < 0:
+            return None
+        size, separator, extension = body[offset:line_end].partition(";")
+        if not size or any(char not in hexdigits for char in size):
+            return None
+        return int(size, 16), line_end + 2, separator + extension
+
+    def _accumulate_trailers(self, trailer_data: str):
         """
         Following https://www.rfc-editor.org/rfc/rfc7230#section-4.4,
         we use the Trailer header to figure out what will be in the chunked transfer coding trailer(s) and add these additional headers to the Visitor instance's header list.
@@ -430,6 +397,9 @@ class HttpVisitor(parser.NodeVisitor):
         forbidden to be sent in a trailer, since processing them as if they
         were present in the header section might bypass external security
         filters.
+
+        The first empty CRLF-delimited line ends the trailer section. Subsequent bytes may
+        belong to another request and must not contribute trailer fields.
         """
 
         if hasattr(self, "trailer"):
@@ -450,19 +420,13 @@ class HttpVisitor(parser.NodeVisitor):
 
             trailer_field_names: Set = set(self.trailer.split(","))
             allowed_trailer_field_names: Set = trailer_field_names - disallowed_fields
-            trailer_headers_string = []
-
-            for node in node_children:
-                trailer_headers_string.append(node.value)
-
-            # TODO kaoudis this is utterly ridiculous, clean it up
-            trailer_headers: List[str] = list(
-                filter(None, "".join(trailer_headers_string).split("\r\n"))
-            )
+            trailer_headers = trailer_data.split("\r\n")
 
             for header in trailer_headers:
-                name, value = header.strip(whitespace).split(":", 1)
-                if name in allowed_trailer_field_names:
+                if not header:
+                    break
+                name, separator, value = header.strip(whitespace).partition(":")
+                if separator and name in allowed_trailer_field_names:
                     # A recipient that retains a received trailer field MUST
                     # either store/forward the trailer field separately from
                     # the received header fields or merge the received trailer
@@ -474,63 +438,36 @@ class HttpVisitor(parser.NodeVisitor):
                     self.headers[name] = value.strip(whitespace)
                     self.__setattr__(name.lower(), value)
 
-    def _accumulate_chunks(self, node_children: List[Node], length: int = 0) -> int:
-        """An utterly hideous yet hopefully fairly close interpretation of the chunk accumulation algorithm from rfc7230 and rfc9112."""
+    def _accumulate_chunks(self, node_children: List[Node]) -> int:
+        """Decode complete chunks and retain available bytes from an incomplete final chunk.
 
-        # read chunk-size, chunk-ext (if any), and CR LF
-        (chunk_size, next_index) = self._chunk_size(node_children)
-        length += chunk_size
+        Args:
+            node_children: Body octets produced by the HTTP grammar.
 
-        # node_children[1] = CR; node_children[2] = LF if no chunk-ext
-        # https://www.rfc-editor.org/rfc/rfc7230#section-4.1.1
-        # a recipient must ignore unrecognized chunk-extensions!
-        if chunk_size > 0:
-            if (
-                node_children[next_index].value != ";"
-                and len(node_children) >= next_index + 2
-            ):
-                starting_index: int = next_index + 2
-            else:
-                # in theory chunk extensions should start with ';'
-                (self.chunk_ext, starting_index) = self._accumulate_chunk_extensions(
-                    node_children, next_index
-                )
-        elif not hasattr(self, "trailer"):
-            # chunk size is 0 and no trailer, so we are done
-            return chunk_size
-
-        for child in node_children[starting_index:]:
-            index = node_children.index(child)
-
-            if chunk_size > 0:
-                # just blindly trust the number lol
-                self.body_parsed.append(child.value)
-                chunk_size -= 1
-            elif (
-                index + 3 <= len(node_children)
-                and child.value == "\r"
-                and node_children[index + 1].value == "\n"
-                and node_children[index + 2].value in self._hex_without_zero
-            ):
-                # If not 0 and all octets are accounted for, the next thing should be the next chunk size. Keep adding data to body_parsed.
-                slice_index = index + 2
-                length += self._accumulate_chunks(node_children[slice_index:], length)
-            elif (
-                # hasattr 'trailer' means there was a Trailer header
-                hasattr(self, "trailer")
-                # '\r\n0\r\n' where our current index is the first '\r'
-                and index + 5 <= len(node_children)
-                and child.value == "\r"
-                # ending chunks w/ '0\r\n'
-                and node_children[index + 2].value == "0"
-            ):
-                trailer_starting_index = index + 5
-                self._accumulate_trailers(node_children[trailer_starting_index:])
+        Returns:
+            The number of body bytes actually decoded. Invalid or incomplete framing stops
+            decoding without consuming subsequent bytes as body content.
+        """
+        body = "".join(child.value for child in node_children)
+        offset = 0
+        length = 0
+        while offset < len(body):
+            header = self._chunk_header(body, offset)
+            if header is None:
+                break
+            size, start, extension = header
+            if extension:
+                self.chunk_ext = list(extension)
+            if size == 0:
+                self._accumulate_trailers(body[start:])
                 return length
-            else:
-                return length
-
-            self.visit(child)
+            end = min(start + size, len(body))
+            self.body_parsed.extend(body[start:end])
+            length += end - start
+            if end < start + size or body[end:end + 2] != "\r\n":
+                break
+            offset = end + 2
+        return length
 
     def visit_chunked_body(self, node: Node):
         """Defined in RFC 7230 Sec. 4.1.3

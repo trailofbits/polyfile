@@ -1,11 +1,11 @@
 from collections.abc import Sequence as AbstractSequence, Set as AbstractSet
-from typing import Generic, TypeVar, Iterable, Iterator, List, Optional, Sequence, Set
+from typing import TypeVar, Iterable, Iterator, List, Optional, Set, overload
 
 T = TypeVar("T")
 
 
-class LazyIterableSequence(Generic[T], Sequence[T], AbstractSequence):
-    """A thread-safe list lazily generated from an iterator"""
+class LazyIterableSequence(AbstractSequence[T]):
+    """A sequence that caches values requested from a source iterator."""
     def __init__(self, source: Iterable[T]):
         self._source_iter: Optional[Iterator[T]] = iter(source)
         self._items: List[T] = []
@@ -23,7 +23,20 @@ class LazyIterableSequence(Generic[T], Sequence[T], AbstractSequence):
             except IndexError:
                 assert self._source_iter is None
 
-    def __getitem__(self, index: int) -> T:
+    @overload
+    def __getitem__(self, index: int) -> T: ...
+
+    @overload
+    def __getitem__(self, index: slice) -> List[T]: ...
+
+    def __getitem__(self, index: int | slice) -> T | List[T]:
+        if isinstance(index, slice):
+            if index.step == 0:
+                raise ValueError("slice step cannot be zero")
+            self._complete()
+            return self._items[index]
+        if index < 0:
+            self._complete()
         while self._source_iter is not None and len(self._items) <= index:
             # we have not yet read enough items
             try:

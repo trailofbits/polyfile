@@ -5,6 +5,7 @@ import shutil
 import sys
 
 from argparse import RawTextHelpFormatter
+from contextlib import ExitStack
 from functools import reduce
 
 try:
@@ -134,9 +135,20 @@ def run_merge(args, parser):
     build_cfg = args.cfg is not None or args.cfg_pdf is not None
     built_type_hierarchy = args.type_hierarchy is not None or args.type_hierarchy_pdf is not None
 
-    if len(args.diff) > 0:
-        input_program_traces = [polytracker.parse(json.load(diff_file)) for diff_file in args.FILES]
-        program_traces_to_diff = [polytracker.parse(json.load(diff_file)) for diff_file in args.diff]
+    if args.demangle and cxxfilt is None and (build_cfg or args.diff):
+        for input_file in args.FILES + (args.diff or []):
+            input_file.close()
+        parser.error(
+            "The `cxxfilt` package is not installed. Reinstall PolyFile with the "
+            "`demangle` option enabled."
+        )
+
+    if args.diff:
+        with ExitStack() as inputs:
+            for input_file in args.FILES + args.diff:
+                inputs.enter_context(input_file)
+            input_program_traces = [polytracker.parse(json.load(diff_file)) for diff_file in args.FILES]
+            program_traces_to_diff = [polytracker.parse(json.load(diff_file)) for diff_file in args.diff]
 
         def labeler(funcname):
             if args.demangle:
@@ -155,7 +167,7 @@ def run_merge(args, parser):
                 first_funcs &= fnames
 
         second_funcs = None
-        for f in input_program_traces:
+        for f in program_traces_to_diff:
             fnames = set(labeler(fname) for fname in f.functions.keys())
             if second_funcs is None:
                 second_funcs = fnames
@@ -178,6 +190,7 @@ def run_merge(args, parser):
             polyfile_json_file = args.FILES[0]
             polytracker_json_file = None
         else:
+            args.FILES[0].close()
             return 0
     elif len(args.FILES) != 2:
         parser.print_help()
@@ -187,10 +200,6 @@ def run_merge(args, parser):
     else:
         polyfile_json_file = args.FILES[0]
         polytracker_json_file = args.FILES[1]
-
-    if build_cfg and args.demangle and cxxfilt is None:
-        log.critical("Error: The `cxxfilt` package is not installed. Either reinstall PolyFile with the `demangle` option enabled, or run `pip3 install cxxfilt`.")
-        parser.exit()
 
     try:
         dataflow_from_start, dataflow_to_end, dataflow_ranges = parse_dataflow_ranges(args.dataflow)
