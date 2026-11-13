@@ -162,6 +162,13 @@ function initLayout() {
 
 let wheelRemainder = 0;
 
+/** @param {number} mode @returns {number} */
+function wheelPixelScale(mode) {
+  if (mode === 1) return byteHeight;
+  if (mode === 2) return getElement('byte-pane').clientHeight;
+  return 1;
+}
+
 /** @param {WheelEvent} event */
 function handleByteWheel(event) {
   const target = event.target;
@@ -169,13 +176,7 @@ function handleByteWheel(event) {
   if (event.ctrlKey || event.shiftKey || Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
   if (event.deltaY === 0) return;
   event.preventDefault();
-  const scale =
-    event.deltaMode === 1
-      ? byteHeight
-      : event.deltaMode === 2
-        ? getElement('byte-pane').clientHeight
-        : 1;
-  wheelRemainder += event.deltaY * scale;
+  wheelRemainder += event.deltaY * wheelPixelScale(event.deltaMode);
   const rows = Math.trunc(wheelRemainder / byteHeight);
   wheelRemainder -= rows * byteHeight;
   if (rows !== 0) scrollToByte((viewerState.rowOffset + rows) * viewerState.bytesPerRow);

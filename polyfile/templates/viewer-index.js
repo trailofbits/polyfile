@@ -25,6 +25,17 @@ function buildIntervalBranch(entries, first, last) {
   return { entry, left, right, maxEnd: Math.max(entry.end, left?.maxEnd ?? 0, right?.maxEnd ?? 0) };
 }
 
+/**
+ * @template T
+ * @param {IntervalBranch<T>} branch
+ * @param {IntervalBranch<T>[]} stack
+ * @param {number} end
+ */
+function queueIntervalChildren(branch, stack, end) {
+  if (branch.left) stack.push(branch.left);
+  if (branch.right && branch.entry.start < end) stack.push(branch.right);
+}
+
 /** @template T */
 class IntervalIndex {
   /** @param {IntervalEntry<T>[]} entries */
@@ -46,9 +57,8 @@ class IntervalIndex {
     while (stack.length) {
       const branch = stack.pop();
       if (!branch || branch.maxEnd <= start) continue;
-      if (branch.left) stack.push(branch.left);
       if (branch.entry.start < end && branch.entry.end > start) values.push(branch.entry.value);
-      if (branch.right && branch.entry.start < end) stack.push(branch.right);
+      queueIntervalChildren(branch, stack, end);
     }
     return values;
   }

@@ -83,7 +83,8 @@ function validUtf8Continuation(lead, byte, index) {
   if (byte === undefined || byte < 0x80 || byte > 0xbf) return false;
   if (index !== 1) return true;
   const bounds = utf8FirstBounds.get(lead);
-  return byte >= (bounds?.[0] ?? 0x80) && byte <= (bounds?.[1] ?? 0xbf);
+  if (!bounds) return true;
+  return byte >= bounds[0] && byte <= bounds[1];
 }
 
 /** @param {Uint8Array} bytes @param {number} offset @returns {number} */
@@ -201,10 +202,16 @@ function paintHighlight(kind, range, start) {
   const first = Math.max(0, Math.floor(range.start - start));
   const last = Math.min(hexCells.length, range.start + range.length - start);
   for (let index = first; index < last; index += 1) {
-    if (!hexCells[index]?.textContent) continue;
-    hexCells[index]?.classList.add(kind);
+    const hex = hexCells[index];
+    if (!hex?.textContent) continue;
+    hex.classList.add(kind);
     asciiCells[index]?.classList.add(kind);
   }
+  paintReadableHighlight(kind, range);
+}
+
+/** @param {string} kind @param {ViewerRange} range */
+function paintReadableHighlight(kind, range) {
   for (let index = firstReadableAt(range.start); index < readableRanges.length; index += 1) {
     const readable = readableRanges[index];
     if (!readable || readable.start >= range.start + range.length) break;
@@ -255,6 +262,12 @@ function fittedColumns() {
   return width >= 16 * (hex + ascii) + gutter + chrome ? 16 : 8;
 }
 
+/** @returns {number} */
+function measuredRowHeight() {
+  const row = document.querySelector('#hexdump .byteline');
+  return Math.max(1, row?.getBoundingClientRect().height || byteHeight);
+}
+
 function resizeViewport() {
   const pane = document.getElementById('byte-pane');
   const height = getElement('scrollcontainer').clientHeight;
@@ -263,8 +276,7 @@ function resizeViewport() {
   if (!hexCells.length) rebuildRows();
   if (!getElement('scrollcapture').hidden) viewerState.bytesPerRow = fittedColumns();
   pane?.style.setProperty('--byte-columns', String(viewerState.bytesPerRow));
-  const row = document.querySelector('#hexdump .byteline');
-  byteHeight = Math.max(1, row?.getBoundingClientRect().height || byteHeight);
+  byteHeight = measuredRowHeight();
   viewerState.visibleRows = Math.max(1, Math.floor(height / byteHeight));
   viewerState.rowOffset = Math.floor(start / viewerState.bytesPerRow);
   renderViewport();

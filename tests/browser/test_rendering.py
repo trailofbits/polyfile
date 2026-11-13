@@ -1,6 +1,7 @@
 """Behavior regressions for bounded source-aware byte and text rendering."""
 
 import base64
+import random
 import re
 from math import ceil
 from typing import TYPE_CHECKING
@@ -47,6 +48,39 @@ def test_hover_finds_overlaps_in_only_the_active_source(
     assert viewer_page.locator(".tree_label.highlighted > .node-name").all_text_contents() == [
         "decoded"
     ]
+
+
+@pytest.mark.parametrize("source", ["file", "decoded:0"])
+def test_hover_matches_linear_overlap_checks_for_seeded_ranges(
+    viewer_page: "Page", report_factory: ReportFactory, source: str
+) -> None:
+    generator = random.Random(3726)
+    ranges = [(generator.randrange(256), generator.randrange(65)) for _ in range(40)]
+    physical = [
+        match(start, length, name=f"file range {index}")
+        for index, (start, length) in enumerate(ranges)
+    ]
+    decoded = match(
+        0, 256, name="decoded:0 root", source="decoded:0",
+        decoded=base64.b64encode(bytes(256)).decode("ascii"),
+        children=[
+            match(start, length, name=f"decoded:0 range {index}", source="decoded:0")
+            for index, (start, length) in enumerate(ranges)
+        ],
+    )
+    root = match(0, 256, name="file root", children=[*physical, decoded])
+    open_report(viewer_page, report_factory(bytes(256), [root]))
+    viewer_page.locator("#source").select_option(source)
+    offsets = [0, 1, 63, 64, 127, 128, 254, 255]
+    offsets.extend(generator.randrange(256) for _ in range(20))
+    for offset in offsets:
+        expected = {f"{source} root"}
+        for index, (start, length) in enumerate(ranges):
+            if start <= offset < start + length:
+                expected.add(f"{source} range {index}")
+        viewer_page.locator(f"#byte{offset}").dispatch_event("pointerover")
+        actual = viewer_page.locator(".tree_label.highlighted > .node-name").all_text_contents()
+        assert set(actual) == expected
 
 
 def test_padding_and_empty_files_have_no_hover_cursor(
@@ -126,6 +160,27 @@ def test_utf8_preview_maps_codepoints_and_malformed_sequences_to_bytes(
     assert "cursor" in (euro.get_attribute("class") or "")
     scroll_rows(viewer_page, 1)
     assert viewer_page.locator("#readablebytes .readable-byte").first.text_content() == "€"
+
+
+@pytest.mark.parametrize(
+    "contents",
+    [
+        b"\xe0\x80\x80", b"\xed\xa0\x80", b"\xf0\x80\x80\x80", b"\xf4\x90\x80\x80",
+        b"\xe0\xa0\x80", b"\xed\x9f\xbf", b"\xf0\x90\x80\x80", b"\xf4\x8f\xbf\xbf",
+        b"\xf0\x90\x80", b"\xe0\xa0", b"\xe0",
+    ],
+)
+def test_utf8_preview_preserves_valid_and_replacement_boundaries(
+    viewer_page: "Page", report_factory: ReportFactory, contents: bytes
+) -> None:
+    open_report(viewer_page, report_factory(contents))
+    assert viewer_page.locator("#readablebytes").text_content() == contents.decode(
+        "utf-8", errors="replace"
+    )
+    lengths = viewer_page.locator("#readablebytes .readable-byte").evaluate_all(
+        "elements => elements.map(element => Number(element.dataset.length))"
+    )
+    assert sum(lengths) == len(contents)
 
 
 def test_large_selection_keeps_only_viewport_cells(

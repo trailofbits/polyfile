@@ -7,5 +7,13 @@
   },
   "categories": {
     "correctness": "error"
+  },
+  "rules": {
+    "complexity": ["error", 8],
+    "max-lines-per-function": [
+      "error",
+      { "max": 50, "skipBlankLines": true, "skipComments": true }
+    ],
+    "max-params": ["error", 5]
   }
 }
