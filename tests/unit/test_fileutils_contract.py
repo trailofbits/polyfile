@@ -117,3 +117,63 @@ def test_sibling_views_share_the_backing_cursor(stream: FileStream) -> None:
     first.seek(0)
     assert second.tell() == 0
     assert second.read(1) == b"9"
+
+
+@pytest.mark.parametrize("index", (-6, -5, -1, 0, 1, 5))
+def test_integer_indexing_matches_bytes_and_preserves_cursor(
+    stream: FileStream, index: int
+) -> None:
+    stream.seek(3)
+    assert stream[index] == bytes((DATA[5:11][index],))
+    assert stream.tell() == 3
+
+
+@pytest.mark.parametrize("index", (-7, 6, 10))
+def test_integer_indexing_rejects_missing_bytes(stream: FileStream, index: int) -> None:
+    stream.seek(3)
+    with pytest.raises(IndexError):
+        stream[index]
+    assert stream.tell() == 3
+
+
+@pytest.mark.parametrize("start", (None, -10, -2, 0, 2, 6, 10))
+@pytest.mark.parametrize("stop", (None, -10, -1, 0, 3, 6, 10))
+def test_slices_match_bytes_and_move_the_shared_cursor(
+    stream: FileStream, start: int | None, stop: int | None
+) -> None:
+    stream.seek(3)
+    child = stream[start:stop]
+    assert isinstance(child, FileStream)
+    expected_start, _, _ = slice(start, stop).indices(len(stream))
+    assert child.start == expected_start
+    assert child.offset() == stream.offset() + expected_start
+    assert stream.tell() == expected_start
+    assert child.content == DATA[5:11][start:stop]
+    assert stream.tell() == expected_start
+
+
+@pytest.mark.parametrize("step", (0, -1, 2))
+def test_slices_reject_nonunit_steps(stream: FileStream, step: int) -> None:
+    stream.seek(3)
+    with pytest.raises(ValueError, match="step"):
+        stream[::step]
+    assert stream.tell() == 3
+
+
+def test_child_reads_preserve_parent_transformations() -> None:
+    class UppercaseView(FileStream):
+        def read(self, n: int | None = None) -> bytes:
+            return super().read(n).upper()
+
+    parent = UppercaseView(b"prefixabcdefsuffix", start=6, length=6)
+    child = parent[1:-1]
+    assert isinstance(child, FileStream)
+    assert child.read() == b"BCDE"
+    assert child.content == b"BCDE"
+
+
+def test_indexing_and_content_restore_a_cursor_outside_the_view(stream: FileStream) -> None:
+    stream.root.seek(1)
+    assert stream[-1] == b"a"
+    assert stream.content == DATA[5:11]
+    assert stream.root.tell() == 1

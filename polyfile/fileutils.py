@@ -5,7 +5,7 @@ from pathlib import Path
 import tempfile as tf
 import shutil
 import sys
-from typing import AnyStr, ContextManager, IO, Iterator, Iterable, List, Optional, TextIO, Union
+from typing import AnyStr, ContextManager, IO, Iterator, Iterable, List, Optional, TextIO, Union, overload
 
 
 Streamable = Union[str, Path, IO, "FileStream", bytes]
@@ -316,8 +316,20 @@ class FileStream(IO):
                     self._temp = None
         return FSTempfile(self)
 
-    def __getitem__(self, index) -> Union[bytes, "FileStream"]:
+    @overload
+    def __getitem__(self, index: int) -> bytes:
+        ...
+
+    @overload
+    def __getitem__(self, index: slice) -> "FileStream":
+        ...
+
+    def __getitem__(self, index: Union[int, slice]) -> Union[bytes, "FileStream"]:
         if isinstance(index, int):
+            if index < 0:
+                index += len(self)
+            if not 0 <= index < len(self):
+                raise IndexError(f"FileStream byte index {index} is outside its {len(self)} bytes")
             with self.save_pos():
                 self.seek(index)
                 return self.read(1)
@@ -325,16 +337,8 @@ class FileStream(IO):
             raise ValueError(f"unexpected argument {index}")
         if index.step is not None and index.step != 1:
             raise ValueError(f"Invalid slice step: {index}")
-        length=None
-        if index.stop is not None:
-            if index.stop < 0 and (
-                    (index.stop < index.start and index.start > 0) or (index.stop > index.start and index.start < 0)):
-                length = len(self) + index.stop - index.start
-            elif index.stop < index.start:
-                length = 0
-            else:
-                length = index.stop - index.start
-        return FileStream(self, start=index.start, length=length, close_on_exit=False)
+        start, stop, _ = index.indices(len(self))
+        return FileStream(self, start=start, length=max(stop - start, 0), close_on_exit=False)
 
     def __enter__(self) -> "FileStream":
         self._entries += 1

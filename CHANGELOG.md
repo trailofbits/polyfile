@@ -89,6 +89,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 - **Breaking:** FileStream seeks use bounded view-relative positions and return the new
   position. Negative view origins and lengths are rejected, and past-EOF origins consistently
   produce empty views at EOF, including when views are nested (#3664).
+- **Breaking:** FileStream integer indexes and unit-step slices normalize negative and omitted
+  bounds consistently with bytes. Missing integer indexes raise `IndexError` (#3664).
 - Bounded file regions now limit reads before allocating data, including `read()` and
   `read(-1)`, so archive members cannot expose neighboring bytes or copy the remaining archive.
 
