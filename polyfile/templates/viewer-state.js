@@ -43,10 +43,10 @@ function getElement(id) {
 }
 
 /** @type {ViewerData} */
-const viewerData = JSON.parse(getElement("viewer-data").textContent || "{}");
+const viewerData = JSON.parse(getElement('viewer-data').textContent || '{}');
 /** @type {ViewerState} */
 const viewerState = {
-  activeSource: "file",
+  activeSource: 'file',
   rowOffset: 0,
   visibleRows: 1,
   bytesPerRow: 16,
@@ -107,14 +107,14 @@ function setSource(source, options = {}) {
   viewerState.selectedNode = null;
   viewerState.selectedRange = null;
   for (const kind of highlightRanges.keys()) {
-    if (kind !== "searchresult" || options.preserveSearch === false) {
+    if (kind !== 'searchresult' || options.preserveSearch === false) {
       highlightRanges.delete(kind);
     }
   }
-  document.querySelectorAll(".tree_label.manually-focused").forEach((label) => {
-    label.classList.remove("manually-focused");
+  document.querySelectorAll('.tree_label.manually-focused').forEach((label) => {
+    label.classList.remove('manually-focused');
   });
-  /** @type {HTMLSelectElement} */ (getElement("source")).value = source;
+  /** @type {HTMLSelectElement} */ (getElement('source')).value = source;
   if (options.scroll !== false) viewerState.rowOffset = 0;
   updateCoverage();
   renderViewport();
@@ -126,9 +126,9 @@ function updateCoverage() {
   if (!source) return;
   const length = getSourceBytes(viewerState.activeSource).length;
   const uncovered = source.regions.reduce((sum, region) => sum + region[1], 0);
-  const coverage = document.querySelector(".coverage");
+  const coverage = document.querySelector('.coverage');
   if (!coverage) return;
-  const prefix = viewerState.activeSource === "file" ? "" : `${viewerState.activeSource}: `;
+  const prefix = viewerState.activeSource === 'file' ? '' : `${viewerState.activeSource}: `;
   coverage.textContent =
     prefix +
     (uncovered === 0

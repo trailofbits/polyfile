@@ -10,39 +10,39 @@ let readableCells = [];
 /** @param {number} byte @returns {string} */
 function displayByte(byte) {
   if (byte < 32) return String.fromCharCode(0x2400 + byte);
-  if (byte === 127) return "\u2421";
+  if (byte === 127) return '\u2421';
   return String.fromCharCode(byte);
 }
 
 /** @param {string} className @returns {HTMLSpanElement} */
 function createSpan(className) {
-  const span = document.createElement("span");
+  const span = document.createElement('span');
   span.className = className;
   return span;
 }
 
 function rebuildRows() {
-  const hex = getElement("hexdump");
-  const ascii = getElement("ascii");
+  const hex = getElement('hexdump');
+  const ascii = getElement('ascii');
   hex.replaceChildren();
   ascii.replaceChildren();
   hexCells = [];
   asciiCells = [];
   for (let row = 0; row < viewerState.visibleRows; row += 1) {
-    const hexRow = document.createElement("div");
-    const asciiRow = document.createElement("div");
-    hexRow.className = asciiRow.className = "byteline";
-    const address = createSpan("byterow");
-    address.dataset.row = String(row);
-    address.title = "Double-click to jump to an address";
+    const hexRow = document.createElement('div');
+    const asciiRow = document.createElement('div');
+    hexRow.className = asciiRow.className = 'byteline';
+    const address = createSpan('byterow');
+    address.dataset['row'] = String(row);
+    address.title = 'Double-click to jump to an address';
     hexRow.append(address);
     for (let column = 0; column < viewerState.bytesPerRow; column += 1) {
       const cell = row * viewerState.bytesPerRow + column;
-      const hexCell = createSpan("byte");
-      const asciiCell = createSpan("byte");
+      const hexCell = createSpan('byte');
+      const asciiCell = createSpan('byte');
       hexCell.id = `byte${cell}`;
       asciiCell.id = `ascii${cell}`;
-      hexCell.dataset.cell = asciiCell.dataset.cell = String(cell);
+      hexCell.dataset['cell'] = asciiCell.dataset['cell'] = String(cell);
       hexRow.append(hexCell);
       asciiRow.append(asciiCell);
       hexCells.push(hexCell);
@@ -68,15 +68,15 @@ function renderReadable() {
   const fragment = document.createDocumentFragment();
   readableCells = [];
   for (let offset = start; offset < end; offset += 1) {
-    const span = createSpan("readable-byte");
-    span.dataset.cell = String(offset - start);
-    span.classList.toggle("undescribed", byteUndescribed(offset));
+    const span = createSpan('readable-byte');
+    span.dataset['cell'] = String(offset - start);
+    span.classList.toggle('undescribed', byteUndescribed(offset));
     span.textContent = displayByte(bytes[offset] ?? 0);
     fragment.append(span);
     readableCells.push(span);
-    if (bytes[offset] === 10) fragment.append(document.createElement("br"));
+    if (bytes[offset] === 10) fragment.append(document.createElement('br'));
   }
-  getElement("readablebytes").replaceChildren(fragment);
+  getElement('readablebytes').replaceChildren(fragment);
 }
 
 function renderViewport() {
@@ -91,27 +91,27 @@ function renderViewport() {
     const hex = hexCells[index];
     const ascii = asciiCells[index];
     if (!hex || !ascii) continue;
-    hex.textContent = byte === undefined ? "" : byte.toString(16).padStart(2, "0");
-    ascii.textContent = byte === undefined ? "" : displayByte(byte);
+    hex.textContent = byte === undefined ? '' : byte.toString(16).padStart(2, '0');
+    ascii.textContent = byte === undefined ? '' : displayByte(byte);
     const uncovered = byte !== undefined && byteUndescribed(start + index);
-    hex.classList.toggle("undescribed", uncovered);
-    ascii.classList.toggle("undescribed", uncovered);
+    hex.classList.toggle('undescribed', uncovered);
+    ascii.classList.toggle('undescribed', uncovered);
   }
-  document.querySelectorAll("#hexdump .byterow").forEach((label, row) => {
+  document.querySelectorAll('#hexdump .byterow').forEach((label, row) => {
     label.textContent =
       ((viewerState.rowOffset + row) * viewerState.bytesPerRow)
         .toString(16)
-        .padStart(Math.max(1, bytes.length.toString(16).length), "0") + ": ";
+        .padStart(Math.max(1, bytes.length.toString(16).length), '0') + ': ';
   });
-  getElement("scrollheightproxy").style.height = `${byteHeight * (rowCount + 2)}px`;
-  getElement("scrollcontainer").scrollTop = byteHeight * viewerState.rowOffset;
+  getElement('scrollheightproxy').style.height = `${byteHeight * (rowCount + 2)}px`;
+  getElement('scrollcontainer').scrollTop = byteHeight * viewerState.rowOffset;
   renderReadable();
   renderHighlights();
 }
 
 function renderHighlights() {
   const cells = [...hexCells, ...asciiCells, ...readableCells];
-  const kinds = ["highlighted", "manually-focused", "cursor", "searchresult", "search-current"];
+  const kinds = ['highlighted', 'manually-focused', 'cursor', 'searchresult', 'search-current'];
   for (const cell of cells) cell.classList.remove(...kinds);
   const start = viewerState.rowOffset * viewerState.bytesPerRow;
   for (const [kind, ranges] of highlightRanges) {
@@ -136,9 +136,9 @@ function scrollToByte(offset) {
 }
 
 function resizeViewport() {
-  const probe = document.querySelector(".hexeditor .byte");
+  const probe = document.querySelector('.hexeditor .byte');
   if (probe instanceof HTMLElement) byteHeight = Math.max(1, probe.getBoundingClientRect().height);
-  const height = getElement("scrollcontainer").clientHeight;
+  const height = getElement('scrollcontainer').clientHeight;
   viewerState.visibleRows = Math.max(1, Math.floor(height / byteHeight) - 2);
   renderViewport();
 }

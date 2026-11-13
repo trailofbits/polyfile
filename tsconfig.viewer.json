@@ -4,7 +4,7 @@
     "checkJs": true,
     "noEmit": true,
     "target": "ES2022",
-    "module": "none",
+    "module": "esnext",
     "moduleDetection": "legacy",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "strict": true,
