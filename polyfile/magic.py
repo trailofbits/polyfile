@@ -26,21 +26,22 @@ import sys
 from time import gmtime, localtime, strftime
 from types import GeneratorType
 from typing import (
-    Any, BinaryIO, Callable, Collection, Dict, FrozenSet, Generic, Iterable, Iterator, KeysView,
-    List, NamedTuple, Optional, Protocol, Set, Tuple, Type, TypeVar, Union
+    Any, BinaryIO, Generic,
+    NamedTuple, Protocol, Self, TypeVar, cast
 )
+from collections.abc import Callable, Collection, Iterable, Iterator, KeysView
 from uuid import UUID
 
 import re2
 
-from .arithmetic import CStyleInt, make_c_style_int
-from .der import DERHeader, DERSpecification, InvalidDER, mime_type_for_message
-from .fileutils import Streamable
-from .iterators import LazyIterableSet
-from .logger import getStatusLogger, TRACE
-from .repl import ANSIColor, ANSIWriter
+from polyfile.arithmetic import CStyleInt, make_c_style_int
+from polyfile.der import DERHeader, DERSpecification, InvalidDER, mime_type_for_message
+from polyfile.fileutils import Streamable
+from polyfile.iterators import LazyIterableSet
+from polyfile.logger import getStatusLogger, TRACE
+from polyfile.repl import ANSIColor, ANSIWriter
 
-from . import magic_defs
+from polyfile import magic_defs
 
 
 log = getStatusLogger("libmagic")
@@ -71,7 +72,7 @@ def get_resource_contents(package):
     return (resource.name for resource in resources.files(package).iterdir() if resource.is_file())
 
 
-MAGIC_DEFS: List[Path] = sorted([
+MAGIC_DEFS: list[Path] = sorted([
     get_resource_path(resource_name)
     for resource_name in get_resource_contents(magic_defs)
     if resource_name not in ("COPYING", "magic.mgc", "__pycache__") and not resource_name.startswith(".")
@@ -93,11 +94,11 @@ ESCAPES = {
 }
 
 
-def unescape(to_unescape: Union[str, bytes]) -> bytes:
+def unescape(to_unescape: str | bytes) -> bytes:
     """Processes unicode escape sequences. Also handles libmagic's support for single digit `\\x#` hex escapes."""
     # first, process single digit hex escapes:
     b = bytearray()
-    escaped: Optional[str] = None
+    escaped: str | None = None
     if isinstance(to_unescape, str):
         to_unescape = to_unescape.encode("utf-8")
     for c in to_unescape:
@@ -175,12 +176,12 @@ class TestResult(ABC):
     the ``use`` sits on.
     """
 
-    def __init__(self, test: "MagicTest", offset: int, parent: Optional["TestResult"] = None):
+    def __init__(self, test: "MagicTest", offset: int, parent: 'TestResult | None' = None):
         self.test: MagicTest = test
         self.offset: int = offset
-        self.parent: Optional["TestResult"] = parent
+        self.parent: TestResult | None = parent
         self.child_matched: bool = False
-        self._message_children: Optional[List[TestResult]] = None
+        self._message_children: list[TestResult] | None = None
         self._message_matched: bool = True
         if parent is not None and bool(self):
             if parent._message_children is None:
@@ -225,12 +226,12 @@ class MatchedTest(TestResult):
             value: Any,
             offset: int,
             length: int,
-            parent: Optional["TestResult"] = None
+            parent: 'TestResult | None' = None
     ):
         super().__init__(test=test, offset=offset, parent=parent)
         self.value: Any = value
         self.length: int = length
-        self._relative_base: Optional[int] = None
+        self._relative_base: int | None = None
 
     @property
     def relative_base(self) -> int:
@@ -286,7 +287,7 @@ class MatchedTest(TestResult):
 
 
 class FailedTest(TestResult):
-    def __init__(self, test: "MagicTest", offset: int, message: str, parent: Optional["TestResult"] = None):
+    def __init__(self, test: "MagicTest", offset: int, message: str, parent: 'TestResult | None' = None):
         super().__init__(test=test, offset=offset, parent=parent)
         self.message: str = message
 
@@ -318,7 +319,7 @@ STRENGTH_MULT: int = 10
 STRENGTH_BASELINE: int = 2 * STRENGTH_MULT
 """The strength every test starts from, before its type and relation terms."""
 
-RELATION_STRENGTH: Dict[str, int] = {
+RELATION_STRENGTH: dict[str, int] = {
     "=": STRENGTH_MULT,
     ">": -2 * STRENGTH_MULT,
     "<": -2 * STRENGTH_MULT,
@@ -331,10 +332,10 @@ An exact match is the most specific, so it gains a unit; an inequality is the le
 operators that still read a value, so it loses two.
 """
 
-UNSELECTIVE_RELATIONS: FrozenSet[str] = frozenset({"x", "!"})
+UNSELECTIVE_RELATIONS: frozenset[str] = frozenset({"x", "!"})
 """The relations libmagic zeroes the strength for, because they match anything or almost anything."""
 
-LIBMAGIC_TYPE_CODES: Dict[str, int] = {
+LIBMAGIC_TYPE_CODES: dict[str, int] = {
     "invalid": 0, "byte": 1, "short": 2, "default": 3, "long": 4, "string": 5, "date": 6,
     "beshort": 7, "belong": 8, "bedate": 9, "leshort": 10, "lelong": 11, "ledate": 12,
     "pstring": 13, "ldate": 14, "beldate": 15, "leldate": 16, "regex": 17, "bestring16": 18,
@@ -377,7 +378,7 @@ asks for 10240 bytes and is one of the shipped definitions this bites.
 """
 
 
-STRING_FLAG_BITS: Tuple[Tuple[str, int], ...] = (
+STRING_FLAG_BITS: tuple[tuple[str, int], ...] = (
     ("compact_whitespace", 0x0001),
     ("optional_blanks", 0x0002),
     ("case_insensitive_lower", 0x0004),
@@ -405,7 +406,7 @@ the regular expression's half of that as `RegexType.limit_lines` and reads the P
 out of `PSTRING_LENGTH_BITS`, so the two never collide.
 """
 
-PSTRING_LENGTH_BITS: Dict[str, int] = {
+PSTRING_LENGTH_BITS: dict[str, int] = {
     "B": 0x0080,
     "H": 0x0100,
     "h": 0x0200,
@@ -446,13 +447,13 @@ def libmagic_base_type(declaration: str) -> str:
     Returns:
         A key of `LIBMAGIC_TYPE_CODES`.
     """
-    name = TYPE_MODIFIER.split(declaration, maxsplit=1)[0]
+    name = cast(str, TYPE_MODIFIER.split(declaration, maxsplit=1)[0])
     if name.startswith("u") and name[1:] in LIBMAGIC_TYPE_CODES:
         return name[1:]
     return name
 
 
-def parse_numeric(text: Union[str, bytes]) -> int:
+def parse_numeric(text: str | bytes) -> int:
     if isinstance(text, bytes):
         text = text.decode("utf-8")
     text = text.strip()
@@ -479,7 +480,7 @@ def parse_numeric(text: Union[str, bytes]) -> int:
 
 class Offset(ABC):
     @abstractmethod
-    def to_absolute(self, data: bytes, last_match: Optional[TestResult], allow_invalid: bool = False) -> int:
+    def to_absolute(self, data: bytes, last_match: TestResult | None, allow_invalid: bool = False) -> int:
         raise NotImplementedError()
 
     @staticmethod
@@ -495,21 +496,21 @@ class Offset(ABC):
 
 
 class InvalidOffsetError(IndexError):
-    def __init__(self, message: Optional[str] = None, offset: Optional[Offset] = None):
+    def __init__(self, message: str | None = None, offset: Offset | None = None):
         if message is None:
             if offset is not None:
                 message = f"Invalid Offset: {offset!r}"
             else:
                 message = "Invalid Offset"
         super().__init__(message)
-        self.offset: Optional[Offset] = offset
+        self.offset: Offset | None = offset
 
 
 class AbsoluteOffset(Offset):
     def __init__(self, offset: int):
         self.offset: int = offset
 
-    def to_absolute(self, data: bytes, last_match: Optional[TestResult], allow_invalid: bool = False) -> int:
+    def to_absolute(self, data: bytes, last_match: TestResult | None, allow_invalid: bool = False) -> int:
         if not allow_invalid and self.offset >= len(data):
             raise InvalidOffsetError(offset=self)
         return self.offset
@@ -526,7 +527,7 @@ class NamedAbsoluteOffset(AbsoluteOffset):
         super().__init__(offset)
         self.test: NamedTest = test
 
-    def to_absolute(self, data: bytes, last_match: Optional[TestResult], allow_invalid: bool = False) -> int:
+    def to_absolute(self, data: bytes, last_match: TestResult | None, allow_invalid: bool = False) -> int:
         while last_match is not None and not last_match.test is self.test:
             last_match = last_match.parent
 
@@ -552,7 +553,7 @@ class NegativeOffset(Offset):
     def __init__(self, magnitude: int):
         self.magnitude: int = magnitude
 
-    def to_absolute(self, data: bytes, last_match: Optional[TestResult], allow_invalid: bool = False) -> int:
+    def to_absolute(self, data: bytes, last_match: TestResult | None, allow_invalid: bool = False) -> int:
         if not allow_invalid and self.magnitude > len(data):
             raise InvalidOffsetError(offset=self)
         return len(data) - self.magnitude
@@ -568,7 +569,7 @@ class RelativeOffset(Offset):
     def __init__(self, relative_to: Offset):
         self.relative_to: Offset = relative_to
 
-    def to_absolute(self, data: bytes, last_match: Optional[TestResult], allow_invalid: bool = False) -> int:
+    def to_absolute(self, data: bytes, last_match: TestResult | None, allow_invalid: bool = False) -> int:
         if isinstance(self.relative_to, NegativeOffset):
             difference = -self.relative_to.magnitude
         else:
@@ -611,9 +612,9 @@ def decode_id3_synchsafe(value: int) -> int:
 class IndirectOffset(Offset):
     OctalIndirectOffset = -1
 
-    STRUCT_FORMATS: Dict[int, str] = {1: "B", 2: "H", 4: "I", 8: "Q"}
+    STRUCT_FORMATS: dict[int, str] = {1: "B", 2: "H", 4: "I", 8: "Q"}
 
-    TYPE_NUM_BYTES: Dict[str, int] = {
+    TYPE_NUM_BYTES: dict[str, int] = {
         "b": 1, "c": 1,
         "h": 2, "s": 2,
         "i": 4, "l": 4,
@@ -636,7 +637,7 @@ class IndirectOffset(Offset):
         elif is_id3 and num_bytes != 4:
             raise ValueError(f"An ID3 indirect offset must be four bytes, not {num_bytes}")
 
-    def _octal_to_absolute(self, data: bytes, last_match: Optional[TestResult],
+    def _octal_to_absolute(self, data: bytes, last_match: TestResult | None,
                            allow_invalid: bool) -> int:
         # This is for the octal type used here:
         # https://github.com/file/file/blob/7a4e60a8f56ed45f76f28d2812a88d82efdc4bb8/magic/Magdir/gentoo#L81
@@ -644,7 +645,7 @@ class IndirectOffset(Offset):
         octal_string_end = offset
         while octal_string_end < len(data) and ord('0') <= data[octal_string_end] <= ord('7'):
             octal_string_end += 1
-        value: Optional[int] = None
+        value: int | None = None
         if octal_string_end > offset:
             try:
                 value = int(data[:octal_string_end], 8)
@@ -662,7 +663,7 @@ class IndirectOffset(Offset):
             fmt = fmt.lower()
         return f"{self.endianness.value}{fmt}"
 
-    def to_absolute(self, data: bytes, last_match: Optional[TestResult], allow_invalid: bool = False) -> int:
+    def to_absolute(self, data: bytes, last_match: TestResult | None, allow_invalid: bool = False) -> int:
         if self.num_bytes == IndirectOffset.OctalIndirectOffset:
             return self._octal_to_absolute(data, last_match, allow_invalid)
         offset = self.offset.to_absolute(data, last_match)
@@ -687,7 +688,7 @@ class IndirectOffset(Offset):
     )
 
     @staticmethod
-    def _parse_post_process(pp: Optional[str]) -> Callable[[int], int]:
+    def _parse_post_process(pp: str | None) -> Callable[[int], int]:
         if pp is None:
             return lambda n: n
         multiply = pp.startswith("*")
@@ -809,7 +810,7 @@ def rebase_in_named_test(offset: Offset, named_test: "NamedTest") -> Offset:
     return offset
 
 
-INDIRECT_OFFSET_TYPES: Dict[Tuple[int, Endianness], str] = {
+INDIRECT_OFFSET_TYPES: dict[tuple[int, Endianness], str] = {
     (1, Endianness.LITTLE): "byte", (1, Endianness.BIG): "byte",
     (2, Endianness.LITTLE): "leshort", (2, Endianness.BIG): "beshort",
     (4, Endianness.NATIVE): "long",
@@ -840,7 +841,7 @@ def libmagic_indirect_type(offset: IndirectOffset) -> str:
     return INDIRECT_OFFSET_TYPES.get((offset.num_bytes, offset.endianness), "long")
 
 
-def libmagic_offset_fields(offset: Offset) -> Tuple[int, int, str]:
+def libmagic_offset_fields(offset: Offset) -> tuple[int, int, str]:
     """The ``struct magic`` fields that `offset` decides.
 
     libmagic steps over the sign of a negative offset before it reads the number, so the field
@@ -870,10 +871,10 @@ def libmagic_offset_fields(offset: Offset) -> Tuple[int, int, str]:
 
 
 class SourceInfo:
-    def __init__(self, path: Union[str, Path], line: int, original_line: Optional[str] = None):
+    def __init__(self, path: str | Path, line: int, original_line: str | None = None):
         self.path: Path = Path(path)
         self.line: int = line
-        self.original_line: Optional[str] = original_line
+        self.original_line: str | None = original_line
 
     def __repr__(self):
         return f"{self.__class__.__name__}(path={self.path!r}, line={self.line}, original_line={self.original_line!r})"
@@ -888,9 +889,9 @@ class MatchContext:
     def __init__(
             self,
             data: bytes,
-            path: Optional[Path] = None,
+            path: Path | None = None,
             only_match_mime: bool = False,
-            decoded_from: Optional[str] = None
+            decoded_from: str | None = None
     ):
         """
         Args:
@@ -902,9 +903,9 @@ class MatchContext:
                 offsets into that rendering, not into the file.
         """
         self.data: bytes = data
-        self.path: Optional[Path] = path
+        self.path: Path | None = path
         self.only_match_mime: bool = only_match_mime
-        self.decoded_from: Optional[str] = decoded_from
+        self.decoded_from: str | None = decoded_from
         self._is_indirect: bool = False
 
     def __getitem__(self, s: slice) -> "MatchContext":
@@ -913,7 +914,7 @@ class MatchContext:
         return MatchContext(data=self.data[s], path=self.path, only_match_mime=self.only_match_mime,
                             decoded_from=self.decoded_from)
 
-    def text_test_context(self, encoding: Optional[str]) -> "MatchContext":
+    def text_test_context(self, encoding: str | None) -> "MatchContext":
         """The buffer libmagic runs its text tests against.
 
         libmagic decodes its input into a UCS-4 buffer, drops the byte order mark, re-encodes that
@@ -948,12 +949,12 @@ class MatchContext:
             return False
 
     @staticmethod
-    def load(stream_or_path: Union[str, Path, BinaryIO], only_match_mime: bool = False) -> "MatchContext":
+    def load(stream_or_path: str | Path | BinaryIO, only_match_mime: bool = False) -> "MatchContext":
         if isinstance(stream_or_path, str) or isinstance(stream_or_path, Path):
             with open(stream_or_path, "rb") as f:
                 return MatchContext.load(f, only_match_mime)
         if hasattr(stream_or_path, "name") and stream_or_path.name is not None:
-            path: Optional[Path] = Path(stream_or_path.name)
+            path: Path | None = Path(stream_or_path.name)
         else:
             path = None
         return MatchContext(stream_or_path.read(), path, only_match_mime)
@@ -1033,16 +1034,16 @@ class TernaryExecutableMessage(TernaryMessage):
         return f"${{x?{self.true_value}:{self.false_value}}}"
 
 
-TEST_TYPES: Set[Type["MagicTest"]] = set()
+TEST_TYPES: set[type["MagicTest"]] = set()
 
-_UNIMPLEMENTED_TESTS: Set["MagicTest"] = set()
+_UNIMPLEMENTED_TESTS: set["MagicTest"] = set()
 """The tests that have already been reported as unimplemented, so each one is only logged once."""
 
 
 class Comment:
-    def __init__(self, message: str, source_info: Optional[SourceInfo] = None):
+    def __init__(self, message: str, source_info: SourceInfo | None = None):
         self.message: str = message
-        self.source_info: Optional[SourceInfo] = source_info
+        self.source_info: SourceInfo | None = source_info
 
     def __str__(self):
         return self.message
@@ -1090,32 +1091,32 @@ class MagicTest(ABC):
     def __init__(
             self,
             offset: Offset,
-            mime: Optional[Union[str, TernaryExecutableMessage]] = None,
+            mime: str | TernaryExecutableMessage | None = None,
             extensions: Iterable[str] = (),
-            message: Union[str, Message] = "",
-            parent: Optional["MagicTest"] = None,
+            message: str | Message = "",
+            parent: 'MagicTest | None' = None,
             comments: Iterable[Comment] = ()
     ):
         self.offset: Offset = offset
-        self._mime: Optional[Message] = None
-        self.extensions: Set[str] = set(extensions)
+        self._mime: Message | None = None
+        self.extensions: set[str] = set(extensions)
         if isinstance(message, Message):
             self._message: Message = message
         else:
             self._message = Message.parse(message)
-        self._parent: Optional[MagicTest] = parent
-        self.children: List[MagicTest] = []
+        self._parent: MagicTest | None = parent
+        self.children: list[MagicTest] = []
         if parent is not None:
             self.level: int = parent.level + 1
             parent.children.append(self)
-            self.named_test: Optional[NamedTest] = parent.named_test
+            self.named_test: NamedTest | None = parent.named_test
             if self.named_test is not None:
                 self.offset = rebase_in_named_test(offset, self.named_test)
             if mime is not None:
                 parent.can_match_mime = True
         else:
             self.level = 0
-            self.named_test: Optional[NamedTest] = None
+            self.named_test: NamedTest | None = None
         self.can_match_mime: bool = mime is not None
         """
         Whether or not this test or any of its descendants can match a MIME type.
@@ -1131,8 +1132,8 @@ class MagicTest(ABC):
 
         """
         self.mime = mime
-        self.source_info: Optional[SourceInfo] = None
-        self.comments: Tuple[Comment, ...] = tuple(comments)
+        self.source_info: SourceInfo | None = None
+        self.comments: tuple[Comment, ...] = tuple(comments)
         self._type: TestType = TestType.UNKNOWN
         self.strength_op: StrengthOp = StrengthOp.NONE
         self.strength_factor: int = 0
@@ -1327,7 +1328,7 @@ class MagicTest(ABC):
             flag |= FLAG_NOSPACE
         return flag
 
-    def libmagic_value_fields(self) -> Tuple[int, bytes, bytes]:
+    def libmagic_value_fields(self) -> tuple[int, bytes, bytes]:
         """The fields of libmagic's ``struct magic`` that hold this test's value.
 
         Returns:
@@ -1336,7 +1337,7 @@ class MagicTest(ABC):
         """
         return 0, bytes(8), b""
 
-    def libmagic_sort_key(self) -> Tuple[Any, ...]:
+    def libmagic_sort_key(self) -> tuple[Any, ...]:
         """The key that orders this test the way libmagic's ``apprentice_sort`` would.
 
         libmagic sorts by descending strength and settles a tie by comparing the two entries'
@@ -1371,13 +1372,13 @@ class MagicTest(ABC):
         )
 
     @property
-    def parent(self) -> Optional["MagicTest"]:
+    def parent(self) -> 'MagicTest | None':
         return self._parent
 
     def ancestors(self) -> Iterator["MagicTest"]:
         """Yields all ancestors of this test. NamedTest will also include all UseTest ancestors that call it."""
-        stack: List[MagicTest] = [self]
-        history: Set[MagicTest] = set(stack)
+        stack: list[MagicTest] = [self]
+        history: set[MagicTest] = set(stack)
         while stack:
             test = stack.pop()
             if test is not self:
@@ -1390,11 +1391,11 @@ class MagicTest(ABC):
                 stack.append(test.parent)
                 history.add(test.parent)
 
-    def _compute_descendants(self) -> Tuple["MagicTest", ...]:
+    def _compute_descendants(self) -> tuple["MagicTest", ...]:
         """Compute all descendants of this test (internal, called once)."""
-        result: List[MagicTest] = []
-        stack: List[MagicTest] = [self]
-        history: Set[MagicTest] = set(stack)
+        result: list[MagicTest] = []
+        stack: list[MagicTest] = [self]
+        history: set[MagicTest] = set(stack)
         while stack:
             test = stack.pop()
             if test is not self:
@@ -1408,7 +1409,7 @@ class MagicTest(ABC):
         return tuple(result)
 
     @functools.cached_property
-    def descendants(self) -> Tuple["MagicTest", ...]:
+    def descendants(self) -> tuple["MagicTest", ...]:
         """
         Returns all descendants of this test (cached).
         UseTests will also include all referenced NamedTests and their descendants.
@@ -1416,18 +1417,18 @@ class MagicTest(ABC):
         """
         return self._compute_descendants()
 
-    def referenced_tests(self) -> Set["NamedTest"]:
-        result: Set[NamedTest] = set()
+    def referenced_tests(self) -> set["NamedTest"]:
+        result: set[NamedTest] = set()
         for child in self.children:
             result |= child.referenced_tests()
         return result
 
     @property
-    def mime(self) -> Optional[Message]:
+    def mime(self) -> Message | None:
         return self._mime
 
     @mime.setter
-    def mime(self, new_mime: Optional[Union[str, Message]]):
+    def mime(self, new_mime: str | Message | None):
         if isinstance(new_mime, str):
             new_mime = Message.parse(new_mime)
         if self._mime is not None:
@@ -1444,7 +1445,7 @@ class MagicTest(ABC):
         """Yields all possible MIME types that this test or any of its descendants could match against"""
         if not self.can_match_mime:
             return
-        yielded: Set[str] = set()
+        yielded: set[str] = set()
         if self.mime is not None:
             yielded |= set(self.mime.possibilities())
             yield from yielded
@@ -1456,7 +1457,7 @@ class MagicTest(ABC):
                 yielded |= new_mimes
 
     @functools.cached_property
-    def mimetypes(self) -> Tuple[str, ...]:
+    def mimetypes(self) -> tuple[str, ...]:
         """Returns all possible MIME types that this test or any of its descendants could match against"""
         return tuple(self._mimetypes())
 
@@ -1470,15 +1471,15 @@ class MagicTest(ABC):
             yielded |= new_extensions
 
     @functools.cached_property
-    def all_extensions(self) -> Tuple[str, ...]:
+    def all_extensions(self) -> tuple[str, ...]:
         """Returns all possible extensions that this test or any of its descendants could match against"""
         return tuple(self._all_extensions())
 
-    def test_flip_endianness(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
+    def test_flip_endianness(self, data: bytes, absolute_offset: int, parent_match: TestResult | None) -> TestResult:
         raise NotImplementedError(f"TODO: Implement test_flip_endianness for {self.__class__.__name__}")
 
     @abstractmethod
-    def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
+    def test(self, data: bytes, absolute_offset: int, parent_match: TestResult | None) -> TestResult:
         raise NotImplementedError()
 
     def write(self, writer: ANSIWriter, is_current_test: bool = False, pre_mime_text: str = "") -> str:
@@ -1522,14 +1523,14 @@ class MagicTest(ABC):
         writer.write("\n")
         return f"  {indent}"
 
-    def calculate_absolute_offset(self, data: bytes, parent_match: Optional[TestResult] = None) -> int:
+    def calculate_absolute_offset(self, data: bytes, parent_match: TestResult | None = None) -> int:
         return self.offset.to_absolute(data, parent_match)
 
     def _run_test(
             self,
             context: MatchContext,
             absolute_offset: int,
-            parent_match: Optional[TestResult],
+            parent_match: TestResult | None,
             flip_endianness: bool
     ) -> TestResult:
         """Runs this test, treating a test that is not implemented as a non-match.
@@ -1551,7 +1552,7 @@ class MagicTest(ABC):
     def _match(
             self,
             context: MatchContext,
-            parent_match: Optional[TestResult] = None,
+            parent_match: TestResult | None = None,
             flip_endianness: bool = False
     ) -> Iterator[TestResult]:
         if context.only_match_mime and not self.can_match_mime:
@@ -1573,7 +1574,7 @@ class MagicTest(ABC):
                 if not context.only_match_mime or child.can_match_mime:
                     yield from child._match(context=context, parent_match=m, flip_endianness=flip_endianness)
 
-    def match(self, to_match: Union[bytes, BinaryIO, str, Path, MatchContext]) -> Iterator[TestResult]:
+    def match(self, to_match: bytes | BinaryIO | str | Path | MatchContext) -> Iterator[TestResult]:
         """Yields all matches for the given data"""
         if isinstance(to_match, bytes):
             to_match = MatchContext(data=to_match)
@@ -1599,15 +1600,15 @@ class DynamicMagicTest(MagicTest, ABC):
     def __init__(
             self,
             offset: Offset,
-            mime: Optional[Union[str, TernaryExecutableMessage]] = None,
+            mime: str | TernaryExecutableMessage | None = None,
             extensions: Iterable[str] = (),
-            default_message: Union[str, Message] = "",
-            parent: Optional["MagicTest"] = None,
+            default_message: str | Message = "",
+            parent: 'MagicTest | None' = None,
             comments: Iterable[Comment] = ()
     ):
         super().__init__(offset=offset, mime=mime, extensions=extensions, parent=parent, comments=comments,
                          message=default_message)
-        self._bound_message: Optional[Message] = None
+        self._bound_message: Message | None = None
 
     @property
     def default_message(self) -> Message:
@@ -1622,17 +1623,30 @@ class DynamicMagicTest(MagicTest, ABC):
         else:
             return self._bound_message
 
-    def bind(self, message: Union[str, Message]) -> MagicTest:
+    def bind(self, message: str | Message) -> Self:
+        """Bind a message in a new instance that preserves this test's subtype.
+
+        Args:
+            message: The message object or definition text to bind.
+
+        Returns:
+            A dynamically derived test with the same state and the supplied message.
+
+        Raises:
+            ValueError: If this test already has a bound message.
+        """
         if self._bound_message is not None:
             raise ValueError(f"{self!r} already has a bound message: {self.message!s}")
         elif not isinstance(message, Message):
             message = Message.parse(message)
-        result: DynamicMagicTest = type(f"Bound{self.__class__.__name__}", (self.__class__,), dict(self.__dict__))()
+        result = cast(Self, type(
+            f"Bound{self.__class__.__name__}", (self.__class__,), dict(self.__dict__)
+        )())
         result._bound_message = message
         return result
 
 
-TYPES_BY_NAME: Dict[str, "DataType"] = {}
+TYPES_BY_NAME: dict[str, "_ParsedDataType"] = {}
 
 
 T = TypeVar("T")
@@ -1653,18 +1667,18 @@ class DataTypeMatch:
 
     def __init__(
             self,
-            raw_match: Optional[bytes] = None,
-            value: Optional[Any] = None,
+            raw_match: bytes | None = None,
+            value: Any | None = None,
             initial_offset: int = 0,
-            relative_base: Optional[int] = None
+            relative_base: int | None = None
     ):
-        self.raw_match: Optional[bytes] = raw_match
+        self.raw_match: bytes | None = raw_match
         if value is None and raw_match is not None:
-            self.value: Optional[bytes] = raw_match
+            self.value: bytes | None = raw_match
         else:
             self.value = value
         self.initial_offset: int = initial_offset
-        self.relative_base: Optional[int] = relative_base
+        self.relative_base: int | None = relative_base
 
     def __bool__(self):
         return self.raw_match is not None
@@ -1753,7 +1767,7 @@ class DataType(ABC, Generic[T]):
         raise NotImplementedError()
 
     @staticmethod
-    def parse(fmt: str) -> "DataType":
+    def parse(fmt: str) -> "_ParsedDataType":
         if fmt in TYPES_BY_NAME:
             return TYPES_BY_NAME[fmt]
         elif fmt.startswith("string") or fmt.startswith("ustring"):
@@ -1791,7 +1805,7 @@ class DataType(ABC, Generic[T]):
         TYPES_BY_NAME[fmt] = dt
         return dt
 
-    def behavior(self) -> Dict[str, Any]:
+    def behavior(self) -> dict[str, Any]:
         """Everything about this type that decides how it matches.
 
         Returns:
@@ -1806,7 +1820,7 @@ class DataType(ABC, Generic[T]):
         return f"{self.__class__.__name__}({self.name})"
 
 
-def _check_name_spells_every_flag(fmt: str, data_type: DataType) -> None:
+def _check_name_spells_every_flag(fmt: str, data_type: DataType[T]) -> None:
     """Checks that a flag-bearing type's name records everything the type does.
 
     `DataType.parse` interns a type under its name, so two declarations that differ only by a flag
@@ -1832,7 +1846,7 @@ class UUIDWildcard:
     pass
 
 
-class GUIDType(DataType[Union[UUID, UUIDWildcard]]):
+class GUIDType(DataType[UUID | UUIDWildcard]):
     # NOTE: libmagic renders `guid` and its `leguid` alias with the first three fields byte-swapped,
     #       the mixed-endian layout Microsoft uses, and `beguid` with the bytes in file order.
     #       See file_print_guid and file_print_beguid in libmagic's src/funcs.c.
@@ -1845,14 +1859,14 @@ class GUIDType(DataType[Union[UUID, UUIDWildcard]]):
             raise ValueError(f"GUIDs only support big and little endianness, not {endianness!r}")
         self.endianness: Endianness = endianness
 
-    def strength_term(self, expected: Union[UUID, UUIDWildcard]) -> int:
+    def strength_term(self, expected: UUID | UUIDWildcard) -> int:
         """A GUID is sized like the sixteen-byte integer it is (``file/src/apprentice.c:912-915``)."""
         return 16 * STRENGTH_MULT
 
-    def relation(self, expected: Union[UUID, UUIDWildcard]) -> str:
+    def relation(self, expected: UUID | UUIDWildcard) -> str:
         return "x" if isinstance(expected, UUIDWildcard) else "="
 
-    def parse_expected(self, specification: str) -> Union[UUID, UUIDWildcard]:
+    def parse_expected(self, specification: str) -> UUID | UUIDWildcard:
         if specification.strip() == "x":
             return UUIDWildcard()
         # there is a bug in the `asf` definition where a guid is missing its last two characters:
@@ -1860,7 +1874,7 @@ class GUIDType(DataType[Union[UUID, UUIDWildcard]]):
             specification = "B61BE100-5B4E-11CF-A8FD-00805F5C442B"
         return UUID(str(specification.strip()))
 
-    def match(self, data: bytes, expected: Union[UUID, UUIDWildcard]) -> DataTypeMatch:
+    def match(self, data: bytes, expected: UUID | UUIDWildcard) -> DataTypeMatch:
         if len(data) < 16:
             return DataTypeMatch.INVALID
         try:
@@ -1877,7 +1891,7 @@ class GUIDType(DataType[Union[UUID, UUIDWildcard]]):
 
 
 class UTF16Type(DataType[bytes]):
-    def __init__(self, endianness: Endianness, num_bytes: Optional[int] = None):
+    def __init__(self, endianness: Endianness, num_bytes: int | None = None):
         name = "lestring16" if endianness == Endianness.LITTLE else "bestring16"
         if num_bytes is not None:
             name = f"{name}/{num_bytes}"
@@ -1885,7 +1899,7 @@ class UTF16Type(DataType[bytes]):
             raise ValueError(f"UTF16 strings only support big and little endianness, not {endianness!r}")
         super().__init__(name)
         self.endianness: Endianness = endianness
-        self.num_bytes: Optional[int] = num_bytes
+        self.num_bytes: int | None = num_bytes
 
     def strength_term(self, expected: bytes) -> int:
         """Half of what the same value would score as a `string` (``file/src/apprentice.c:1003``).
@@ -1916,10 +1930,10 @@ class UTF16Type(DataType[bytes]):
 
 
 class StringTest(ABC):
-    def __init__(self, trim: bool = False, compact_whitespace: bool = False, num_bytes: Optional[int] = None):
+    def __init__(self, trim: bool = False, compact_whitespace: bool = False, num_bytes: int | None = None):
         self.trim: bool = trim
         self.compact_whitespace: bool = compact_whitespace
-        self.num_bytes: Optional[int] = num_bytes
+        self.num_bytes: int | None = num_bytes
 
     @property
     def value_length(self) -> int:
@@ -1992,7 +2006,7 @@ class StringTest(ABC):
               optional_blanks: bool = False,
               full_word_match: bool = False,
               has_string_flags: bool = False,
-              num_bytes: Optional[int] = None) -> "StringTest":
+              num_bytes: int | None = None) -> "StringTest":
         if specification.strip() == "x":
             return StringWildcard(trim=trim, compact_whitespace=compact_whitespace, num_bytes=num_bytes)
         if specification.startswith("!"):
@@ -2037,7 +2051,7 @@ class StringTest(ABC):
 
 
 class StringWildcard(StringTest):
-    def value_end(self, data: bytes, max_bytes: Optional[int] = None) -> int:
+    def value_end(self, data: bytes, max_bytes: int | None = None) -> int:
         """Finds the length of the value that libmagic would read from the head of `data`.
 
         A wildcard value ends at the first null byte, carriage return, or line feed, whichever
@@ -2141,7 +2155,7 @@ class NegatedStringTest(StringWildcard):
 
 class StringLengthTest(StringWildcard):
     def __init__(self, to_match: str, test_smaller: bool, trim: bool = False, compact_whitespace: bool = False,
-                 num_bytes: Optional[int] = None):
+                 num_bytes: int | None = None):
         super().__init__(trim=trim, compact_whitespace=compact_whitespace, num_bytes=num_bytes)
         self.raw_pattern: str = to_match
         self.to_match: bytes = unescape(to_match)
@@ -2204,7 +2218,7 @@ class StringMatch(StringTest):
                  optional_blanks: bool = False,
                  full_word_match: bool = False,
                  has_string_flags: bool = False,
-                 num_bytes: Optional[int] = None
+                 num_bytes: int | None = None
     ):
         super().__init__(trim=trim, compact_whitespace=compact_whitespace, num_bytes=num_bytes)
         self.raw_pattern: str = to_match
@@ -2214,7 +2228,7 @@ class StringMatch(StringTest):
         self.optional_blanks: bool = optional_blanks
         self.full_word_match: bool = full_word_match
         self.has_string_flags: bool = has_string_flags
-        self._is_always_text: Optional[bool] = None
+        self._is_always_text: bool | None = None
         self._blanks = compact_whitespace or optional_blanks
         self._fold_case = case_insensitive_lower or case_insensitive_upper
         self._parts = self._comparison_parts()
@@ -2227,7 +2241,7 @@ class StringMatch(StringTest):
     def relation(self) -> str:
         return "="
 
-    def _comparison_parts(self) -> List[Tuple[bytes, int]]:
+    def _comparison_parts(self) -> list[tuple[bytes, int]]:
         parts = []
         for blank, group in groupby(self.string, lambda byte: byte in WHITESPACE):
             value = bytes(group)
@@ -2252,7 +2266,7 @@ class StringMatch(StringTest):
             start += 1
         return start
 
-    def _literal_end(self, data: bytes, start: int, value: bytes) -> Optional[int]:
+    def _literal_end(self, data: bytes, start: int, value: bytes) -> int | None:
         end = start + len(value)
         if end > len(data):
             return None
@@ -2267,7 +2281,7 @@ class StringMatch(StringTest):
         return (not self.full_word_match or end == len(data)
                 or data[end] == 0 or data[end] in WHITESPACE)
 
-    def _match_end(self, data: bytes, start: int) -> Optional[int]:
+    def _match_end(self, data: bytes, start: int) -> int | None:
         for value, minimum in self._parts:
             if value:
                 end = self._literal_end(data, start, value)
@@ -2342,7 +2356,7 @@ class StringMatch(StringTest):
             return self.num_bytes - 1
         return self.num_bytes
 
-    def _first_bytes(self) -> Tuple[bytes, ...]:
+    def _first_bytes(self) -> tuple[bytes, ...]:
         first = self.string[0]
         if self.case_insensitive_lower and 97 <= first <= 122:
             return bytes([first]), bytes([first - 32])
@@ -2413,24 +2427,24 @@ STRING_MODIFIER_TOKEN: Pattern[str] = re.compile(
 )
 
 
-def _modifier_groups(format_str: str, names: Tuple[str, ...]) -> Tuple[str, ...]:
+def _modifier_groups(format_str: str, names: tuple[str, ...]) -> tuple[str, ...]:
     names_pattern = "|".join(re.escape(name) for name in names)
     pattern = rf"(?:{names_pattern})(?:/(?P<options>[A-Za-z0-9]+(?:/[A-Za-z0-9]+)*))?"
     match = re.fullmatch(pattern, format_str)
     if match is None:
         raise ValueError(f"Invalid {names[0]} type declaration: {format_str!r}")
-    options: str = match.group("options") or ""
+    options = cast(str, match.group("options") or "")
     return tuple(options.split("/"))
 
 
 def _parse_string_modifiers(
-        format_str: str, names: Tuple[str, ...], flags: str, *, allow_range: bool = True
-) -> Tuple[Optional[int], str]:
+        format_str: str, names: tuple[str, ...], flags: str, *, allow_range: bool = True
+) -> tuple[int | None, str]:
     """Read slash-separated flag groups and numeric ranges in their declared order."""
     length = None
     options = []
     tokens = (token for group in _modifier_groups(format_str, names)
-              for token in STRING_MODIFIER_TOKEN.findall(group))
+              for token in cast(list[str], STRING_MODIFIER_TOKEN.findall(group)))
     for token in tokens:
         if token[0].isdigit():
             if not allow_range:
@@ -2447,7 +2461,7 @@ class StringType(DataType[StringTest]):
     DECLARATION: str = "string"
     """The word a definition writes to declare this type."""
 
-    FLAGS: Tuple[Tuple[str, str], ...] = (
+    FLAGS: tuple[tuple[str, str], ...] = (
         ("W", "compact_whitespace"),
         ("w", "optional_blanks"),
         ("C", "case_insensitive_upper"),
@@ -2473,7 +2487,7 @@ class StringType(DataType[StringTest]):
             trim: bool = False,
             force_text: bool = False,
             force_binary: bool = False,
-            num_bytes: Optional[int] = None
+            num_bytes: int | None = None
     ):
         self.case_insensitive_lower: bool = case_insensitive_lower
         self.case_insensitive_upper: bool = case_insensitive_upper
@@ -2483,7 +2497,7 @@ class StringType(DataType[StringTest]):
         self.trim: bool = trim
         self.force_text: bool = force_text
         self.force_binary: bool = force_binary
-        self.num_bytes: Optional[int] = num_bytes
+        self.num_bytes: int | None = num_bytes
         super().__init__(self.declaration())
 
     def declaration(self) -> str:
@@ -2604,11 +2618,11 @@ class StringType(DataType[StringTest]):
 
 class SearchType(StringType):
     DECLARATION: str = "search"
-    FLAGS: Tuple[Tuple[str, str], ...] = StringType.FLAGS + (("s", "match_to_start"),)
+    FLAGS: tuple[tuple[str, str], ...] = StringType.FLAGS + (("s", "match_to_start"),)
 
     def __init__(
             self,
-            repetitions: Optional[int] = None,
+            repetitions: int | None = None,
             case_insensitive_lower: bool = False,
             case_insensitive_upper: bool = False,
             compact_whitespace: bool = False,
@@ -2635,7 +2649,7 @@ class SearchType(StringType):
         )
 
     @property
-    def repetitions(self) -> Optional[int]:
+    def repetitions(self) -> int | None:
         """The number of start offsets libmagic tries, from the ``search/N`` declaration.
 
         Returns:
@@ -2860,7 +2874,7 @@ def expand_posix_classes(match: bytes) -> bytes:
             ("print", "^\0-\x1f\x7f"),
             ("word", "\\w")
     ):
-        match = match.replace(f"[:{match_from}:]".encode("utf-8"), f"{replace_with}".encode("utf-8"))
+        match = match.replace(f"[:{match_from}:]".encode(), f"{replace_with}".encode())
     return match
 
 
@@ -2916,6 +2930,11 @@ class RegexMatch(Protocol):
         ...
 
 
+class _CompiledRegex(Protocol):
+    def search(self, data: bytes) -> RegexMatch | None:
+        ...
+
+
 class MagicRegex:
     """A definition's linear-time regex and the literal count libmagic scores it by."""
 
@@ -2939,7 +2958,7 @@ class MagicRegex:
         options.log_errors = False
         pattern = b"(?m)" + self.pattern if flags & re.MULTILINE else self.pattern
         try:
-            self.compiled = re2.compile(pattern, options=options)
+            self.compiled = cast(_CompiledRegex, re2.compile(pattern, options=options))
         except re2.error as error:
             detail = error.args[0]
             if isinstance(detail, bytes):
@@ -2948,7 +2967,7 @@ class MagicRegex:
                              "use supported syntax without lookaround or backreferences") from error
         self.negated: bool = negated
 
-    def search(self, data: bytes) -> Optional[RegexMatch]:
+    def search(self, data: bytes) -> RegexMatch | None:
         return self.compiled.search(data)
 
     def __str__(self):
@@ -2994,7 +3013,7 @@ def line_region_length(region: bytes, line_count: int) -> int:
 
 
 class RegexType(DataType[MagicRegex]):
-    FLAGS: Tuple[Tuple[str, str], ...] = (
+    FLAGS: tuple[tuple[str, str], ...] = (
         ("c", "case_insensitive"),
         ("C", "case_insensitive_upper"),
         ("s", "match_to_start"),
@@ -3011,7 +3030,7 @@ class RegexType(DataType[MagicRegex]):
 
     def __init__(
             self,
-            length: Optional[int] = None,
+            length: int | None = None,
             case_insensitive: bool = False,
             match_to_start: bool = False,
             limit_lines: bool = False,
@@ -3021,7 +3040,7 @@ class RegexType(DataType[MagicRegex]):
             *,
             case_insensitive_upper: bool = False
     ):
-        self.declared_length: Optional[int] = length
+        self.declared_length: int | None = length
         """The number the declaration wrote after ``regex``, or None if it wrote none.
 
         This, not `length`, is libmagic's ``str_range``: the defaults `length` falls back to are
@@ -3204,7 +3223,7 @@ class RegexType(DataType[MagicRegex]):
         )
 
 
-BASE_NUMERIC_TYPES_BY_NAME: Dict[str, "BaseNumericDataType"] = {}
+BASE_NUMERIC_TYPES_BY_NAME: dict[str, "BaseNumericDataType"] = {}
 
 
 DATETIME_FORMAT: str = "%a %b %e %H:%M:%S %Y"
@@ -3301,7 +3320,7 @@ class NumericPreprocessor(Protocol):
         ...
 
 
-NUMERIC_OPERATORS_BY_SYMBOL: Dict[str, "NumericOperator"] = {}
+NUMERIC_OPERATORS_BY_SYMBOL: dict[str, "NumericOperator"] = {}
 
 
 class NumericOperator(Enum):
@@ -3326,16 +3345,19 @@ class NumericOperator(Enum):
 
 
 class NumericValue(Generic[NumericT]):
-    def __init__(self, value: NumericT, operator: NumericOperator = NumericOperator.EQUALS):
-        self.value: NumericT = value
+    def __init__(
+            self, value: NumericT | None, operator: NumericOperator = NumericOperator.EQUALS
+    ):
+        self.value: NumericT | None = value
         self.operator: NumericOperator = operator
 
     def test(self, to_match: NumericT, unsigned: bool, num_bytes: int,
              preprocess: NumericPreprocessor = lambda x: x) -> bool:
+        assert self.value is not None
         return self.operator.test(preprocess(to_match), self.value)
 
     @staticmethod
-    def parse(value: str, num_bytes: int) -> "NumericValue":
+    def parse(value: str, num_bytes: int) -> "NumericValue[int] | NumericValue[float]":
         value = value.strip()
         try:
             return IntegerValue.parse(value, num_bytes)
@@ -3351,7 +3373,7 @@ class NumericValue(Generic[NumericT]):
         return f"{self.operator}{self.value!s}"
 
 
-class NumericWildcard(NumericValue):
+class NumericWildcard(NumericValue[int]):
     def __init__(self):
         super().__init__(None)
 
@@ -3368,12 +3390,13 @@ class IntegerValue(NumericValue[int]):
             num_bytes: int,
             preprocess: NumericPreprocessor = lambda x: x
     ) -> bool:
+        assert self.value is not None
         to_test = make_c_style_int(value=self.value, num_bytes=num_bytes, signed=not unsigned)
         to_match = make_c_style_int(value=to_match, num_bytes=num_bytes, signed=not unsigned)
         return self.operator.test(preprocess(to_match), to_test)
 
     @staticmethod
-    def parse(value: Union[str, bytes], num_bytes: int) -> "IntegerValue":
+    def parse(value: str | bytes, num_bytes: int) -> "IntegerValue":
         if isinstance(value, bytes):
             value = value.decode("utf-8")
         try:
@@ -3402,7 +3425,7 @@ class FloatValue(NumericValue[float]):
         return FloatValue(value=float(value), operator=operator)
 
 
-class NumericDataType(DataType[NumericValue]):
+class NumericDataType(DataType["NumericValue[int] | NumericValue[float]"]):
     def __init__(
             self,
             name: str,
@@ -3419,22 +3442,24 @@ class NumericDataType(DataType[NumericValue]):
         if self.endianness == Endianness.PDP and self.base_type.num_bytes != 4:
             raise ValueError(f"PDP endianness can only be used with four byte base types, not {self.base_type}")
 
-    def strength_term(self, expected: NumericValue) -> int:
+    def strength_term(self, expected: NumericValue[int] | NumericValue[float]) -> int:
         """One unit per byte the type reads (``file/src/apprentice.c:975-996``)."""
         return self.base_type.num_bytes * STRENGTH_MULT
 
-    def relation(self, expected: NumericValue) -> str:
+    def relation(self, expected: NumericValue[int] | NumericValue[float]) -> str:
         if isinstance(expected, NumericWildcard):
             return "x"
         return expected.operator.symbol
 
-    def parse_expected(self, specification: str) -> NumericValue:
+    def parse_expected(self, specification: str) -> NumericValue[int] | NumericValue[float]:
         if specification.strip() == "x":
             return NumericWildcard()
         else:
             return NumericValue.parse(specification, self.base_type.num_bytes)
 
-    def match(self, data: bytes, expected: NumericValue) -> DataTypeMatch:
+    def match(
+            self, data: bytes, expected: NumericValue[int] | NumericValue[float]
+    ) -> DataTypeMatch:
         if len(data) < self.base_type.num_bytes:
             return DataTypeMatch.INVALID
         elif self.endianness == Endianness.PDP:
@@ -3526,7 +3551,10 @@ class NumericDataType(DataType[NumericValue]):
         )
 
 
-def libmagic_str_range(data_type: DataType) -> int:
+_ParsedDataType = GUIDType | UTF16Type | StringType | PascalStringType | RegexType | NumericDataType
+
+
+def libmagic_str_range(data_type: DataType[T]) -> int:
     """The ``str_range`` libmagic stores for a string type.
 
     It is the number the declaration wrote after the type name, and zero when it wrote none:
@@ -3545,10 +3573,10 @@ def libmagic_str_range(data_type: DataType) -> int:
     """
     if isinstance(data_type, RegexType):
         return data_type.declared_length or 0
-    return getattr(data_type, "num_bytes", None) or 0
+    return cast(int | None, getattr(data_type, "num_bytes", None)) or 0
 
 
-def libmagic_str_flags(data_type: DataType) -> int:
+def libmagic_str_flags(data_type: DataType[T]) -> int:
     """The ``str_flags`` bits the modifier letters on `data_type` set.
 
     Args:
@@ -3583,7 +3611,7 @@ def libmagic_pstring_flags(data_type: PascalStringType) -> int:
     return flags | libmagic_str_flags(data_type.string_type)
 
 
-def libmagic_string_flags(data_type: DataType) -> bytes:
+def libmagic_string_flags(data_type: DataType[T]) -> bytes:
     """The ``str_range`` and ``str_flags`` word libmagic gives a string type.
 
     Args:
@@ -3619,7 +3647,7 @@ def libmagic_string_value(constant: StringTest) -> bytes:
     return b""
 
 
-def libmagic_numeric_value(data_type: DataType, value: Union[int, float]) -> bytes:
+def libmagic_numeric_value(data_type: DataType[T], value: int | float) -> bytes:
     """The bytes libmagic would copy into a numeric test's value union.
 
     Args:
@@ -3637,7 +3665,7 @@ def libmagic_numeric_value(data_type: DataType, value: Union[int, float]) -> byt
     return libmagic_field(value, 8)
 
 
-def libmagic_value(data_type: DataType, constant: Any) -> Tuple[int, bytes]:
+def libmagic_value(data_type: DataType[T], constant: T) -> tuple[int, bytes]:
     """The ``vallen`` and value bytes libmagic would store for a parsed test value.
 
     libmagic reads no value at all for the ``x`` relation, so a wildcard leaves both zeroed
@@ -3657,11 +3685,12 @@ def libmagic_value(data_type: DataType, constant: Any) -> Tuple[int, bytes]:
     elif isinstance(constant, bytes):
         return len(constant), constant
     elif isinstance(constant, NumericValue) and not isinstance(constant, NumericWildcard):
+        assert constant.value is not None
         return 0, libmagic_numeric_value(data_type, constant.value)
     return 0, b""
 
 
-def _string_input_length(expected: StringTest) -> Optional[int]:
+def _string_input_length(expected: StringTest) -> int | None:
     """Retains bounded wildcard output and one full-word terminator byte."""
     if type(expected) is NegatedStringTest:
         return _string_input_length(expected.parent)
@@ -3672,13 +3701,13 @@ def _string_input_length(expected: StringTest) -> Optional[int]:
     return max(MAX_STRING_BYTES, expected.value_length + 1)
 
 
-def _utf16_input_length(data_type: UTF16Type, expected: bytes) -> Optional[int]:
+def _utf16_input_length(data_type: UTF16Type, expected: bytes) -> int | None:
     if data_type.num_bytes is not None and data_type.num_bytes < 0:
         return None
     return len(expected)
 
 
-def _bounded_input_length(data_type: DataType, expected: Any) -> Optional[int]:
+def _bounded_input_length(data_type: DataType[Any], expected: Any) -> int | None:
     """Returns proven inspection bounds, leaving extension types unbounded."""
     if type(data_type) is NumericDataType:
         return data_type.base_type.num_bytes
@@ -3699,10 +3728,10 @@ class ConstantMatchTest(MagicTest, Generic[T]):
             offset: Offset,
             data_type: DataType[T],
             constant: T,
-            mime: Optional[str] = None,
+            mime: str | None = None,
             extensions: Iterable[str] = (),
             message: str = "",
-            parent: Optional["MagicTest"] = None
+            parent: 'MagicTest | None' = None
     ):
         super().__init__(offset=offset, mime=mime, extensions=extensions, message=message, parent=parent)
         self.data_type: DataType[T] = data_type
@@ -3717,7 +3746,7 @@ class ConstantMatchTest(MagicTest, Generic[T]):
             flag |= FLAG_UNSIGNED
         return flag
 
-    def libmagic_value_fields(self) -> Tuple[int, bytes, bytes]:
+    def libmagic_value_fields(self) -> tuple[int, bytes, bytes]:
         value_length, value = libmagic_value(self.data_type, self.constant)
         return value_length, libmagic_string_flags(self.data_type), value
 
@@ -3733,11 +3762,11 @@ class ConstantMatchTest(MagicTest, Generic[T]):
     def declared_test_type(self) -> TestType:
         return self.data_type.declared_test_types()
 
-    def calculate_absolute_offset(self, data: bytes, parent_match: Optional[TestResult] = None) -> int:
+    def calculate_absolute_offset(self, data: bytes, parent_match: TestResult | None = None) -> int:
         return self.offset.to_absolute(data, parent_match, self.data_type.allows_invalid_offsets(self.constant))
 
     def matched_test(
-            self, match: DataTypeMatch, absolute_offset: int, parent_match: Optional[TestResult]
+            self, match: DataTypeMatch, absolute_offset: int, parent_match: TestResult | None
     ) -> MatchedTest:
         """Records a successful match, with the relative base that libmagic would resolve against.
 
@@ -3780,7 +3809,7 @@ class ConstantMatchTest(MagicTest, Generic[T]):
         start, _, _ = slice(absolute_offset, None).indices(len(data))
         return data[start:start + length]
 
-    def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
+    def test(self, data: bytes, absolute_offset: int, parent_match: TestResult | None) -> TestResult:
         match = self.data_type.match(self._input_region(data, absolute_offset), self.constant)
         if match:
             return self.matched_test(match, absolute_offset, parent_match)
@@ -3793,7 +3822,7 @@ class ConstantMatchTest(MagicTest, Generic[T]):
             )
 
     def test_flip_endianness(
-            self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]
+            self, data: bytes, absolute_offset: int, parent_match: TestResult | None
     ) -> TestResult:
         if isinstance(self.data_type, NumericDataType):
             assert isinstance(self.constant, NumericValue)
@@ -3816,16 +3845,16 @@ class OffsetMatchTest(MagicTest):
     def __init__(
             self,
             offset: Offset,
-            value: Union[IntegerValue, NumericWildcard],
-            mime: Optional[str] = None,
+            value: IntegerValue | NumericWildcard,
+            mime: str | None = None,
             extensions: Iterable[str] = (),
             message: str = "",
-            parent: Optional["MagicTest"] = None,
+            parent: 'MagicTest | None' = None,
             subtraction: int = 0,
             modulo: int = 0
     ):
         super().__init__(offset=offset, mime=mime, extensions=extensions, message=message, parent=parent)
-        self.value: Union[IntegerValue, NumericWildcard] = value
+        self.value: IntegerValue | NumericWildcard = value
         self.subtraction: int = subtraction
         self.modulo: int = modulo
 
@@ -3844,7 +3873,7 @@ class OffsetMatchTest(MagicTest):
     def subtest_type(self) -> TestType:
         return TestType.UNKNOWN
 
-    def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
+    def test(self, data: bytes, absolute_offset: int, parent_match: TestResult | None) -> TestResult:
         computed_value = absolute_offset - self.subtraction
         if self.modulo != 0:
             computed_value = computed_value % self.modulo
@@ -3859,13 +3888,13 @@ class OffsetMatchTest(MagicTest):
             )
 
     def test_flip_endianness(
-            self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]
+            self, data: bytes, absolute_offset: int, parent_match: TestResult | None
     ) -> TestResult:
         return self.test(data, absolute_offset, parent_match)
 
 
 class IndirectResult(MatchedTest):
-    def __init__(self, test: "IndirectTest", offset: int, parent: Optional[TestResult] = None):
+    def __init__(self, test: "IndirectTest", offset: int, parent: TestResult | None = None):
         super().__init__(test, value=None, offset=offset, length=0, parent=parent)
 
     def explain(self, writer: ANSIWriter, file: Streamable):
@@ -3878,10 +3907,10 @@ class IndirectTest(MagicTest):
             matcher: "MagicMatcher",
             offset: Offset,
             relative: bool = False,
-            mime: Optional[str] = None,
+            mime: str | None = None,
             extensions: Iterable[str] = (),
             message: str = "",
-            parent: Optional[MagicTest] = None
+            parent: MagicTest | None = None
     ):
         super().__init__(offset=offset, mime=mime, extensions=extensions, message=message, parent=parent)
         self.matcher: MagicMatcher = matcher
@@ -3904,7 +3933,7 @@ class IndirectTest(MagicTest):
     def subtest_type(self) -> TestType:
         return TestType.BINARY
 
-    def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
+    def test(self, data: bytes, absolute_offset: int, parent_match: TestResult | None) -> TestResult:
         if self.relative:
             if parent_match is None:
                 return FailedTest(
@@ -3918,7 +3947,7 @@ class IndirectTest(MagicTest):
         return IndirectResult(self, absolute_offset, parent_match)
 
     def test_flip_endianness(
-            self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]
+            self, data: bytes, absolute_offset: int, parent_match: TestResult | None
     ) -> TestResult:
         return self.test(data, absolute_offset, parent_match)
 
@@ -3928,7 +3957,7 @@ class NamedTest(MagicTest):
             self,
             name: str,
             offset: Offset,
-            mime: Optional[str] = None,
+            mime: str | None = None,
             extensions: Iterable[str] = (),
             message: str = ""
     ):
@@ -3938,14 +3967,14 @@ class NamedTest(MagicTest):
         assert isinstance(offset, AbsoluteOffset) and offset.offset == 0
 
         class NamedTestOffset(Offset):
-            def to_absolute(self, data: bytes, last_match: Optional[TestResult], allow_invalid: bool = False) -> int:
+            def to_absolute(self, data: bytes, last_match: TestResult | None, allow_invalid: bool = False) -> int:
                 assert last_match is not None
                 return last_match.offset
         offset = NamedTestOffset()
         super().__init__(offset=offset, mime=mime, extensions=extensions, message=message, parent=None)
         self.name: str = name
         self.named_test = self
-        self.used_by: Set[UseTest] = set()
+        self.used_by: set[UseTest] = set()
 
     def libmagic_type(self) -> str:
         return "name"
@@ -3953,7 +3982,7 @@ class NamedTest(MagicTest):
     def subtest_type(self) -> TestType:
         return TestType.UNKNOWN
 
-    def test_flip_endianness(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
+    def test_flip_endianness(self, data: bytes, absolute_offset: int, parent_match: TestResult | None) -> TestResult:
         if parent_match is not None:
             assert isinstance(parent_match, MatchedTest)
             return MatchedTest(self, offset=parent_match.offset + parent_match.length, length=0, value=self.name,
@@ -3961,7 +3990,7 @@ class NamedTest(MagicTest):
         else:
             raise ValueError("A named test must always be called from a `use` test.")
 
-    def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> MatchedTest:
+    def test(self, data: bytes, absolute_offset: int, parent_match: TestResult | None) -> MatchedTest:
         if parent_match is not None:
             assert isinstance(parent_match, MatchedTest)
             return MatchedTest(self, offset=parent_match.offset + parent_match.length, length=0, value=self.name,
@@ -3998,10 +4027,10 @@ class UseTest(MagicTest):
             self,
             referenced_test: NamedTest,
             offset: Offset,
-            mime: Optional[str] = None,
+            mime: str | None = None,
             extensions: Iterable[str] = (),
             message: str = "",
-            parent: Optional["MagicTest"] = None,
+            parent: 'MagicTest | None' = None,
             flip_endianness: bool = False,
             late_binding: bool = False
     ):
@@ -4017,7 +4046,7 @@ class UseTest(MagicTest):
     def subtest_type(self) -> TestType:
         return self.referenced_test.test_type
 
-    def referenced_tests(self) -> Set[NamedTest]:
+    def referenced_tests(self) -> set[NamedTest]:
         result = super().referenced_tests() | {self.referenced_test}
         if self.named_test is None or self.named_test.name != self.referenced_test.name:
             result |= self.referenced_test.referenced_tests()
@@ -4026,7 +4055,7 @@ class UseTest(MagicTest):
     def _match(
             self,
             context: MatchContext,
-            parent_match: Optional[TestResult] = None,
+            parent_match: TestResult | None = None,
             flip_endianness: bool = False
     ) -> Iterator[TestResult]:
         flip_endianness = flip_endianness ^ self.flip_endianness
@@ -4061,7 +4090,7 @@ class UseTest(MagicTest):
 
     def _match_referenced_test(
             self, context: MatchContext, use_match: MatchedTest, flip_endianness: bool
-    ) -> List[TestResult]:
+    ) -> list[TestResult]:
         """Runs the referenced named test list and collects everything it matched.
 
         libmagic evaluates the whole named list and uses the number of entries that printed as the
@@ -4082,7 +4111,7 @@ class UseTest(MagicTest):
             context = MatchContext(data=context.data, path=context.path)
         return list(self.referenced_test._match(context, use_match, flip_endianness=flip_endianness))
 
-    def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
+    def test(self, data: bytes, absolute_offset: int, parent_match: TestResult | None) -> TestResult:
         raise NotImplementedError("This function should never be called")
 
 
@@ -4162,7 +4191,7 @@ class JSONTest(MagicTest):
     NEWLINE_DELIMITED: bool = False
     """Whether this test matches newline-delimited JSON rather than a single JSON value."""
 
-    def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
+    def test(self, data: bytes, absolute_offset: int, parent_match: TestResult | None) -> TestResult:
         try:
             parsed = parse_json(data[absolute_offset:])
         except (json.JSONDecodeError, UnicodeDecodeError) as e:
@@ -4209,7 +4238,7 @@ class JSONTest(MagicTest):
         return True
 
     def test_flip_endianness(
-            self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]
+            self, data: bytes, absolute_offset: int, parent_match: TestResult | None
     ) -> TestResult:
         return self.test(data, absolute_offset, parent_match)
 
@@ -4254,7 +4283,7 @@ class CSVTest(MagicTest):
         return completed >= 2
 
     def test(self, data: bytes, absolute_offset: int,
-             parent_match: Optional[TestResult]) -> TestResult:
+             parent_match: TestResult | None) -> TestResult:
         """Match raw CSV bytes and name their detected text encoding.
 
         Args:
@@ -4292,7 +4321,7 @@ class CSVTest(MagicTest):
         return True
 
     def test_flip_endianness(
-            self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]
+            self, data: bytes, absolute_offset: int, parent_match: TestResult | None
     ) -> TestResult:
         return self.test(data, absolute_offset, parent_match)
 
@@ -4312,7 +4341,7 @@ class DefaultTest(MagicTest):
         """
         return 0
 
-    def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
+    def test(self, data: bytes, absolute_offset: int, parent_match: TestResult | None) -> TestResult:
         if parent_match is None or not parent_match.child_matched:
             return MatchedTest(self, offset=absolute_offset, length=0, value=True, parent=parent_match)
         else:
@@ -4320,7 +4349,7 @@ class DefaultTest(MagicTest):
                                                                                          "has a child that matched")
 
     def test_flip_endianness(
-            self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]
+            self, data: bytes, absolute_offset: int, parent_match: TestResult | None
     ) -> TestResult:
         return self.test(data, absolute_offset, parent_match)
 
@@ -4336,7 +4365,7 @@ class ClearTest(MagicTest):
         """``clear`` takes no value, so libmagic parses it as the ``x`` relation."""
         return "x"
 
-    def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> MatchedTest:
+    def test(self, data: bytes, absolute_offset: int, parent_match: TestResult | None) -> MatchedTest:
         """Matches unconditionally, having unset the parent's `TestResult.child_matched`.
 
         The flag is unset after building the result, because building it raises the flag the way
@@ -4350,7 +4379,7 @@ class ClearTest(MagicTest):
         return result
 
     def test_flip_endianness(
-            self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]
+            self, data: bytes, absolute_offset: int, parent_match: TestResult | None
     ) -> TestResult:
         return self.test(data, absolute_offset, parent_match)
 
@@ -4362,10 +4391,10 @@ class DERTest(MagicTest):
             self,
             offset: Offset,
             specification: DERSpecification,
-            mime: Optional[Union[str, TernaryExecutableMessage]] = None,
+            mime: str | TernaryExecutableMessage | None = None,
             extensions: Iterable[str] = (),
-            message: Union[str, Message] = "",
-            parent: Optional["MagicTest"] = None,
+            message: str | Message = "",
+            parent: 'MagicTest | None' = None,
             comments: Iterable[Comment] = ()
     ):
         super().__init__(offset=offset, mime=mime, extensions=extensions, message=message,
@@ -4382,7 +4411,7 @@ class DERTest(MagicTest):
     def subtest_type(self) -> TestType:
         return TestType.BINARY
 
-    def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
+    def test(self, data: bytes, absolute_offset: int, parent_match: TestResult | None) -> TestResult:
         try:
             header = DERHeader.parse(data, absolute_offset)
             value = self.specification.match(header, data)
@@ -4395,7 +4424,7 @@ class DERTest(MagicTest):
                            parent=parent_match)
 
     def test_flip_endianness(
-            self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]
+            self, data: bytes, absolute_offset: int, parent_match: TestResult | None
     ) -> TestResult:
         return self.test(data, absolute_offset, parent_match)
 
@@ -4435,7 +4464,7 @@ _UTF8_SAFE_BYTES: bytes = bytes(
     b for b in range(256) if b >= 0x80 or TEXT_CHAR_CLASSES[b] == TEXT_CHAR_ASCII
 )
 
-_UCS_BYTE_ORDER_MARKS: Tuple[Tuple[bytes, str, int], ...] = (
+_UCS_BYTE_ORDER_MARKS: tuple[tuple[bytes, str, int], ...] = (
     (b"\xff\xfe\x00\x00", "utf-32le", 4),
     (b"\x00\x00\xfe\xff", "utf-32be", 4),
     (b"\xff\xfe", "utf-16le", 2),
@@ -4476,7 +4505,7 @@ def _looks_like_utf8(data: bytes, start: int = 0) -> bool:
     return True
 
 
-def _utf8_encoding(data: bytes) -> Optional[str]:
+def _utf8_encoding(data: bytes) -> str | None:
     """Names the UTF-8 family `data` belongs to, as ``file_encoding``'s two UTF-8 tests do.
 
     ``looks_utf8_with_BOM`` gives up unless more than the three bytes of the mark are present, so a
@@ -4496,7 +4525,7 @@ def _utf8_encoding(data: bytes) -> Optional[str]:
     return None
 
 
-def _looks_like_ucs(data: bytes) -> Optional[str]:
+def _looks_like_ucs(data: bytes) -> str | None:
     for bom, encoding, unit in _UCS_BYTE_ORDER_MARKS:
         if not data.startswith(bom):
             continue
@@ -4516,7 +4545,7 @@ def _looks_like_ucs(data: bytes) -> Optional[str]:
     return None
 
 
-def _eight_bit_encoding(data: bytes) -> Optional[str]:
+def _eight_bit_encoding(data: bytes) -> str | None:
     if not _only_contains(data, _TEXT_BYTES):
         return None
     elif _only_contains(data, _ISO_8859_BYTES):
@@ -4553,7 +4582,7 @@ printing characters. Its code page 1047 table sits behind ``#ifdef notdef`` and 
 """
 
 
-def _ebcdic_encoding(data: bytes) -> Optional[str]:
+def _ebcdic_encoding(data: bytes) -> str | None:
     ascii_only = True
     for chunk in _encoding_chunks(data):
         translated = chunk.translate(EBCDIC_TO_ASCII)
@@ -4585,7 +4614,7 @@ def _trim_trailing_nuls(data: bytes) -> bytes:
     return data[:trimmed]
 
 
-def detect_text_encoding(data: bytes) -> Optional[str]:
+def detect_text_encoding(data: bytes) -> str | None:
     """Decides whether `data` is text, and names the character encoding family it belongs to.
 
     This mirrors ``file_encoding`` in libmagic's ``src/encoding.c``: membership in a text
@@ -4620,7 +4649,7 @@ def detect_text_encoding(data: bytes) -> Optional[str]:
     return _ebcdic_encoding(data)
 
 
-LIBMAGIC_ENCODING_NAMES: Dict[str, str] = {
+LIBMAGIC_ENCODING_NAMES: dict[str, str] = {
     "ascii": "ASCII",
     "utf-8": "Unicode text, UTF-8",
     "utf-8-sig": "Unicode text, UTF-8 (with BOM)",
@@ -4641,11 +4670,11 @@ MAX_LINE_LENGTH: int = 300
 TEXT_ENCODING_MAX_BYTES: int = 64 * 1024
 """libmagic's ``FILE_ENCODING_MAX``: how many bytes it decodes to describe text (``src/file.h``)."""
 
-_EIGHT_BIT_ENCODINGS: FrozenSet[str] = frozenset({"ascii", "iso-8859-1", "unknown-8bit"})
+_EIGHT_BIT_ENCODINGS: frozenset[str] = frozenset({"ascii", "iso-8859-1", "unknown-8bit"})
 
-_EBCDIC_ENCODINGS: FrozenSet[str] = frozenset({"ebcdic", "ebcdic-international"})
+_EBCDIC_ENCODINGS: frozenset[str] = frozenset({"ebcdic", "ebcdic-international"})
 
-_UCS_BOM_LENGTHS: Dict[str, int] = {
+_UCS_BOM_LENGTHS: dict[str, int] = {
     encoding: len(bom) for bom, encoding, _ in _UCS_BYTE_ORDER_MARKS
 }
 
@@ -4738,7 +4767,7 @@ class TextEncodingDescription:
         self.has_overstriking: bool = "\b" in text
 
     @classmethod
-    def detect(cls, data: bytes) -> Optional["TextEncodingDescription"]:
+    def detect(cls, data: bytes) -> Self | None:
         """Classifies `data` and measures the line shape libmagic would report for it.
 
         ``file_ascmagic`` hands the same trimmed buffer to ``file_encoding`` and to
@@ -4761,7 +4790,7 @@ class TextEncodingDescription:
             return None
         return cls(encoding, _decode_text(buffer, encoding))
 
-    def _splice(self, message: str) -> Tuple[str, bool]:
+    def _splice(self, message: str) -> tuple[str, bool]:
         """Replaces a soft magic message's trailing ``text`` with the separator libmagic uses.
 
         libmagic rewrites the tail of its output buffer with ``file_replace(ms, " text$", ", ")``,
@@ -4837,9 +4866,9 @@ class PlainTextTest(MagicTest):
     def __init__(
             self,
             offset: Offset = AbsoluteOffset(0),
-            mime: Union[str, TernaryExecutableMessage] = "text/plain",
+            mime: str | TernaryExecutableMessage = "text/plain",
             extensions: Iterable[str] = ("txt",),
-            parent: Optional["MagicTest"] = None,
+            parent: 'MagicTest | None' = None,
             comments: Iterable[Comment] = ()
     ):
         super().__init__(offset, mime, extensions, "", parent, comments)
@@ -4847,7 +4876,7 @@ class PlainTextTest(MagicTest):
     def subtest_type(self) -> TestType:
         return TestType.TEXT
 
-    def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
+    def test(self, data: bytes, absolute_offset: int, parent_match: TestResult | None) -> TestResult:
         content = data[absolute_offset:]
         # this decides whether `file_ascmagic` reports text at all, and `file_ascmagic` classifies
         # the trimmed buffer (`file/src/ascmagic.c:83-93`)
@@ -4856,14 +4885,14 @@ class PlainTextTest(MagicTest):
             return FailedTest(self, offset=absolute_offset, parent=parent_match, message="the data do not appear to "
                                                                                          "be encoded in a text format")
         try:
-            value: Union[str, bytes] = content.decode(encoding)
+            value: str | bytes = content.decode(encoding)
         except (UnicodeDecodeError, LookupError):
             value = content
         return MatchedTest(self, offset=absolute_offset, length=len(content), parent=parent_match,
                            value=value)
 
     def test_flip_endianness(
-            self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]
+            self, data: bytes, absolute_offset: int, parent_match: TestResult | None
     ) -> TestResult:
         return self.test(data, absolute_offset, parent_match)
 
@@ -4874,10 +4903,10 @@ class OctetStreamTest(MagicTest):
     def __init__(
             self,
             offset: Offset = AbsoluteOffset(0),
-            mime: Union[str, TernaryExecutableMessage] = "application/octet-stream",
+            mime: str | TernaryExecutableMessage = "application/octet-stream",
             extensions: Iterable[str] = (),
-            message: Union[str, Message] = "data",
-            parent: Optional["MagicTest"] = None,
+            message: str | Message = "data",
+            parent: 'MagicTest | None' = None,
             comments: Iterable[Comment] = ()
     ):
         super().__init__(offset, mime, extensions, message, parent, comments)
@@ -4885,13 +4914,13 @@ class OctetStreamTest(MagicTest):
     def subtest_type(self) -> TestType:
         return TestType.BINARY
 
-    def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
+    def test(self, data: bytes, absolute_offset: int, parent_match: TestResult | None) -> TestResult:
         # Everything is an octet stream!
         return MatchedTest(self, offset=absolute_offset, length=len(data) - absolute_offset, parent=parent_match,
                            value=data)
 
     def test_flip_endianness(
-            self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]
+            self, data: bytes, absolute_offset: int, parent_match: TestResult | None
     ) -> TestResult:
         return self.test(data, absolute_offset, parent_match)
 
@@ -4913,10 +4942,10 @@ class EmptyFileTest(MagicTest):
     def __init__(
             self,
             offset: Offset = AbsoluteOffset(0),
-            mime: Union[str, TernaryExecutableMessage] = "inode/x-empty",
+            mime: str | TernaryExecutableMessage = "inode/x-empty",
             extensions: Iterable[str] = (),
-            message: Union[str, Message] = "empty",
-            parent: Optional["MagicTest"] = None,
+            message: str | Message = "empty",
+            parent: 'MagicTest | None' = None,
             comments: Iterable[Comment] = ()
     ):
         super().__init__(offset, mime, extensions, message, parent, comments)
@@ -4924,15 +4953,15 @@ class EmptyFileTest(MagicTest):
     def subtest_type(self) -> TestType:
         return TestType.BINARY
 
-    def calculate_absolute_offset(self, data: bytes, parent_match: Optional[TestResult] = None) -> int:
+    def calculate_absolute_offset(self, data: bytes, parent_match: TestResult | None = None) -> int:
         # an empty buffer has no valid offset, and libmagic reports it without reading one
         return self.offset.to_absolute(data, parent_match, allow_invalid=True)
 
-    def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
+    def test(self, data: bytes, absolute_offset: int, parent_match: TestResult | None) -> TestResult:
         return MatchedTest(self, offset=absolute_offset, length=0, parent=parent_match, value=data)
 
     def test_flip_endianness(
-            self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]
+            self, data: bytes, absolute_offset: int, parent_match: TestResult | None
     ) -> TestResult:
         return self.test(data, absolute_offset, parent_match)
 
@@ -4944,7 +4973,7 @@ MIME_PATTERN: Pattern[str] = re.compile(r"^!:mime\s+([^#]+?)\s*(#.*)?$")
 EXTENSION_PATTERN: Pattern[str] = re.compile(r"^!:ext\s+([^\s]+)\s*(#.*)?$")
 
 
-def _split_with_escapes(text: str) -> Tuple[str, str]:
+def _split_with_escapes(text: str) -> tuple[str, str]:
     first_length = 0
     escaped = False
     delimiter_length = 1
@@ -5001,11 +5030,11 @@ class _MagicMessageRenderer:
     """Replay cached calls in libmagic's output order without rerunning tests."""
 
     def __init__(self):
-        self.parts: List[str] = []
+        self.parts: list[str] = []
         self.firstline: bool = True
         self.printed: bool = False
         self.need_separator: bool = False
-        self.visible: Set[int] = set()
+        self.visible: set[int] = set()
 
     def render(self, match: "Match") -> None:
         visible = self.visible
@@ -5110,7 +5139,7 @@ class Match:
             matcher: "MagicMatcher",
             context: MatchContext,
             results: Iterable[TestResult],
-            text_encoding: Optional[TextEncodingDescription] = None
+            text_encoding: TextEncodingDescription | None = None
     ):
         """
         Args:
@@ -5122,12 +5151,12 @@ class Match:
         """
         self.matcher: MagicMatcher = matcher
         self.context: MatchContext = context
-        self.text_encoding: Optional[TextEncodingDescription] = text_encoding
-        self._result_iter: Optional[Iterator[TestResult]] = iter(results)
-        self._results: List[TestResult] = []
-        self._indirect_matches: Dict[int, List[Match]] = {}
-        self._indirect_results: Set[int] = set()
-        self._elf_description: Optional[str] = None
+        self.text_encoding: TextEncodingDescription | None = text_encoding
+        self._result_iter: Iterator[TestResult] | None = iter(results)
+        self._results: list[TestResult] = []
+        self._indirect_matches: dict[int, list[Match]] = {}
+        self._indirect_results: set[int] = set()
+        self._elf_description: str | None = None
 
     @property
     def data(self) -> bytes:
@@ -5139,8 +5168,8 @@ class Match:
 
     @property
     def mimetypes(self) -> LazyIterableSet[str]:
-        return LazyIterableSet[str]((
-            result.test.mime.resolve(self.context) for result in self if result.test.mime is not None)
+        return LazyIterableSet[str](
+            result.test.mime.resolve(self.context) for result in self if result.test.mime is not None
         )
 
     @property
@@ -5150,7 +5179,7 @@ class Match:
                 yield from result.test.extensions
         return LazyIterableSet[str](_extensions())
 
-    def explain(self, file: Streamable, ansi_color: Optional[bool] = None) -> str:
+    def explain(self, file: Streamable, ansi_color: bool | None = None) -> str:
         """Explains every test that contributed to this match.
 
         A match against a decoded buffer reports offsets into that buffer, so this explains it
@@ -5221,7 +5250,7 @@ class Match:
             i += 1
 
     def _message_roots(self) -> Iterator[TestResult]:
-        seen: Set[int] = set()
+        seen: set[int] = set()
         for result in self._results:
             if id(result) in self._indirect_results:
                 continue
@@ -5295,7 +5324,7 @@ def octal_escape(description: str) -> str:
         `description` with each unprintable character replaced by the octal escape of its UTF-8
         bytes.
     """
-    escaped: List[str] = []
+    escaped: list[str] = []
     for character in description:
         if character.isprintable():
             escaped.append(character)
@@ -5321,8 +5350,8 @@ def join_matches(matches: Iterable[Match], raw: bool = False) -> str:
     Returns:
         The joined description, which is empty when `matches` is.
     """
-    text_encoding: Optional[TextEncodingDescription] = None
-    parts: List[str] = []
+    text_encoding: TextEncodingDescription | None = None
+    parts: list[str] = []
     for match in matches:
         parts.append(match.description())
         if match.text_encoding is not None:
@@ -5336,14 +5365,14 @@ def join_matches(matches: Iterable[Match], raw: bool = False) -> str:
 
 
 class DefaultMagicMatcher:
-    _DEFAULT_INSTANCE: Optional["MagicMatcher"] = None
+    _DEFAULT_INSTANCE: 'MagicMatcher | None' = None
 
     def __get__(self, instance, owner) -> "MagicMatcher":
         if DefaultMagicMatcher._DEFAULT_INSTANCE is None:
             DefaultMagicMatcher._DEFAULT_INSTANCE = MagicMatcher.parse(*MAGIC_DEFS)
         return DefaultMagicMatcher._DEFAULT_INSTANCE
 
-    def __set__(self, instance, value: Optional["MagicMatcher"]):
+    def __set__(self, instance, value: 'MagicMatcher | None'):
         DefaultMagicMatcher._DEFAULT_INSTANCE = value
 
     def __delete__(self, instance):
@@ -5354,29 +5383,29 @@ class MagicMatcher:
     DEFAULT_INSTANCE: "MagicMatcher" = DefaultMagicMatcher()  # type: ignore
 
     def __init__(self, tests: Iterable[MagicTest] = ()):
-        self._tests: List[MagicTest] = []
-        self.named_tests: Dict[str, NamedTest] = {}
-        self._tests_by_mime: Dict[str, Set[MagicTest]] = defaultdict(set)
-        self._tests_by_ext: Dict[str, Set[MagicTest]] = defaultdict(set)
-        self._tests_that_can_be_indirect: Set[MagicTest] = set()
-        self._non_text_tests: Dict[MagicTest, None] = {}
-        self._text_tests: Dict[MagicTest, None] = {}
+        self._tests: list[MagicTest] = []
+        self.named_tests: dict[str, NamedTest] = {}
+        self._tests_by_mime: dict[str, set[MagicTest]] = defaultdict(set)
+        self._tests_by_ext: dict[str, set[MagicTest]] = defaultdict(set)
+        self._tests_that_can_be_indirect: set[MagicTest] = set()
+        self._non_text_tests: dict[MagicTest, None] = {}
+        self._text_tests: dict[MagicTest, None] = {}
         self._dirty: bool = True
         for test in tests:
             self.add(test)
 
     @property
-    def tests_by_mime(self) -> Dict[str, Set[MagicTest]]:
+    def tests_by_mime(self) -> dict[str, set[MagicTest]]:
         self._reassign_test_types()
         return self._tests_by_mime
 
     @property
-    def tests_by_ext(self) -> Dict[str, Set[MagicTest]]:
+    def tests_by_ext(self) -> dict[str, set[MagicTest]]:
         self._reassign_test_types()
         return self._tests_by_ext
 
     @property
-    def tests_that_can_be_indirect(self) -> Set[MagicTest]:
+    def tests_that_can_be_indirect(self) -> set[MagicTest]:
         self._reassign_test_types()
         return self._tests_that_can_be_indirect
 
@@ -5392,7 +5421,7 @@ class MagicMatcher:
         self._reassign_test_types()
         return self._text_tests.keys()
 
-    def add(self, test: Union[MagicTest, Path], test_type: TestType = TestType.UNKNOWN) -> List[MagicTest]:
+    def add(self, test: MagicTest | Path, test_type: TestType = TestType.UNKNOWN) -> list[MagicTest]:
         if not isinstance(test, MagicTest):
             level_zero_tests, _, tests_with_mime, indirect_tests = self._parse_file(test, self)
             for test in tests_with_mime:
@@ -5461,8 +5490,8 @@ class MagicMatcher:
 
     def only_match(
             self,
-            mimetypes: Optional[Iterable[str]] = None,
-            extensions: Optional[Iterable[str]] = None
+            mimetypes: Iterable[str] | None = None,
+            extensions: Iterable[str] | None = None
     ) -> "MagicMatcher":
         """
         Returns the simplest possible matcher that is capable of matching against all the given mimetypes or extensions.
@@ -5473,7 +5502,7 @@ class MagicMatcher:
         """
         if mimetypes is None and extensions is None:
             return self
-        tests: Set[MagicTest] = {
+        tests: set[MagicTest] = {
             indirect_test for indirect_test in self.tests_that_can_be_indirect
             if not any(True for _ in indirect_test.mimetypes)
         }
@@ -5495,12 +5524,12 @@ class MagicMatcher:
         return iter(self._tests)
 
     @property
-    def mimetypes(self) -> Iterable[str]:
+    def mimetypes(self) -> KeysView[str]:
         """Returns the set of MIME types this matcher is capable of matching"""
         return self.tests_by_mime.keys()
 
     @property
-    def extensions(self) -> Iterable[str]:
+    def extensions(self) -> KeysView[str]:
         """Returns the set of extensions this matcher is capable of matching"""
         return self.tests_by_ext.keys()
 
@@ -5562,10 +5591,10 @@ class MagicMatcher:
             self,
             tests: Collection[MagicTest],
             context: MatchContext,
-            text_encoding: Optional[TextEncodingDescription],
+            text_encoding: TextEncodingDescription | None,
             description: str,
-            file_context: Optional[MatchContext] = None
-    ) -> Iterator[Tuple[MagicTest, Match]]:
+            file_context: MatchContext | None = None
+    ) -> Iterator[tuple[MagicTest, Match]]:
         """Yields a match for each of `tests` that matches `context`.
 
         Args:
@@ -5655,7 +5684,7 @@ class MagicMatcher:
         return [test for test in self.text_tests
                 if test.declared_test_type() != TestType.TEXT]
 
-    def match(self, to_match: Union[bytes, BinaryIO, str, Path, MatchContext]) -> Iterator[Match]:
+    def match(self, to_match: bytes | BinaryIO | str | Path | MatchContext) -> Iterator[Match]:
         if isinstance(to_match, bytes):
             to_match = MatchContext(to_match)
         elif not isinstance(to_match, MatchContext):
@@ -5672,7 +5701,7 @@ class MagicMatcher:
         # `file_ascmagic` trims, so NUL-padded text is text to one and binary to the other
         looks_text = detect_text_encoding(to_match.data) is not None
         yielded = False
-        matched_on_the_files_bytes: Set[MagicTest] = set()
+        matched_on_the_files_bytes: set[MagicTest] = set()
         # only the text pass carries the encoding description: `file_ascmagic` prints it, and
         # `file_buffer` reaches `file_ascmagic` only once binary soft magic has printed nothing
         # (`file/src/funcs.c:479-503`)
@@ -5715,9 +5744,9 @@ class MagicMatcher:
             line: str,
             def_file: Path,
             line_number: int,
-            parent: Optional[MagicTest] = None,
-            matcher: Optional["MagicMatcher"] = None
-    ) -> Optional[MagicTest]:
+            parent: MagicTest | None = None,
+            matcher: 'MagicMatcher | None' = None
+    ) -> MagicTest | None:
         m = TEST_PATTERN.match(line)
         if not m:
             return None
@@ -5765,7 +5794,7 @@ class MagicMatcher:
                     except ValueError:
                         raise ValueError(f"{def_file!s} line {line_number}: Invalid offset type: {data_type!r}")
                 if test_str.strip() == "x":
-                    expected_value: NumericValue = NumericWildcard()
+                    expected_value: IntegerValue | NumericWildcard = NumericWildcard()
                 else:
                     expected_value = IntegerValue.parse(test_str, num_bytes=8)
                 test = OffsetMatchTest(offset=offset, value=expected_value, message=message,
@@ -5831,7 +5860,8 @@ class MagicMatcher:
                     raise ValueError(f"{def_file!s} line {line_number}: {e!s}")
                 test = ConstantMatchTest(
                     offset=offset,
-                    data_type=data_type,
+                    # The factory pairs each heterogeneous type with its own parsed value.
+                    data_type=cast(DataType[object], data_type),
                     constant=constant,
                     message=message,
                     parent=parent
@@ -5839,7 +5869,7 @@ class MagicMatcher:
         test.source_info = SourceInfo(def_file, line_number, line)
         return test
 
-    STRENGTH_OPS: Dict[str, StrengthOp] = {
+    STRENGTH_OPS: dict[str, StrengthOp] = {
         "+": StrengthOp.PLUS,
         "-": StrengthOp.MINUS,
         "*": StrengthOp.TIMES,
@@ -5848,7 +5878,7 @@ class MagicMatcher:
 
     @staticmethod
     def parse_strength(
-            specification: bytes, current_test: MagicTest, def_file: Union[str, Path],
+            specification: bytes, current_test: MagicTest, def_file: str | Path,
             line_number: int
     ):
         """Records a ``!:strength`` factor on the entry that the directive applies to.
@@ -5893,15 +5923,15 @@ class MagicMatcher:
 
     @staticmethod
     def _parse_file(
-            def_file: Union[str, Path], matcher: "MagicMatcher"
-    ) -> Tuple[Iterable[MagicTest], Iterable[UseTest], Set[MagicTest], Set[IndirectTest]]:
+            def_file: str | Path, matcher: "MagicMatcher"
+    ) -> tuple[Iterable[MagicTest], Iterable[UseTest], set[MagicTest], set[IndirectTest]]:
         def_file = Path(def_file)
-        current_test: Optional[MagicTest] = None
-        late_bindings: List[UseTest] = []
-        level_zero_tests: List[MagicTest] = []
-        tests_with_mime: Set[MagicTest] = set()
-        indirect_tests: Set[IndirectTest] = set()
-        comments: List[Comment] = []
+        current_test: MagicTest | None = None
+        late_bindings: list[UseTest] = []
+        level_zero_tests: list[MagicTest] = []
+        tests_with_mime: set[MagicTest] = set()
+        indirect_tests: set[IndirectTest] = set()
+        comments: list[Comment] = []
         with open(def_file, "rb") as f:
             for line_number, raw_line in enumerate(f.readlines()):
                 line_number += 1
@@ -5971,11 +6001,11 @@ class MagicMatcher:
         return level_zero_tests, late_bindings, tests_with_mime, indirect_tests
 
     @staticmethod
-    def parse(*def_files: Union[str, Path]) -> "MagicMatcher":
-        late_bindings: Dict[Union[str, Path], List[UseTest]] = {}
-        zero_level_tests: List[MagicTest] = []
-        tests_with_mime: Set[MagicTest] = set()
-        indirect_tests: Set[IndirectTest] = set()
+    def parse(*def_files: str | Path) -> "MagicMatcher":
+        late_bindings: dict[str | Path, list[UseTest]] = {}
+        zero_level_tests: list[MagicTest] = []
+        tests_with_mime: set[MagicTest] = set()
+        indirect_tests: set[IndirectTest] = set()
         matcher = MagicMatcher([])
         for file in def_files:
             zl, lb, wm, it = MagicMatcher._parse_file(file, matcher=matcher)

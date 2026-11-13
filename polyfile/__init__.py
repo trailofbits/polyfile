@@ -1,4 +1,4 @@
-from . import (
+from polyfile import (
     nes,
     jpeg,
     zipmatcher,
@@ -21,8 +21,8 @@ from . import (
 
 from polyfile import bzip2matcher, freezematcher, lrzipmatcher, lzmamatcher, tarmatcher, xzmatcher
 from polyfile.analysis import AnalysisLimits
-from .__main__ import main
-from .polyfile import __version__, InvalidMatch, Match, Matcher, Parser, PARSERS, register_parser, Submatch
+from polyfile.__main__ import main
+from polyfile.polyfile import __version__, InvalidMatch, Match, Matcher, Parser, PARSERS, register_parser, Submatch
 
 
 # Lazy PDF parser registration
@@ -34,7 +34,7 @@ class _LazyPDFParser(Parser):
 
     def parse(self, stream, match):
         if _LazyPDFParser._actual_parser is None:
-            from . import pdf
+            from polyfile import pdf
             _LazyPDFParser._actual_parser = pdf.pdf_parser
         yield from _LazyPDFParser._actual_parser(stream, match)
 

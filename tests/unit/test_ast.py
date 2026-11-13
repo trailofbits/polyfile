@@ -1,17 +1,16 @@
-from typing import Iterable, Optional, Tuple
+from collections.abc import Iterable
 from unittest import TestCase
 
 from polyfile.polyfile import Analyzer, Match
 from polyfile.ast import Node
-from polyfile.fileutils import Tempfile
 
 
 class MockASTNode:
     def __init__(
             self,
             name: str,
-            offset: Optional[int] = None,
-            length: Optional[int] = None,
+            offset: int | None = None,
+            length: int | None = None,
             children: Iterable["MockASTNode"] = ()
     ):
         self.name: str = name
@@ -19,7 +18,7 @@ class MockASTNode:
             setattr(self, "offset", offset)
         if length is not None:
             setattr(self, "length", length)
-        self.children: Tuple[MockASTNode, ...] = tuple(children)
+        self.children: tuple[MockASTNode, ...] = tuple(children)
 
 
 class ASTTest(TestCase):

@@ -1,23 +1,24 @@
-from typing import Any, Iterable, Iterator, List, Optional, Tuple, Union
+from typing import Any, Self
+from collections.abc import Iterable, Iterator
 
-from .polyfile import Match, Submatch
+from polyfile.polyfile import Match, Submatch
 
 
 class Node:
     def __init__(self,
                  name: str,
-                 value: Optional[bytes] = None,
-                 offset: Optional[int] = None,
-                 length: Optional[int] = None,
-                 older_sibling: Optional["Node"] = None,
+                 value: bytes | None = None,
+                 offset: int | None = None,
+                 length: int | None = None,
+                 older_sibling: 'Node | None' = None,
                  children: Iterable["Node"] = ()
     ):
         self.name: str = name
-        self.value: Optional[bytes] = value
-        self._offset: Optional[int] = offset
-        self._length: Optional[int] = length
-        self.older_sibling: Optional[Node] = older_sibling
-        self.children: Tuple[Node, ...] = tuple(children)
+        self.value: bytes | None = value
+        self._offset: int | None = offset
+        self._length: int | None = length
+        self.older_sibling: Node | None = older_sibling
+        self.children: tuple[Node, ...] = tuple(children)
 
     def __repr__(self):
         r = f"{self.__class__.__name__}(name={self.name!r}"
@@ -49,7 +50,7 @@ class Node:
                 self._length = self.children[-1].offset + self.children[-1].length - self.offset
         return self._length
 
-    def to_matches(self, parent: Optional[Match] = None) -> Iterator[Submatch]:
+    def to_matches(self, parent: Match | None = None) -> Iterator[Submatch]:
         """Map parser-local AST positions into the containing analysis source.
 
         Args:
@@ -60,7 +61,7 @@ class Node:
             offsets remain relative to their own parents; backing-stream origins are irrelevant.
         """
         source_base = 0 if parent is None else parent.offset
-        stack: List[Tuple["Node", Optional[Match]]] = [(self, parent)]
+        stack: list[tuple[Node, Match | None]] = [(self, parent)]
         while stack:
             node, parent = stack.pop()
             if parent is None:
@@ -79,11 +80,11 @@ class Node:
                 stack.append((child, match))
 
     @classmethod
-    def load(cls, obj: Any) -> "Node":
-        ancestors: List[Tuple[Any, Optional[Tuple[Node, ...]]]] = [
+    def load(cls, obj: Any) -> Self:
+        ancestors: list[tuple[Any, tuple[Node, ...] | None]] = [
             (obj, None)
         ]
-        children: Optional[Tuple[Node, ...]]
+        children: tuple[Node, ...] | None
         while True:
             obj, children = ancestors.pop()
             if children is None:
@@ -96,29 +97,33 @@ class Node:
                 raise ValueError(f"{obj!r} does not have a `name` attribute!")
             name: str = obj.name
             if hasattr(obj, "value"):
-                value: Union[Optional[bytes], str] = obj.value
+                value: bytes | None | str = obj.value
             else:
                 value = None
             if isinstance(value, str):
                 value = value.encode("utf-8")
             if hasattr(obj, "offset"):
-                offset: Optional[int] = obj.offset
+                offset: int | None = obj.offset
             else:
                 offset = None
             if hasattr(obj, "length") and (value is None or obj.length >= len(value)):
-                length: Optional[int] = obj.length
+                length: int | None = obj.length
             else:
                 length = None
-            older_sibling: Optional[Node] = None
-            for reversed_parent_index, (parent, siblings) in enumerate(reversed(ancestors)):
+            older_sibling: Node | None = None
+            parent_index = None
+            for index in range(len(ancestors) - 1, -1, -1):
+                parent, siblings = ancestors[index]
                 if siblings is not None:
+                    parent_index = index
                     if siblings:
-                        older_sibling: Optional[Node] = siblings[-1]
+                        older_sibling: Node | None = siblings[-1]
                     break
-            else:
-                assert not ancestors
             node = cls(name=name, value=value, offset=offset, length=length, older_sibling=older_sibling,
                        children=children)
-            if not ancestors:
+            if parent_index is None:
+                assert not ancestors
                 return node
-            ancestors[len(ancestors) - reversed_parent_index - 1] = parent, siblings + (node,)
+            parent, siblings = ancestors[parent_index]
+            assert siblings is not None
+            ancestors[parent_index] = parent, siblings + (node,)

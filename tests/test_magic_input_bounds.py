@@ -2,6 +2,7 @@
 
 import tracemalloc
 from pathlib import Path
+from typing import TypeVar, cast
 from uuid import UUID
 
 import pytest
@@ -14,15 +15,21 @@ from polyfile.magic import (
     DataType,
     DataTypeMatch,
     Endianness,
+    GUIDType,
     MagicMatcher,
     MatchedTest,
     NegatedStringTest,
+    NumericDataType,
+    PascalStringType,
     RegexType,
+    SearchType,
     StringMatch,
     StringTest,
     StringType,
     UTF16Type,
 )
+
+T = TypeVar("T")
 
 
 @pytest.mark.parametrize(
@@ -41,7 +48,8 @@ from polyfile.magic import (
 def test_fixed_magic_allocation_does_not_grow_with_input(
     declaration: str, value: str, flipped: bool
 ) -> None:
-    data_type = DataType.parse(declaration)
+    # This matrix pairs each dynamic declaration with that parser's own expected value.
+    data_type = cast(DataType[object], DataType.parse(declaration))
     test = ConstantMatchTest(AbsoluteOffset(1), data_type, data_type.parse_expected(value))
     run = test.test_flip_endianness if flipped else test.test
     inputs = (b"x" * 1_048_576, b"x" * 16_777_216)
@@ -93,6 +101,7 @@ def test_string_blank_padding_does_not_report_the_copy_or_padding(flags: str) ->
 @pytest.mark.parametrize("declaration", ["lestring16", "bestring16"])
 def test_utf16_value_at_eof_and_truncation(declaration: str) -> None:
     data_type = DataType.parse(declaration)
+    assert isinstance(data_type, UTF16Type)
     expected = data_type.parse_expected("TOKEN")
     test = ConstantMatchTest(AbsoluteOffset(1), data_type, expected)
     result = test.test(b"!" + expected, 1, None)
@@ -106,6 +115,7 @@ def test_utf16_value_at_eof_and_truncation(declaration: str) -> None:
 @pytest.mark.parametrize("declaration", ["guid", "beguid"])
 def test_guid_keeps_its_byte_order_and_truncation(declaration: str) -> None:
     data_type = DataType.parse(declaration)
+    assert isinstance(data_type, GUIDType)
     expected = UUID("00112233-4455-6677-8899-aabbccddeeff")
     payload = expected.bytes_le if declaration == "guid" else expected.bytes
     test = ConstantMatchTest(AbsoluteOffset(1), data_type, expected)
@@ -122,6 +132,7 @@ def test_guid_keeps_its_byte_order_and_truncation(declaration: str) -> None:
 )
 def test_numeric_offsets_keep_slice_and_eof_behavior(offset: int, valid: bool) -> None:
     data_type = DataType.parse("lelong")
+    assert isinstance(data_type, NumericDataType)
     test = ConstantMatchTest(AbsoluteOffset(0), data_type, data_type.parse_expected("123"))
     result = test.test(b"abc{\0\0\0", offset, None)
     assert bool(result) == valid
@@ -133,6 +144,7 @@ def test_numeric_offsets_keep_slice_and_eof_behavior(offset: int, valid: bool) -
 
 def test_flipped_numeric_match_reads_its_original_width() -> None:
     data_type = DataType.parse("lelong")
+    assert isinstance(data_type, NumericDataType)
     test = ConstantMatchTest(AbsoluteOffset(1), data_type, data_type.parse_expected("123"))
     data = b"!\0\0\0{" + b"tail" * 1000
     assert not test.test(data, 1, None)
@@ -146,6 +158,7 @@ def test_flipped_numeric_match_reads_its_original_width() -> None:
 @pytest.mark.parametrize("declaration", ["regex", "regex/0", "regex/0l", "regex/1l"])
 def test_regex_keeps_its_existing_region_termination(declaration: str) -> None:
     data_type = DataType.parse(declaration)
+    assert isinstance(data_type, RegexType)
     test = ConstantMatchTest(AbsoluteOffset(1), data_type, data_type.parse_expected("TOKEN"))
     assert not test.test(b"!" + b"A" * (REGEX_MAX - 5) + b"TOKEN" + b"tail", 1, None)
     if declaration != "regex/1l":
@@ -192,6 +205,7 @@ def test_negative_direct_regex_limit_keeps_the_full_tail() -> None:
 
 def test_search_blank_runs_keep_context_beyond_the_start_range() -> None:
     data_type = DataType.parse("search/2/W")
+    assert isinstance(data_type, SearchType)
     test = ConstantMatchTest(AbsoluteOffset(1), data_type, data_type.parse_expected(r"A\ B"))
     result = test.test(b"!A" + b" " * 10_000 + b"B", 1, None)
     assert isinstance(result, MatchedTest)
@@ -201,6 +215,7 @@ def test_search_blank_runs_keep_context_beyond_the_start_range() -> None:
 
 def test_pascal_string_retains_its_declared_body() -> None:
     data_type = DataType.parse("pstring/H")
+    assert isinstance(data_type, PascalStringType)
     test = ConstantMatchTest(AbsoluteOffset(1), data_type, data_type.parse_expected("TOKEN"))
     payload = b"TOKEN" + b"x" * 1000
     result = test.test(b"!" + len(payload).to_bytes(2, "big") + payload, 1, None)
@@ -225,7 +240,7 @@ class CompleteInputStringType(StringType):
 @pytest.mark.parametrize("data_type", [CompleteInputType("custom"), CompleteInputStringType()])
 @pytest.mark.parametrize("flipped", [False, True])
 def test_custom_types_receive_the_complete_remaining_input(
-    data_type: DataType, flipped: bool
+    data_type: DataType[T], flipped: bool
 ) -> None:
     expected = data_type.parse_expected("123")
     test = ConstantMatchTest(AbsoluteOffset(1), data_type, expected)

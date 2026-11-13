@@ -1,25 +1,28 @@
 from abc import ABC, abstractmethod
+from collections.abc import Callable, Iterable, Iterator
 import atexit
 from enum import Enum
 from pathlib import Path
 from pdb import Pdb
 import sys
-from typing import Any, Callable, Dict, Generic, Iterable, Iterator, List, Optional, Type, TypeVar, Union
+from typing import Generic, ParamSpec, Protocol, Self, TypeVar, cast
 
-from .polyfile import __copyright__, __license__, __version__, PARSERS, Match, Parser, ParserFunction, Submatch
-from .magic import (
+from polyfile.fileutils import FileStream
+from polyfile.polyfile import __copyright__, __license__, __version__, PARSERS, Match, Parser
+from polyfile.magic import (
     AbsoluteOffset, FailedTest, InvalidOffsetError, MagicMatcher, MagicTest, Offset, TestResult, TEST_TYPES
 )
-from .profiling import Profiler, Unprofiled, unprofiled
-from .repl import ANSIColor, ANSIWriter, arg_completer, command, ExitREPL, log, REPL, SetCompleter, string_escape
-from .wildcards import Wildcard
+from polyfile.profiling import Profiler, Unprofiled, unprofiled
+from polyfile.repl import (
+    ANSIColor, ANSIWriter, arg_completer, command, ExitREPL, log, REPL, SetCompleter
+)
+from polyfile.wildcards import Wildcard
 
 
-B = TypeVar("B", bound="Breakpoint")
-T = TypeVar("T")
+P = ParamSpec("P")
 
 
-BREAKPOINT_TYPES: List[Type["Breakpoint"]] = []
+BREAKPOINT_TYPES: list[type["Breakpoint"]] = []
 
 
 class Breakpoint(ABC):
@@ -34,18 +37,18 @@ class Breakpoint(ABC):
             test: MagicTest,
             data: bytes,
             absolute_offset: int,
-            parent_match: Optional[TestResult],
-            result: Optional[TestResult]
+            parent_match: TestResult | None,
+            result: TestResult | None
     ) -> bool:
         raise NotImplementedError()
 
     @classmethod
     @abstractmethod
-    def parse(cls: Type[B], command: str) -> Optional[B]:
+    def parse(cls, command: str) -> "Breakpoint | None":
         raise NotImplementedError()
 
     @staticmethod
-    def from_str(command: str) -> Optional["Breakpoint"]:
+    def from_str(command: str) -> "Breakpoint | None":
         if command.startswith("!"):
             return FailedBreakpoint.parse(command)
         elif command.startswith("="):
@@ -75,15 +78,15 @@ class FailedBreakpoint(Breakpoint):
             test: MagicTest,
             data: bytes,
             absolute_offset: int,
-            parent_match: Optional[TestResult],
-            result: Optional[TestResult]
+            parent_match: TestResult | None,
+            result: TestResult | None
     ) -> bool:
         return (result is None or isinstance(result, FailedTest)) and self.parent.should_break(
             test, data, absolute_offset, parent_match, result
         )
 
     @classmethod
-    def parse(cls: B, command: str) -> Optional[B]:
+    def parse(cls, command: str) -> "FailedBreakpoint | None":
         if not command.startswith("!"):
             return None
         parent = Breakpoint.from_str(command[1:])
@@ -109,15 +112,15 @@ class MatchedBreakpoint(Breakpoint):
             test: MagicTest,
             data: bytes,
             absolute_offset: int,
-            parent_match: Optional[TestResult],
-            result: Optional[TestResult]
+            parent_match: TestResult | None,
+            result: TestResult | None
     ) -> bool:
         return result is not None and not isinstance(result, FailedTest) and self.parent.should_break(
             test, data, absolute_offset, parent_match, result
         )
 
     @classmethod
-    def parse(cls: B, command: str) -> Optional[B]:
+    def parse(cls, command: str) -> "MatchedBreakpoint | None":
         if not command.startswith("="):
             return None
         parent = Breakpoint.from_str(command[1:])
@@ -144,13 +147,13 @@ class MimeBreakpoint(Breakpoint):
             test: MagicTest,
             data: bytes,
             absolute_offset: int,
-            parent_match: Optional[TestResult],
-            result: Optional[TestResult]
+            parent_match: TestResult | None,
+            result: TestResult | None
     ) -> bool:
         return self.pattern.is_contained_in(test.mimetypes)
 
     @classmethod
-    def parse(cls: Type[B], command: str) -> Optional[B]:
+    def parse(cls, command: str) -> "MimeBreakpoint | None":
         if command.lower().startswith("mime:"):
             return MimeBreakpoint(command[len("mime:"):])
         return None
@@ -180,19 +183,19 @@ class ExtensionBreakpoint(Breakpoint):
             test: MagicTest,
             data: bytes,
             absolute_offset: int,
-            parent_match: Optional[TestResult],
-            result: Optional[TestResult]
+            parent_match: TestResult | None,
+            result: TestResult | None
     ) -> bool:
         return self.ext in test.all_extensions
 
     @classmethod
-    def parse(cls: Type[B], command: str) -> Optional[B]:
+    def parse(cls, command: str) -> "ExtensionBreakpoint | None":
         if command.lower().startswith("ext:"):
             return ExtensionBreakpoint(command[len("ext:"):])
         return None
 
     @classmethod
-    def print_usage(cls, debugger: "Debugger") -> str:
+    def print_usage(cls, debugger: "Debugger") -> None:
         debugger.write("b EXT:EXTENSION", color=ANSIColor.MAGENTA)
         debugger.write(" to break when a test is capable of matching that extension.\nFor example:\n")
         debugger.write("    b EXT:pdf\n", color=ANSIColor.MAGENTA)
@@ -211,8 +214,8 @@ class FileBreakpoint(Breakpoint):
             test: MagicTest,
             data: bytes,
             absolute_offset: int,
-            parent_match: Optional[TestResult],
-            result: TestResult
+            parent_match: TestResult | None,
+            result: TestResult | None
     ) -> bool:
         if test.source_info is None or test.source_info.line != self.line:
             return False
@@ -224,7 +227,7 @@ class FileBreakpoint(Breakpoint):
             return test.source_info.path.name == self.filename
 
     @classmethod
-    def parse(cls: Type[B], command: str) -> Optional[B]:
+    def parse(cls, command: str) -> "FileBreakpoint | None":
         filename, *remainder = command.split(":")
         if not remainder:
             return None
@@ -247,20 +250,32 @@ class FileBreakpoint(Breakpoint):
         return f"Breakpoint: {self.filename} line {self.line}"
 
 
+class _TestCallback(Protocol):
+    def __call__(
+        self, test: MagicTest, /, data: bytes, absolute_offset: int,
+        parent_match: TestResult | None
+    ) -> TestResult | None: ...
+
+
+class _ParserCallback(Protocol):
+    def __call__(self, stream: FileStream, match: Match) -> Iterator[Match]: ...
+
+
 class InstrumentedTest:
-    def __init__(self, test: Type[MagicTest], debugger: "Debugger"):
-        self.test: Type[MagicTest] = test
+    def __init__(self, test: type[MagicTest], debugger: "Debugger"):
+        self.test: type[MagicTest] = test
         self.debugger: Debugger = debugger
         if "test" in test.__dict__:
-            self.original_test: Optional[Callable[[...], Optional[TestResult]]] = test.test
+            self.original_test: _TestCallback | None = test.test
 
-            def wrapper(test_instance, *args, **kwargs) -> Optional[TestResult]:
-                # if self.original_test is None:
-                #     # this is a NOOP
-                #     return self.test.test(test_instance, *args, **kwargs)
-                return self.debugger.debug(self, test_instance, *args, **kwargs)
+            def wrapper(
+                test_instance: MagicTest, data: bytes, absolute_offset: int,
+                parent_match: TestResult | None
+            ) -> TestResult | None:
+                return self.debugger.debug(self, test_instance, data, absolute_offset, parent_match)
 
-            test.test = wrapper
+            # An aborted PDB call can return None outside the normal MagicTest contract.
+            setattr(test, "test", wrapper)
         else:
             self.original_test = None
 
@@ -271,18 +286,18 @@ class InstrumentedTest:
     def uninstrument(self):
         if self.original_test is not None:
             # we are still assigned to the test function, so reset it
-            self.test.test = self.original_test
+            setattr(self.test, "test", self.original_test)
         self.original_test = None
 
 
 class InstrumentedParser:
     def __init__(self, parser: Parser, debugger: "Debugger"):
-        self.parser: Type[Parser] = parser
+        self.parser: Parser = parser
         self.debugger: Debugger = debugger
-        self.original_parser: Optional[ParserFunction] = parser.parse
+        self.original_parser: _ParserCallback | None = parser.parse
 
-        def wrapper(parser_instance, *args, **kwargs) -> Iterator[Submatch]:
-            yield from self.debugger.debug_parse(self, parser_instance, *args, **kwargs)
+        def wrapper(stream: FileStream, match: Match) -> Iterator[Match]:
+            yield from self.debugger.debug_parse(self, stream, match)
 
         parser.parse = wrapper
 
@@ -307,7 +322,7 @@ T = TypeVar("T")
 
 class Variable(Generic[T]):
     def __init__(self, possibilities: Iterable[T], value: T):
-        self.possibilities: List[T] = list(possibilities)
+        self.possibilities: list[T] = list(possibilities)
         self._value: T = value
         self.value = value
 
@@ -339,7 +354,7 @@ class BooleanVariable(Variable[bool]):
     def __init__(self, value: bool):
         super().__init__((True, False), value)
 
-    def parse(self, value: str) -> T:
+    def parse(self, value: str) -> bool:
         try:
             return super().parse(value)
         except ValueError:
@@ -384,31 +399,31 @@ class Profile(BooleanVariable):
 class Debugger(REPL):
     def __init__(self, break_on_parsing: bool = True):
         super().__init__(name="the debugger")
-        self.instrumented_tests: List[InstrumentedTest] = []
-        self.breakpoints: List[Breakpoint] = []
+        self.instrumented_tests: list[InstrumentedTest] = []
+        self.breakpoints: list[Breakpoint] = []
         self._entries: int = 0
         self.step_mode: StepMode = StepMode.RUNNING
-        self.last_command: Optional[str] = None
-        self.last_test: Optional[MagicTest] = None
-        self.last_parent_match: Optional[MagicTest] = None
+        self.last_command: str | None = None
+        self.last_test: MagicTest | None = None
+        self.last_parent_match: TestResult | None = None
         self.data: bytes = b""
         self.last_offset: int = 0
-        self.last_result: Optional[TestResult] = None
-        self.repl_test: Optional[MagicTest] = None
-        self.instrumented_parsers: List[InstrumentedParser] = []
+        self.last_result: TestResult | None = None
+        self.repl_test: MagicTest | None = None
+        self.instrumented_parsers: list[InstrumentedParser] = []
         self.break_on_submatching: BreakOnSubmatching = BreakOnSubmatching(break_on_parsing, self)
         self.profile: Profile = Profile(False, self)
-        self.variables_by_name: Dict[str, Variable] = {
+        self.variables_by_name: dict[str, Variable[bool]] = {
             "break_on_parsing": self.break_on_submatching,
             "profile": self.profile
         }
-        self.variable_descriptions: Dict[str, str] = {
+        self.variable_descriptions: dict[str, str] = {
             "break_on_parsing": "Break when a PolyFile parser is about to be invoked and debug using PDB (default=True;"
                                 " disable from the command line with `--no-debug-python`)",
             "profile": "Profile the performance of each magic test that is run (default=False)"
         }
-        self.profile_results: Dict[Union[MagicTest, Type[Parser]], float] = {}
-        self._pdb: Optional[Pdb] = None
+        self.profile_results: dict[MagicTest | Parser, float] = {}
+        self._pdb: Pdb | None = None
         self._debug_next: bool = False
 
     def save_context(self):
@@ -464,7 +479,7 @@ class Debugger(REPL):
             # we are now disabled, so store our history
             self.store_history()
 
-    def __enter__(self) -> "Debugger":
+    def __enter__(self) -> Self:
         self._entries += 1
         if self._entries == 1:
             self.enabled = True
@@ -475,11 +490,14 @@ class Debugger(REPL):
         if self._entries == 0:
             self.enabled = False
 
-    def should_break(self) -> bool:
+    def should_break(self) -> bool | TestResult:
+        test = cast(MagicTest, self.last_test)
         return self.step_mode == StepMode.SINGLE_STEPPING or (
             self.step_mode == StepMode.NEXT and self.last_result
         ) or any(
-            b.should_break(self.last_test, self.data, self.last_offset, self.last_parent_match, self.last_result)
+            b.should_break(
+                test, self.data, self.last_offset, self.last_parent_match, self.last_result
+            )
             for b in self.breakpoints
         )
 
@@ -492,7 +510,9 @@ class Debugger(REPL):
         test.write(writer, is_current_test=is_current_test, pre_mime_text=pre_mime_text)
         super().write(str(writer))
 
-    def write(self, message: Any, bold: bool = False, dim: bool = False, color: Optional[ANSIColor] = None):
+    def write(
+        self, message: object, bold: bool = False, dim: bool = False, color: ANSIColor | None = None
+    ) -> None:
         if sys.stdout.isatty() and isinstance(message, MagicTest):
             self.write_test(message)
         else:
@@ -503,7 +523,9 @@ class Debugger(REPL):
         writer.write_context(data, offset, context_bytes, num_bytes)
         super().write(message=str(writer))
 
-    def _debug(self, func: Callable[[Any], T], *args, **kwargs) -> T:
+    def _debug(
+        self, func: Callable[P, T], *args: P.args, **kwargs: P.kwargs
+    ) -> T | None:
         if self.profile.value:
             self.write("Warning:", bold=True, color=ANSIColor.RED)
             self.write(" Profiling will be disabled for this test while debugging!\n")
@@ -533,8 +555,8 @@ class Debugger(REPL):
             test: MagicTest,
             data: bytes,
             absolute_offset: int,
-            parent_match: Optional[TestResult]
-    ) -> Optional[TestResult]:
+            parent_match: TestResult | None
+    ) -> TestResult | None:
         profiler = Profiler()
         if instrumented_test.original_test is None:
             test_func = instrumented_test.test.test
@@ -542,7 +564,9 @@ class Debugger(REPL):
             test_func = instrumented_test.original_test
         if self._debug_next:
             self._debug_next = False
-            result: TestResult = self._debug(test_func, test, data, absolute_offset, parent_match)
+            result: TestResult | None = self._debug(
+                test_func, test, data, absolute_offset, parent_match
+            )
         else:
             with profiler:
                 result = test_func(test, data, absolute_offset, parent_match)
@@ -563,11 +587,11 @@ class Debugger(REPL):
     @unprofiled
     def print_where(
             self,
-            test: Optional[MagicTest] = None,
-            offset: Optional[int] = None,
-            parent_match: Optional[TestResult] = None,
-            result: Optional[TestResult] = None
-    ):
+            test: MagicTest | None = None,
+            offset: int | None = None,
+            parent_match: TestResult | None = None,
+            result: TestResult | None = None
+    ) -> None:
         if test is None:
             test = self.last_test
         if test is None:
@@ -616,7 +640,7 @@ class Debugger(REPL):
             except InvalidOffsetError as e:
                 self.write(f"{e!s}\n", color=ANSIColor.RED)
         if result is not None and hasattr(result, "length"):
-            context_bytes = result.length
+            context_bytes = cast(int, result.length)
         else:
             context_bytes = 1
         self.print_context(self.data, data_offset, num_bytes=context_bytes)
@@ -646,7 +670,9 @@ class Debugger(REPL):
             self.write(",\n", bold=True)
         self.write("}\n", bold=True)
 
-    def debug_parse(self, instrumented_parser: InstrumentedParser, file_stream, match: Match) -> Iterator[Submatch]:
+    def debug_parse(
+        self, instrumented_parser: InstrumentedParser, file_stream: FileStream, match: Match
+    ) -> Iterator[Match]:
         log.clear_status()
         source_base = match.offset
 
@@ -714,10 +740,11 @@ class Debugger(REPL):
                             # This next line will invoke the parser:
                             result = next(generator)
                         else:
-                            result = self._pdb.runcall(next, generator)
+                            assert self._pdb is not None
+                            result = cast(Match | None, self._pdb.runcall(next, generator))
                         if result is None:
                             return
-                        self.write(f"Got a submatch:\n", dim=True)
+                        self.write("Got a submatch:\n", dim=True)
                         self.print_match(result)
                         yield result
                     except StopIteration:
@@ -744,25 +771,22 @@ class Debugger(REPL):
              aliases=("run",))
     def cont(self, arguments: str):
         self.step_mode = StepMode.RUNNING
-        self.last_command = command
         raise ExitREPL()
 
     @command(allows_abbreviation=True, help="step through a single magic test")
     def step(self, arguments: str):
         self.step_mode = StepMode.SINGLE_STEPPING
-        self.last_command = command
         raise ExitREPL()
 
     @command(allows_abbreviation=False, name="debug_and_rerun", help="re-run the last test and debug in PDB")
     def debug_and_rerun(self, arguments: str):
-        self.last_command = command
         if self.last_test is None:
             self.write("Error: A test has not yet been run\n", color=ANSIColor.RED)
             return
         test = self.last_test.__class__.test
         # Is the test instrumented? If so, find the original version!
         for instrumented in self.instrumented_tests:
-            if instrumented.test.test is test:
+            if instrumented.test.test is test and instrumented.original_test is not None:
                 test = instrumented.original_test
                 break
         self._debug(test, self.last_test, self.data, self.last_offset, self.last_parent_match)
@@ -779,7 +803,6 @@ class Debugger(REPL):
                        color=ANSIColor.RED)
             return
         self.step_mode = StepMode.RUNNING
-        self.last_command = command
         try:
             raise ExitREPL()
         finally:
@@ -788,14 +811,12 @@ class Debugger(REPL):
     @command(allows_abbreviation=False, help="step into the next magic test and debug in PDB")
     def debug_and_step(self, arguments: str):
         self.step_mode = StepMode.SINGLE_STEPPING
-        self.last_command = command
         self._debug_next = True
         raise ExitREPL()
 
     @command(allows_abbreviation=True, help="continue execution until the next test that matches")
     def next(self, arguments: str):
         self.step_mode = StepMode.NEXT
-        self.last_command = command
         raise ExitREPL()
 
     @command(allows_abbreviation=True,
@@ -965,7 +986,7 @@ class Debugger(REPL):
                 self.write(f"Deleted {b!s}\n")
 
     @arg_completer(for_command="set")
-    def set_completer(self, index: int, arg: str, prev_arguments: Iterable[str]):
+    def set_completer(self, index: int, arg: str, prev_arguments: tuple[str, ...]):
         if index == 0:
             return SetCompleter(lambda: self.variables_by_name.keys())(arg)
         elif index == 1:

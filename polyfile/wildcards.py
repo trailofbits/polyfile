@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from collections.abc import Container
 import re
-from typing import Iterable, List
+from collections.abc import Iterable
 
 
 class Wildcard(ABC):
@@ -43,7 +43,7 @@ class SimpleWildcard(Wildcard):
 
     @property
     def escaped_pattern(self) -> str:
-        components: List[str] = []
+        components: list[str] = []
         component: str = ""
         for last_c, c in zip((None,) + tuple(self.raw_pattern), self.raw_pattern):
             escaped = last_c is not None and last_c == "\\"

@@ -8,12 +8,13 @@ from mimetypes import guess_extension
 from pathlib import Path
 from time import localtime
 import traceback
-from typing import Any, Callable, Dict, IO, Iterable, Iterator, List, Optional, Set, Tuple, Union
+from typing import Any
+from collections.abc import Callable, Iterable, Iterator
 
 from polyfile.analysis import AnalysisContext, AnalysisLimits
 from polyfile.fileutils import FileStream, Streamable
-from . import logger
-from .magic import MagicMatcher, Match as MagicMatch, MatchContext, TestResult
+from polyfile import logger
+from polyfile.magic import MagicMatcher, Match as MagicMatch, MatchContext, TestResult
 
 __version__: str = version("polyfile")
 del version
@@ -24,7 +25,7 @@ __license__: str = "Apache License Version 2.0 https://www.apache.org/licenses/"
 ParserFunction = Callable[[FileStream, "Match"], Iterator["Match"]]
 
 
-class Parser(ABC, ParserFunction):
+class Parser(ABC):
     @abstractmethod
     def parse(self, stream: FileStream, match: "Match") -> Iterator["Match"]:
         raise NotImplementedError()
@@ -58,7 +59,7 @@ class ParserFunctionWrapper(Parser):
             return self.parser.__class__.__name__
 
 
-PARSERS: Dict[str, Set[Parser]] = defaultdict(set)
+PARSERS: dict[str, set[Parser]] = defaultdict(set)
 
 log = logger.getStatusLogger("polyfile")
 
@@ -73,29 +74,29 @@ class Match:
             name: str,
             match_obj: Any,
             relative_offset: int = 0,
-            length: Optional[int] = None,
-            parent: Optional["Match"] = None,
-            matcher: Optional["Matcher"] = None,
-            display_name: Optional[str] = None,
-            img_data: Optional[str] = None,
-            decoded: Optional[bytes] = None,
-            extension: Optional[str] = None,
+            length: int | None = None,
+            parent: 'Match | None' = None,
+            matcher: 'Matcher | None' = None,
+            display_name: str | None = None,
+            img_data: str | None = None,
+            decoded: bytes | None = None,
+            extension: str | None = None,
             *,
-            description: Optional[str] = None,
-            analysis_context: Optional[AnalysisContext] = None,
-            analysis_depth: Optional[int] = None,
-            source: Optional[str] = None
+            description: str | None = None,
+            analysis_context: AnalysisContext | None = None,
+            analysis_depth: int | None = None,
+            source: str | None = None
     ):
-        self._children: List[Match] = []
+        self._children: list[Match] = []
         self.name: str = name
-        self.matcher: Optional[Matcher] = None
+        self.matcher: Matcher | None = None
         self.match = match_obj
-        self.description: Optional[str] = description
-        self.img_data: Optional[str] = img_data
-        self.decoded: Optional[bytes] = decoded
+        self.description: str | None = description
+        self.img_data: str | None = img_data
+        self.decoded: bytes | None = decoded
         self._offset: int = relative_offset
-        self._length: Optional[int] = length
-        self._parent: Optional[Match] = parent
+        self._length: int | None = length
+        self._parent: Match | None = parent
         self.source = source if source is not None else (
             parent.source if parent is not None else "file"
         )
@@ -115,14 +116,14 @@ class Match:
             analysis_depth = parent.analysis_depth if parent is not None else 0
         self.analysis_depth = analysis_depth
         self.analysis_member_counted = False
-        self.analysis_skip_parsers: Set[str] = set()
-        self.analysis_status: Optional[str] = None
-        self.analysis_message: Optional[str] = None
+        self.analysis_skip_parsers: set[str] = set()
+        self.analysis_status: str | None = None
+        self.analysis_message: str | None = None
         if display_name is None:
             self.display_name: str = name
         else:
             self.display_name = display_name
-        self.extension: Optional[str] = extension
+        self.extension: str | None = extension
         if extension is None:
             self.extension = guess_extension(self.name)
             if self.extension is not None and self.extension.startswith("."):
@@ -130,7 +131,7 @@ class Match:
                 self.extension = self.extension[1:]
 
     @property
-    def children(self) -> Tuple["Match", ...]:
+    def children(self) -> tuple["Match", ...]:
         return tuple(self._children)
 
     def __len__(self):
@@ -143,7 +144,7 @@ class Match:
         return self._children[index]
 
     @property
-    def parent(self) -> Optional["Match"]:
+    def parent(self) -> 'Match | None':
         return self._parent
 
     @property
@@ -235,8 +236,8 @@ class Submatch(Match):
     pass
 
 
-def register_parser(*filetypes: str) -> Callable[[Union[Parser, ParserFunction]], Parser]:
-    def wrapper(parser: Union[Parser, ParserFunction]) -> Parser:
+def register_parser(*filetypes: str) -> Callable[[Parser | ParserFunction], Parser]:
+    def wrapper(parser: Parser | ParserFunction) -> Parser:
         if not isinstance(parser, Parser):
             parser = ParserFunctionWrapper(parser)
         for ft in filetypes:
@@ -246,8 +247,8 @@ def register_parser(*filetypes: str) -> Callable[[Union[Parser, ParserFunction]]
 
 
 class Matcher:
-    def __init__(self, parse: bool = True, matcher: Optional[MagicMatcher] = None,
-                 *, limits: Optional[AnalysisLimits] = None):
+    def __init__(self, parse: bool = True, matcher: MagicMatcher | None = None,
+                 *, limits: AnalysisLimits | None = None):
         if matcher is None:
             self.magic_matcher: MagicMatcher = MagicMatcher.DEFAULT_INSTANCE
         else:
@@ -259,18 +260,18 @@ class Matcher:
             self, mimetype: str,
             match_obj: TestResult,
             data: bytes,
-            file_stream: Union[str, Path, IO, FileStream],
-            parent: Optional[Match] = None,
+            file_stream: Streamable,
+            parent: Match | None = None,
             offset: int = 0,
-            length: Optional[int] = None,
+            length: int | None = None,
             *,
-            description: Optional[str] = None,
-            analysis_context: Optional[AnalysisContext] = None,
+            description: str | None = None,
+            analysis_context: AnalysisContext | None = None,
             analysis_depth: int = 0
     ) -> Iterator[Match]:
         if length is None:
             length = len(data) - offset
-        extension: Optional[str] = None
+        extension: str | None = None
         try:
             extension = next(iter(match_obj.test.all_extensions))
         except StopIteration:
@@ -297,10 +298,9 @@ class Matcher:
                         submatch_iter = parser(fs, m)
                         try:
                             first_submatch = next(submatch_iter)
-                            has_first = True
                         except StopIteration:
-                            has_first = False
-                        if has_first:
+                            pass
+                        else:
                             yield first_submatch
                             yield from submatch_iter
                 except InvalidMatch:
@@ -312,14 +312,14 @@ class Matcher:
                         traceback.print_exc()
 
     def identify(
-            self, file_stream: Union[str, Path, IO, FileStream]
+            self, file_stream: Streamable
     ) -> Iterator[MagicMatch]:
         with FileStream(file_stream) as f:
             context = MatchContext.load(f, only_match_mime=False)
             yield from self.magic_matcher.match(context)
 
     def match(self, file_stream: Streamable,
-              parent: Optional[Match] = None) -> Iterator[Match]:
+              parent: Match | None = None) -> Iterator[Match]:
         analysis_context = (
             parent.analysis_context if parent is not None else AnalysisContext(self.limits)
         )
@@ -333,7 +333,7 @@ class Matcher:
                     parent.analysis_status = "limited"
                     parent.analysis_message = reason
                     return
-            matched_mimetypes: Set[str] = set()
+            matched_mimetypes: set[str] = set()
             magic_context = MatchContext.load(f, only_match_mime=True)
             is_elf = magic_context.data.startswith(b"\x7fELF")
             magic_context.only_match_mime = not is_elf
@@ -356,18 +356,18 @@ class Matcher:
 
 
 class Analyzer:
-    def __init__(self, path: Union[str, Path], parse: bool = True,
-                 magic_matcher: Optional[MagicMatcher] = None,
-                 *, limits: Optional[AnalysisLimits] = None):
-        self.path: Union[str, Path] = path
+    def __init__(self, path: str | Path, parse: bool = True,
+                 magic_matcher: MagicMatcher | None = None,
+                 *, limits: AnalysisLimits | None = None):
+        self.path: str | Path = path
         self.parse: bool = parse
-        self._magic_matcher: Optional[MagicMatcher] = magic_matcher
+        self._magic_matcher: MagicMatcher | None = magic_matcher
         self.limits = limits or AnalysisLimits()
-        self._matcher: Optional[Matcher] = None
-        self._matches: Optional[List[Match]] = None
-        self._match_iterator: Optional[Iterator[Match]] = None
-        self._magic_matches: Optional[List[MagicMatch]] = None
-        self._magic_match_iterator: Optional[Iterator[MagicMatch]] = None
+        self._matcher: Matcher | None = None
+        self._matches: list[Match] | None = None
+        self._match_iterator: Iterator[Match] | None = None
+        self._magic_matches: list[MagicMatch] | None = None
+        self._magic_match_iterator: Iterator[MagicMatch] | None = None
 
     @property
     def magic_matcher(self) -> MagicMatcher:
@@ -376,8 +376,8 @@ class Analyzer:
         else:
             return self._magic_matcher
 
-    def mime_types(self) -> Iterator[Tuple[str, MagicMatch]]:
-        mimetypes: Dict[str, Set[str]] = {}
+    def mime_types(self) -> Iterator[tuple[str, MagicMatch]]:
+        mimetypes: dict[str, set[str]] = {}
         with open(self.path, "rb") as f:
             for match in self.magic_matcher.match(MatchContext.load(f, only_match_mime=True)):
                 for mimetype in match.mimetypes:
@@ -396,11 +396,11 @@ class Analyzer:
         return self._matcher
 
     @property
-    def matches_so_far(self) -> List[Match]:
+    def matches_so_far(self) -> list[Match] | None:
         return self._matches
 
     @property
-    def magic_matches_so_far(self) -> List[MagicMatch]:
+    def magic_matches_so_far(self) -> list[MagicMatch] | None:
         return self._magic_matches
 
     def matches(self) -> Iterator[Match]:
@@ -410,7 +410,7 @@ class Analyzer:
                 self._match_iterator = iter(self.matcher.match(self.path))
             else:
                 yield from self._matches
-            while True:
+            while self._match_iterator is not None:
                 try:
                     match = next(self._match_iterator)
                 except StopIteration:
@@ -431,14 +431,14 @@ class Analyzer:
         else:
             yield from self._matches
 
-    def magic_matches(self) -> Iterator[Match]:
+    def magic_matches(self) -> Iterator[MagicMatch]:
         if self._magic_matches is None or self._magic_match_iterator is not None:
             if self._magic_matches is None:
                 self._magic_matches = []
                 self._magic_match_iterator = iter(self.matcher.identify(self.path))
             else:
                 yield from self._magic_matches
-            while True:
+            while self._magic_match_iterator is not None:
                 try:
                     match = next(self._magic_match_iterator)
                     yield match
@@ -448,7 +448,7 @@ class Analyzer:
         else:
             yield from self._magic_matches
 
-    def sbud(self, matches: Optional[Iterable[Match]] = None, include_contents: bool = True) -> Dict[str, Any]:
+    def sbud(self, matches: Iterable[Match] | None = None, include_contents: bool = True) -> dict[str, Any]:
         """Builds the SBuD object that describes this file.
 
         Args:
@@ -472,7 +472,7 @@ class Analyzer:
         md5 = hashlib.md5()
         sha1 = hashlib.sha1()
         sha256 = hashlib.sha256()
-        b64contents: Optional[str] = None
+        b64contents: str | None = None
         with open(self.path, 'rb') as hash_file:
             data = hash_file.read()
             md5.update(data)
@@ -482,7 +482,7 @@ class Analyzer:
                 b64contents = base64.b64encode(data).decode('utf-8')
             file_length = len(data)
             del data
-        sbud: Dict[str, Any] = {
+        sbud: dict[str, Any] = {
             'MD5': md5.hexdigest(),
             'SHA1': sha1.hexdigest(),
             'SHA256': sha256.hexdigest(),

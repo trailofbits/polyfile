@@ -249,9 +249,12 @@ def test_case_folding_stays_ascii_only() -> None:
 @pytest.mark.parametrize("declaration", ["search/40", "regex"])
 def test_truncated_utf8_values_remain_binary(declaration: str) -> None:
     data_type = DataType.parse(declaration)
-    assert (
-        data_type.test_types(data_type.parse_expected(r"\xc3")) == MagicTestType.BINARY
-    )
+    if isinstance(data_type, SearchType):
+        passes = data_type.test_types(data_type.parse_expected(r"\xc3"))
+    else:
+        assert isinstance(data_type, RegexType)
+        passes = data_type.test_types(data_type.parse_expected(r"\xc3"))
+    assert passes == MagicTestType.BINARY
 
 
 def test_direct_caret_remains_a_regex_anchor() -> None:
