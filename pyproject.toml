@@ -81,4 +81,12 @@ polyfile = ["templates/*", "CHANGELOG.md"]
 "polyfile.magic_defs" = ["*"]
 
 [tool.ty.rules]
+dynamic-function-decorator-return = "error"
+missing-type-argument = "error"
+possibly-unresolved-reference = "error"
+unsound-return-statement = "error"
 unused-type-ignore-comment = "error"
+
+[tool.ty.src]
+include = ["polyfile", "polymerge", "tests", "build_backend.py", "compile_kaitai_parsers.py"]
+exclude = ["polyfile/kaitai/parsers", "polyfile/kaitai/kaitai-struct-compiler-*"]

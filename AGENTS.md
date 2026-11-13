@@ -136,6 +136,16 @@ uv run flake8 polyfile polymerge tests build_backend.py compile_kaitai_parsers.p
     --max-complexity=10 --max-line-length=127 --exclude=polyfile/kaitai/parsers
 ```
 
+### Type checking
+
+The type check covers handwritten code in `polyfile/`, `polymerge/`, and `tests/`, plus the
+build scripts. `pyproject.toml` excludes generated Kaitai parsers and downloaded compiler files.
+CI checks each supported Python version using the interpreter installed for that matrix job.
+
+```bash
+uv run ty check --error-on-warning
+```
+
 ### Testing
 ```bash
 # Run all tests
@@ -162,6 +172,9 @@ uv run flake8 polyfile polymerge tests build_backend.py compile_kaitai_parsers.p
 # Lint (advisory)
 uv run flake8 polyfile polymerge tests build_backend.py compile_kaitai_parsers.py \
     --max-complexity=10 --max-line-length=127 --exclude=polyfile/kaitai/parsers
+
+# Types (handwritten code, tests, and build scripts)
+uv run ty check --error-on-warning
 
 # Security audit (checks for vulnerable dependencies)
 uvx pip-audit
