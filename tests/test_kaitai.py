@@ -5,7 +5,6 @@ import pickle
 import signal
 import struct
 from tempfile import NamedTemporaryFile, TemporaryDirectory
-from typing import Optional, Tuple
 from unittest import skipUnless, TestCase
 from urllib.error import URLError
 import warnings
@@ -99,7 +98,7 @@ class TestGeneratedParsers(TestCase):
     """
 
     @staticmethod
-    def compile_error(path: Path) -> Optional[str]:
+    def compile_error(path: Path) -> str | None:
         """Returns why Python rejects a generated parser, or :const:`None` if it accepts it."""
         with warnings.catch_warnings():
             warnings.simplefilter("error", SyntaxWarning)
@@ -125,7 +124,7 @@ class TestKaitaiParsing(TestCase):
     """
 
     # Files from the Corkami "pocs" corpus, which is downloaded on demand.
-    CORKAMI_SAMPLES: Tuple[Tuple[str, str], ...] = (
+    CORKAMI_SAMPLES: tuple[tuple[str, str], ...] = (
         ("image/gif.ksy", "mini/gif89.gif"),
         ("image/png.ksy", "mini/png.png"),
         ("image/jpeg.ksy", "mini/jpg.jpg"),

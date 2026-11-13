@@ -1,6 +1,5 @@
 import re
 from pathlib import Path
-from typing import List, Tuple
 from unittest import TestCase
 
 REPO_ROOT: Path = Path(__file__).absolute().parent.parent
@@ -9,10 +8,10 @@ README_PATH: Path = REPO_ROOT / "README.md"
 MARKDOWN_LINK: re.Pattern[str] = re.compile(r"\[(?P<text>[^]]*)]\((?P<target>[^)\s]+)\)")
 """Matches an inline markdown link, capturing its text and its target."""
 
-ABSOLUTE_SCHEMES: Tuple[str, ...] = ("https://", "http://", "mailto:")
+ABSOLUTE_SCHEMES: tuple[str, ...] = ("https://", "http://", "mailto:")
 
 
-def readme_link_targets() -> List[str]:
+def readme_link_targets() -> list[str]:
     """The target of every inline markdown link in README.md.
 
     Returns:

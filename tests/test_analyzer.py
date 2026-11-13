@@ -1,4 +1,4 @@
-from typing import Any, Dict
+from typing import Any
 from unittest import TestCase
 
 from polyfile.polyfile import Analyzer
@@ -6,12 +6,12 @@ from polyfile.polyfile import Analyzer
 from .test_zipmatcher import MEMBERS, build_zip, temporary_file
 
 
-def node_count(element: Dict[str, Any]) -> int:
+def node_count(element: dict[str, Any]) -> int:
     """Counts an SBuD element and everything nested under it."""
     return 1 + sum(node_count(child) for child in (element.get("subEls") or ()))
 
 
-def tree_size(sbud: Dict[str, Any]) -> int:
+def tree_size(sbud: dict[str, Any]) -> int:
     """Counts every element in an SBuD object's structure."""
     return sum(node_count(element) for element in sbud["struc"])
 

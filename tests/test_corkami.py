@@ -3,7 +3,6 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
-from typing import Set
 from unittest import TestCase
 
 from polyfile.magic import MAGIC_DEFS, MagicMatcher, MatchContext
@@ -58,7 +57,7 @@ def _init_tests():
                     str(FILE_PATH), "-m", str(MAGIC_FILE_PATH), "-i", "--keep-going", str(local_path)
                 ])
                 file_output = orig_file_output
-                file_mimetypes: Set[str] = set()
+                file_mimetypes: set[str] = set()
                 while file_output:
                     m = FILE_MIMETYPE_PATTERN.match(file_output)
                     if not m:
