@@ -1,6 +1,8 @@
 from collections import deque
 import collections.abc
-from typing import IO, Mapping, Sequence, Union
+from typing import BinaryIO, cast
+from collections.abc import Sequence
+from collections.abc import Iterator
 
 from . import serialization
 
@@ -9,7 +11,7 @@ from . import serialization
 class TrieNode:
     def __init__(self, value=None, sources=None, _children=None):
         if _children is None:
-            self._children: Mapping[object, TrieNode] = {}
+            self._children: dict[object, TrieNode] = {}
         else:
             self._children = _children
         self.value = value
@@ -36,7 +38,7 @@ class TrieNode:
     def __ne__(self, other):
         return not (self == other)
 
-    def __getitem__(self, key):
+    def __getitem__(self, key: object) -> "TrieNode":
         return self._children[key]
 
     def __contains__(self, value):
@@ -112,15 +114,15 @@ class TrieNode:
             if first in self._children:
                 yield from self[first].find_prefix(remainder)
 
-    def bfs(self):
-        queue = deque([self])
+    def bfs(self) -> Iterator["TrieNode"]:
+        queue: deque[TrieNode] = deque([self])
         while queue:
             head = queue.popleft()
             yield head
             queue.extend(head._children.values())
 
-    def dfs(self):
-        stack = [self]
+    def dfs(self) -> Iterator["TrieNode"]:
+        stack: list[TrieNode] = [self]
         visited = set()
         while stack:
             tail = stack.pop()
@@ -144,6 +146,11 @@ class ACNode(TrieNode):
     def serialize(self):
         return super().serialize() + (self.parent, self.fall)
 
+    def __getitem__(self, key: object) -> "ACNode":
+        child = super().__getitem__(key)
+        assert isinstance(child, ACNode)
+        return child
+
     def __repr__(self):
         if self.fall is not self:
             return f"{self.__class__.__name__}(value={self.value!r}, sources={self.sources!r}, _children={self._children!r}), parent={self.parent!r}, _fall={self.fall!r}"
@@ -158,11 +165,15 @@ class ACNode(TrieNode):
     def finalize(self):
         self.fall = self
         for n in self.bfs():
+            assert isinstance(n, ACNode)
             if n is self:
                 continue
+            assert n.parent is not None
             new_fall = n.parent.fall
+            assert new_fall is not None
             while n.value not in new_fall and new_fall is not self:
                 new_fall = new_fall.fall
+                assert new_fall is not None
             if n.value not in new_fall:
                 # there is no suffix
                 n.fall = self
@@ -177,6 +188,7 @@ class ACNode(TrieNode):
         node_ids = {}
         falls = {}
         for node in self.dfs():
+            assert isinstance(node, ACNode)
             assert node not in node_ids
             nid = len(node_ids)
             node_ids[id(node)] = nid
@@ -213,11 +225,11 @@ class MultiSequenceSearch:
             self.trie.add(seq)
         self.trie.finalize()
 
-    def save(self, output_stream: IO):
+    def save(self, output_stream: BinaryIO):
         serialization.dump(self.trie, output_stream)
 
     @staticmethod
-    def load(input_stream: IO[bytes]) -> "MultiSequenceSearch":
+    def load(input_stream: BinaryIO) -> "MultiSequenceSearch":
         """Load a serialized search root without writing to the terminal.
 
         Args:
@@ -236,24 +248,27 @@ class MultiSequenceSearch:
         search.trie = root
         return search
 
-    def search(self, source_sequence: Union[Sequence, IO]):
+    def search(self, source_sequence: Sequence[object] | BinaryIO):
         """The Aho-Corasick Algorithm"""
         if hasattr(source_sequence, 'read'):
-            def iterator():
+            reader = cast(BinaryIO, source_sequence)
+            def iterator() -> Iterator[object]:
                 while True:
-                    b = source_sequence.read(1)
+                    b = reader.read(1)
                     if not b:
                         return
                     yield b[0]
         else:
-            def iterator():
-                return iter(source_sequence)
+            sequence = cast(Sequence[object], source_sequence)
+            def iterator() -> Iterator[object]:
+                return iter(sequence)
 
         state = self.trie
         for stream_offset, c in enumerate(iterator()):
             n = state
 
             while c not in n and n is not self.trie:
+                assert n.fall is not None
                 n = n.fall
 
             if n is self.trie:
@@ -266,6 +281,7 @@ class MultiSequenceSearch:
 
             while n is not self.trie:
                 yield from ((stream_offset - len(source) + 1, source) for source in n.sources)
+                assert n.fall is not None
                 n = n.fall
 
 
@@ -275,17 +291,19 @@ class StartsWithMatcher:
         for seq in sequences_to_find:
             self.trie.add(seq)
 
-    def search(self, source_sequence: Union[Sequence, IO]):
+    def search(self, source_sequence: Sequence[object] | BinaryIO):
         if hasattr(source_sequence, 'read'):
-            def iterator():
+            reader = cast(BinaryIO, source_sequence)
+            def iterator() -> Iterator[object]:
                 while True:
-                    b = source_sequence.read(1)
+                    b = reader.read(1)
                     if not b:
                         return
                     yield b[0]
         else:
-            def iterator():
-                return iter(source_sequence)
+            sequence = cast(Sequence[object], source_sequence)
+            def iterator() -> Iterator[object]:
+                return iter(sequence)
 
         state = self.trie
         yield from ((0, s) for s in state.sources)

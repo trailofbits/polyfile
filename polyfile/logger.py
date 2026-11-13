@@ -1,14 +1,22 @@
 import logging
 import sys
 from time import time
-from typing import Collection, Iterator, Optional, TypeVar
+from typing import TYPE_CHECKING, TextIO, TypeVar, cast
+from collections.abc import Collection, Iterator
+
+if TYPE_CHECKING:
+    StreamHandlerBase = logging.StreamHandler[TextIO]
+    LoggerBase = logging.Logger
+else:
+    StreamHandlerBase = logging.StreamHandler
+    LoggerBase = logging.getLoggerClass()
 
 
 STATUS = 15
 TRACE = 5
 
 
-class StatusLogHandler(logging.StreamHandler):
+class StatusLogHandler(StreamHandlerBase):
     def __init__(self, stream=sys.stderr):
         super().__init__(stream=stream)
         self._status: str = ''
@@ -52,7 +60,7 @@ DEFAULT_STATUS_LOG_HANDLER = StatusLogHandler()
 T = TypeVar("T")
 
 
-class StatusLogger(logging.getLoggerClass()):
+class StatusLogger(LoggerBase):
     def __init__(self, name, level=logging.NOTSET):
         super().__init__(name, level)
         self.addHandler(DEFAULT_STATUS_LOG_HANDLER)
@@ -120,8 +128,13 @@ class StatusLogger(logging.getLoggerClass()):
 logging.setLoggerClass(StatusLogger)
 
 
-def getStatusLogger(name) -> StatusLogger:
-    return logging.getLogger(name)
+def getStatusLogger(name: str) -> StatusLogger:
+    """Return a named logger using this module's registered status logger class.
+
+    The logging registry exposes Logger statically after setLoggerClass installs StatusLogger.
+    Callers must obtain these names through this module before another logger class claims them.
+    """
+    return cast(StatusLogger, logging.getLogger(name))
 
 
 def get_root_logger():
