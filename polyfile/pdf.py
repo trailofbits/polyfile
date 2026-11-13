@@ -1170,21 +1170,21 @@ def pdf_obj_parser(file_stream, obj, objid: int, parent: Match, pdf_header_offse
         relative_offset = obj.pdf_offset
         obj_length = obj.pdf_bytes - 1
     with file_stream.save_pos():
-        file_stream.seek(parent.offset + relative_offset - pdf_header_offset)
+        file_stream.seek(relative_offset)
         reverse_skip_whitespace(file_stream)
         if reverse_expect(file_stream, b"obj") and reverse_skip_whitespace(file_stream):
             version = reverse_expect(file_stream, lambda _, b: ord('0') <= b[0] <= ord('9'))
             if version and reverse_skip_whitespace(file_stream):
                 obj_id = reverse_expect(file_stream, lambda _, b: ord('0') <= b[0] <= ord('9'))
                 if obj_id:
-                    obj_offset = parent.offset + relative_offset - pdf_header_offset - file_stream.tell()
+                    obj_offset = relative_offset - file_stream.tell()
                     relative_offset -= obj_offset
                     obj_length += obj_offset
-        file_stream.seek(parent.offset + relative_offset - pdf_header_offset + obj_length)
+        file_stream.seek(relative_offset + obj_length)
         skip_whitespace(file_stream)
         if file_stream.read(6) == b"endobj":
             skip_whitespace(file_stream)
-            obj_length = file_stream.tell() - (parent.offset + relative_offset - pdf_header_offset)
+            obj_length = file_stream.tell() - relative_offset
     if isinstance(obj, PDFObjectStream):
         match = Submatch(
             name="PDFObject",
@@ -1374,6 +1374,18 @@ def parse_xref_row(row, row_start: int, matcher: Matcher, parent: Match, pdf_hea
 
 # Note: PDF parser is registered lazily in __init__.py to defer pdfminer import
 def pdf_parser(file_stream, parent: Match):
+    """Map a PDF view into its parent's physical or decoded analysis source.
+
+    Args:
+        file_stream: A stream view containing the PDF and any leading preamble. Stream
+            positions and token provenance are relative to this view.
+        parent: The match whose source position identifies byte zero of the view. Its
+            source coordinates can differ from the stream's backing-file coordinates.
+
+    Yields:
+        The PDF's structure positioned within the parser parent's analysis source.
+    """
+    source_base = parent.offset
     # pdfminer expects %PDF to be at byte offset zero in the file
     pdf_header_offset = file_stream.first_index_of(b"%PDF")
     if pdf_header_offset > 0:
@@ -1395,7 +1407,7 @@ def pdf_parser(file_stream, parent: Match):
         with FileStream(file_stream, start=pdf_header_offset) as f:
             yield from pdf_parser(f, pdf_content)
         return
-    pdf_header_offset = file_stream.start
+    pdf_header_offset = source_base
     parser = PDFParser(RawPDFStream(file_stream))
     doc = InstrumentedPDFDocument(parser)
     yielded = set()
