@@ -92,7 +92,8 @@ def _tree_codes(
     counts: bytes, start: int, fields: list[RawRegion]
 ) -> tuple[tuple[int, ...], tuple[int, ...]]:
     available, offset = 1, 0
-    bases, offsets = [], []
+    bases: list[int] = []
+    offsets: list[int] = []
     for index, count in enumerate(counts):
         available = available * 2 - count - (2 if index == len(counts) - 1 else 0)
         if available < 0:

@@ -9,6 +9,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.fixture_types import FixtureProvenance
+
 from polyfile import AnalysisLimits
 from polyfile.__main__ import main
 from polyfile.compression import DecodeError, DecodeResult
@@ -41,7 +43,9 @@ def analyzed(data: bytes | Path, limits: AnalysisLimits | None = None) -> list[M
 
 
 @pytest.mark.parametrize("item", PROVENANCE, ids=lambda item: item["fixture"])
-def test_owned_fixtures_round_trip_and_have_verified_provenance(gnu_gzip: str, item: dict) -> None:
+def test_owned_fixtures_round_trip_and_have_verified_provenance(
+    gnu_gzip: str, item: FixtureProvenance
+) -> None:
     encoded = (FIXTURES / item["fixture"]).read_bytes()
     expected = (FIXTURES / item["payload"]).read_bytes()
     assert sha256(encoded).hexdigest() == item["encoded_sha256"]

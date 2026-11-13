@@ -102,11 +102,13 @@ class GeneratedHtmlTests(TestCase):
             r'<script id="viewer-data" type="application/json">(.*?)</script>', html, re.DOTALL
         )
         self.assertIsNotNone(emitted, 'the viewer has no inert JSON payload')
+        assert emitted is not None
         return json.loads(emitted.group(1))
 
     def legend(self, html):
         found = re.search(r'<div class="coverage">(.*?)</div>', html, re.DOTALL)
         self.assertIsNotNone(found, 'the viewer has no coverage legend')
+        assert found is not None
         return ' '.join(found.group(1).split())
 
     def test_a_file_with_gaps_emits_them(self):
