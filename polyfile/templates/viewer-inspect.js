@@ -16,17 +16,20 @@ function selectNode(uid) {
 
 /** @param {number} offset */
 function hoverByte(offset) {
+  if (
+    !Number.isInteger(offset) ||
+    offset < 0 ||
+    offset >= getSourceBytes(viewerState.activeSource).length
+  ) {
+    clearHover();
+    return;
+  }
   document.querySelectorAll('.tree_label.highlighted').forEach((label) => {
     label.classList.remove('highlighted');
   });
   setHighlight('cursor', viewerState.activeSource, offset, 1);
-  for (const node of viewerData.nodes) {
-    if (
-      node.source === viewerState.activeSource &&
-      node.offset <= offset &&
-      offset < node.offset + node.size
-    )
-      getNodeLabel(node.uid)?.classList.add('highlighted');
+  for (const node of nodesAtByte(viewerState.activeSource, offset)) {
+    getNodeLabel(node.uid)?.classList.add('highlighted');
   }
 }
 

@@ -76,15 +76,14 @@ function getSourceBytes(source) {
 
 /** @param {number} uid @returns {HTMLElement | null} */
 function getNodeLabel(uid) {
-  return document.querySelector(`.tree_label[data-uid="${uid}"]`);
+  return nodeLabels.get(uid) ?? null;
 }
 
 /** @param {string} kind @param {ViewerRange[]} ranges */
 function setHighlights(kind, ranges) {
-  highlightRanges.set(
-    kind,
-    ranges.filter((range) => range.length > 0),
-  );
+  const merged = mergeHighlightRanges(ranges);
+  highlightRanges.set(kind, merged);
+  highlightIndexes.set(kind, indexHighlightRanges(merged));
   renderHighlights();
 }
 
@@ -96,6 +95,7 @@ function setHighlight(kind, source, start, length) {
 /** @param {string} kind */
 function clearHighlight(kind) {
   highlightRanges.delete(kind);
+  highlightIndexes.delete(kind);
   renderHighlights();
 }
 
@@ -109,6 +109,7 @@ function setSource(source, options = {}) {
   for (const kind of highlightRanges.keys()) {
     if (kind !== 'searchresult' || options.preserveSearch === false) {
       highlightRanges.delete(kind);
+      highlightIndexes.delete(kind);
     }
   }
   document.querySelectorAll('.tree_label.manually-focused').forEach((label) => {
