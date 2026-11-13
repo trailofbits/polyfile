@@ -1,9 +1,10 @@
+from collections.abc import Iterator
 from pathlib import Path
 
 from polyfile.ast import Node as ASTNode
 from polyfile.fileutils import ExactNamedTempfile, FileStream
 from polyfile.magic import MagicMatcher
-from polyfile.polyfile import register_parser, Match
+from polyfile.polyfile import register_parser, Match, Submatch
 
 
 Http11RequestGrammar = None
@@ -41,7 +42,21 @@ def _use_byte_offsets(root: ASTNode, text: str) -> None:
 
 
 @register_parser(HTTP_11_MIME_TYPE)
-def parse_http_11(file_stream: FileStream, parent: Match):
+def parse_http_11(file_stream: FileStream, parent: Match) -> Iterator[Submatch]:
+    """Map one UTF-8 HTTP request from the current byte cursor into its analysis source.
+
+    Args:
+        file_stream: A bounded view whose current byte cursor identifies the request start.
+            Parsing reads the complete view and leaves the shared cursor at its EOF.
+        parent: The match whose analysis-source position identifies view byte zero. Its source
+            can be physical or decoded, independently of the backing buffer's byte origin.
+
+    Yields:
+        HTTP nodes whose offsets and lengths select their original encoded bytes.
+
+    Raises:
+        UnicodeDecodeError: If the view is not valid UTF-8, or its cursor splits a character.
+    """
     offset = file_stream.tell()
     file_stream.seek(0)
     global Http11RequestGrammar
@@ -50,8 +65,10 @@ def parse_http_11(file_stream: FileStream, parent: Match):
 
         from polyfile.http.http_11 import Http11RequestGrammar as Grammar
         Http11RequestGrammar = Grammar
-    text = file_stream.read().decode("utf-8")
-    http_ast, _ = Http11RequestGrammar("request").parse(text, start=offset)
+    data = file_stream.read()
+    text = data.decode("utf-8")
+    character_offset = len(data[:offset].decode("utf-8"))
+    http_ast, _ = Http11RequestGrammar("request").parse(text, start=character_offset)
     root_node = ASTNode.load(http_ast)
     _use_byte_offsets(root_node, text)
     yield from root_node.to_matches(parent)

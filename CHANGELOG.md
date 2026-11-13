@@ -94,6 +94,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 
 - **Breaking:** HTTP AST spans use original UTF-8 byte positions rather than character
   positions, including multibyte headers and bodies within nested or decoded sources (#3712).
+  Request-start cursors count bytes and reject positions inside a UTF-8 character.
 
 - **Breaking:** Nested BrainFu loops use their immediate parent's source coordinates, keeping
   loop and command offsets aligned in bounded stream views (#3711).
