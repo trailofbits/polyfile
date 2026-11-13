@@ -40,8 +40,9 @@ class Discovery:
         )
         if self.member:
             text.append(f"  {literal(self.member, encoding=encoding)}", style="magenta")
+        source = literal(self.source, encoding=encoding)
         text.append(
-            f"  @ 0x{self.offset:x} | {self.size:,} bytes | {literal(self.source, encoding=encoding)}",
+            f"  @ 0x{self.offset:x} | {self.size:,} bytes | {source}",
             style="dim",
         )
         return text

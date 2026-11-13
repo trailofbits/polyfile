@@ -77,6 +77,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 
 ### Changed
 
+- **Breaking:** Terminal logging uses Rich 15.0.0 on stderr, with live matcher-pass progress,
+  a bounded file-type tree during analysis, and a complete tree and summary at completion.
+  Redirected stderr retains plain warnings, errors, and explicitly requested debug/trace logs;
+  status and ordinary informational messages are suppressed. Quiet mode suppresses all logging.
+  MIME descriptions move from interleaved stderr fragments into the match display. Scan scope
+  and result formats are unchanged.
+
 - **Breaking:** JSON elements identify their physical or decoded `source`; offsets stop at
   decoded-buffer boundaries. ZIP and PDF decoded content uses explicit `decoded_content` nodes.
   HTML highlighting, downloads, and coverage use the selected source, and decoded text is escaped.
@@ -97,6 +104,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 - **Breaking:** PDF, Kaitai, and HTTP AST offsets stay within their sources across nested stream
   views and decoded data. Parser debugger locations distinguish backing-file, stream, and
   analysis-source coordinates (#3665).
+- `--max-matches 0` no longer starts recursive analysis while preparing structured output.
+- Restore terminal, logging, and signal state when scanning ends or stops early, and close
+  unfinished Analyzer iterators explicitly through `Analyzer.close()`.
+
 - Bounded file regions now limit reads before allocating data, including `read()` and
   `read(-1)`, so archive members cannot expose neighboring bytes or copy the remaining archive.
 
