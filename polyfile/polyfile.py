@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from collections.abc import Generator
 from collections import defaultdict
 import base64
 import hashlib
@@ -7,7 +8,6 @@ from mimetypes import guess_extension
 from pathlib import Path
 import sys
 from time import localtime
-import traceback
 from typing import Any, Callable, Dict, IO, Iterable, Iterator, List, Optional, Set, Tuple, Union
 
 from polyfile.analysis import AnalysisContext, AnalysisLimits
@@ -314,8 +314,7 @@ class Matcher:
                 except Exception as e:
                     log.warning(f"Parser {parser!s} for MIME type {mimetype} raised an exception while "
                                 f"parsing {match_obj!s} in {file_stream!s}: {e!s}")
-                    if log.isEnabledFor(logger.logging.DEBUG):
-                        traceback.print_exc()
+                    log.debug("Parser exception details", exc_info=True)
 
     def identify(
             self, file_stream: Union[str, Path, IO, FileStream]
@@ -330,7 +329,7 @@ class Matcher:
             parent.analysis_context if parent is not None else AnalysisContext(self.limits)
         )
         depth = parent.analysis_depth + 1 if parent is not None else 0
-        with FileStream(file_stream) as f:
+        with FileStream(file_stream) as f, logger.scanning_region(parent):
             if parent is not None:
                 reason = analysis_context.claim_member(
                     len(f), depth, count=not parent.analysis_member_counted,
@@ -427,17 +426,19 @@ class Analyzer:
                 else:
                     filetype = match.name
                 if match.parent is None:
-                    log.info(f"Found a file of type {filetype} at byte offset {match.offset}")
+                    logger.report_match(match)
+                    log.debug(f"Found a file of type {filetype} at byte offset {match.offset}")
                     self._matches.append(match)
                     yield match
                 elif isinstance(match, Submatch):
                     log.debug(f"Found a subregion of type {filetype} at byte offset {match.offset}")
                 else:
-                    log.info(f"Found an embedded file of type {filetype} at byte offset {match.offset}")
+                    logger.report_match(match)
+                    log.debug(f"Found an embedded file of type {filetype} at byte offset {match.offset}")
         else:
             yield from self._matches
 
-    def magic_matches(self) -> Iterator[Match]:
+    def magic_matches(self) -> Iterator[MagicMatch]:
         if self._magic_matches is None or self._magic_match_iterator is not None:
             if self._magic_matches is None:
                 self._magic_matches = []
@@ -453,6 +454,14 @@ class Analyzer:
                     break
         else:
             yield from self._magic_matches
+
+    def close(self) -> None:
+        """Release active scan iterators, including those stopped before exhaustion."""
+        for iterator in (self._match_iterator, self._magic_match_iterator):
+            if isinstance(iterator, Generator):
+                iterator.close()
+        self._match_iterator = None
+        self._magic_match_iterator = None
 
     def sbud(self, matches: Optional[Iterable[Match]] = None, include_contents: bool = True) -> Dict[str, Any]:
         """Builds the SBuD object that describes this file.

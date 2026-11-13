@@ -10,13 +10,12 @@ from textwrap import dedent
 from typing import ContextManager, Optional, TextIO
 
 from polyfile.analysis import AnalysisLimits
-from . import html
-from . import logger
-from .fileutils import PathOrStdin, PathOrStdout
-from .magic import MagicMatcher
-from .debugger import Debugger
-from .polyfile import __version__, Analyzer
-from .repl import ExitREPL
+from polyfile import html, logger
+from polyfile.fileutils import PathOrStdin, PathOrStdout
+from polyfile.magic import MagicMatcher
+from polyfile.debugger import Debugger
+from polyfile.polyfile import __version__, Analyzer
+from polyfile.repl import ExitREPL
 
 
 log = logger.getStatusLogger("polyfile")
@@ -25,12 +24,17 @@ log = logger.getStatusLogger("polyfile")
 class SIGTERMHandler:
     def __init__(self):
         self.terminated = False
-        signal.signal(signal.SIGTERM, self.sigterm_handler)
+
+    def __enter__(self):
+        self.previous = signal.signal(signal.SIGTERM, self.sigterm_handler)
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        signal.signal(signal.SIGTERM, self.previous)
 
     def sigterm_handler(self, signum, frame):
-        sys.stderr.flush()
-        sys.stderr.write('\n\nCaught SIGTERM. Exiting gracefully, and dumping partial results...\n')
         self.terminated = True
+        logger.partial("Terminated")
 
 
 class KeyboardInterruptHandler:
@@ -39,23 +43,29 @@ class KeyboardInterruptHandler:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         if isinstance(exc_val, KeyboardInterrupt):
-            try:
-                sys.stdout.flush()
-                sys.stderr.flush()
-                sys.stderr.write("\n\nCaught keyboard interrupt.\n")
-                if not sys.stderr.isatty() or not sys.stdin.isatty():
-                    sys.exit(128 + 15)
-                while True:
-                    sys.stderr.write("Would you like PolyFile to output its current progress? [Yn] ")
-                    result = input()
-                    if not result or result.lower() == 'y':
-                        return True
-                    elif result and result.lower() == 'n':
-                        sys.exit(0)
-            except KeyboardInterrupt:
-                sys.exit(128 + signal.SIGINT)
-        else:
-            return exc_type is None
+            logger.partial("Interrupted")
+            with logger.suspend_status():
+                return self.handle_interrupt()
+        return exc_type is None
+
+    @staticmethod
+    def handle_interrupt():
+        """Ask whether to keep partial results after clearing terminal animation."""
+        try:
+            sys.stdout.flush()
+            sys.stderr.flush()
+            sys.stderr.write("\n\nCaught keyboard interrupt.\n")
+            if not sys.stderr.isatty() or not sys.stdin.isatty():
+                sys.exit(128 + signal.SIGTERM)
+            while True:
+                sys.stderr.write("Would you like PolyFile to output its current progress? [Yn] ")
+                result = input()
+                if not result or result.lower() == 'y':
+                    return True
+                elif result and result.lower() == 'n':
+                    sys.exit(0)
+        except KeyboardInterrupt:
+            sys.exit(128 + signal.SIGINT)
 
 
 class FormatOutput:
@@ -332,51 +342,53 @@ viewer is built from the contents."""))
         run_analysis(args)
 
 
-def run_analysis(args):
-    """Analyze the requested input using the invocation's logging configuration."""
+def selected_matcher(filetypes: Optional[list[str]]) -> Optional[MagicMatcher]:
+    """Select requested MIME definitions without changing scan behavior."""
+    if not filetypes:
+        return None
+    regex = "|".join(f"({value.replace('*', '.*').replace('?', '.?')})" for value in filetypes)
+    pattern = re.compile(regex)
+    mimetypes = [mime for mime in MagicMatcher.DEFAULT_INSTANCE.mimetypes if pattern.fullmatch(mime)]
+    if not mimetypes:
+        log.error("Filetype argument(s) %s did not match any known definitions!", filetypes)
+        sys.exit(1)
+    log.info("Only matching against these types: %s", ", ".join(mimetypes))
+    return MagicMatcher.DEFAULT_INSTANCE.only_match(mimetypes=mimetypes)
 
-    if args.filetype:
-        regex = r'|'.join(fr"({ f.replace('*', '.*').replace('?', '.?') })" for f in args.filetype)
-        matcher = re.compile(regex)
-        mimetypes = [mimetype for mimetype in MagicMatcher.DEFAULT_INSTANCE.mimetypes if matcher.fullmatch(mimetype)]
-        if not mimetypes:
-            log.error(f"Filetype argument(s) { args.filetype } did not match any known definitions!")
-            exit(1)
-        log.info(f"Only matching against these types: {', '.join(mimetypes)}")
-        magic_matcher: Optional[MagicMatcher] = MagicMatcher.DEFAULT_INSTANCE.only_match(mimetypes=mimetypes)
-    else:
-        magic_matcher = None
 
-    sigterm_handler = SIGTERMHandler()
+def configure_debugger(args: argparse.Namespace, stack: ExitStack) -> None:
+    """Enter the debugger before enabling scan status."""
+    if not args.debugger:
+        if args.no_debug_python:
+            log.warning("Ignoring `--no-debug-python`; it can only be used with the --debugger option.")
+        return
+    debugger = Debugger(break_on_parsing=not args.no_debug_python)
+    for command in args.eval_command or ():
+        try:
+            debugger.before_prompt()
+            debugger.write(f"{debugger.repl_prompt}{command}\n")
+            debugger.run_command(command)
+        except KeyError:
+            sys.exit(1)
+        except ExitREPL:
+            sys.exit(0)
+    if args.eval_command:
+        debugger.write("\n")
+    stack.enter_context(debugger)
 
+
+def run_analysis(args: argparse.Namespace) -> None:
+    """Analyze the input within the invocation's terminal and signal lifecycles."""
+    magic_matcher = selected_matcher(args.filetype)
     try:
         path_or_stdin = PathOrStdin(args.FILE)
     except FileNotFoundError:
-        log.error(f"Cannot open {args.FILE!r} (No such file or directory)")
-        exit(1)
+        log.error("Cannot open %r (No such file or directory)", args.FILE)
+        sys.exit(1)
     except KeyboardInterrupt:
-        # this will happen if the user presses ^C wile reading from STDIN
-        exit(1)
-        return  # this is here because linters are dumb and will complain about the next line without it
-
-    with path_or_stdin as file_path, ExitStack() as stack:
-        if args.debugger:
-            debugger = Debugger(break_on_parsing=not args.no_debug_python)
-            if args.eval_command:
-                for ex in args.eval_command:
-                    try:
-                        debugger.before_prompt()
-                        debugger.write(f"{debugger.repl_prompt}{ex}\n")
-                        debugger.run_command(ex)
-                    except KeyError:
-                        exit(1)
-                    except ExitREPL:
-                        exit(0)
-                debugger.write("\n")
-            stack.enter_context(debugger)
-        elif args.no_debug_python:
-            log.warning("Ignoring `--no-debug-python`; it can only be used with the --debugger option.")
-
+        sys.exit(1)
+    with path_or_stdin as file_path, SIGTERMHandler() as signals, ExitStack() as stack:
+        configure_debugger(args, stack)
         limits = AnalysisLimits(
             max_depth=args.max_depth, max_member_bytes=args.max_member_bytes,
             max_total_bytes=args.max_total_bytes, max_members=args.max_members,
@@ -384,90 +396,101 @@ def run_analysis(args):
         )
         analyzer = Analyzer(file_path, parse=not args.only_match, magic_matcher=magic_matcher,
                             limits=limits)
-
-        needs_sbud = any(output_format.output_format in {"html", "json", "sbud"} for output_format in args.format)
-        with KeyboardInterruptHandler():
-            # do we need to do a full match? if so, do that up front:
-            if needs_sbud:
-                if args.max_matches is None or args.max_matches > 0:
-                    for match in analyzer.matches():
-                        if sigterm_handler.terminated:
-                            break
-                        if match.parent is None:
-                            if args.max_matches is not None and len(analyzer.matches_so_far) >= args.max_matches:
-                                log.info(f"Found {args.max_matches} matches; stopping early")
-                                break
-        if needs_sbud:
-            sbud = analyzer.sbud(matches=analyzer.matches_so_far, include_contents=not args.no_contents)
-
-            if args.require_match and not analyzer.matches_so_far:
-                log.info("No matches found, exiting")
-                exit(127)
-
-        for output_format in args.format:
-            with output_format.output_stream as output:
-                if output_format.output_format == "file":
-                    istty = sys.stderr.isatty() and output.isatty() and logging.root.level <= logging.INFO
-                    lines = set()
-                    with KeyboardInterruptHandler():
-                        for match in analyzer.magic_matches():
-                            line = str(match)
-                            if line not in lines:
-                                lines.add(line)
-                                if istty:
-                                    log.clear_status()
-                                    output.write(f"{line}\n")
-                                    output.flush()
-                                else:
-                                    output.write(f"{line}\n")
-                    if istty:
-                        log.clear_status()
-                elif output_format.output_format in ("mime", "explain"):
-                    omm = sys.stderr.isatty() and output.isatty() and logging.root.level <= logging.INFO
-                    if omm:
-                        # figure out the longest MIME type so we can make sure the columns are aligned
-                        longest_mimetype = max(len(mimetype) for mimetype in analyzer.magic_matcher.mimetypes)
-                    found_match = False
-                    with KeyboardInterruptHandler():
-                        for mimetype, match in analyzer.mime_types():
-                            found_match = True
-                            if omm:
-                                log.clear_status()
-                                output.write(mimetype)
-                                output.flush()
-                                sys.stderr.write("." * (longest_mimetype - len(mimetype) + 1))
-                                sys.stderr.write(str(match))
-                                sys.stderr.flush()
-                                output.write("\n")
-                                output.flush()
-                            else:
-                                output.write(mimetype)
-                                output.write("\n")
-                            if output_format.output_format == "explain":
-                                output.write(match.explain(ansi_color=output.isatty(), file=file_path))
-                    if args.require_match and not found_match and not needs_sbud:
-                        log.info("No matches found, exiting")
-                        exit(127)
-                    if omm:
-                        log.clear_status()
-                    elif not output_format.output_to_stdout:
-                        log.info(f"Saved MIME output to {output_format.output_path}")
-                elif output_format.output_format == "json" or output_format.output_format == "sbud":
-                    assert needs_sbud
-                    json.dump(sbud, output)
-                    if not output_format.output_to_stdout:
-                        log.info(f"Saved {output_format.output_format.upper()} output to {output_format.output_path}")
-                elif output_format.output_format == "html":
-                    assert needs_sbud
-                    output.write(html.generate(file_path, sbud))
-                    if not output_format.output_to_stdout:
-                        log.info(f"Saved HTML output to {output_format.output_path}")
-                else:
-                    # This should never happen because the output formats are constrained by argparse
-                    raise NotImplementedError(f"TODO: Add support for output format {output_format!r}")
-
-        if sigterm_handler.terminated:
+        structured = any(fmt.output_format in {"html", "json", "sbud"} for fmt in args.format)
+        logger.start_scan("stdin" if args.FILE == "-" else args.FILE, recursive=structured)
+        try:
+            sbud = analyze_structure(args, analyzer, signals) if structured else None
+            write_outputs(args, analyzer, sbud, signals)
+        finally:
+            logger.report_analysis_status(analyzer.matches_so_far or [])
+            analyzer.close()
+        if signals.terminated:
+            log.warning("Caught SIGTERM; output contains partial results.")
             sys.exit(128 + signal.SIGTERM)
+
+
+def analyze_structure(args: argparse.Namespace, analyzer: Analyzer,
+                      signals: SIGTERMHandler) -> dict:
+    """Collect recursive results, retaining discoveries if scanning stops early."""
+    with KeyboardInterruptHandler():
+        if args.max_matches is None or args.max_matches > 0:
+            for match in analyzer.matches():
+                if signals.terminated:
+                    break
+                if args.max_matches is not None and len(analyzer.matches_so_far) >= args.max_matches:
+                    logger.partial("Match limit reached")
+                    log.info("Found %s matches; stopping early", args.max_matches)
+                    break
+        else:
+            logger.partial("Match limit reached")
+    matches = analyzer.matches_so_far or []
+    if args.require_match and not matches:
+        log.info("No matches found, exiting")
+        sys.exit(127)
+    log.status("Preparing structured output")
+    return analyzer.sbud(matches=matches, include_contents=not args.no_contents)
+
+
+def write_text(output: TextIO, text: str) -> None:
+    """Write a complete result while the stderr live display is suspended."""
+    with logger.suspend_status():
+        output.write(text)
+        output.flush()
+
+
+def write_file_output(analyzer: Analyzer, output: TextIO, signals: SIGTERMHandler) -> None:
+    """Stream distinct identification descriptions without adding display markup."""
+    lines: set[str] = set()
+    with KeyboardInterruptHandler():
+        for match in analyzer.magic_matches():
+            if signals.terminated:
+                break
+            line = str(match)
+            if line not in lines:
+                lines.add(line)
+                logger.report_file_identification(match, line)
+                write_text(output, f"{line}\n")
+
+
+def write_mime_output(analyzer: Analyzer, output: TextIO, signals: SIGTERMHandler,
+                      *, explain: bool) -> bool:
+    """Stream MIME results and optional explanations without stderr fragments."""
+    found = False
+    with KeyboardInterruptHandler():
+        for mimetype, match in analyzer.mime_types():
+            if signals.terminated:
+                break
+            found = True
+            logger.report_identification(match, mimetype, str(match))
+            write_text(output, f"{mimetype}\n")
+            if explain:
+                write_text(output, match.explain(ansi_color=output.isatty(), file=analyzer.path))
+    return found
+
+
+def write_outputs(args: argparse.Namespace, analyzer: Analyzer, sbud: Optional[dict],
+                  signals: SIGTERMHandler) -> None:
+    """Render each requested output while keeping all terminal status on stderr."""
+    for fmt in args.format:
+        with fmt.output_stream as output:
+            if fmt.output_format == "file":
+                write_file_output(analyzer, output, signals)
+            elif fmt.output_format in ("mime", "explain"):
+                found = write_mime_output(analyzer, output, signals,
+                                          explain=fmt.output_format == "explain")
+                if args.require_match and not found and sbud is None:
+                    log.info("No matches found, exiting")
+                    sys.exit(127)
+            else:
+                assert sbud is not None
+                with logger.suspend_status():
+                    if fmt.output_format == "html":
+                        output.write(html.generate(analyzer.path, sbud))
+                    else:
+                        json.dump(sbud, output)
+                    output.flush()
+        if not fmt.output_to_stdout:
+            log.info("Saved %s output to %s", fmt.output_format.upper(), fmt.output_path)
 
 
 if __name__ == '__main__':

@@ -128,3 +128,51 @@ def test_suspension_does_not_redirect_streams(terminal):
         assert session.live.is_started
     assert output.getvalue() == "result\n"
     assert "result" not in terminal.getvalue()
+
+
+def test_force_color_does_not_enable_redirected_status(monkeypatch):
+    monkeypatch.setenv("FORCE_COLOR", "1")
+    errors = io.StringIO()
+    with logger.logging_context(stream=errors):
+        log = logger.getStatusLogger("polyfile")
+        log.status("working")
+        log.warning("diagnostic")
+    assert "\x1b" not in errors.getvalue()
+    assert "working" not in errors.getvalue()
+
+
+def test_no_color_removes_severity_colors(terminal, monkeypatch):
+    monkeypatch.setenv("NO_COLOR", "1")
+    with logger.logging_context(stream=terminal):
+        logger.getStatusLogger("polyfile").warning("diagnostic")
+    assert "diagnostic" in terminal.getvalue()
+    assert "\x1b[33m" not in terminal.getvalue()
+
+
+def test_delayed_progress_appears_after_delay(terminal, monkeypatch):
+    now = [0.0]
+    monkeypatch.setattr(logger, "monotonic", lambda: now[0])
+    with logger.logging_context(stream=terminal) as session:
+        work = logger.getStatusLogger("polyfile").range(
+            [1, 2], "Checking", delay=1, update_interval=0
+        )
+        next(work)
+        assert not session.live.is_started
+        now[0] = 2
+        next(work)
+        assert session.live.is_started
+        assert "1/2" in frame(session)
+        work.close()
+
+
+def test_abandoned_nested_work_cannot_restart_a_closed_session(terminal):
+    with logger.logging_context(stream=terminal):
+        log = logger.getStatusLogger("polyfile")
+        parent = log.range([1], "Parent")
+        child = log.range([2], "Child")
+        next(parent)
+        next(child)
+    completed_output = terminal.getvalue()
+    child.close()
+    parent.close()
+    assert terminal.getvalue() == completed_output
