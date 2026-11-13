@@ -4398,16 +4398,32 @@ _UCS_BYTE_ORDER_MARKS: Tuple[Tuple[bytes, str, int], ...] = (
 UTF8_BYTE_ORDER_MARK: bytes = b"\xef\xbb\xbf"
 """The mark ``looks_utf8_with_BOM`` reads before it classifies what follows (``src/encoding.c``)."""
 
+_ENCODING_CHUNK_BYTES: int = 64 * 1024
+
+
+def _encoding_chunks(
+        data: bytes, start: int = 0, end: int | None = None
+) -> Iterator[bytes]:
+    """Yields bounded byte regions without copying the remaining input."""
+    if end is None:
+        end = len(data)
+    for offset in range(start, end, _ENCODING_CHUNK_BYTES):
+        yield data[offset:min(offset + _ENCODING_CHUNK_BYTES, end)]
+
 
 def _only_contains(data: bytes, allowed: bytes) -> bool:
-    return not data.translate(None, delete=allowed)
+    return all(not chunk.translate(None, delete=allowed)
+               for chunk in _encoding_chunks(data))
 
 
-def _looks_like_utf8(data: bytes) -> bool:
-    if not _only_contains(data, _UTF8_SAFE_BYTES):
-        return False
+def _looks_like_utf8(data: bytes, start: int = 0) -> bool:
+    decoder = codecs.getincrementaldecoder("utf-8")()
     try:
-        data.decode("utf-8")
+        for chunk in _encoding_chunks(data, start):
+            if not _only_contains(chunk, _UTF8_SAFE_BYTES):
+                return False
+            decoder.decode(chunk)
+        decoder.decode(b"", final=True)
     except UnicodeDecodeError:
         return False
     return True
@@ -4425,8 +4441,8 @@ def _utf8_encoding(data: bytes) -> Optional[str]:
     Returns:
         The name of the UTF-8 family, or None if `data` is not UTF-8.
     """
-    body = data[len(UTF8_BYTE_ORDER_MARK):]
-    if data.startswith(UTF8_BYTE_ORDER_MARK) and body and _looks_like_utf8(body):
+    if (data.startswith(UTF8_BYTE_ORDER_MARK) and len(data) > len(UTF8_BYTE_ORDER_MARK)
+            and _looks_like_utf8(data, len(UTF8_BYTE_ORDER_MARK))):
         return "utf-8-sig"
     elif _looks_like_utf8(data):
         return "utf-8"
@@ -4437,15 +4453,19 @@ def _looks_like_ucs(data: bytes) -> Optional[str]:
     for bom, encoding, unit in _UCS_BYTE_ORDER_MARKS:
         if not data.startswith(bom):
             continue
-        body = data[len(bom):]
-        body = body[:len(body) - len(body) % unit]
+        end = len(data) - (len(data) - len(bom)) % unit
+        decoder = codecs.getincrementaldecoder(encoding)()
         try:
-            decoded = body.decode(encoding)
+            for chunk in _encoding_chunks(data, len(bom), end):
+                decoded = decoder.decode(chunk)
+                if not all(char >= "\x80" or TEXT_CHAR_CLASSES[ord(char)] == TEXT_CHAR_ASCII
+                           for char in decoded):
+                    break
+            else:
+                decoder.decode(b"", final=True)
+                return encoding
         except UnicodeDecodeError:
             continue
-        if all(char >= "\x80" or TEXT_CHAR_CLASSES[ord(char)] == TEXT_CHAR_ASCII
-               for char in decoded):
-            return encoding
     return None
 
 
@@ -4487,12 +4507,13 @@ printing characters. Its code page 1047 table sits behind ``#ifdef notdef`` and 
 
 
 def _ebcdic_encoding(data: bytes) -> Optional[str]:
-    translated = data.translate(EBCDIC_TO_ASCII)
-    if _only_contains(translated, _ASCII_BYTES):
-        return "ebcdic"
-    elif _only_contains(translated, _ISO_8859_BYTES):
-        return "ebcdic-international"
-    return None
+    ascii_only = True
+    for chunk in _encoding_chunks(data):
+        translated = chunk.translate(EBCDIC_TO_ASCII)
+        if not _only_contains(translated, _ISO_8859_BYTES):
+            return None
+        ascii_only = ascii_only and _only_contains(translated, _ASCII_BYTES)
+    return "ebcdic" if ascii_only else "ebcdic-international"
 
 
 def _trim_trailing_nuls(data: bytes) -> bytes:
