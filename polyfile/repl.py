@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 import sys
 import traceback
-from typing import Any, Self, TypeVar, cast
+from typing import Self, TypeVar, cast
 
 from polyfile.fileutils import FileStream, Streamable
 from polyfile.profiling import Unprofiled
@@ -69,7 +69,7 @@ class ANSIWriter:
 
     @staticmethod
     def format(
-            message: Any, bold: bool = False, dim: bool = False, color: ANSIColor | None = None,
+            message: object, bold: bool = False, dim: bool = False, color: ANSIColor | None = None,
             escape_for_readline: bool = False
     ) -> str:
         prefixes: list[str] = []
@@ -88,8 +88,10 @@ class ANSIWriter:
             message = str(message)
         return message
 
-    def write(self, message: Any, bold: bool = False, dim: bool = False, color: ANSIColor | None = None,
-              escape_for_readline: bool | None = None) -> None:
+    def write(
+        self, message: object, bold: bool = False, dim: bool = False,
+        color: ANSIColor | None = None, escape_for_readline: bool | None = None
+    ) -> None:
         if self.use_ansi:
             if escape_for_readline is None:
                 escape_for_readline = self.escape_for_readline
@@ -487,7 +489,9 @@ class REPL(metaclass=REPLMeta):
         finally:
             readline.set_completer(prev_completer)
 
-    def write(self, message: Any, bold: bool = False, dim: bool = False, color: ANSIColor | None = None):
+    def write(
+        self, message: object, bold: bool = False, dim: bool = False, color: ANSIColor | None = None
+    ) -> None:
         if sys.stdout.isatty():
             message = ANSIWriter.format(message=message, bold=bold, dim=dim, color=color)
         sys.stdout.write(str(message))
