@@ -60,7 +60,7 @@ class LazyIterableSequence(AbstractSequence[T]):
                 break
 
 
-def unique(iterator: Iterator[T], elements: Optional[Set[T]] = None) -> Iterator[T]:
+def unique(iterator: Iterable[T], elements: set[T] | None = None) -> Iterator[T]:
     """Yields all of the unique elements of the input sequence"""
     if elements is None:
         elements = set()

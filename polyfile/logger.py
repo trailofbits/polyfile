@@ -5,18 +5,18 @@ from typing import TYPE_CHECKING, TextIO, TypeVar, cast
 from collections.abc import Collection, Iterator
 
 if TYPE_CHECKING:
-    StreamHandlerBase = logging.StreamHandler[TextIO]
-    LoggerBase = logging.Logger
+    _StreamHandlerBase = logging.StreamHandler[TextIO]
+    _LoggerBase = logging.Logger
 else:
-    StreamHandlerBase = logging.StreamHandler
-    LoggerBase = logging.getLoggerClass()
+    _StreamHandlerBase = logging.StreamHandler
+    _LoggerBase = logging.getLoggerClass()
 
 
 STATUS = 15
 TRACE = 5
 
 
-class StatusLogHandler(StreamHandlerBase):
+class StatusLogHandler(_StreamHandlerBase):
     def __init__(self, stream=sys.stderr):
         super().__init__(stream=stream)
         self._status: str = ''
@@ -60,7 +60,7 @@ DEFAULT_STATUS_LOG_HANDLER = StatusLogHandler()
 T = TypeVar("T")
 
 
-class StatusLogger(LoggerBase):
+class StatusLogger(_LoggerBase):
     def __init__(self, name, level=logging.NOTSET):
         super().__init__(name, level)
         self.addHandler(DEFAULT_STATUS_LOG_HANDLER)
