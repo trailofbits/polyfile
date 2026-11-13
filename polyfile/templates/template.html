@@ -6,6 +6,7 @@
     <title>PolyFile | {{ filename|e }}</title>
     <style>
 {% include "hexdump.css" %}
+{{ asset("viewer-inspect.css")|safe }}
     </style>
 </head>
 <body>
@@ -78,8 +79,6 @@
 </section>
 
 {% macro render_match_name(match, first) -%}
-<button type="button" class="download" title="Download this range" data-action="download"
-        data-uid="{{ match['uid'] }}" aria-label="Download {{ match['name']|e }}">⇩</button>
 <span class="node-name">{{ match['name']|e }}</span>
 {% if match.get('analysis_status') %}<br>
 <small class="analysis-status">{{ match['analysis_status']|e }}:
@@ -87,8 +86,6 @@
 {% endif %}{% if not first %}<br>
 <small>{{ match['size'] }} bytes @ {{ '0x%0X' % match['offset'] }}
     ({{ match.get('source', 'file')|e }})</small>
-{% endif %}{% if match.get('decoded') %}<br>
-<button type="button" data-action="decode" data-uid="{{ match['uid'] }}">Decode</button>
 {% endif %}
 {% if match.get('img_data') %}<span class="tree_custom"
     data-image-uid="{{ match['uid'] }}"></span>{% endif %}
@@ -96,22 +93,35 @@
 
 {% macro render_match(match, first) -%}
 <li data-node-uid="{{ match['uid'] }}">
+    <div class="tree-row">
     {% if match.get('subEls') %}
-    <input type="checkbox" {{ 'checked ' if first }}id="match{{ match['uid'] }}">
-    <label class="tree_label" for="match{{ match['uid'] }}" data-uid="{{ match['uid'] }}"
-           data-offset="{{ match['offset'] }}" data-size="{{ match['size'] }}"
-           data-source="{{ match.get('source', 'file')|e }}">
+    <button type="button" class="tree-toggle" data-action="toggle-node"
+            data-node-uid="{{ match['uid'] }}" aria-controls="children{{ match['uid'] }}"
+            aria-expanded="{{ 'true' if first else 'false' }}"
+            aria-label="{{ 'Collapse' if first else 'Expand' }} {{ match['name']|e }}">
+        {{ '▾' if first else '▸' }}
+    </button>
+    {% else %}
+    <span class="tree-toggle-spacer" aria-hidden="true"></span>
+    {% endif %}
+    <button type="button" class="tree_label" data-uid="{{ match['uid'] }}"
+            data-offset="{{ match['offset'] }}" data-size="{{ match['size'] }}"
+            data-source="{{ match.get('source', 'file')|e }}" aria-pressed="false">
         {{ render_match_name(match, first) }}
-    </label>
-    <ul>
+    </button>
+    <button type="button" class="download" title="Download this range" data-action="download"
+            data-uid="{{ match['uid'] }}" aria-label="Download {{ match['name']|e }}">⇩</button>
+    {% if match.get('decoded') %}
+    <button type="button" class="decode-action" data-action="decode"
+            data-uid="{{ match['uid'] }}" aria-label="View decoded text for {{ match['name']|e }}">
+        Text
+    </button>
+    {% endif %}
+    </div>
+    {% if match.get('subEls') %}
+    <ul id="children{{ match['uid'] }}" {{ 'hidden' if not first }}>
         {% for child in match['subEls'] %}{{ render_match(child, False) }}{% endfor %}
     </ul>
-    {% else %}
-    <span class="tree_label" data-uid="{{ match['uid'] }}" data-offset="{{ match['offset'] }}"
-          data-size="{{ match['size'] }}" data-source="{{ match.get('source', 'file')|e }}"
-          tabindex="0">
-        {{ render_match_name(match, first) }}
-    </span>
     {% endif %}
 </li>
 {%- endmacro %}
@@ -186,11 +196,6 @@
 </footer>
 </div>
 <p id="loading" role="status">Loading…</p>
-<dialog id="decoded-preview" class="popup" aria-labelledby="decoded-title">
-    <h2 id="decoded-title"></h2>
-    <button type="button" data-action="close-preview" aria-label="Close decoded preview">×</button>
-    <pre id="decoded-text" class="rawdump"></pre>
-</dialog>
 <script id="viewer-data" type="application/json">{{ viewer_data|tojson }}</script>
 <script type="module">
 {{ asset("viewer-state.js")|safe }}
