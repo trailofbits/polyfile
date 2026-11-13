@@ -50,6 +50,16 @@ class Node:
         return self._length
 
     def to_matches(self, parent: Optional[Match] = None) -> Iterator[Submatch]:
+        """Map parser-local AST positions into the containing analysis source.
+
+        Args:
+            parent: The match whose beginning is the parser input's source origin.
+
+        Yields:
+            Structural matches translated by the original parent's source offset. Descendant
+            offsets remain relative to their own parents; backing-stream origins are irrelevant.
+        """
+        source_base = 0 if parent is None else parent.offset
         stack: List[Tuple["Node", Optional[Match]]] = [(self, parent)]
         while stack:
             node, parent = stack.pop()
@@ -60,7 +70,7 @@ class Node:
             match = Submatch(
                 name=node.name,
                 match_obj=node.value,
-                relative_offset=node.offset - parent_offset,
+                relative_offset=source_base + node.offset - parent_offset,
                 length=node.length,
                 parent=parent
             )
