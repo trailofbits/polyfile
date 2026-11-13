@@ -1,19 +1,10 @@
 import importlib
+from enum import StrEnum
 from string import whitespace
-import sys
 
 from abnf.grammars.misc import load_grammar_rules
 
 from ..logger import getStatusLogger
-
-if sys.version_info < (3, 11):
-    # StrEnum is only available in Python 3.11 or newer
-    from enum import Enum
-    class StrEnum(str, Enum):
-        pass
-else:
-    from enum import StrEnum
-
 
 log = getStatusLogger("HTTP/1.1")
 

@@ -20,6 +20,7 @@ import json
 import logging
 from pathlib import Path
 import re
+from re import Pattern
 import struct
 import sys
 from time import gmtime, localtime, strftime
@@ -42,29 +43,32 @@ from .repl import ANSIColor, ANSIWriter
 from . import magic_defs
 
 
-if sys.version_info < (3, 9):
-    from typing import Pattern
-else:
-    from re import Pattern
-
-
 log = getStatusLogger("libmagic")
 
 
-if sys.version_info < (3, 11):
-    def get_resource_path(name: str) -> Path:
-        with resources.path(magic_defs, name) as path:
-            return path
+def get_resource_path(name: str) -> Path:
+    """Return the filesystem path to a bundled magic definition.
 
-    def get_resource_contents(package):
-        return resources.contents(package)
-else:
-    def get_resource_path(name: str) -> Path:
-        with resources.as_file(resources.files(magic_defs).joinpath(name)) as f:
-            return f
+    Args:
+        name: The resource name within the magic definitions package.
 
-    def get_resource_contents(package):
-        return (resource.name for resource in resources.files(package).iterdir() if resource.is_file())
+    Returns:
+        The path to the requested definition.
+    """
+    with resources.as_file(resources.files(magic_defs).joinpath(name)) as path:
+        return path
+
+
+def get_resource_contents(package):
+    """Yield the names of file resources in a package.
+
+    Args:
+        package: The package whose immediate file resources to enumerate.
+
+    Yields:
+        The name of each file resource, excluding directories.
+    """
+    return (resource.name for resource in resources.files(package).iterdir() if resource.is_file())
 
 
 MAGIC_DEFS: List[Path] = sorted([

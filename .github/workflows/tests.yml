@@ -7,7 +7,7 @@ on:
   push:
     branches: [ master ]
   pull_request:
-    branches: [master, 'feat/issue-*', 'fix/issue-*', 'refactor/matcher-types']
+    branches: [master, 'feat/issue-*', 'fix/issue-*', 'refactor/issue-*', 'refactor/matcher-types']
 
 permissions: {}
 
