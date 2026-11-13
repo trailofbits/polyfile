@@ -92,6 +92,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 
 ### Fixed
 
+- **Breaking:** PDF concatenation retains nonlinear source mappings and combines the full spans
+  of contiguous instrumented operands, including when a later slice or split consumes the result
+  (#3666).
+- **Breaking:** Prefix concatenation preserves nonlinear PDF token spans. Aligned values retain
+  the existing inferred positions for native prefixes, and contiguous token prefixes retain
+  their full recorded source spans (#3666).
+- **Breaking:** Text and byte wrappers constructed from numeric PDF tokens retain conservative
+  whole-token spans instead of inferring an exact byte map from matching value lengths (#3666).
+- **Breaking:** PDF codec conversions retain exact byte mappings only when a native codec and
+  representable input establish one-to-one positions. Lossy and custom conversions keep whole
+  source spans even when their input and output lengths match. Codec registry changes during
+  conversion and custom codecs with altered metadata preserve conservative source spans (#3666).
 - **Breaking:** PDF token splitting rejects incompatible separator families, accepts contiguous
   byte-buffer separators, and checks platform-sized integer overflow for `maxsplit` (#3666).
 - **Breaking:** PDF slices, split parts, and stripped values report bounded source spans.
@@ -102,9 +114,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 - **Breaking:** PDF token splitting respects finite split limits, empty separator fields, and
   integer-index protocol arguments without losing unsplit suffixes (#3666).
 
-- **Breaking:** PDF tokens support Python numeric conversion and text encoding/stripping defaults
-  without conversion errors or deprecation warnings. Wrapper operations retain source metadata
-  (#3666).
+- **Breaking:** PDF numeric protocols return native values without conversion errors or
+  deprecation warnings. Use `as_int()` and `as_float()` to retain byte provenance on converted
+  tokens. Text encoding and stripping support built-in defaults (#3666).
 
 - **Breaking:** PolyMerge returns an empty association map for an empty PolyFile structure,
   including when the program trace contains tainted bytes (#3682).
