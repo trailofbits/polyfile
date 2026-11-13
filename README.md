@@ -68,12 +68,6 @@ ZIP end of central directory record Java JAR archive
 To generate an interactive hex viewer for the file, use the `--html` option:
 ```console
 $ polyfile --html output.html png-polyglot.png
-Found a file of type application/pdf at byte offset 0
-Found a file of type application/x-brainfuck at byte offset 0
-Found a file of type image/png at byte offset 0
-Found a file of type application/zip at byte offset 0
-Found a file of type application/java-archive at byte offset 0
-Saved HTML output to output.html
 ```
 The viewer renders any byte that no match describes in gray on a diagonal hatch, and reports how many
 such bytes the file has above the hex dump.
@@ -106,6 +100,45 @@ the matching work for the default `file` or MIME outputs. For JSON and SBuD outp
 `--no-contents` omits the input's base64 copy and reduces serialization work; it does not skip
 identification or recursive analysis. HTML output requires that copy and cannot use
 `--no-contents`.
+
+### Terminal status
+
+When stderr is a terminal, PolyFile displays the discovered file types, elapsed time, and
+progress through the current matcher pass. Recursive analysis can discover additional work,
+so the progress bar measures tests in that pass rather than a percentage of the entire scan.
+The live tree shows recent matches and their ancestors; the complete file-type tree remains
+in your terminal when analysis finishes. Parser fields are omitted from this view.
+
+For example, the final stderr view for `--format mime` on a 67-byte PNG resembles:
+
+```text
+PolyFile  sample.png
+Matches
+└── image/png  @ 0x0 | 67 bytes | file
+Complete | 1 matches | 0.02s
+```
+
+Each offset belongs to the indicated source: `file` is the original input, and `decoded:0`,
+`decoded:1`, and subsequent identifiers refer to decoded buffers. Embedded classifications
+include member names when available. Limitations and interrupted scans retain their partial
+results and identify why analysis stopped.
+
+The display uses the analysis your output format already performs. The `file`, `mime`, and
+`explain` formats identify the input; JSON, SBuD, and HTML also expose recursively discovered
+files. The default `file` view uses identification descriptions; MIME and recursive views use
+MIME labels. To watch recursive analysis while saving JSON, run:
+
+```console
+$ polyfile --format json --no-contents sample.zip > sample.json
+```
+
+Result data goes to stdout or the selected `--output` path. All logging and status go to
+stderr. When stderr is redirected, live status and ordinary informational messages are
+suppressed; warnings and errors remain as plain text. Explicit `--debug` and `--trace`
+diagnostics also remain available. Use `--quiet` to suppress all logging and status.
+
+PolyFile respects `NO_COLOR`, prints a static final summary with `TERM=dumb`, and disables
+live status in the interactive debugger.
 
 ### Interactive Debugger
 

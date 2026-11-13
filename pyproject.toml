@@ -43,6 +43,7 @@ dependencies = [
     "Pillow==13.0.0",
     "pyreadline3; platform_system == 'Windows'",
     "pyyaml>=3.13",
+    "rich==15.0.0",
     # Also the floor that keeps CI's pip-audit of the installed environment clean
     # (PYSEC-2026-3447). Bump this together with [build-system] requires.
     "setuptools>=83.0.0",

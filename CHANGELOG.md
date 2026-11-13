@@ -77,6 +77,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 
 ### Changed
 
+- **Breaking:** Terminal logging uses Rich 15.0.0 on stderr, with live matcher-pass progress,
+  a bounded file-type tree during analysis, and a complete tree and summary at completion.
+  Redirected stderr retains plain warnings, errors, and explicitly requested debug/trace logs;
+  status and ordinary informational messages are suppressed. Quiet mode suppresses all logging.
+  MIME descriptions move from interleaved stderr fragments into the match display. Scan scope
+  and result formats are unchanged.
+
 - Modernize handwritten Python annotations for Python 3.11 with native generics, unions, and
   subclass-preserving `Self` returns, and enforce modernization rules with Ruff (#3670).
 
@@ -92,11 +99,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
   runtime behavior (#3671).
 
 - Remove compatibility imports and runtime bases for Python versions older than 3.11.
-
 - **Breaking:** JSON elements identify their physical or decoded `source`; offsets stop at
   decoded-buffer boundaries. ZIP and PDF decoded content uses explicit `decoded_content` nodes.
-  HTML highlighting, downloads, and coverage use the selected source, and decoded text is escaped.
-
+  HTML highlighting, downloads, and coverage use the selected source, and decoded text is escaped
 - **Breaking:** Require Python 3.11 or later and pin patched filelock 4.2.7 and Pillow 13.0.0.
   CI tests Python 3.11 through 3.14 independently so a failing job preserves other results.
 
@@ -139,17 +144,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
   including when the program trace contains tainted bytes (#3682).
 - **Breaking:** Aborting PDB while stepping through parser matches stops that debugging run
   without printing or yielding an absent match (#3678).
-
 - **Breaking:** PolyMerge handles commands without `--diff` and compares the functions shared
   by each actual input group. Empty legacy traces and function source iteration work;
   unavailable optional demangling reports an argument error (#3675).
-
 - **Breaking:** Lazy sequences support negative indexes and slices over their complete input
   while retaining lazy positive-index access and the Sequence interface.
-
 - **Breaking:** Loading a serialized multi-sequence search returns its result without printing
   or terminating the process, and rejects serialized values that are not search roots.
-
 - **Breaking:** FileStream seeks use bounded view-relative positions and return the new
   position. Negative view origins and lengths are rejected, and past-EOF origins consistently
   produce empty views at EOF, including when views are nested (#3664).
@@ -161,6 +162,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 - **Breaking:** PDF, Kaitai, and HTTP AST offsets stay within their sources across nested stream
   views and decoded data. Parser debugger locations distinguish backing-file, stream, and
   analysis-source coordinates (#3665).
+- **Breaking:** `--max-matches 0` no longer starts recursive analysis while preparing structured
+  output.
+- **Breaking:** The CLI restores terminal, logging, and signal state after scanning. The new
+  `Analyzer.close()` method releases unfinished scan iterators.
 - **Breaking:** Brainfuck matching returns successful results after optional arithmetic noop
   validation, while retaining cancelling-pair rejection and existing thresholds (#3668).
 - **Breaking:** JPEG2000 image previews encode PNG bytes into the data URL without raising
@@ -169,7 +174,6 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
   decoded byte once, and retains available prefixes with their actual length on incomplete input.
   Trailer fields stop at the terminating empty line, so subsequent pipelined request headers
   cannot populate or overwrite trailer metadata (#3674).
-
 - Bounded file regions now limit reads before allocating data, including `read()` and
   `read(-1)`, so archive members cannot expose neighboring bytes or copy the remaining archive.
 

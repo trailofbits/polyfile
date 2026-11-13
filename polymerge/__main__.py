@@ -150,12 +150,13 @@ https://github.com/trailofbits/polytracker/
 
     args = parser.parse_args(argv[1:])
 
-    if args.debug:
-        logger.setLevel(logging.DEBUG)
-    elif args.quiet:
-        logger.setLevel(logging.CRITICAL)
-    else:
-        logger.setLevel(logger.STATUS)
+    level = logging.DEBUG if args.debug else logger.STATUS
+    with logger.logging_context(level, quiet=args.quiet):
+        return run_merge(args, parser)
+
+
+def run_merge(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int | None:
+    """Merge the requested inputs using the invocation's logging configuration."""
 
     build_cfg = args.cfg is not None or args.cfg_pdf is not None
     built_type_hierarchy = args.type_hierarchy is not None or args.type_hierarchy_pdf is not None
