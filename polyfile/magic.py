@@ -3682,10 +3682,10 @@ def _bounded_input_length(data_type: DataType, expected: Any) -> Optional[int]:
         return 16
     elif type(data_type) is UTF16Type and isinstance(expected, bytes):
         return _utf16_input_length(data_type, expected)
-    elif type(data_type) is StringType and isinstance(expected, StringTest):
+    elif type(data_type) is StringType:
         return _string_input_length(expected)
     elif type(data_type) is RegexType:
-        return REGEX_MAX
+        return REGEX_MAX if data_type.length >= 0 else None
     return None
 
 
@@ -3768,6 +3768,8 @@ class ConstantMatchTest(MagicTest, Generic[T]):
 
     def _input_region(self, data: bytes, absolute_offset: int) -> bytes:
         """Copies only the bytes an exact built-in type can inspect or report."""
+        if absolute_offset == 0:
+            return data[absolute_offset:]
         length = _bounded_input_length(self.data_type, self.constant)
         if length is None or type(data) is not bytes:
             return data[absolute_offset:]
