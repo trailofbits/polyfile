@@ -208,7 +208,6 @@ function initShell() {
     const row = target.closest('.byterow');
     if (row instanceof HTMLElement) jumpFromRow(Number(row.dataset['row']));
   });
-  window.addEventListener('resize', resizeViewport);
   document.addEventListener('keydown', (event) => {
     if (event.key !== 'Escape') return;
     viewerState.selectedNode = null;

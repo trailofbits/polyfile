@@ -905,6 +905,70 @@ kbd {
     max-height: 26vh;
   }
 }
+@media (max-height: 600px) and (min-width: 500px) {
+  .app-shell {
+    padding: 8px 12px;
+    gap: 8px;
+  }
+  .app-header {
+    display: flex;
+    gap: 10px;
+  }
+  .brand-name,
+  .report-heading p {
+    display: none;
+  }
+  .brand-mark {
+    width: 28px;
+    height: 30px;
+  }
+  .report-heading {
+    flex: 1;
+    padding-left: 10px;
+  }
+  .header-actions {
+    display: flex;
+    align-items: end;
+    gap: 6px;
+    margin-left: auto;
+  }
+  .source-field {
+    width: 100px;
+    min-width: 100px;
+    max-width: 140px;
+  }
+  .theme-field {
+    width: 80px;
+  }
+  .search-toolbar {
+    padding: 8px 10px;
+    gap: 8px;
+  }
+  .search-field {
+    flex: 1 1 140px;
+  }
+  .search-mode {
+    width: 100px;
+  }
+  .search-scope {
+    flex: 0 0 120px;
+    width: 120px;
+  }
+  .case-field {
+    font-size: 11px;
+  }
+  .pane-header {
+    min-height: 44px;
+    padding: 6px 10px;
+  }
+  .workspace-tabs button {
+    min-height: 32px;
+    padding: 4px 12px;
+  }
+  .coverage {
+    padding: 6px 10px;
+  }
+}
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

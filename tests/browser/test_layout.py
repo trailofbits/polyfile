@@ -137,6 +137,10 @@ def test_last_byte_remains_reachable_after_height_changes(
     open_report(viewer_page, report_factory(bytes(8192) + b"\xfe"))
     for height in (1000, 500, 1100):
         viewer_page.set_viewport_size({"width": 1024, "height": height})
+        viewer_page.evaluate(
+            "() => new Promise(resolve => "
+            "requestAnimationFrame(() => requestAnimationFrame(resolve)))"
+        )
         scroll = viewer_page.locator("#scrollcontainer")
         scroll.evaluate("element => { element.scrollTop = element.scrollHeight; }")
         expect(viewer_page.locator("#hexdump .byte").filter(has_text="fe")).to_have_count(1)
