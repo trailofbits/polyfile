@@ -1,4 +1,4 @@
-from typing import Iterator, Optional
+from collections.abc import Iterator
 
 from .fileutils import Tempfile
 from .polyfile import InvalidMatch, Match, Matcher, Submatch
@@ -6,16 +6,16 @@ from .structs import Constant, Field, Struct, StructError
 
 
 class PolyFileStruct(Struct):
-    __name__: Optional[str] = None
+    __name__: str | None = None
 
     @property
     def match_name(self) -> str:
         if self.__name__ is not None:
             return self.__name__
         else:
-            return self.__class__.__name__
+            return str(self.__class__.__name__)
 
-    def match(self, matcher: Matcher, parent: Optional[Match] = None) -> Iterator[Submatch]:
+    def match(self, matcher: Matcher, parent: Match | None = None) -> Iterator[Match]:
         """Yields a match for this struct, one for each of its fields, and any embedded files.
 
         A field holding raw bytes can itself contain a file, so it is written to a temporary
