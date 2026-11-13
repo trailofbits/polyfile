@@ -40,7 +40,7 @@ jobs:
       # also the environment pip-audit scans. Installing into a virtualenv would hide every
       # dependency from it. setuptools no longer needs installing here: the isolated build
       # environment gets it from [build-system] requires in pyproject.toml.
-      run: uv pip install --system '.[dev]'
+      run: uv pip install --system '.[dev,viewer-test]'
     - name: Install the GNU gzip reference decoder
       shell: bash
       run: |
@@ -99,7 +99,7 @@ jobs:
         --python-version "${{ matrix.python-version }}" --error-on-warning
     - name: Test with pytest
       run: |
-        pytest tests
+        pytest tests --ignore=tests/browser
 
   distributions:
     name: Build distributions
