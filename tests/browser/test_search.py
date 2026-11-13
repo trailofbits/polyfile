@@ -56,6 +56,20 @@ def test_combined_default_merges_identical_ranges(
     expect(viewer_page.locator("#searchinfo")).to_contain_text("2 of 2 · file @ 0x6")
 
 
+def test_structure_mode_marks_nodes_without_searching_raw_bytes(
+    viewer_page: "Page", report_factory: ReportFactory
+) -> None:
+    nodes = [match(0, 16, name="root", children=[match(10, 6, name="Symbol table")])]
+    open_report(viewer_page, report_factory(b"symbol....symbol", nodes))
+    submit_search(viewer_page, "symbol", "structure")
+    expect(viewer_page.locator("#searchinfo")).to_contain_text("1 of 1 · file @ 0xa")
+    expect(viewer_page.locator(".tree_label.searchresult")).to_contain_text(
+        "Symbol table"
+    )
+    viewer_page.locator("#search").fill("")
+    expect(viewer_page.locator(".tree_label.searchresult")).to_have_count(0)
+
+
 def test_numeric_order_overlaps_and_chunk_boundaries(
     viewer_page: "Page", report_factory: ReportFactory
 ) -> None:

@@ -6,6 +6,7 @@
 const viewerSearch = {
   generation: 0,
   current: 0,
+  lastYield: 0,
   /** @type {SearchHit[]} */
   results: [],
 };
@@ -137,8 +138,10 @@ async function scanSearchBytes(task) {
 /** @param {number} generation @param {string} source @param {number} count */
 async function searchCheckpoint(generation, source, count) {
   if (generation !== viewerSearch.generation) return false;
+  if (performance.now() - viewerSearch.lastYield < 8) return true;
   getElement("searchinfo").textContent = `Searching ${source}… ${count} matches`;
   await yieldSearch();
+  if (generation === viewerSearch.generation) viewerSearch.lastYield = performance.now();
   return generation === viewerSearch.generation;
 }
 
@@ -200,12 +203,22 @@ function searchNavigationEnabled(enabled) {
   }
 }
 
+/** @param {SearchHit[]} results */
+function markStructureSearchResults(results) {
+  const matches = new Set();
+  for (const result of results) for (const uid of result.nodes) matches.add(uid);
+  document.querySelectorAll(".tree_label[data-uid]").forEach((label) => {
+    label.classList.toggle("searchresult", matches.has(Number(label.getAttribute("data-uid"))));
+  });
+}
+
 /** @param {string} message */
 function resetSearch(message) {
   viewerSearch.results = [];
   viewerSearch.current = 0;
   clearHighlight("searchresult");
   clearHighlight("search-current");
+  markStructureSearchResults([]);
   searchNavigationEnabled(false);
   getElement("searchinfo").textContent = message;
 }
@@ -224,6 +237,7 @@ async function executeSearch(options, generation) {
   if (!(await scanSearchNodes(options, sources, hits, generation))) return;
   if (generation !== viewerSearch.generation) return;
   viewerSearch.results = orderedSearchHits(hits, sources);
+  markStructureSearchResults(viewerSearch.results);
   setHighlights("searchresult", viewerSearch.results);
   searchNavigationEnabled(viewerSearch.results.length > 0);
   if (viewerSearch.results.length === 0) getElement("searchinfo").textContent = "0 results";
@@ -233,6 +247,7 @@ async function executeSearch(options, generation) {
 /** Start a cancellable search across the selected source scope. */
 function runSearch() {
   viewerSearch.generation += 1;
+  viewerSearch.lastYield = performance.now();
   const generation = viewerSearch.generation;
   const options = searchOptions();
   resetSearch(options.query ? "Searching…" : "");
