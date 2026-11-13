@@ -1,13 +1,18 @@
 """Behavior regressions for bounded source-aware byte and text rendering."""
 
 import base64
+import re
 from math import ceil
 from typing import TYPE_CHECKING
+
+import pytest
 
 from tests.browser.helpers import ReportFactory, match, open_report
 
 if TYPE_CHECKING:
     from playwright.sync_api import Page
+
+expect = pytest.importorskip("playwright.sync_api", reason="Install .[viewer-test] first").expect
 
 
 def scroll_rows(page: "Page", rows: int) -> None:
@@ -18,7 +23,10 @@ def scroll_rows(page: "Page", rows: int) -> None:
     page.locator("#scrollcontainer").evaluate(
         "(element, top) => { element.scrollTop = top; }", ceil(rows * height)
     )
-    page.wait_for_timeout(50)
+    columns = page.locator("#hexdump .byteline").first.locator(".byte").count()
+    expect(page.locator("#hexdump .byterow").first).to_have_text(
+        re.compile(rf"^0*{rows * columns:x}:\s*$")
+    )
 
 
 def test_hover_finds_overlaps_in_only_the_active_source(
@@ -80,19 +88,26 @@ def test_resize_reflows_columns_and_keeps_the_final_partial_row_reachable(
 ) -> None:
     viewer_page.set_viewport_size({"width": 1800, "height": 1000})
     open_report(viewer_page, report_factory(bytes(4096) + b"ENDING!"))
-    assert viewer_page.locator("#hexdump .byteline").first.locator(".byte").count() == 16
+    expect(viewer_page.locator("#hexdump .byteline").first.locator(".byte")).to_have_count(16)
     viewer_page.set_viewport_size({"width": 600, "height": 380})
-    viewer_page.wait_for_timeout(100)
-    assert viewer_page.locator("#hexdump .byteline").first.locator(".byte").count() == 8
+    expect(viewer_page.locator("#hexdump .byteline").first.locator(".byte")).to_have_count(8)
     viewer_page.locator("#scrollcontainer").evaluate(
         "element => { element.scrollTop = element.scrollHeight; }"
     )
-    viewer_page.wait_for_timeout(100)
+    expect(viewer_page.locator("#hexdump .byte").filter(has_text="21")).to_have_count(1)
     cells = viewer_page.locator("#hexdump .byte").all_text_contents()
     assert [cell for cell in cells if cell][-7:] == ["45", "4e", "44", "49", "4e", "47", "21"]
     viewer_page.set_viewport_size({"width": 1800, "height": 1000})
-    viewer_page.wait_for_timeout(100)
-    assert viewer_page.locator("#hexdump .byteline").first.locator(".byte").count() == 16
+    expect(viewer_page.locator("#hexdump .byteline").first.locator(".byte")).to_have_count(16)
+
+
+def test_ascii_cells_use_fixed_width_printable_characters(
+    viewer_page: "Page", report_factory: ReportFactory
+) -> None:
+    contents = b"\x00\t\n\r\x1f A&<>\x7f\x80\xff"
+    open_report(viewer_page, report_factory(contents))
+    assert "".join(viewer_page.locator("#ascii .byte").all_text_contents()) == "····· A&<>···"
+    assert viewer_page.locator('#readablebytes [data-offset="0"]').text_content() == "␀"
 
 
 def test_utf8_preview_maps_codepoints_and_malformed_sequences_to_bytes(

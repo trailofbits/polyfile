@@ -13,9 +13,7 @@ const utf8Decoder = new TextDecoder('utf-8', { ignoreBOM: true });
 
 /** @param {number} byte @returns {string} */
 function displayByte(byte) {
-  if (byte < 32) return String.fromCharCode(0x2400 + byte);
-  if (byte === 127) return '\u2421';
-  return byte < 127 ? String.fromCharCode(byte) : '\u00b7';
+  return byte >= 32 && byte < 127 ? String.fromCharCode(byte) : '\u00b7';
 }
 
 /** @param {string} className @returns {HTMLSpanElement} */
@@ -114,7 +112,9 @@ function utf8WindowStart(bytes, start) {
 /** @param {Uint8Array} bytes @param {number} offset @param {number} length */
 function readableCharacter(bytes, offset, length) {
   const byte = bytes[offset] ?? 0;
-  if (byte < 128 && byte !== 10 && byte !== 9) return displayByte(byte);
+  if (byte >= 32 && byte < 127) return String.fromCharCode(byte);
+  if (byte < 32 && byte !== 10 && byte !== 9) return String.fromCharCode(0x2400 + byte);
+  if (byte === 127) return '\u2421';
   return utf8Decoder.decode(bytes.subarray(offset, offset + length));
 }
 
