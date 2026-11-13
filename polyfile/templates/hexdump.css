@@ -865,8 +865,23 @@ kbd {
     width: 80px;
   }
   .search-toolbar {
-    padding: 8px 10px;
-    gap: 8px;
+    padding: 4px 8px;
+    gap: 6px;
+  }
+  .search-toolbar .field-label {
+    font-size: 10px;
+    gap: 0;
+  }
+  .search-toolbar button,
+  .search-toolbar select,
+  .search-toolbar input[type='search'],
+  .search-toolbar input[type='text'] {
+    min-height: 28px;
+    padding-block: 3px;
+  }
+  .search-toolbar .case-field,
+  #searchinfo {
+    min-height: 28px;
   }
   .search-field {
     flex: 1 1 140px;
@@ -883,7 +898,7 @@ kbd {
   }
   .pane-header {
     min-height: 44px;
-    padding: 6px 10px;
+    padding: 4px 10px;
   }
   .workspace-tabs button {
     min-height: 32px;
