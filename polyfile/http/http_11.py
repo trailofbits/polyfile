@@ -5,7 +5,7 @@ from types import ModuleType
 
 from abnf.grammars.misc import load_grammar_rules
 
-from ..logger import getStatusLogger
+from polyfile.logger import getStatusLogger
 
 log = getStatusLogger("HTTP/1.1")
 
@@ -36,7 +36,7 @@ log.clear_status()
 
 from abnf import Rule, parser, Node
 
-from . import defacto, deprecated, experimental, structured_headers
+from polyfile.http import defacto, deprecated, experimental, structured_headers
 
 
 # The overall goal of this parser is to take in utf-8 textual representations

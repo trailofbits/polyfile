@@ -2,7 +2,7 @@ import base64
 from io import BytesIO
 from typing import TYPE_CHECKING, cast
 
-from .polyfile import register_parser, InvalidMatch, Submatch
+from polyfile.polyfile import register_parser, InvalidMatch, Submatch
 
 if TYPE_CHECKING:
     from PIL import Image as PILImage

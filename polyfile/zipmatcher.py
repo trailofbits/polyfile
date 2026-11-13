@@ -10,9 +10,9 @@ from zipfile import ZipFile as PythonZip
 
 from polyfile.compression import CHUNK_SIZE, DecodeError, OutputBuffer, match_decoded
 
-from .fileutils import ExactNamedTempfile, FileStream, Tempfile
-from .logger import StatusLogger
-from .magic import (
+from polyfile.fileutils import ExactNamedTempfile, FileStream, Tempfile
+from polyfile.logger import StatusLogger
+from polyfile.magic import (
     AbsoluteOffset,
     FailedTest,
     MagicMatcher,
@@ -21,9 +21,9 @@ from .magic import (
     TestResult,
     TestType,
 )
-from .polyfile import InvalidMatch, Match, register_parser
-from .structmatcher import PolyFileStruct
-from .structs import ByteField, Constant, Endianness, StructError, UInt16, UInt32
+from polyfile.polyfile import InvalidMatch, Match, register_parser
+from polyfile.structmatcher import PolyFileStruct
+from polyfile.structs import ByteField, Constant, Endianness, StructError, UInt16, UInt32
 
 log = StatusLogger("polyfile")
 

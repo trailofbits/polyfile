@@ -1,6 +1,6 @@
 from abnf.grammars.misc import load_grammar_rules
 from abnf.grammars import rfc9110
-from . import structured_headers
+from polyfile.http import structured_headers
 from abnf import Rule as _Rule
 
 rulelist: list[tuple[str, _Rule]] = [

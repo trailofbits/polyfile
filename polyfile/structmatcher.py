@@ -1,8 +1,8 @@
 from collections.abc import Iterator
 
-from .fileutils import Tempfile
-from .polyfile import InvalidMatch, Match, Matcher, Submatch
-from .structs import Constant, Field, Struct, StructError
+from polyfile.fileutils import Tempfile
+from polyfile.polyfile import InvalidMatch, Match, Matcher, Submatch
+from polyfile.structs import Constant, Field, Struct, StructError
 
 
 class PolyFileStruct(Struct):
