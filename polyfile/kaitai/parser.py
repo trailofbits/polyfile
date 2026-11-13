@@ -7,7 +7,6 @@ import inspect
 from io import BufferedReader, BytesIO
 import json
 from pathlib import Path
-import sys
 from typing import Any, Dict, Iterator, List, Optional, Set, Type, Union
 
 from . import parsers
@@ -18,12 +17,8 @@ from kaitaistruct import KaitaiStruct
 
 with resources.as_file(resources.files(parsers) / "manifest.json") as manifest_path:
     PARSER_DIR: Path = manifest_path.parent
-if sys.version_info >= (3, 9):
-    with (resources.files(parsers) / "manifest.json").open("r") as f:
-        MANIFEST: Dict[str, Dict[str, Any]] = json.load(f)
-else:
-    with resources.open_text(parsers, "manifest.json") as f:
-        MANIFEST = json.load(f)
+with (resources.files(parsers) / "manifest.json").open("r") as f:
+    MANIFEST: Dict[str, Dict[str, Any]] = json.load(f)
 
 COMPILED_INFO_BY_KSY: Dict[str, CompiledKSY] = {
     ksy_path: CompiledKSY(
