@@ -3706,7 +3706,7 @@ def _utf16_input_length(data_type: UTF16Type, expected: bytes) -> Optional[int]:
     return len(expected)
 
 
-def _bounded_input_length(data_type: DataType, expected: Any) -> Optional[int]:
+def _bounded_input_length(data_type: DataType[Any], expected: Any) -> Optional[int]:
     """Returns proven inspection bounds, leaving extension types unbounded."""
     if type(data_type) is NumericDataType:
         return data_type.base_type.num_bytes
