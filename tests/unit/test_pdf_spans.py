@@ -1,0 +1,191 @@
+"""PDF token operations retain byte-accurate or conservative whole-token source spans."""
+
+import json
+
+import pytest
+
+from polyfile.pdf import PDFDeciphered, PDFList, PSBytes, PSInt, PSStr, PSToken
+from polyfile.polyfile import Match, Matcher
+
+
+def span(value: object) -> tuple[int, int]:
+    assert isinstance(value, PSToken)
+    return value.pdf_offset, value.pdf_bytes
+
+
+def token(binary: bool, value: str = "abcde", size: int | None = None) -> PSStr | PSBytes:
+    length = len(value) if size is None else size
+    if binary:
+        return PSBytes(value.encode("ascii"), pdf_offset=7, pdf_bytes=length)
+    return PSStr(value, pdf_offset=7, pdf_bytes=length)
+
+
+@pytest.mark.parametrize("binary", [False, True])
+@pytest.mark.parametrize(
+    ("selection", "offset", "length"),
+    [
+        (slice(None), 7, 5),
+        (slice(1, 3), 8, 2),
+        (slice(1, 1), 8, 0),
+        (slice(5, None), 12, 0),
+        (slice(100, None), 12, 0),
+        (slice(-3, -1), 9, 2),
+        (slice(None, -1), 7, 4),
+        (slice(None, None, -1), 7, 5),
+        (slice(1, 4, 2), 8, 3),
+        (slice(4, 0, -2), 9, 3),
+        (slice(-100, 100), 7, 5),
+        (slice(-100, -100), 7, 0),
+    ],
+)
+def test_aligned_slice_spans_stay_within_the_parent(
+    binary: bool,
+    selection: slice,
+    offset: int,
+    length: int,
+) -> None:
+    source = token(binary)
+    result = source[selection]
+    value = b"abcde" if binary else "abcde"
+    assert result == value[selection]
+    assert span(result) == (offset, length)
+    assert 7 <= span(result)[0] <= sum(span(result)) <= 12
+    assert span(source) == (7, 5)
+
+
+@pytest.mark.parametrize("binary", [False, True])
+@pytest.mark.parametrize(
+    "selection", [slice(None), slice(1, 1), slice(-3, -1), slice(None, None, -1)]
+)
+def test_nonlinear_slices_retain_the_original_whole_span(binary: bool, selection: slice) -> None:
+    source = token(binary, size=9)
+    result = source[selection]
+    value = b"abcde" if binary else "abcde"
+    assert result == value[selection]
+    assert span(result) == (7, 9)
+    assert span(source) == (7, 9)
+
+
+@pytest.mark.parametrize("binary", [False, True])
+def test_reversed_values_do_not_reclassify_as_aligned(binary: bool) -> None:
+    reverse = token(binary)[::-1]
+    assert len(reverse) == span(reverse)[1]
+    result = reverse[1:2]
+    assert result == (b"d" if binary else "d")
+    assert span(result) == (7, 5)
+
+
+@pytest.mark.parametrize("binary", [False, True])
+def test_sparse_slice_keeps_its_enclosing_span_when_sliced_again(binary: bool) -> None:
+    sparse = token(binary)[1:4:2]
+    result = sparse[1:]
+    assert result == (b"d" if binary else "d")
+    assert span(result) == (8, 3)
+
+
+@pytest.mark.parametrize("binary", [False, True])
+def test_equal_length_nonlinear_results_retain_the_original_mapping(binary: bool) -> None:
+    source = token(binary, "abcdefgh", size=2)
+    first = source[:2]
+    assert len(first) == span(first)[1]
+    result = first[1:2]
+    assert result == (b"b" if binary else "b")
+    assert span(result) == (7, 2)
+
+
+def test_deciphered_slices_use_base_wrappers_with_the_original_span() -> None:
+    source = PDFDeciphered(b"abcde", original_bytes=b"12345", pdf_offset=7, pdf_bytes=5)
+    result = source[1:3]
+    assert type(result) is PSBytes
+    assert result == b"bc"
+    assert span(result) == (7, 5)
+    assert span(result[1:]) == (7, 5)
+
+
+def test_decoding_and_encoding_do_not_reclassify_nonlinear_values() -> None:
+    source = PSBytes(b"a\x00", pdf_offset=7, pdf_bytes=2)
+    encoded = source.decode("utf-16-le").encode("utf-16-le")
+    assert encoded == b"a\x00"
+    assert len(encoded) == span(encoded)[1]
+    result = encoded[:1]
+    assert span(result) == (7, 2)
+
+
+def test_equal_length_deciphering_stays_nonlinear_through_conversions() -> None:
+    source = PDFDeciphered(b"abcde", original_bytes=b"12345", pdf_offset=7, pdf_bytes=5)
+    encoded = source.decode().encode()
+    copied = PSBytes(encoded, pdf_offset=7, pdf_bytes=5)
+    result = copied[1:3]
+    assert result == b"bc"
+    assert span(result) == (7, 5)
+
+
+@pytest.mark.parametrize("binary", [False, True])
+def test_ascii_wrapper_conversions_keep_aligned_spans(binary: bool) -> None:
+    source = token(binary)
+    converted = source.decode() if isinstance(source, PSBytes) else source.encode()
+    result = converted[1:3]
+    assert span(result) == (8, 2)
+
+
+@pytest.mark.parametrize("binary", [False, True])
+def test_split_and_strip_metadata_covers_the_returned_aligned_values(binary: bool) -> None:
+    source = token(binary, "ab cd")
+    pieces = source.split()
+    assert [span(part) for part in pieces] == [(7, 2), (10, 2)]
+    assert span(source.split(None, 0)[0]) == (7, 5)
+    value = token(binary, "a,,b,")
+    separator = b"," if binary else ","
+    assert [span(part) for part in value.split(separator)] == [
+        (7, 1),
+        (9, 0),
+        (10, 1),
+        (12, 0),
+    ]
+    stripped = token(binary, " ab ").strip()
+    assert span(stripped) == (8, 2)
+
+
+@pytest.mark.parametrize("binary", [False, True])
+def test_empty_sources_and_invalid_slice_steps(binary: bool) -> None:
+    source = token(binary, "")
+    result = source[::-1]
+    assert span(result) == (7, 0)
+    with pytest.raises(ValueError, match="slice step cannot be zero"):
+        source[::0]
+
+
+@pytest.mark.parametrize("binary", [False, True])
+@pytest.mark.parametrize("index", [0, 2, -1])
+def test_aligned_integer_selection_reports_one_source_byte(binary: bool, index: int) -> None:
+    source = token(binary)
+    result = source[index]
+    assert span(result) == (7 + index % 5, 1)
+
+
+def test_list_selection_preserves_existing_element_provenance() -> None:
+    first = PSInt(3, pdf_offset=9, pdf_bytes=1)
+    last = PSStr("ab", pdf_offset=12, pdf_bytes=2)
+    values = PDFList.load([first, last])
+    assert values[0] is first
+    assert values[-1] is last
+    part = values[1:]
+    assert span(part) == (9, 5)
+    assert part[0] is last
+    assert span(last) == (12, 2)
+
+
+def test_uninstrumented_list_elements_use_the_whole_parent_span() -> None:
+    values = PDFList.load([])
+    values.extend([3, "ab"])
+    values.pdf_offset = 7
+    values.pdf_bytes = 7
+    for index in (0, 1):
+        result = values[index]
+        assert span(result) == (7, 7)
+
+
+def test_alignment_metadata_is_not_part_of_serialized_matches() -> None:
+    value = token(False)[::-1]
+    match = Match("token", value, matcher=Matcher())
+    assert "_pdf_byte_aligned" not in json.dumps(match.to_obj())

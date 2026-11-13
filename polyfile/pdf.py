@@ -102,11 +102,14 @@ PDFXRef.load = load_xref
 class PSToken:
     pdf_offset: int
     pdf_bytes: int
+    _pdf_byte_aligned: bool
 
     def __new__(cls, *args, **kwargs):
         ret = super().__new__(cls, *args)
         ret.pdf_offset = kwargs["pdf_offset"]
         ret.pdf_bytes = kwargs["pdf_bytes"]
+        if args and isinstance(args[0], PSSequence):
+            ret._pdf_byte_aligned = args[0]._is_byte_aligned()
         return ret
 
     def __int__(self):
@@ -159,6 +162,39 @@ C = TypeVar("C")
 
 
 class PSSequence(PSToken):
+    def _is_byte_aligned(self) -> bool:
+        """Whether value positions still correspond to ascending individual source bytes.
+
+        Unmarked text and byte values are initially aligned when their value length equals
+        their source span. Transformed wrappers and explicitly nonlinear derived values stay
+        nonlinear even when their lengths happen to match again. This marker is internal;
+        it does not extend the output schema or provide a per-byte source map.
+        """
+        return (
+            isinstance(self, (str, bytes))
+            and self.pdf_bytes == len(self)
+            and bool(getattr(self, "_pdf_byte_aligned", True))
+            and not hasattr(self, "original_bytes")
+        )
+
+    def _slice_span(self, selection: slice) -> Tuple[int, int, bool]:
+        """Return an enclosing aligned interval, or the original whole nonlinear span.
+
+        Structured sequences do not have a byte-per-element map. Their slices conservatively
+        retain the whole source span; integer selection separately preserves an element's own
+        recorded provenance when it is available.
+        """
+        if not self._is_byte_aligned():
+            return self.pdf_offset, self.pdf_bytes, False
+        positions = range(*selection.indices(len(self)))
+        if not positions:
+            boundary = min(max(positions.start, 0), len(self))
+            return self.pdf_offset + boundary, 0, True
+        start = min(positions[0], positions[-1])
+        end = max(positions[0], positions[-1]) + 1
+        aligned = len(positions) == 1 or positions.step == 1
+        return self.pdf_offset + start, end - start, aligned
+
     def split(
         self,
         sep: Optional[Union[str, bytes, "PSSequence"]] = None,
@@ -252,40 +288,37 @@ class PSSequence(PSToken):
     def __getitem__(self, item):
         if isinstance(item, int):
             value = super().__getitem__(item)
-            return make_ps_object(value, pdf_offset=self.pdf_offset+item, pdf_bytes=self.pdf_bytes-item)
+            if has_provenance(value):
+                return value
+            index = item if item >= 0 else len(self) + item
+            offset, length, aligned = self._slice_span(slice(index, index + 1))
+            result = make_ps_object(value, pdf_offset=offset, pdf_bytes=length)
+            if isinstance(result, PSSequence):
+                result._pdf_byte_aligned = aligned
+            return result
         elif isinstance(item, slice):
-            if item.start is None:
-                start = 0
-            else:
-                start = item.start
-            if item.stop is None:
-                stop = self.pdf_bytes
-            else:
-                stop = item.stop
+            value = super().__getitem__(item)
+            offset, length, aligned = self._slice_span(item)
             try:
-                return self.__class__(
-                    super().__getitem__(item),
-                    pdf_offset=self.pdf_offset+start,
-                    pdf_bytes=self.pdf_bytes-(stop - start)
-                )
+                result = self.__class__(value, pdf_offset=offset, pdf_bytes=length)
             except ValueError:
                 if isinstance(self, PSBytes):
-                    return PSBytes(
-                        super().__getitem__(item),
-                        pdf_offset=self.pdf_offset+start,
-                        pdf_bytes=self.pdf_bytes-(stop - start)
-                    )
+                    result = PSBytes(value, pdf_offset=offset, pdf_bytes=length)
                 else:
                     raise
+            result._pdf_byte_aligned = aligned
+            return result
         else:
             return super().__getitem__(item)
 
 
 class PSStr(PSSequence, str):
     def encode(self, encoding: str = "utf-8", errors: str = "strict") -> "PSBytes":
-        return PSBytes(
+        result = PSBytes(
             super().encode(encoding, errors), pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes
         )
+        result._pdf_byte_aligned = self._is_byte_aligned() and len(result) == len(self)
+        return result
 
     def __str__(self):
         return str.__str__(self)
@@ -300,11 +333,11 @@ class PSBytes(PSSequence, bytes):
 
     def __getitem__(self, item):
         if isinstance(item, slice):
-            if item.start is None:
-                start = 0
-            else:
-                start = item.start
-            return PSBytes(super().__getitem__(item), pdf_offset=self.pdf_offset + start)
+            value = bytes.__getitem__(self, item)
+            offset, length, aligned = self._slice_span(item)
+            result = PSBytes(value, pdf_offset=offset, pdf_bytes=length)
+            result._pdf_byte_aligned = aligned
+            return result
         else:
             ret = super().__getitem__(item)
             if isinstance(ret, PSInt):
@@ -313,7 +346,11 @@ class PSBytes(PSSequence, bytes):
                 return PSInt(ret, pdf_offset=self.pdf_offset + item)
 
     def decode(self, encoding: str = "utf-8", errors: str = "strict") -> PSStr:
-        return PSStr(super().decode(encoding, errors), pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes)
+        result = PSStr(
+            super().decode(encoding, errors), pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes
+        )
+        result._pdf_byte_aligned = self._is_byte_aligned() and len(result) == len(self)
+        return result
 
 
     def __str__(self):
