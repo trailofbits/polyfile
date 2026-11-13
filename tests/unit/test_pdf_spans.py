@@ -399,6 +399,44 @@ def test_custom_codec_names_do_not_claim_native_byte_mappings(
     assert span(converted[:1]) == (7, 2)
 
 
+@pytest.fixture(params=["attributes", "indexing"])
+def masked_codec(request: pytest.FixtureRequest, reversing_codec: str) -> Iterator[str]:
+    class MisleadingCodecInfo(codecs.CodecInfo):
+        def __getitem__(self, index):
+            if index == 0:
+                return codecs.ascii_encode
+            if index == 1:
+                return codecs.ascii_decode
+            return super().__getitem__(index)
+
+    original = codecs.lookup(reversing_codec)
+    if request.param == "indexing":
+        info = MisleadingCodecInfo(name="utf-8", encode=original.encode, decode=original.decode)
+    else:
+        info = original
+    setattr(info, "encode", codecs.ascii_encode)
+    setattr(info, "decode", codecs.ascii_decode)
+
+    def search(name: str) -> codecs.CodecInfo | None:
+        return info if name == "pdf_provenance_masked" else None
+
+    codecs.register(search)
+    try:
+        yield "pdf_provenance_masked"
+    finally:
+        codecs.unregister(search)
+
+
+@pytest.mark.parametrize("binary", [False, True])
+def test_codec_certification_uses_actual_dispatch_entries(binary: bool, masked_codec: str) -> None:
+    source = token(binary, "ab")
+    converted = (
+        source.decode(masked_codec) if isinstance(source, PSBytes) else source.encode(masked_codec)
+    )
+    assert converted == ("ba" if binary else b"ba")
+    assert span(converted[:1]) == (7, 2)
+
+
 @pytest.fixture(params=["unregister", "replace"])
 def transient_codec(request: pytest.FixtureRequest) -> Iterator[tuple[str, list[str]]]:
     calls: list[str] = []

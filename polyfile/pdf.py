@@ -202,6 +202,8 @@ class PSSequence(PSToken):
 
         Codec conversions certify alignment only for native ASCII, ASCII-only UTF-8, and
         representable Latin-1 values. Other conversions retain the original whole span.
+        Native codec identities come from immutable dispatch entries rather than mutable
+        codec attributes or overridden indexing.
         """
         return (
             isinstance(self, (str, bytes))
@@ -391,7 +393,7 @@ class PSStr(PSSequence, str):
             or str.__contains__(encoding, "\x00") or str.__contains__(errors, "\x00")
         ):
             super().encode(encoding, errors)
-        encoder = codecs.lookup(encoding).encode
+        encoder: object = tuple.__getitem__(codecs.lookup(encoding), 0)
         result = PSBytes(
             super().encode(encoding, errors), pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes
         )
@@ -437,7 +439,7 @@ class PSBytes(PSSequence, bytes):
             or str.__contains__(encoding, "\x00") or str.__contains__(errors, "\x00")
         ):
             super().decode(encoding, errors)
-        decoder = codecs.lookup(encoding).decode
+        decoder: object = tuple.__getitem__(codecs.lookup(encoding), 1)
         result = PSStr(
             super().decode(encoding, errors), pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes
         )

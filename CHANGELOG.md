@@ -99,7 +99,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 - **Breaking:** PDF codec conversions retain exact byte mappings only when a native codec and
   representable input establish one-to-one positions. Lossy and custom conversions keep whole
   source spans even when their input and output lengths match. Codec registry changes during
-  conversion preserve the result and its conservative span (#3666).
+  conversion and custom codecs with altered metadata preserve conservative source spans (#3666).
 - **Breaking:** PDF token splitting rejects incompatible separator families, accepts contiguous
   byte-buffer separators, and checks platform-sized integer overflow for `maxsplit` (#3666).
 - **Breaking:** PDF slices, split parts, and stripped values report bounded source spans.
