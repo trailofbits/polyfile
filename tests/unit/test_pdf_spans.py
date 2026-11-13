@@ -1,6 +1,9 @@
 """PDF token operations retain byte-accurate or conservative whole-token source spans."""
 
+from collections.abc import Callable, Iterator
+import codecs
 import json
+from typing import cast
 
 import pytest
 
@@ -189,3 +192,340 @@ def test_alignment_metadata_is_not_part_of_serialized_matches() -> None:
     value = token(False)[::-1]
     match = Match("token", value, matcher=Matcher())
     assert "_pdf_byte_aligned" not in json.dumps(match.to_obj())
+
+
+@pytest.mark.parametrize("binary", [False, True])
+def test_empty_suffix_preserves_nonlinear_mapping(binary: bool) -> None:
+    source = token(binary)[::-1]
+    assert isinstance(source, (PSStr, PSBytes))
+    result = cast(bytes, source) + b"" if isinstance(source, PSBytes) else cast(str, source) + ""
+    assert result == (b"edcba" if binary else "edcba")
+    assert span(result) == (7, 5)
+    assert span(result[1:2]) == (7, 5)
+    copied = type(source)(result, pdf_offset=7, pdf_bytes=5)
+    assert span(copied[1:2]) == (7, 5)
+
+
+@pytest.mark.parametrize("binary", [False, True])
+def test_unpositioned_suffix_does_not_reactivate_alignment(binary: bool) -> None:
+    source = token(binary, "ab", size=4)
+    result = (
+        cast(bytes, source) + b"cd" if isinstance(source, PSBytes) else cast(str, source) + "cd"
+    )
+    assert result == (b"abcd" if binary else "abcd")
+    assert span(result) == (7, 4)
+    assert span(result[1:2]) == (7, 4)
+
+
+@pytest.mark.parametrize("binary", [False, True])
+def test_empty_suffix_retains_aligned_mapping(binary: bool) -> None:
+    source = token(binary)
+    result = cast(bytes, source) + b"" if isinstance(source, PSBytes) else cast(str, source) + ""
+    assert span(result) == (7, 5)
+    assert span(result[1:2]) == (8, 1)
+
+
+@pytest.mark.parametrize("binary", [False, True])
+@pytest.mark.parametrize("nonlinear", [None, "left", "right"])
+def test_contiguous_concatenation_combines_source_spans(
+    binary: bool, nonlinear: str | None,
+) -> None:
+    left = token(binary, "abc")
+    right = token(binary, "de")
+    right.pdf_offset = 10
+    if nonlinear == "left":
+        left = left[::-1]
+    elif nonlinear == "right":
+        right = right[::-1]
+    if isinstance(left, PSBytes):
+        assert isinstance(right, PSBytes)
+        result = cast(bytes, left) + cast(bytes, right)
+        expected = bytes(left) + bytes(right)
+    else:
+        assert isinstance(left, PSStr) and isinstance(right, PSStr)
+        result = cast(str, left) + cast(str, right)
+        expected = str(left) + str(right)
+    assert result == expected
+    assert span(result) == (7, 5)
+    assert span(result[1:2]) == ((8, 1) if nonlinear is None else (7, 5))
+
+
+@pytest.mark.parametrize("binary", [False, True])
+def test_contiguous_concatenation_keeps_full_nonlinear_source_spans(binary: bool) -> None:
+    left = token(binary, "abc", size=5)
+    right = token(binary, "de")
+    right.pdf_offset = 12
+    if isinstance(left, PSBytes):
+        assert isinstance(right, PSBytes)
+        result = cast(bytes, left) + cast(bytes, right)
+    else:
+        assert isinstance(right, PSStr)
+        result = cast(str, left) + cast(str, right)
+    assert span(result) == (7, 7)
+    assert span(result[1:2]) == (7, 7)
+
+
+@pytest.mark.parametrize("binary", [False, True])
+def test_split_after_concatenation_preserves_nonlinear_mapping(binary: bool) -> None:
+    source = token(binary, "ab cd")[::-1]
+    assert isinstance(source, (PSStr, PSBytes))
+    result = cast(bytes, source) + b"" if isinstance(source, PSBytes) else cast(str, source) + ""
+    assert [span(part) for part in result.split()] == [(7, 5), (7, 5)]
+
+
+@pytest.mark.parametrize("binary", [False, True])
+@pytest.mark.parametrize("prefix", ["", "xy"])
+def test_native_prefix_preserves_nonlinear_mapping(binary: bool, prefix: str) -> None:
+    source = token(binary)[::-1]
+    assert isinstance(source, (PSStr, PSBytes))
+    if isinstance(source, PSBytes):
+        result = prefix.encode("ascii") + cast(bytes, source)
+        expected = prefix.encode("ascii") + b"edcba"
+    else:
+        result = prefix + cast(str, source)
+        expected = prefix + "edcba"
+    assert result == expected
+    assert span(result) == (7, 5)
+    assert span(result[1:2]) == (7, 5)
+
+
+@pytest.mark.parametrize("binary", [False, True])
+def test_aligned_native_prefix_keeps_legacy_inferred_positions(binary: bool) -> None:
+    source = token(binary)
+    result = (
+        b"xy" + cast(bytes, source) if isinstance(source, PSBytes) else "xy" + cast(str, source)
+    )
+    assert span(result) == (5, 7)
+    assert span(result[1:2]) == (6, 1)
+    assert span(source) == (7, 5)
+
+
+@pytest.mark.parametrize("binary", [False, True])
+def test_reflected_concatenation_combines_known_contiguous_spans(binary: bool) -> None:
+    left = token(binary, "abc", size=5)
+    right = token(binary, "de")
+    right.pdf_offset = 12
+    result = cast(Callable[[str | bytes], str | bytes], right.__radd__)(left)
+    assert result == (b"abcde" if binary else "abcde")
+    assert span(result) == (7, 7)
+    assert span(result[1:2]) == (7, 7)
+
+
+@pytest.mark.parametrize("binary", [False, True])
+@pytest.mark.parametrize("as_int", [False, True])
+def test_numeric_roundtrip_retains_conservative_source_mapping(binary: bool, as_int: bool) -> None:
+    source = token(binary, "1234")[::-1]
+    assert isinstance(source, (PSStr, PSBytes))
+    number = source.as_int() if as_int else PSInt(source, pdf_offset=7, pdf_bytes=4)
+    assert span(number) == (7, 4)
+    copied = PSInt(number, pdf_offset=7, pdf_bytes=4)
+    result = PSStr(copied, pdf_offset=7, pdf_bytes=4)
+    assert result == "4321"
+    assert span(result[:1]) == (7, 4)
+    assert span(source) == (7, 4)
+
+
+def test_equal_length_lossy_encoding_retains_the_whole_span() -> None:
+    source = PSStr(chr(0xD800) + "é", pdf_offset=7, pdf_bytes=2)
+    result = source.encode("utf-8", "ignore")
+    assert result == b"\xc3\xa9"
+    assert span(result[:1]) == (7, 2)
+    assert span(result.decode("latin-1").encode("latin-1")[:1]) == (7, 2)
+
+
+def test_decoding_replacements_do_not_infer_a_byte_map() -> None:
+    source = PSBytes(b"\xffa", pdf_offset=7, pdf_bytes=2)
+    result = source.decode("utf-8", "replace")
+    assert result == "\ufffda"
+    assert span(result[:1]) == (7, 2)
+
+
+@pytest.mark.parametrize("binary", [False, True])
+@pytest.mark.parametrize("encoding", ["ascii", "UTF8", "latin_1"])
+@pytest.mark.parametrize("errors", ["strict", "ignore", "replace"])
+def test_known_one_byte_codec_mappings_remain_exact(
+    binary: bool, encoding: str, errors: str,
+) -> None:
+    source = token(binary, "ab")
+    converted = (
+        source.decode(encoding, errors) if isinstance(source, PSBytes)
+        else source.encode(encoding, errors)
+    )
+    assert span(converted[1:2]) == (8, 1)
+
+
+def test_latin_one_non_ascii_mappings_remain_exact() -> None:
+    raw = PSBytes(b"\xe9x", pdf_offset=7, pdf_bytes=2)
+    decoded = raw.decode("latin-1")
+    assert decoded == "éx"
+    assert span(decoded[1:2]) == (8, 1)
+    encoded = decoded.encode("latin-1")
+    assert encoded == b"\xe9x"
+    assert span(encoded[1:2]) == (8, 1)
+
+
+@pytest.fixture
+def reversing_codec() -> Iterator[str]:
+    def encode(value: str, errors: str = "strict") -> tuple[bytes, int]:
+        return value[::-1].encode("ascii"), len(value)
+
+    def decode(value: object, errors: str = "strict") -> tuple[str, int]:
+        assert isinstance(value, (bytes, bytearray, memoryview))
+        raw = bytes(value)
+        return raw[::-1].decode("ascii"), len(raw)
+
+    def search(name: str) -> codecs.CodecInfo | None:
+        if name == "pdf_provenance_reverse":
+            return codecs.CodecInfo(name="utf-8", encode=encode, decode=decode)
+        return None
+
+    codecs.register(search)
+    try:
+        yield "pdf_provenance_reverse"
+    finally:
+        codecs.unregister(search)
+
+
+@pytest.mark.parametrize("binary", [False, True])
+def test_custom_codec_names_do_not_claim_native_byte_mappings(
+    binary: bool, reversing_codec: str,
+) -> None:
+    source = token(binary, "ab")
+    converted = (
+        source.decode(reversing_codec) if isinstance(source, PSBytes)
+        else source.encode(reversing_codec)
+    )
+    assert converted == ("ba" if binary else b"ba")
+    assert span(converted[:1]) == (7, 2)
+
+
+@pytest.fixture(params=["attributes", "indexing"])
+def masked_codec(request: pytest.FixtureRequest, reversing_codec: str) -> Iterator[str]:
+    class MisleadingCodecInfo(codecs.CodecInfo):
+        def __getitem__(self, index):
+            if index == 0:
+                return codecs.ascii_encode
+            if index == 1:
+                return codecs.ascii_decode
+            return super().__getitem__(index)
+
+    original = codecs.lookup(reversing_codec)
+    if request.param == "indexing":
+        info = MisleadingCodecInfo(name="utf-8", encode=original.encode, decode=original.decode)
+    else:
+        info = original
+    setattr(info, "encode", codecs.ascii_encode)
+    setattr(info, "decode", codecs.ascii_decode)
+
+    def search(name: str) -> codecs.CodecInfo | None:
+        return info if name == "pdf_provenance_masked" else None
+
+    codecs.register(search)
+    try:
+        yield "pdf_provenance_masked"
+    finally:
+        codecs.unregister(search)
+
+
+@pytest.mark.parametrize("binary", [False, True])
+def test_codec_certification_uses_actual_dispatch_entries(binary: bool, masked_codec: str) -> None:
+    source = token(binary, "ab")
+    converted = (
+        source.decode(masked_codec) if isinstance(source, PSBytes) else source.encode(masked_codec)
+    )
+    assert converted == ("ba" if binary else b"ba")
+    assert span(converted[:1]) == (7, 2)
+
+
+@pytest.fixture(params=["unregister", "replace"])
+def transient_codec(request: pytest.FixtureRequest) -> Iterator[tuple[str, list[str]]]:
+    calls: list[str] = []
+
+    def encode(value: str, errors: str = "strict") -> tuple[bytes, int]:
+        calls.append("encode")
+        codecs.unregister(search)
+        if request.param == "replace":
+            codecs.register(replacement)
+        return value[::-1].encode("ascii"), len(value)
+
+    def decode(value: object, errors: str = "strict") -> tuple[str, int]:
+        assert isinstance(value, (bytes, bytearray, memoryview))
+        calls.append("decode")
+        codecs.unregister(search)
+        if request.param == "replace":
+            codecs.register(replacement)
+        raw = bytes(value)
+        return raw[::-1].decode("ascii"), len(raw)
+
+    def replacement(name: str) -> codecs.CodecInfo | None:
+        return codecs.lookup("ascii") if name == "pdf_provenance_transient" else None
+
+    def search(name: str) -> codecs.CodecInfo | None:
+        if name == "pdf_provenance_transient":
+            return codecs.CodecInfo(name="utf-8", encode=encode, decode=decode)
+        return None
+
+    codecs.register(search)
+    try:
+        yield "pdf_provenance_transient", calls
+    finally:
+        codecs.unregister(search)
+        codecs.unregister(replacement)
+
+
+@pytest.mark.parametrize("binary", [False, True])
+def test_codec_registry_changes_do_not_affect_returned_provenance(
+    binary: bool, transient_codec: tuple[str, list[str]],
+) -> None:
+    name, calls = transient_codec
+    source = token(binary, "ab")
+    converted = source.decode(name) if isinstance(source, PSBytes) else source.encode(name)
+    assert converted == ("ba" if binary else b"ba")
+    assert span(converted[:1]) == (7, 2)
+    assert calls == (["decode"] if binary else ["encode"])
+
+
+@pytest.mark.parametrize("binary", [False, True])
+def test_native_codec_registry_change_control(
+    binary: bool, transient_codec: tuple[str, list[str]],
+) -> None:
+    name, calls = transient_codec
+    converted = b"ab".decode(name) if binary else "ab".encode(name)
+    assert converted == ("ba" if binary else b"ba")
+    assert calls == (["decode"] if binary else ["encode"])
+
+
+@pytest.mark.parametrize("binary", [False, True])
+@pytest.mark.parametrize(
+    ("encoding", "errors"),
+    [
+        (None, "strict"),
+        (42, "strict"),
+        (b"ascii", "strict"),
+        ("missing_codec", None),
+        ("missing_codec", 42),
+        (None, None),
+        (42, None),
+        ("\x00", "strict"),
+        ("ascii", "\x00"),
+        ("missing_codec", "\x00"),
+        ("\x00", None),
+        ("missing_codec", "strict"),
+    ],
+)
+def test_codec_arguments_preserve_native_validation_order(
+    binary: bool, encoding: object, errors: object,
+) -> None:
+    encoding, errors = cast(str, encoding), cast(str, errors)
+    source = token(binary, "ab")
+    with pytest.raises((TypeError, ValueError, LookupError)) as expected:
+        if isinstance(source, PSBytes):
+            b"ab".decode(encoding, errors)
+        else:
+            "ab".encode(encoding, errors)
+    with pytest.raises(type(expected.value)) as actual:
+        if isinstance(source, PSBytes):
+            source.decode(encoding, errors)
+        else:
+            source.encode(encoding, errors)
+    assert str(actual.value) == str(expected.value)
