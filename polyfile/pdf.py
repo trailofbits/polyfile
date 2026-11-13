@@ -116,15 +116,15 @@ class PSToken:
         """Converts a numeric token to an integer while retaining its byte provenance."""
         return PSInt(int(self), pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes)
 
-    def __float__(self):
+    def __float__(self) -> float:
         if isinstance(self, float):
-            return self
+            return float.__float__(self)
         elif isinstance(self, int):
-            return PSFloat(int(self, base=10), pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes)
+            return float(int(self))
         elif isinstance(self, bytes):
-            return PSFloat(self.decode(), pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes)
+            return float(self.decode())
         elif isinstance(self, PSStr):
-            return PSFloat(str(self), pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes)
+            return float(str(self))
         else:
             raise NotImplementedError()
 
@@ -133,9 +133,6 @@ class PSToken:
             return self
         else:
             return PSBytes(self, pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes)
-
-    def __hex__(self):
-        return PSStr(super().__hex__(), pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes)
 
     def __str__(self):
         raise NotImplementedError()
@@ -200,19 +197,23 @@ class PSSequence(PSToken):
     def __radd__(self: Type[C], other) -> C:
         return self.__class__(other, pdf_offset=self.pdf_offset - len(other)) + self
 
-    def lstrip(self: Type[C], chars: bytes = b" \t\n\r") -> C:
+    def lstrip(self, chars: str | bytes | None = None) -> "PSSequence":
+        if chars is None:
+            chars = " \t\n\r" if isinstance(self, str) else b" \t\n\r"
         ret = self
         while ret and ret[0] in chars:
             ret = ret[1:]
         return ret
 
-    def rstrip(self: Type[C], chars: bytes = b" \t\n\r") -> C:
+    def rstrip(self, chars: str | bytes | None = None) -> "PSSequence":
+        if chars is None:
+            chars = " \t\n\r" if isinstance(self, str) else b" \t\n\r"
         ret = self
         while ret and ret[-1] in chars:
             ret = ret[:-1]
         return ret
 
-    def strip(self: Type[C], chars: bytes = b" \t\n\r") -> C:
+    def strip(self, chars: str | bytes | None = None) -> "PSSequence":
         return self.lstrip(chars).rstrip(chars)
 
     def __getitem__(self, item):
@@ -248,8 +249,10 @@ class PSSequence(PSToken):
 
 
 class PSStr(PSSequence, str):
-    def encode(self, encoding: str = ..., errors: str = ...) -> bytes:
-        return PSBytes(super().encode(encoding, errors), pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes)
+    def encode(self, encoding: str = "utf-8", errors: str = "strict") -> "PSBytes":
+        return PSBytes(
+            super().encode(encoding, errors), pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes
+        )
 
     def __str__(self):
         return str.__str__(self)
