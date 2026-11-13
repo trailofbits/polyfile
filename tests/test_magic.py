@@ -8,8 +8,9 @@ import zlib
 from itertools import chain
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Callable, Dict, Iterable, Iterator, List, Optional, Set, Tuple
+from collections.abc import Iterable, Iterator
 from unittest import TestCase
+from unittest.mock import patch
 from uuid import UUID
 
 # from polyfile import logger
@@ -17,7 +18,8 @@ import polyfile.der
 import polyfile.magic
 from polyfile.http.matcher import HTTP_11_MIME_TYPE
 from polyfile.magic import (
-    DataType, MagicMatcher, MagicTest, MAGIC_DEFS, Match, MatchContext, RegexType, SearchType,
+    DataType, MagicMatcher, MagicTest as MagicRule, MAGIC_DEFS, Match, MatchContext, RegexType,
+    SearchType,
     StringType, TestResult
 )
 
@@ -27,14 +29,14 @@ from polyfile.magic import (
 FILE_TEST_DIR: Path = Path(__file__).parent.parent / "file" / "tests"
 
 
-def every_bundled_test() -> Iterator[MagicTest]:
+def every_bundled_test() -> Iterator[MagicRule]:
     """Walks the default matcher, including the subtests nested under each level 0 test.
 
     Yields:
         Each test once, in no particular order.
     """
-    seen: Set[int] = set()
-    stack: List[MagicTest] = list(MagicMatcher.DEFAULT_INSTANCE)
+    seen: set[int] = set()
+    stack: list[MagicRule] = list(MagicMatcher.DEFAULT_INSTANCE)
     while stack:
         test = stack.pop()
         if id(test) in seen:
@@ -43,7 +45,7 @@ def every_bundled_test() -> Iterator[MagicTest]:
         yield test
         stack.extend(test.children)
 
-KNOWN_FAILURES: Dict[str, int] = {
+KNOWN_FAILURES: dict[str, int] = {
     # Empty, and worth keeping that way: every stem of the libmagic corpus now matches what
     # libmagic reports. `test_file_corpus` asserts that a stem listed here still FAILS, so an entry
     # is a deliberate record of a filed bug rather than a way to quiet the suite. Add one only
@@ -113,7 +115,7 @@ def corpus_flags(test: str) -> str:
     return flags.read_text().strip()
 
 
-def corpus_result_matches(expected: str, matches: Set[str]) -> bool:
+def corpus_result_matches(expected: str, matches: set[str]) -> bool:
     """Reports whether PolyFile's matches include libmagic's expected description.
 
     Only trailing whitespace is ignored. Case is significant: libmagic's spelling of a
@@ -147,18 +149,12 @@ def corpus_result_matches(expected: str, matches: Set[str]) -> bool:
 
 
 class MagicTest(TestCase):
-    _old_local_date: Optional[Callable[[int], str]] = None
-
     @classmethod
     def setUpClass(cls):
         # the libmagic test corpus assumes the local time zone is UTC, so hack magic to get it to work:
-        cls._old_local_date = polyfile.magic.local_date
-        polyfile.magic.local_date = polyfile.magic.utc_date
-
-    @classmethod
-    def tearDownClass(cls):
-        # undo our UTC hack
-        polyfile.magic.local_date = cls._old_local_date
+        date_patch = patch.object(polyfile.magic, "local_date", polyfile.magic.utc_date)
+        date_patch.start()
+        cls.addClassCleanup(date_patch.stop)
 
     def test_parsing(self):
         matcher = MagicMatcher.parse(*MAGIC_DEFS)
@@ -187,6 +183,7 @@ class MagicTest(TestCase):
                                ("beguid", file_order)):
             with self.subTest(data_type=name):
                 data_type = polyfile.magic.DataType.parse(name)
+                assert isinstance(data_type, polyfile.magic.GUIDType)
                 match = data_type.match(data, polyfile.magic.UUIDWildcard())
                 self.assertEqual(expected, match.value)
                 self.assertEqual(expected, data_type.match(data, expected).value)
@@ -480,6 +477,7 @@ class MagicTest(TestCase):
             with self.subTest(data=data[:16]):
                 description = polyfile.magic.TextEncodingDescription.detect(data)
                 self.assertIsNotNone(description)
+                assert description is not None
                 self.assertEqual(expected_encoding, description.encoding)
                 mimetypes = {
                     mimetype
@@ -499,6 +497,7 @@ class MagicTest(TestCase):
         """
         description = polyfile.magic.TextEncodingDescription.detect(b"hello world" + b"\x00" * 400)
         self.assertIsNotNone(description)
+        assert description is not None
         self.assertEqual("ASCII text, with no line terminators", description.describe(""))
 
     def test_an_even_buffer_that_trims_odd_keeps_a_nul(self):
@@ -513,7 +512,9 @@ class MagicTest(TestCase):
         detect = polyfile.magic.TextEncodingDescription.detect
         self.assertIsNone(detect(b"abc\x00"))
         self.assertIsNone(detect(b"The quick brown fox.\n" + b"\x00" * 491))
-        self.assertEqual("ascii", detect(b"abc\x00\x00").encoding)
+        description = detect(b"abc\x00\x00")
+        assert description is not None
+        self.assertEqual("ascii", description.encoding)
         self.assertEqual({"data"},
                          {str(m) for m in MagicMatcher.DEFAULT_INSTANCE.match(b"abc\x00")})
         self.assertEqual({"ASCII text, with no line terminators"},
@@ -530,6 +531,7 @@ class MagicTest(TestCase):
         data = b"\xff\xfe" + "hi\n".encode("utf-16le")
         description = polyfile.magic.TextEncodingDescription.detect(data)
         self.assertIsNotNone(description)
+        assert description is not None
         self.assertEqual(1, description.lf)
         self.assertEqual("Unicode text, UTF-16, little-endian text", description.describe(""))
 
@@ -583,6 +585,7 @@ class MagicTest(TestCase):
                 self.assertEqual(expected_encoding, polyfile.magic.detect_text_encoding(data))
                 description = polyfile.magic.TextEncodingDescription.detect(data)
                 self.assertIsNotNone(description)
+                assert description is not None
                 self.assertEqual(expected_description, description.describe(""))
                 mimetypes = {
                     mimetype
@@ -614,7 +617,7 @@ class MagicTest(TestCase):
                 self.assertEqual(expected_encoding, polyfile.magic.detect_text_encoding(data))
 
     @staticmethod
-    def messages(matcher: MagicMatcher, data: bytes) -> Set[str]:
+    def messages(matcher: MagicMatcher, data: bytes) -> set[str]:
         return {str(match) for match in matcher.match(data)}
 
     def only_match(self, data: bytes, message: str):
@@ -924,7 +927,7 @@ class MagicTest(TestCase):
 
         self.assert_corpus_verdict(test, expected, matches, flags)
 
-    def assert_corpus_verdict(self, test: str, expected: str, matches: Set[str], flags: str):
+    def assert_corpus_verdict(self, test: str, expected: str, matches: set[str], flags: str):
         """Asserts that a corpus test passes, or that it still fails if `KNOWN_FAILURES` maps it.
 
         Args:
@@ -998,7 +1001,7 @@ class MagicMatchingRegressionTest(TestCase):
     ))
 
     @staticmethod
-    def mimetypes(matcher: MagicMatcher, data: bytes) -> Set[str]:
+    def mimetypes(matcher: MagicMatcher, data: bytes) -> set[str]:
         """Collects every MIME type that `matcher` reports for `data`.
 
         Args:
@@ -1008,13 +1011,13 @@ class MagicMatchingRegressionTest(TestCase):
         Returns:
             The union of the MIME types of every match.
         """
-        found: Set[str] = set()
+        found: set[str] = set()
         for match in matcher.match(data):
             found |= set(match.mimetypes)
         return found
 
     @staticmethod
-    def counting_match(result: TestResult, count: int) -> Tuple[Match, List[TestResult]]:
+    def counting_match(result: TestResult, count: int) -> tuple[Match, list[TestResult]]:
         """Builds a `Match` that records each result its iterator yields.
 
         Args:
@@ -1024,7 +1027,7 @@ class MagicMatchingRegressionTest(TestCase):
         Returns:
             The match, and the list that grows by one entry per result the match consumes.
         """
-        produced: List[TestResult] = []
+        produced: list[TestResult] = []
 
         def results() -> Iterator[TestResult]:
             for _ in range(count):
@@ -1176,7 +1179,7 @@ class RegexSemanticsTest(TestCase):
         return f"0\tregex{flags}\t=[0-9]{{1,3}}\tdigits\n>&0\tstring\t{follow_up}\tthen\n"
 
     @staticmethod
-    def messages(definition: str, data: bytes) -> Set[str]:
+    def messages(definition: str, data: bytes) -> set[str]:
         """Classifies `data` with a matcher built from a single magic definition.
 
         Args:
@@ -1280,7 +1283,7 @@ class StringDataTypeTest(TestCase):
     """Regression tests for the `string` data type defects reported in issue #3483."""
 
     @staticmethod
-    def messages(definition: str, data: bytes) -> Set[str]:
+    def messages(definition: str, data: bytes) -> set[str]:
         """Runs a single magic definition against `data`.
 
         Args:
@@ -1305,6 +1308,7 @@ class StringDataTypeTest(TestCase):
         shebang = StringType.parse("string/wt")
         self.assertTrue(shebang.optional_blanks)
         expected = shebang.parse_expected("#!\\ ")
+        assert isinstance(expected, polyfile.magic.StringMatch)
         self.assertTrue(expected.optional_blanks)
         for data in (b"#!/usr/bin/x", b"#! /usr/bin/x", b"#!\t/usr/bin/x", b"#!  \t/usr/bin/x"):
             self.assertTrue(shebang.match(data, expected), repr(data))
@@ -1660,8 +1664,10 @@ class StringDataTypeTest(TestCase):
         libmagic accepts the string modifiers on `pstring` (`file/src/apprentice.c:1943-2020`).
         """
         trimming = DataType.parse("pstring/BT")
+        assert isinstance(trimming, polyfile.magic.PascalStringType)
         self.assertEqual("hi", trimming.match(b"\x06  hi  ", trimming.parse_expected("x")).value)
         verbatim = DataType.parse("pstring/B")
+        assert isinstance(verbatim, polyfile.magic.PascalStringType)
         untrimmed = verbatim.match(b"\x06  hi  ", verbatim.parse_expected("x"))
         self.assertEqual("  hi  ", untrimmed.value)
 
@@ -1968,8 +1974,11 @@ class SearchTextClassificationTest(TestCase):
         adopt its flags.
         """
         flagged = DataType.parse("search/21/b")
+        assert isinstance(flagged, SearchType)
+        unflagged = DataType.parse("search/21")
+        assert isinstance(unflagged, SearchType)
         self.assertTrue(flagged.force_binary)
-        self.assertFalse(DataType.parse("search/21").force_binary)
+        self.assertFalse(unflagged.force_binary)
         self.assertIs(flagged, DataType.parse("search/b/21"))
 
     def test_a_gimp_animated_brush_is_still_detected(self):
@@ -2031,7 +2040,7 @@ class NamedTestOffsetTest(TestCase):
         data[32:38] = b"NESTED"
         return bytes(data)
 
-    def messages(self, definitions: str, data: bytes) -> Set[str]:
+    def messages(self, definitions: str, data: bytes) -> set[str]:
         """Matches `data` against ad-hoc definitions written to a temporary file."""
         with TemporaryDirectory() as directory:
             path = Path(directory) / "definitions"
@@ -2073,7 +2082,7 @@ class UseTestSemanticsTest(TestCase):
     """The same definitions, with the named list's only entry left undescribed."""
 
     @staticmethod
-    def messages(definitions: str, data: bytes) -> Set[str]:
+    def messages(definitions: str, data: bytes) -> set[str]:
         """Matches `data` against ad-hoc definitions and collects the resulting messages.
 
         Args:
@@ -2421,7 +2430,7 @@ class TextEncodingDescriptionTest(TestCase):
     """The same test without `t`, which libmagic runs in its binary pass and never describes."""
 
     @staticmethod
-    def messages(definition: str, data: bytes) -> Set[str]:
+    def messages(definition: str, data: bytes) -> set[str]:
         """Runs a single magic definition against `data`.
 
         Args:
@@ -2449,6 +2458,7 @@ class TextEncodingDescriptionTest(TestCase):
         """
         description = polyfile.magic.TextEncodingDescription.detect(data)
         self.assertIsNotNone(description, f"{data!r} was not classified as text")
+        assert description is not None
         return description.describe(message)
 
     def test_a_text_suffix_is_replaced_by_the_encoding(self):
@@ -2682,7 +2692,7 @@ for path in sys.argv[1:]:
     print(path, "\t".join(str(match) for match in MagicMatcher.DEFAULT_INSTANCE.match(data)))
 """
 
-HASH_SEEDS: Tuple[str, ...] = ("0", "1", "12345")
+HASH_SEEDS: tuple[str, ...] = ("0", "1", "12345")
 
 
 class MatchOrderTest(TestCase):
@@ -2695,7 +2705,7 @@ class MatchOrderTest(TestCase):
     later run.
     """
 
-    MULTI_MATCH_STEMS: Tuple[str, ...] = (
+    MULTI_MATCH_STEMS: tuple[str, ...] = (
         "HWP2016.hwpx.zip", "keyman-2", "escapevel", "issue311docx", "issue359xlsx", "osm",
     )
     """Corpus stems that PolyFile reports more than one match for, so their order is observable."""
@@ -2707,7 +2717,7 @@ class MatchOrderTest(TestCase):
             tests: The level 0 tests to check, in the order something reported them.
             label: What is being checked, for the failure message.
         """
-        previous: Optional[polyfile.magic.MagicTest] = None
+        previous: polyfile.magic.MagicTest | None = None
         for test in tests:
             if previous is not None:
                 self.assertLessEqual(
@@ -2792,7 +2802,7 @@ class MatchOrderTest(TestCase):
                         "Run `git submodule init && git submodule update` in the repository root.")
         paths = [str(FILE_TEST_DIR / f"{stem}.testfile") for stem in self.MULTI_MATCH_STEMS]
         command = [sys.executable, "-c", ORDER_SCRIPT, *paths]
-        reported: Dict[str, str] = {}
+        reported: dict[str, str] = {}
         for seed in HASH_SEEDS:
             environment = dict(os.environ, PYTHONHASHSEED=seed)
             try:
@@ -2829,7 +2839,7 @@ class StringFlagSortKeyTest(TestCase):
     """
 
     @staticmethod
-    def order(first: str, second: str, value: str) -> List[str]:
+    def order(first: str, second: str, value: str) -> list[str]:
         """The order PolyFile runs two equally strong tests of the given types in.
 
         Args:
@@ -2972,7 +2982,7 @@ class StringFlagSortKeyTest(TestCase):
         """
         self.assertEqual(["ZZZ-first", "AAA-second"], self.order("pstring", "pstring/B", "x"))
 
-    FLAG_WORDS: Tuple[Tuple[str, int, int], ...] = (
+    FLAG_WORDS: tuple[tuple[str, int, int], ...] = (
         ("string", 0, 0x0000),
         ("string/b", 0, 0x0040),
         ("string/t", 0, 0x0020),
@@ -3196,7 +3206,7 @@ class UCSTextBufferTest(TestCase):
                 '<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"/>\n')
     """A document `polyfile/magic_defs/sgml` reports as SVG, XML 1.0 and XML."""
 
-    ENCODINGS: Tuple[Tuple[str, str, bytes], ...] = (
+    ENCODINGS: tuple[tuple[str, str, bytes], ...] = (
         ("utf-16le", "UTF-16, little-endian", b"\xff\xfe"),
         ("utf-16be", "UTF-16, big-endian", b"\xfe\xff"),
         ("utf-32le", "UTF-32, little-endian", b"\xff\xfe\x00\x00"),
@@ -3219,7 +3229,7 @@ class UCSTextBufferTest(TestCase):
         return bom + text.encode(encoding)
 
     @staticmethod
-    def text_buffer(data: bytes) -> Optional[bytes]:
+    def text_buffer(data: bytes) -> bytes | None:
         """Returns the buffer `MagicMatcher.match` would hand the text tests for `data`.
 
         Args:
@@ -3284,7 +3294,7 @@ class UCSTextBufferTest(TestCase):
     def test_an_unchanged_input_keeps_its_context(self):
         """ASCII and unmarked UTF-8 already hold the bytes text tests expect."""
         inputs = ((b"plain ascii text\n", "ascii"),
-                  ("café naïve\n".encode("utf-8"), "utf-8"))
+                  ("café naïve\n".encode(), "utf-8"))
         for data, expected_encoding in inputs:
             with self.subTest(encoding=expected_encoding):
                 self.assertEqual(expected_encoding, polyfile.magic.detect_text_encoding(data))
@@ -3318,6 +3328,7 @@ class UCSTextBufferTest(TestCase):
         match = matches["XML document, Unicode text, UTF-16, little-endian text"]
         self.assertEqual("utf-16le", match.context.decoded_from)
         result = match[0]
+        assert isinstance(result, polyfile.magic.MatchedTest)
         self.assertEqual(b"<?xml", match.context.data[result.offset:result.offset + result.length])
         self.assertEqual(b"\xff\xfe<\x00?", data[result.offset:result.offset + result.length])
         explanation = match.explain(file=data, ansi_color=False)
@@ -3334,6 +3345,7 @@ class UCSTextBufferTest(TestCase):
         match = matches["XML document, ASCII text"]
         self.assertIsNone(match.context.decoded_from)
         result = match[0]
+        assert isinstance(result, polyfile.magic.MatchedTest)
         self.assertEqual(b"<?xml", data[result.offset:result.offset + result.length])
         self.assertNotIn("decoded from this file", match.explain(file=data, ansi_color=False))
 
@@ -3398,12 +3410,11 @@ class DataTypeNameTest(TestCase):
 
         DataType.parse("string")
         try:
-            polyfile.magic.StringType = ForgetfulStringType
-            polyfile.magic.TYPES_BY_NAME.pop("string/f", None)
-            with self.assertRaises(ValueError):
-                DataType.parse("string/f")
+            with patch.object(polyfile.magic, "StringType", ForgetfulStringType):
+                polyfile.magic.TYPES_BY_NAME.pop("string/f", None)
+                with self.assertRaises(ValueError):
+                    DataType.parse("string/f")
         finally:
-            polyfile.magic.StringType = StringType
             polyfile.magic.TYPES_BY_NAME.pop("string/f", None)
 
     def test_whole_word_match_survives_parsing(self):
@@ -3414,9 +3425,12 @@ class DataTypeNameTest(TestCase):
         `string` and shared the unflagged type's instance.
         """
         whole_word = DataType.parse("string/f")
+        assert isinstance(whole_word, StringType)
+        plain = DataType.parse("string")
+        assert isinstance(plain, StringType)
         self.assertIsNot(whole_word, DataType.parse("string"))
         self.assertTrue(whole_word.full_word_match)
-        self.assertFalse(DataType.parse("string").full_word_match)
+        self.assertFalse(plain.full_word_match)
         expected = whole_word.parse_expected("if")
         self.assertTrue(whole_word.match(b"if x then", expected))
         self.assertFalse(whole_word.match(b"iffy", expected))
@@ -3431,7 +3445,7 @@ class SearchFlagTableTest(TestCase):
     optional blanks, and dropped `t` altogether.
     """
 
-    FLAGS: Tuple[Tuple[str, str], ...] = (
+    FLAGS: tuple[tuple[str, str], ...] = (
         ("W", "compact_whitespace"),
         ("w", "optional_blanks"),
         ("c", "case_insensitive_lower"),
@@ -3467,7 +3481,9 @@ class SearchFlagTableTest(TestCase):
             with self.subTest(declaration=declaration):
                 with self.assertRaises(ValueError):
                     DataType.parse(declaration)
-        self.assertEqual(1, DataType.parse("pstring/B").byte_length)
+        pascal = DataType.parse("pstring/B")
+        assert isinstance(pascal, polyfile.magic.PascalStringType)
+        self.assertEqual(1, pascal.byte_length)
 
     def test_flags_may_precede_an_undocumented_repetition_count(self):
         """Tests that `ber`'s `search/b64` is `search/64` with the binary flag set.
@@ -3476,7 +3492,9 @@ class SearchFlagTableTest(TestCase):
         as a flag, in one loop, so the two orders mean the same thing.
         """
         self.assertIs(DataType.parse("search/b64"), DataType.parse("search/64/b"))
-        self.assertEqual(64, DataType.parse("search/b64").repetitions)
+        search = DataType.parse("search/b64")
+        assert isinstance(search, SearchType)
+        self.assertEqual(64, search.repetitions)
 
 
 class PassSelectionTest(TestCase):
@@ -3593,7 +3611,7 @@ class PassGateTest(TestCase):
     """
 
     @staticmethod
-    def messages(definition: str, data: bytes) -> Set[str]:
+    def messages(definition: str, data: bytes) -> set[str]:
         """Runs a single magic definition against `data`.
 
         Args:
@@ -3737,7 +3755,7 @@ class DefaultTestSemanticsTest(TestCase):
     """
 
     @staticmethod
-    def messages(definitions: str, data: bytes) -> Set[str]:
+    def messages(definitions: str, data: bytes) -> set[str]:
         """Matches `data` against ad-hoc definitions and collects the resulting messages.
 
         Args:
@@ -3869,7 +3887,7 @@ class RegexSubjectTest(TestCase):
     """A level 0 test on `HEAD`, whose continuation looks for `TARGET` in the rest of the file."""
 
     @staticmethod
-    def messages(definitions: str, data: bytes) -> Set[str]:
+    def messages(definitions: str, data: bytes) -> set[str]:
         """Matches `data` against ad-hoc definitions and collects the resulting messages.
 
         Args:

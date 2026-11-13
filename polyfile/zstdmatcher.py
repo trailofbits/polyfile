@@ -5,6 +5,7 @@ import struct
 import sys
 from collections.abc import Iterator
 from types import ModuleType
+from typing import Protocol, cast
 
 from polyfile.compression import (
     CHUNK_SIZE,
@@ -27,6 +28,18 @@ from polyfile.magic import (
 from polyfile.polyfile import Match, register_parser
 
 ZSTD_MAGIC = b"\x28\xb5\x2f\xfd"
+
+
+class _FrameInfo(Protocol):
+    @property
+    def dictionary_id(self) -> int:
+        ...
+
+    @property
+    def decompressed_size(self) -> int | None:
+        ...
+
+
 SKIPPABLE_BASE = 0x184D2A50
 LEGACY_MAGICS = frozenset(
     bytes([version]) + ZSTD_MAGIC[1:] for version in range(0x22, 0x28)
@@ -109,7 +122,7 @@ def _frame_header(stream: FileStream, backend: ModuleType) -> tuple[int, int | N
     with stream.save_pos():
         header = stream.read(18)
     try:
-        info = backend.get_frame_info(header)
+        info = cast(_FrameInfo, backend.get_frame_info(header))
     except backend.ZstdError as error:
         raise DecodeError(
             f"invalid Zstandard frame header at offset {start}: {error}"
@@ -120,6 +133,7 @@ def _frame_header(stream: FileStream, backend: ModuleType) -> tuple[int, int | N
             status="unsupported",
         )
     if header[4] & 0x20:
+        assert info.decompressed_size is not None
         return info.decompressed_size, info.decompressed_size
     descriptor = header[5]
     base = 1 << (10 + (descriptor >> 3))

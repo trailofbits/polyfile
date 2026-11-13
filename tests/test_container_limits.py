@@ -80,7 +80,9 @@ def test_unbounded_zip_backend_reports_requested_limit_as_unsupported(
     encoded = next(
         node
         for node in nodes
-        if node.name == "compressed_data" and node.parent.name == "LocalFileHeader"
+        if node.name == "compressed_data"
+        and node.parent is not None
+        and node.parent.name == "LocalFileHeader"
     )
     assert encoded.analysis_status == "unsupported"
     assert not any(child.name == "decoded_content" for child in encoded)
