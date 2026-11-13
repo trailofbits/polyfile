@@ -1,10 +1,10 @@
 import struct
 import zipfile
+from collections.abc import Generator
 from contextlib import contextmanager
 from io import BytesIO
 from pathlib import Path
 from tempfile import NamedTemporaryFile
-from typing import Dict, Iterator, List, Optional, Set, Tuple
 from unittest import TestCase
 
 from polyfile.analysis import AnalysisLimits
@@ -14,12 +14,12 @@ from polyfile.polyfile import Match, Matcher
 from polyfile.structs import Constant
 from polyfile.zipmatcher import EOCD_SIGNATURE, EndOfCentralDirectory, parse_zip
 
-MEMBERS: Dict[str, bytes] = {
+MEMBERS: dict[str, bytes] = {
     "first.txt": b"the first member of the archive\n",
     "nested/second.txt": b"the second member of the archive\n",
 }
 
-MANIFEST: Dict[str, bytes] = {"META-INF/MANIFEST.MF": b"Manifest-Version: 1.0\n\n"}
+MANIFEST: dict[str, bytes] = {"META-INF/MANIFEST.MF": b"Manifest-Version: 1.0\n\n"}
 
 # The size of an end of central directory record that carries no comment:
 EOCD_SIZE = 22
@@ -35,7 +35,7 @@ PNG = (
 
 def build_zip(
         prefix: bytes = b"",
-        members: Optional[Dict[str, bytes]] = None,
+        members: dict[str, bytes] | None = None,
         comment: bytes = b"",
         compression: int = zipfile.ZIP_DEFLATED,
 ) -> bytes:
@@ -61,7 +61,7 @@ def build_zip(
 
 
 @contextmanager
-def temporary_file(data: bytes) -> Iterator[Path]:
+def temporary_file(data: bytes) -> Generator[Path, None, None]:
     """Writes bytes to a temporary file that is removed when the context exits."""
     with NamedTemporaryFile("wb", suffix=".bin", delete=False) as f:
         f.write(data)
@@ -112,28 +112,29 @@ class TestZipMatcher(TestCase):
         self.assertEqual("limited", wrapper.analysis_status)
         self.assertFalse(any(match.name == "application/json" for match in matches))
 
-    def member_names(self, data: bytes) -> List[bytes]:
+    def member_names(self, data: bytes) -> list[bytes]:
         with temporary_file(data) as path, FileStream(str(path)) as stream:
             eocd = EndOfCentralDirectory.load(stream)
             self.assertIsNotNone(eocd)
+            assert eocd is not None
             return [
                 cd.local_file_header(stream).file_name for cd in eocd.central_directories(stream)
             ]
 
-    def parsed_matches(self, data: bytes, parse: bool = False) -> List[Match]:
+    def parsed_matches(self, data: bytes, parse: bool = False) -> list[Match]:
         parent = Match("application/zip", None, 0, length=len(data), matcher=Matcher(parse=parse))
         with temporary_file(data) as path, FileStream(str(path)) as stream:
             return list(parse_zip(stream, parent))
 
-    def parsed_names(self, data: bytes) -> List[str]:
+    def parsed_names(self, data: bytes) -> list[str]:
         return [match.name for match in self.parsed_matches(data)]
 
-    def archive_offsets(self, data: bytes) -> List[int]:
+    def archive_offsets(self, data: bytes) -> list[int]:
         """Returns the byte offset at which each archive in the file starts, first one first."""
         with temporary_file(data) as path, FileStream(str(path)) as stream:
             return [eocd.archive_offset for eocd in EndOfCentralDirectory.load_all(stream)][::-1]
 
-    def records(self, data: bytes) -> List[Tuple[str, int]]:
+    def records(self, data: bytes) -> list[tuple[str, int]]:
         """Returns the name and byte offset of every ZIP record that `parse_zip` maps."""
         parent = Match("application/zip", None, 0, length=len(data), matcher=Matcher(parse=False))
         with temporary_file(data) as path, FileStream(str(path)) as stream:
@@ -143,11 +144,11 @@ class TestZipMatcher(TestCase):
                 if match.parent is parent
             ]
 
-    def record_offsets(self, data: bytes, name: str) -> List[int]:
+    def record_offsets(self, data: bytes, name: str) -> list[int]:
         """Returns the byte offset of every mapped ZIP record of one kind."""
         return [offset for record_name, offset in self.records(data) if record_name == name]
 
-    def matched_mime_types(self, data: bytes) -> Set[str]:
+    def matched_mime_types(self, data: bytes) -> set[str]:
         with temporary_file(data) as path, FileStream(str(path)) as stream:
             context = MatchContext.load(stream, only_match_mime=True)
             return {
@@ -165,9 +166,13 @@ class TestZipMatcher(TestCase):
 
     def test_archive_offset(self):
         with temporary_file(build_zip()) as path, FileStream(str(path)) as stream:
-            self.assertEqual(0, EndOfCentralDirectory.load(stream).archive_offset)
+            eocd = EndOfCentralDirectory.load(stream)
+            assert eocd is not None
+            self.assertEqual(0, eocd.archive_offset)
         with temporary_file(build_zip(PNG)) as path, FileStream(str(path)) as stream:
-            self.assertEqual(len(PNG), EndOfCentralDirectory.load(stream).archive_offset)
+            eocd = EndOfCentralDirectory.load(stream)
+            assert eocd is not None
+            self.assertEqual(len(PNG), eocd.archive_offset)
 
     def test_members_at_offset_zero(self):
         expected = [name.encode("utf-8") for name in MEMBERS]

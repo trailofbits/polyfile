@@ -1,9 +1,8 @@
 from abnf.grammars.misc import load_grammar_rules
 from abnf.grammars import rfc9110, rfc3986
 from abnf import Rule as _Rule
-from typing import List, Tuple
 
-inherited_rulelist: List[Tuple[str, _Rule]] = [
+inherited_rulelist: list[tuple[str, _Rule]] = [
     ("ipv4", rfc3986.Rule("IPv4address")),
     ("ipv6", rfc3986.Rule("IPv6address")),
     ("uri-host", rfc9110.Rule("uri-host")),
@@ -19,7 +18,7 @@ class Rule(_Rule):
     There are several variants on X-Forwarded-Proto header included.
     """
 
-    grammar: List[str] = [
+    grammar: list[str] | str = [
         'defacto-header = "X-Forwarded-For:" OWS X-Forwarded-For OWS / "X-Forwarded-Host:" OWS X-Forwarded-Host OWS / "X-Forwarded-Proto:" OWS X-Forwarded-Proto OWS / "Front-End-Https:" OWS Front-End-Https OWS / "X-Forwarded-Protocol:" OWS X-Forwarded-Protocol OWS / "X-Forwarded-Ssl:" OWS X-Forwarded-Ssl OWS / "X-Url-Scheme:" OWS X-Url-Scheme OWS',
         # https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-Forwarded-For
         'X-Forwarded-For = xff-client *( 0*1SP "," 0*1SP xff-proxy )',

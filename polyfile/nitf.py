@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from .fileutils import ExactNamedTempfile
-from .magic import MagicMatcher, TestType
+from polyfile.fileutils import ExactNamedTempfile
+from polyfile.magic import MagicMatcher, TestType
 
 with ExactNamedTempfile(b"""# The default libmagic test for NITF does not associate a MIME type,
 # and does not support NITF 02.10

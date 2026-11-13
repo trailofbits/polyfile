@@ -1,11 +1,12 @@
 import tempfile
 from pathlib import Path
-from typing import Any, Iterator, List, Set, Tuple
+from typing import Any
+from collections.abc import Iterator
 from unittest import TestCase
 
 from polyfile.magic import MagicMatcher, MagicTest, printf_to_python
 
-RENDER_VALUES: Tuple[Any, ...] = (0, 1234, -1, 2 ** 40, b"abc", "abc")
+RENDER_VALUES: tuple[Any, ...] = (0, 1234, -1, 2 ** 40, b"abc", "abc")
 """One value of every shape a test can hand its message: an integer, a byte string, a string.
 
 A conversion only has to accept one of them. `%d` rejecting `b"abc"` says nothing, because a test
@@ -22,8 +23,8 @@ def every_test(matcher: MagicMatcher) -> Iterator[MagicTest]:
     Yields:
         Each test once, in no particular order.
     """
-    seen: Set[int] = set()
-    stack: List[MagicTest] = list(matcher)
+    seen: set[int] = set()
+    stack: list[MagicTest] = list(matcher)
     while stack:
         test = stack.pop()
         if id(test) in seen:
@@ -91,7 +92,7 @@ class TestMessagesRenderTheValue(TestCase):
 
     DATA: bytes = bytes(range(8))
 
-    def messages(self, definition: str) -> Set[str]:
+    def messages(self, definition: str) -> set[str]:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "definition"
             path.write_bytes(definition.encode("utf-8"))
@@ -139,13 +140,13 @@ class TestEveryBundledMessageRenders(TestCase):
     maxDiff = None
     """Every offending definition is named, rather than the first few and an ellipsis."""
 
-    def unrenderable(self) -> List[Tuple[str, str]]:
+    def unrenderable(self) -> list[tuple[str, str]]:
         """Every bundled message spelling that no representative value formats.
 
         Returns:
             Pairs of source location and message, one per spelling that nothing renders.
         """
-        failures: List[Tuple[str, str]] = []
+        failures: list[tuple[str, str]] = []
         for test in every_test(MagicMatcher.DEFAULT_INSTANCE):
             message = getattr(test, "message", None)
             if message is None:

@@ -8,7 +8,6 @@ import base64
 import logging
 import unittest
 from tempfile import NamedTemporaryFile
-from typing import List, Tuple
 from unittest.mock import MagicMock, patch
 
 from polyfile.pdf import PDFDict, PDFList, PSBytes, PSInt, parse_object
@@ -244,12 +243,12 @@ class CapturedWarnings(logging.Handler):
 
     def __init__(self):
         super().__init__(level=logging.WARNING)
-        self.records: List[logging.LogRecord] = []
+        self.records: list[logging.LogRecord] = []
 
     def emit(self, record: logging.LogRecord) -> None:
         self.records.append(record)
 
-    def messages(self, logger_name: str) -> List[str]:
+    def messages(self, logger_name: str) -> list[str]:
         """Returns the messages one logger emitted.
 
         Args:
@@ -269,7 +268,7 @@ class TestMalformedPDFMatchTree(unittest.TestCase):
     tree instead. These tests therefore assert on the tree and on the warnings, not on exceptions.
     """
 
-    def match(self, data: bytes) -> Tuple[List[str], CapturedWarnings]:
+    def match(self, data: bytes) -> tuple[list[str], CapturedWarnings]:
         """Runs the full matcher over a PDF held in memory.
 
         Args:
@@ -359,7 +358,7 @@ class TestMalformedPDFMatchTree(unittest.TestCase):
 class TestXRefRowCells(unittest.TestCase):
     """Regression tests for the cross-reference row cells in issue #3542."""
 
-    def match(self, data: bytes) -> List[Match]:
+    def match(self, data: bytes) -> list[Match]:
         """Runs the full matcher over a PDF held in memory.
 
         Args:

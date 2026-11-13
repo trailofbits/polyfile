@@ -1,5 +1,5 @@
 import random
-from typing import Iterator
+from collections.abc import Iterator
 from unittest import TestCase
 
 from polyfile.iterators import LazyIterableSequence, LazyIterableSet, unique

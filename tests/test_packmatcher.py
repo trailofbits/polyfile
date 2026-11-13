@@ -18,6 +18,7 @@ from polyfile.magic import MAGIC_DEFS, MagicMatcher, join_matches
 from polyfile.packmatcher import PACK_MEMORY, PACK_MIME, decode_pack
 from polyfile.polyfile import Match, Matcher
 from tests.pack_fixture import pack_fixture
+from tests.fixture_types import FixtureProvenance
 
 FIXTURES = Path(__file__).parent / "fixtures" / "pack"
 PAYLOAD = (FIXTURES / "document.decoded").read_bytes()
@@ -42,7 +43,7 @@ def analyzed(data: bytes | Path, limits: AnalysisLimits | None = None) -> list[M
 
 
 @pytest.mark.parametrize("item", PROVENANCE, ids=lambda item: item["fixture"])
-def test_owned_pack_fixtures_round_trip_with_real_decoder(item: dict) -> None:
+def test_owned_pack_fixtures_round_trip_with_real_decoder(item: FixtureProvenance) -> None:
     encoded = (FIXTURES / item["fixture"]).read_bytes()
     expected = (FIXTURES / item["payload"]).read_bytes()
     assert sha256(encoded).hexdigest() == item["encoded_sha256"]
@@ -255,7 +256,7 @@ def test_explicit_generic_mime_filter_retains_original_pack_verdict() -> None:
 
 
 @pytest.mark.parametrize("item", PROVENANCE, ids=lambda item: item["fixture"])
-def test_native_pack_agrees_with_gnu_reference(gnu_gzip: str, item: dict) -> None:
+def test_native_pack_agrees_with_gnu_reference(gnu_gzip: str, item: FixtureProvenance) -> None:
     encoded = (FIXTURES / item["fixture"]).read_bytes()
     with FileStream(encoded) as stream:
         reference = run_helper(stream, (gnu_gzip, "-d", "-c"))
