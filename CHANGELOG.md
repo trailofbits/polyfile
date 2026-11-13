@@ -88,6 +88,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 
 ### Fixed
 
+- **Breaking:** Loading a serialized multi-sequence search returns its result without printing
+  or terminating the process, and rejects serialized values that are not search roots.
+
 - **Breaking:** FileStream seeks use bounded view-relative positions and return the new
   position. Negative view origins and lengths are rejected, and past-EOF origins consistently
   produce empty views at EOF, including when views are nested (#3664).
