@@ -314,7 +314,20 @@ class PSSequence(PSToken):
         return result
 
     def __radd__(self: Type[C], other) -> C:
-        return self.__class__(other, pdf_offset=self.pdf_offset - len(other)) + self
+        value = other + super().__getitem__(slice(None))
+        offset, length = self.pdf_offset, self.pdf_bytes
+        aligned = False
+        if isinstance(other, self.__class__) and other.pdf_offset + other.pdf_bytes == offset:
+            offset = other.pdf_offset
+            length += other.pdf_bytes
+            aligned = other._is_byte_aligned() and self._is_byte_aligned()
+        elif not isinstance(other, PSSequence) and self._is_byte_aligned():
+            offset -= len(other)
+            length += len(other)
+            aligned = True
+        result = self.__class__(value, pdf_offset=offset, pdf_bytes=length)
+        result._pdf_byte_aligned = aligned
+        return result
 
     def lstrip(self, chars: str | bytes | None = None) -> "PSSequence":
         if chars is None:

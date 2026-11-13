@@ -1,5 +1,6 @@
 """PDF token operations retain byte-accurate or conservative whole-token source spans."""
 
+from collections.abc import Callable
 import json
 from typing import cast
 
@@ -207,7 +208,9 @@ def test_empty_suffix_preserves_nonlinear_mapping(binary: bool) -> None:
 @pytest.mark.parametrize("binary", [False, True])
 def test_unpositioned_suffix_does_not_reactivate_alignment(binary: bool) -> None:
     source = token(binary, "ab", size=4)
-    result = cast(bytes, source) + b"cd" if isinstance(source, PSBytes) else cast(str, source) + "cd"
+    result = (
+        cast(bytes, source) + b"cd" if isinstance(source, PSBytes) else cast(str, source) + "cd"
+    )
     assert result == (b"abcd" if binary else "abcd")
     assert span(result) == (7, 4)
     assert span(result[1:2]) == (7, 4)
@@ -267,3 +270,41 @@ def test_split_after_concatenation_preserves_nonlinear_mapping(binary: bool) -> 
     assert isinstance(source, (PSStr, PSBytes))
     result = cast(bytes, source) + b"" if isinstance(source, PSBytes) else cast(str, source) + ""
     assert [span(part) for part in result.split()] == [(7, 5), (7, 5)]
+
+
+@pytest.mark.parametrize("binary", [False, True])
+@pytest.mark.parametrize("prefix", ["", "xy"])
+def test_native_prefix_preserves_nonlinear_mapping(binary: bool, prefix: str) -> None:
+    source = token(binary)[::-1]
+    assert isinstance(source, (PSStr, PSBytes))
+    if isinstance(source, PSBytes):
+        result = prefix.encode("ascii") + cast(bytes, source)
+        expected = prefix.encode("ascii") + b"edcba"
+    else:
+        result = prefix + cast(str, source)
+        expected = prefix + "edcba"
+    assert result == expected
+    assert span(result) == (7, 5)
+    assert span(result[1:2]) == (7, 5)
+
+
+@pytest.mark.parametrize("binary", [False, True])
+def test_aligned_native_prefix_keeps_legacy_inferred_positions(binary: bool) -> None:
+    source = token(binary)
+    result = (
+        b"xy" + cast(bytes, source) if isinstance(source, PSBytes) else "xy" + cast(str, source)
+    )
+    assert span(result) == (5, 7)
+    assert span(result[1:2]) == (6, 1)
+    assert span(source) == (7, 5)
+
+
+@pytest.mark.parametrize("binary", [False, True])
+def test_reflected_concatenation_combines_known_contiguous_spans(binary: bool) -> None:
+    left = token(binary, "abc", size=5)
+    right = token(binary, "de")
+    right.pdf_offset = 12
+    result = cast(Callable[[str | bytes], str | bytes], right.__radd__)(left)
+    assert result == (b"abcde" if binary else "abcde")
+    assert span(result) == (7, 7)
+    assert span(result[1:2]) == (7, 7)
