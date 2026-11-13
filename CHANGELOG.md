@@ -77,8 +77,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 
 ### Changed
 
-- Core Python annotations describe nullable analysis caches, callable parsers, AST traversal,
-  and generic profiling decorators without changing their runtime behavior (#3671).
+- Core Python annotations describe nullable analysis caches, callable parsers, generic matchers,
+  search and serialization traversal, and native decoder boundaries without changing their
+  runtime behavior (#3671).
 
 - Remove compatibility imports and runtime bases for Python versions older than 3.11.
 

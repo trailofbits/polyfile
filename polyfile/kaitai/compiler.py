@@ -21,7 +21,7 @@ import stat
 import subprocess
 import sys
 import tokenize
-from typing import Iterable, List, Optional, Tuple, Union
+from typing import Iterable, List, Optional, Tuple, Union, cast
 from urllib.request import urlopen
 import warnings
 from zipfile import ZipFile
@@ -57,7 +57,7 @@ _HARD_KEYWORDS: str = "|".join(keyword.kwlist)
 # kaitai-struct-compiler 0.11 copies a specification's identifiers into Python verbatim, so these
 # are the three shapes in which a field or enum member named after a hard keyword reaches the
 # generated source. Every one of them is a syntax error, which is what makes matching them safe.
-_KEYWORD_PATTERNS: Tuple[Tuple[re.Pattern, str], ...] = (
+_KEYWORD_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
     # An enum member: `not = 6`
     (re.compile(rf"^(?P<indent>[ \t]+)(?P<kw>{_HARD_KEYWORDS})(?P<tail> = )", re.MULTILINE),
      r"\g<indent>\g<kw>_\g<tail>"),
@@ -74,9 +74,9 @@ _QUOTED_KEYWORD = re.compile('"(?P<kw>' + _HARD_KEYWORDS + ')"')
 _QUOTED_REPLACEMENT = '"\\g<kw>_"'
 
 
-def _escape_seq_fields(match: "re.Match") -> str:
+def _escape_seq_fields(match: re.Match[str]) -> str:
     fields = _QUOTED_KEYWORD.sub(_QUOTED_REPLACEMENT, match.group("fields"))
-    return match.group("head") + fields + "]"
+    return cast(str, match.group("head")) + fields + "]"
 
 
 def _decodes(literal: str) -> bool:

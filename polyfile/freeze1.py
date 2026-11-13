@@ -62,12 +62,12 @@ class _Bits:
 
 class _AdaptiveHuffman:
     def __init__(self) -> None:
-        self.frequency = array("I", [0]) * (_ROOT + 1)
-        self.index = array("I", range(_ROOT + 1))
-        self.parent = array("I", [0]) * (_ROOT + 1)
-        self.left = array("I", [0]) * (_ROOT + 1)
-        self.right = array("I", [0]) * (_ROOT + 1)
-        self.order = array("I", range(_ROOT + 1))
+        self.frequency: "array[int]" = array("I", [0]) * (_ROOT + 1)
+        self.index: "array[int]" = array("I", range(_ROOT + 1))
+        self.parent: "array[int]" = array("I", [0]) * (_ROOT + 1)
+        self.left: "array[int]" = array("I", [0]) * (_ROOT + 1)
+        self.right: "array[int]" = array("I", [0]) * (_ROOT + 1)
+        self.order: "array[int]" = array("I", range(_ROOT + 1))
         for code in range(_SYMBOLS):
             self.frequency[code] = 1
             self.parent[code] = _SYMBOLS + (code >> 1)
@@ -83,13 +83,13 @@ class _AdaptiveHuffman:
         self.order[code] = code
 
     def decode(self, bits: _Bits) -> int:
-        code = _ROOT
+        code: int = _ROOT
         while code >= _SYMBOLS:
             code = self.right[code] if bits.read() else self.left[code]
         if self.frequency[_ROOT] == 0x8000:
             self._halve()
         self._update(code)
-        return code
+        return int(code)
 
     def _swap(self, code: int, other: int) -> None:
         first, second = self.index[code], self.index[other]
