@@ -52,6 +52,15 @@ function clearSelectedLabels() {
     });
 }
 
+function clearInspectionSelection() {
+  viewerState.selectedNode = null;
+  viewerState.selectedRange = null;
+  clearSelectedLabels();
+  clearHighlight('manually-focused');
+  clearHover();
+  updateSelectionDetails();
+}
+
 /** @param {boolean} [focus] */
 function showSelectedBytes(focus = true) {
   if (!window.matchMedia('(max-width: 899px)').matches) return;
@@ -364,7 +373,12 @@ function handleInspectionClick(event) {
   }
   const label = target.closest('.tree_label');
   if (label instanceof HTMLElement) {
-    selectNode(Number(label.dataset['uid']), { preserveSearch: searchOptions().scope === 'all' });
+    const uid = Number(label.dataset['uid']);
+    if (viewerState.selectedNode === uid) {
+      clearInspectionSelection();
+      return;
+    }
+    selectNode(uid, { preserveSearch: searchOptions().scope === 'all' });
   }
 }
 
@@ -394,11 +408,7 @@ function previewInspectionByte(event) {
 /** @param {KeyboardEvent} event */
 function clearInspectionOnEscape(event) {
   if (event.key !== 'Escape' || document.querySelector('dialog[open]')) return;
-  viewerState.selectedNode = null;
-  viewerState.selectedRange = null;
-  clearSelectedLabels();
-  clearHighlight('manually-focused');
-  updateSelectionDetails();
+  clearInspectionSelection();
 }
 
 function initInspection() {

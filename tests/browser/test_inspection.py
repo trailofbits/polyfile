@@ -53,6 +53,76 @@ def test_keyboard_selects_branches_and_leaves(
     )
 
 
+@pytest.mark.parametrize("source", ["file", "decoded:0"])
+def test_repeated_node_click_clears_selection_and_preserves_navigation(
+    viewer_page: "Page", report_factory: ReportFactory, source: str
+) -> None:
+    payload = bytes(range(256)) * 32
+    leaf = match(129, 1, name="leaf", source=source)
+    selected = match(128, 16, name="selected node", source=source, children=[leaf])
+    container = match(
+        0, len(payload), name="source branch", source=source, children=[selected]
+    )
+    if source != "file":
+        container["decoded"] = base64.b64encode(payload).decode("ascii")
+        nodes = [match(0, 4, name="physical root", children=[container])]
+    else:
+        nodes = [container]
+    open_report(viewer_page, report_factory(payload, nodes))
+    viewer_page.get_by_role("button", name="Expand all", exact=True).click()
+    label = node_button(viewer_page, "selected node")
+    label.click()
+    expect(label).to_have_attribute("aria-pressed", "true")
+    viewer_page.locator("#scrollcontainer").evaluate(
+        "element => { element.scrollTop = 0; }"
+    )
+    expect(viewer_page.locator("#byte-position")).to_contain_text("0x0–")
+    position = viewer_page.locator("#byte-position").inner_text()
+    label.dispatch_event("pointerover")
+    expect(viewer_page.locator("#hexdump .highlighted")).to_have_count(16)
+    label.click()
+    expect(label).to_have_attribute("aria-pressed", "false")
+    expect(
+        viewer_page.locator(".manually-focused, .highlighted, .cursor")
+    ).to_have_count(0)
+    expect(viewer_page.locator("#selection-details")).to_have_text(
+        "Select a structure node to inspect its byte range."
+    )
+    expect(viewer_page.locator("#source")).to_have_value(source)
+    expect(viewer_page.locator("#byte-position")).to_have_text(position)
+    expect(node_button(viewer_page, "leaf")).to_be_visible()
+    expect(
+        viewer_page.get_by_role("button", name="Collapse selected node", exact=True)
+    ).to_have_attribute("aria-expanded", "true")
+    viewer_page.locator("#search").hover()
+    label.hover()
+    expect(viewer_page.locator("#hexdump .highlighted")).to_have_count(16)
+
+
+@pytest.mark.parametrize("key", ["Enter", "Space"])
+def test_repeated_keyboard_activation_toggles_selection(
+    viewer_page: "Page", report_factory: ReportFactory, key: str
+) -> None:
+    open_report(
+        viewer_page, report_factory(b"data", [match(0, 4, name="selected node")])
+    )
+    label = node_button(viewer_page, "selected node")
+    label.focus()
+    for selected in (True, False, True):
+        viewer_page.keyboard.press(key)
+        expect(label).to_have_attribute("aria-pressed", str(selected).lower())
+        expect(label).to_be_focused()
+        expect(viewer_page.locator("#hexdump .manually-focused")).to_have_count(
+            4 if selected else 0
+        )
+    viewer_page.keyboard.press("Escape")
+    expect(label).to_have_attribute("aria-pressed", "false")
+    expect(viewer_page.locator("#hexdump .manually-focused")).to_have_count(0)
+    expect(viewer_page.locator("#selection-details")).to_have_text(
+        "Select a structure node to inspect its byte range."
+    )
+
+
 def test_structure_search_reveals_collapsed_ancestors(
     viewer_page: "Page", report_factory: ReportFactory
 ) -> None:
@@ -68,6 +138,12 @@ def test_structure_search_reveals_collapsed_ancestors(
         "aria-pressed", "true"
     )
     expect(viewer_page.locator("#selection-details")).to_contain_text("needle field")
+    for direction in ("#searchdown", "#searchup", "#searchdown"):
+        viewer_page.locator(direction).click()
+        expect(node_button(viewer_page, "needle field")).to_have_attribute(
+            "aria-pressed", "true"
+        )
+        expect(viewer_page.locator("#hexdump .manually-focused")).to_have_count(2)
 
 
 def test_hover_preserves_source_and_persistent_selection(
