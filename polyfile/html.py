@@ -116,8 +116,11 @@ def encoded_contents(file_path, sbud):
             ``Analyzer.sbud(include_contents=False)`` produces.
     """
     if 'b64contents' not in sbud:
-        raise ValueError(f"cannot render a hex viewer for {file_path!r}: the SBuD object has no 'b64contents' key. "
-                         "Build it with Analyzer.sbud(include_contents=True), which is the default.")
+        raise ValueError(
+            f"cannot render a hex viewer for {file_path!r}: "
+            "the SBuD object has no 'b64contents' key. "
+            "Build it with Analyzer.sbud(include_contents=True), which is the default."
+        )
     return sbud['b64contents']
 
 
@@ -174,6 +177,9 @@ def generate(file_path: str, sbud: dict[str, Any]) -> str:
     filename = os.path.basename(file_path)
     return TEMPLATE.render(
         asset=_template_asset,
+        brand_logo=base64.b64encode(
+            _template_asset('polyfile.svg').encode('utf-8')
+        ).decode('ascii'),
         filename=filename,
         matches=matches,
         source_buffers=sources,

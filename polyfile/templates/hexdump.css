@@ -7,6 +7,7 @@
   --border: #dce4ea;
   --border-strong: #b7c7d1;
   --text: #1c2d39;
+  --brand-file: #181717;
   --muted: #5a6d7b;
   --accent: #007a80;
   --accent-soft: #d9f2ef;
@@ -30,6 +31,7 @@
   --border: #2b3d4c;
   --border-strong: #536d7e;
   --text: #e1ebf2;
+  --brand-file: #ffffff;
   --muted: #a0b3c1;
   --accent: #6cddd0;
   --accent-soft: #173e40;
@@ -52,6 +54,7 @@
     --border: #2b3d4c;
     --border-strong: #536d7e;
     --text: #e1ebf2;
+    --brand-file: #ffffff;
     --muted: #a0b3c1;
     --accent: #6cddd0;
     --accent-soft: #173e40;
@@ -167,9 +170,20 @@ svg {
   place-items: center;
   width: 34px;
   height: 38px;
-  border-radius: 7px;
-  background: var(--accent);
-  color: var(--canvas);
+  border-radius: 6px;
+  background: #ffffff;
+}
+.brand-mark img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.brand-poly {
+  color: #a20000;
+}
+.brand-file {
+  color: var(--brand-file);
 }
 .report-heading {
   min-width: 0;

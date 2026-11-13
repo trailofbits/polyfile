@@ -1,6 +1,7 @@
 import base64
 import json
 import re
+from pathlib import Path
 from unittest import TestCase
 
 from polyfile.fileutils import Tempfile
@@ -141,6 +142,13 @@ class GeneratedHtmlTests(TestCase):
         contents = bytes(range(16))
         html = self.render(contents, [match(0, 16)])
         self.assertIn(base64.b64encode(contents).decode('utf-8'), html)
+
+    def test_the_repository_logo_is_embedded_in_the_report(self):
+        html = self.render(b'file', [match(0, 4)])
+        embedded = re.search(r'src="data:image/svg\+xml;base64,([^"]+)"', html)
+        self.assertIsNotNone(embedded, 'the viewer has no embedded SVG logo')
+        logo = Path(__file__).resolve().parents[2] / 'logo' / 'polyfile.svg'
+        self.assertEqual(logo.read_bytes(), base64.b64decode(embedded.group(1), validate=True))
 
     def test_an_sbud_without_contents_is_refused(self):
         """`--no-contents` omits `b64contents`, which the hex viewer is built from.

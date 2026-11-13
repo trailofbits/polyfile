@@ -15,12 +15,10 @@
 <header class="app-header">
     <div class="brand" aria-label="PolyFile">
         <span class="brand-mark" aria-hidden="true">
-            <svg width="24" height="26" viewBox="0 0 24 26" fill="none"
-                 stroke="currentColor" stroke-width="1.6" stroke-linejoin="round">
-                <path d="m4 8 8-4 8 4-8 4-8-4Zm0 5 8 4 8-4M4 18l8 4 8-4" />
-            </svg>
+            <img src="data:image/svg+xml;base64,{{ brand_logo }}" alt="">
         </span>
-        <span class="brand-name">PolyFile</span>
+        <span class="brand-name"><span class="brand-poly">Poly</span><span
+            class="brand-file">File</span></span>
     </div>
     <div class="report-heading">
         <h1 title="{{ filename|e }}">{{ filename|e }}</h1>
