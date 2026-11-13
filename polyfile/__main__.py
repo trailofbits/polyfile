@@ -461,7 +461,6 @@ def write_mime_output(analyzer: Analyzer, output: TextIO, signals: SIGTERMHandle
             if signals.terminated:
                 break
             found = True
-            logger.report_identification(match, mimetype, str(match))
             write_text(output, f"{mimetype}\n")
             if explain:
                 write_text(output, match.explain(ansi_color=output.isatty(), file=analyzer.path))

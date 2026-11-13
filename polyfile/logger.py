@@ -288,12 +288,8 @@ def report_identification(match: "MagicMatch", name: str, description: str) -> N
 
 
 def report_file_identification(match: "MagicMatch", description: str) -> None:
-    """Read MIME labels only after the caller has rendered the complete magic result."""
-    session = _session.get()
-    if session is not None and session.show_summary and not session.recursive:
-        names = tuple(match.mimetypes) or ("file",)
-        for name in names:
-            report_identification(match, name, description)
+    """Display an existing file description without resolving additional MIME labels."""
+    report_identification(match, description, "")
 
 
 def report_analysis_status(roots: Collection["Match"]) -> None:

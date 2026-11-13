@@ -390,6 +390,7 @@ class Analyzer:
                     if mimetype not in mimetypes:
                         mimetypes[mimetype] = set()
                     if match_text not in mimetypes[mimetype]:
+                        logger.report_identification(match, mimetype, match_text)
                         yield mimetype, match
                         mimetypes[mimetype].add(match_text)
 

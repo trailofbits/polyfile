@@ -47,7 +47,10 @@ def test_stderr_terminal_does_not_change_stdout(sample, format):
     assert plain == pretty
     assert errors == ""
     assert "Complete |" in final_tree(terminal)
-    assert "application/zip" in final_tree(terminal)
+    if format == "file":
+        assert "archive" in final_tree(terminal).lower()
+    else:
+        assert "application/zip" in final_tree(terminal)
 
 
 @pytest.mark.parametrize("format", ["file", "mime"])

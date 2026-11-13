@@ -109,7 +109,7 @@ so the progress bar measures tests in that pass rather than a percentage of the 
 The live tree shows recent matches and their ancestors; the complete file-type tree remains
 in your terminal when analysis finishes. Parser fields are omitted from this view.
 
-For example, the final stderr view for a 67-byte PNG resembles:
+For example, the final stderr view for `--format mime` on a 67-byte PNG resembles:
 
 ```text
 PolyFile  sample.png
@@ -125,7 +125,8 @@ results and identify why analysis stopped.
 
 The display uses the analysis your output format already performs. The `file`, `mime`, and
 `explain` formats identify the input; JSON, SBuD, and HTML also expose recursively discovered
-files. To watch recursive analysis while saving JSON, run:
+files. The default `file` view uses identification descriptions; MIME and recursive views use
+MIME labels. To watch recursive analysis while saving JSON, run:
 
 ```console
 $ polyfile --format json --no-contents sample.zip > sample.json

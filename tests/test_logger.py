@@ -8,6 +8,8 @@ import pytest
 from rich.console import Console
 
 from polyfile import logger
+from polyfile.iterators import LazyIterableSet
+from polyfile.magic import MagicMatcher, Match, MatchContext
 
 
 class Terminal(io.StringIO):
@@ -176,3 +178,20 @@ def test_abandoned_nested_work_cannot_restart_a_closed_session(terminal):
     child.close()
     parent.close()
     assert terminal.getvalue() == completed_output
+
+
+def test_file_display_does_not_evaluate_unused_match_details(terminal):
+    class RenderedMatch(Match):
+        @property
+        def mimetypes(self) -> LazyIterableSet[str]:
+            raise AssertionError("display resolved an unused MIME label")
+
+        def __str__(self) -> str:
+            raise AssertionError("display rendered the description again")
+
+    match = RenderedMatch(MagicMatcher(), MatchContext(b"input"), ())
+    with logger.logging_context(stream=terminal) as session:
+        session.start_scan("input", recursive=False)
+        logger.report_file_identification(match, "Existing identification description")
+        assert len(session.tree) == 1
+        assert "Existing identification description" in frame(session)
