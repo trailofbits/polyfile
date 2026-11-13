@@ -50,7 +50,7 @@ dependencies = [
 
 [project.optional-dependencies]
 demangle = ["cxxfilt"]
-dev = ["pytest", "flake8", "ty==0.0.98"]
+dev = ["pytest", "flake8", "ruff==0.17.5", "ty==0.0.98"]
 
 [project.scripts]
 polyfile = "polyfile.__main__:main"
@@ -79,6 +79,20 @@ namespaces = false
 polyfile = ["templates/*", "CHANGELOG.md"]
 "polyfile.kaitai.parsers" = ["*.py", "manifest.json"]
 "polyfile.magic_defs" = ["*"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+force-exclude = true
+extend-exclude = [
+    "polyfile/kaitai/parsers",
+    "polyfile/kaitai/kaitai-struct-compiler-*",
+    "kaitai_struct_formats",
+    "file",
+]
+
+[tool.ruff.lint]
+select = ["UP"]
 
 [tool.ty.rules]
 dynamic-function-decorator-return = "error"
