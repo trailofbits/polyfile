@@ -94,9 +94,6 @@
     <pre id="decoded-text" class="rawdump"></pre>
 </dialog>
 <script id="viewer-data" type="application/json">{{ viewer_data|tojson }}</script>
-<script>
-{% include "download.js" %}
-</script>
 <script type="module">
 {{ asset("viewer-state.js")|safe }}
 {{ asset("viewer-render.js")|safe }}
