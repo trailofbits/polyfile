@@ -121,7 +121,7 @@ class TestBFMatcher(TestCase):
                 assert isinstance(result, MatchedTest)
                 self.assertEqual(result.value, commands)
                 self.assertEqual(result.offset, 0)
-                self.assertEqual(result.length, len(data) - 1)
+                self.assertEqual(result.length, len(data))
 
     def test_noop_validation_rejects_both_adjacent_cancelling_pairs(self) -> None:
         matcher = BFMatcher()
