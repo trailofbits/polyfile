@@ -1,3 +1,5 @@
+import codecs
+from encodings.utf_8 import decode as decode_utf8
 from typing import (
     TYPE_CHECKING,
     BinaryIO,
@@ -157,6 +159,16 @@ class Provenance(Protocol):
 
 
 class PSToken:
+    """A parsed value whose wrappers carry its original PDF byte span.
+
+    Python's numeric conversion protocols return native values without provenance. Use
+    ``as_int()`` or ``as_float()`` when the converted value must retain ``pdf_offset`` and
+    ``pdf_bytes`` for subsequent structure mapping.
+
+    These attributes describe a token's source span. Inherited numeric arithmetic can return
+    native values and does not combine the provenance of its operands.
+    """
+
     pdf_offset: int
     pdf_bytes: int
     _pdf_byte_aligned: bool
@@ -165,8 +177,9 @@ class PSToken:
         ret = super().__new__(cls, *args)
         ret.pdf_offset = kwargs["pdf_offset"]
         ret.pdf_bytes = kwargs["pdf_bytes"]
-        if args and isinstance(args[0], PSSequence):
-            ret._pdf_byte_aligned = args[0]._is_byte_aligned()
+        if args and isinstance(args[0], PSToken):
+            source = args[0]
+            ret._pdf_byte_aligned = isinstance(source, PSSequence) and source._is_byte_aligned()
         return ret
 
     def __int__(self):
@@ -182,7 +195,24 @@ class PSToken:
         """Converts a numeric token to an integer while retaining its byte provenance."""
         return PSInt(int(self), pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes)
 
+    def as_float(self) -> "PSFloat":
+        """Convert a numeric token to a float while preserving its original source span.
+
+        Returns:
+            A PSFloat carrying this token's pdf_offset and pdf_bytes.
+
+        Raises:
+            ValueError: If a text or byte token does not represent a floating-point number.
+            OverflowError: If an integer token is too large to convert to a float.
+        """
+        return PSFloat(float(self), pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes)
+
     def __float__(self) -> float:
+        """Return a native float; use as_float() to retain PDF byte provenance.
+
+        Python's float() strips float-subclass metadata and warns when this method returns
+        a strict subclass. The explicit conversion method preserves a tagged result.
+        """
         if isinstance(self, float):
             return float.__float__(self)
         elif isinstance(self, int):
@@ -250,6 +280,11 @@ class PSSequence(PSToken, Generic[ElementT, SequenceT]):
         their source span. Transformed wrappers and explicitly nonlinear derived values stay
         nonlinear even when their lengths happen to match again. This marker is internal;
         it does not extend the output schema or provide a per-byte source map.
+
+        Codec conversions certify alignment only for native ASCII, ASCII-only UTF-8, and
+        representable Latin-1 values. Other conversions retain the original whole span.
+        Native codec identities come from immutable dispatch entries rather than mutable
+        codec attributes or overridden indexing.
         """
         return (
             isinstance(self, (str, bytes))
@@ -355,18 +390,37 @@ class PSSequence(PSToken, Generic[ElementT, SequenceT]):
 
     def __add__(self, other: object) -> SequenceT:
         value = cast(PrimitiveSequence[SequenceT], super()).__add__(other)
+        length = self.pdf_bytes
+        aligned = self._is_byte_aligned() and not other
         if (
             isinstance(other, self.__class__)
             and other.pdf_offset == self.pdf_offset + self.pdf_bytes
         ):
-            return cast(SequenceT, self.__class__(value, pdf_offset=self.pdf_offset))
-        return cast(
-            SequenceT, self.__class__(value, pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes)
-        )
+            length += other.pdf_bytes
+            aligned = self._is_byte_aligned() and other._is_byte_aligned()
+        result = self.__class__(value, pdf_offset=self.pdf_offset, pdf_bytes=length)
+        result._pdf_byte_aligned = aligned
+        return cast(SequenceT, result)
 
     def __radd__(self, other: object) -> SequenceT:
-        prefix = self.__class__(other, pdf_offset=self.pdf_offset - len(cast(Sized, other)))
-        return prefix + self
+        base = cast(PrimitiveSequence[SequenceT], super())
+        value = cast(PrimitiveSequence[SequenceT], other) + base.__getitem__(slice(None))
+        offset, length = self.pdf_offset, self.pdf_bytes
+        aligned = False
+        if (
+            isinstance(other, self.__class__)
+            and other.pdf_offset + other.pdf_bytes == offset
+        ):
+            offset = other.pdf_offset
+            length += other.pdf_bytes
+            aligned = other._is_byte_aligned() and self._is_byte_aligned()
+        elif not isinstance(other, PSSequence) and self._is_byte_aligned():
+            offset -= len(cast(Sized, other))
+            length += len(cast(Sized, other))
+            aligned = True
+        result = self.__class__(value, pdf_offset=offset, pdf_bytes=length)
+        result._pdf_byte_aligned = aligned
+        return cast(SequenceT, result)
 
     def lstrip(self, chars: object | None = None) -> SequenceT:
         if chars is None:
@@ -427,10 +481,24 @@ class PSStr(PSSequence[str, str], str):
         return super().__getitem__(item)
 
     def encode(self, encoding: str = "utf-8", errors: str = "strict") -> "PSBytes":
+        if (
+            not isinstance(encoding, str) or not isinstance(errors, str)
+            or str.__contains__(encoding, "\x00") or str.__contains__(errors, "\x00")
+        ):
+            super().encode(encoding, errors)
+        encoder: object = tuple.__getitem__(codecs.lookup(encoding), 0)
         result = PSBytes(
             super().encode(encoding, errors), pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes
         )
-        result._pdf_byte_aligned = self._is_byte_aligned() and len(result) == len(self)
+        ascii_encoding = encoder is codecs.ascii_encode or encoder is codecs.utf_8_encode
+        one_byte_mapping = (
+            ascii_encoding and str.isascii(self)
+            or encoder is codecs.latin_1_encode
+            and all(ord(char) <= 0xFF for char in str.__iter__(self))
+        )
+        result._pdf_byte_aligned = (
+            self._is_byte_aligned() and one_byte_mapping and len(result) == len(self)
+        )
         return result
 
     def __str__(self):
@@ -459,10 +527,23 @@ class PSBytes(PSSequence[int, bytes], bytes):
                 return PSInt(ret, pdf_offset=self.pdf_offset + item)
 
     def decode(self, encoding: str = "utf-8", errors: str = "strict") -> PSStr:
+        if (
+            not isinstance(encoding, str) or not isinstance(errors, str)
+            or str.__contains__(encoding, "\x00") or str.__contains__(errors, "\x00")
+        ):
+            super().decode(encoding, errors)
+        decoder: object = tuple.__getitem__(codecs.lookup(encoding), 1)
         result = PSStr(
             super().decode(encoding, errors), pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes
         )
-        result._pdf_byte_aligned = self._is_byte_aligned() and len(result) == len(self)
+        ascii_decoding = decoder is codecs.ascii_decode or decoder is decode_utf8
+        one_byte_mapping = (
+            ascii_decoding and bytes.isascii(self)
+            or decoder is codecs.latin_1_decode
+        )
+        result._pdf_byte_aligned = (
+            self._is_byte_aligned() and one_byte_mapping and len(result) == len(self)
+        )
         return result
 
 

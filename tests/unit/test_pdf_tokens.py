@@ -18,7 +18,7 @@ from polyfile.pdf import PSBytes, PSFloat, PSInt, PSStr, PSToken
     ],
     ids=["integer", "float", "text", "bytes"],
 )
-def test_float_conversion_preserves_source_token(token: PSToken, expected: float) -> None:
+def test_float_protocol_returns_a_native_value(token: PSToken, expected: float) -> None:
     provenance = token.pdf_offset, token.pdf_bytes
 
     result = float(token)
