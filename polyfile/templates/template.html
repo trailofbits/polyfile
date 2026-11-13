@@ -9,31 +9,73 @@
     </style>
 </head>
 <body>
-<button type="button" data-action="download-file">Download File</button>
-<label>Source <select id="source">
+<div class="app-shell">
+<header class="app-header">
+    <div class="brand" aria-label="PolyFile">
+        <span class="brand-mark" aria-hidden="true">
+            <svg width="24" height="26" viewBox="0 0 24 26" fill="none"
+                 stroke="currentColor" stroke-width="1.6" stroke-linejoin="round">
+                <path d="m4 8 8-4 8 4-8 4-8-4Zm0 5 8 4 8-4M4 18l8 4 8-4" />
+            </svg>
+        </span>
+        <span class="brand-name">PolyFile</span>
+    </div>
+    <div class="report-heading">
+        <h1 title="{{ filename|e }}">{{ filename|e }}</h1>
+        <p>Binary structure inspector</p>
+    </div>
+    <div class="header-actions">
+        <label class="field-label source-field">Source <select id="source">
 {% for source in source_buffers %}<option value="{{ source|e }}">{{ source|e }}</option>{% endfor %}
-</select></label>
-<label>Search <input type="search" placeholder="Search" id="search"></label>
-<label>Mode <select id="searchmode">
-    <option value="combined">Combined</option><option value="text">Text</option>
-    <option value="hex">Hex bytes</option><option value="structure">Structure</option>
-</select></label>
-<label>Scope <select id="searchscope">
-    <option value="all">All sources</option><option value="current">Current source</option>
-</select></label>
-<label><input type="checkbox" id="matchcase"> Match case</label>
-<span id="searchinfo" role="status" aria-live="polite"></span>
-<span id="searchbuttons" hidden>
-    <button type="button" id="searchup" aria-label="Previous search result">↑</button>
-    <button type="button" id="searchdown" aria-label="Next search result">↓</button>
-</span>
-<div class="coverage">
-{% if undescribed_bytes %}<span class="swatch undescribed"></span>Hatched, gray bytes are undescribed:
-    no match covers them. {{ '{:,}'.format(undescribed_bytes) }} of
-    {{ '{:,}'.format(input_bytes) }} bytes ({{ '%.1f' % undescribed_percent }}%) are
-    undescribed.{% else %}Every one of the {{ '{:,}'.format(input_bytes) }} bytes is described by
-    a match.{% endif %}
-</div>
+        </select></label>
+        <label class="field-label theme-field">Theme <select id="theme">
+            <option value="system">System</option>
+            <option value="light">Light</option><option value="dark">Dark</option>
+        </select></label>
+        <button type="button" class="primary-button download-primary" data-action="download-file">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"
+                 stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+                <path d="M12 3v12m-4-4 4 4 4-4M5 17v4h14v-4" />
+            </svg>
+            Download File
+        </button>
+    </div>
+</header>
+<section class="search-toolbar" aria-label="Search and navigation">
+    <label class="field-label search-field" for="search">Search
+        <span class="search-input">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"
+                 stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+                <circle cx="10.5" cy="10.5" r="6.5" /><path d="m16 16 4.5 4.5" />
+            </svg>
+            <input type="search" placeholder="Search bytes or structure…" id="search"
+                   autocomplete="off" spellcheck="false">
+        </span>
+    </label>
+    <label class="field-label search-mode">Mode <select id="searchmode">
+        <option value="combined">Combined</option><option value="text">Text</option>
+        <option value="hex">Hex bytes</option><option value="structure">Structure</option>
+    </select></label>
+    <label class="field-label search-scope">Scope <select id="searchscope">
+        <option value="all">All sources</option><option value="current">Current source</option>
+    </select></label>
+    <label class="case-field"><input type="checkbox" id="matchcase"> Match case</label>
+    <span id="searchinfo" role="status" aria-live="polite"></span>
+    <span id="searchbuttons" class="search-navigation" hidden>
+        <button type="button" class="icon-button" id="searchup"
+                aria-label="Previous search result" title="Previous result (Shift+Enter)">↑</button>
+        <button type="button" class="icon-button" id="searchdown"
+                aria-label="Next search result" title="Next result (Enter)">↓</button>
+    </span>
+    <form id="goto-form" class="goto-form" hidden>
+        <label class="field-label">Go to offset
+            <input id="goto" type="text" placeholder="0x0000" autocomplete="off"
+                   spellcheck="false" aria-describedby="goto-error">
+        </label>
+        <button type="submit" class="icon-button" aria-label="Go to offset">↵</button>
+        <p id="goto-error" role="status" aria-live="polite"></p>
+    </form>
+</section>
 
 {% macro render_match_name(match, first) -%}
 <button type="button" class="download" title="Download this range" data-action="download"
@@ -43,7 +85,7 @@
 <small class="analysis-status">{{ match['analysis_status']|e }}:
     {{ match.get('analysis_message', '')|e }}</small>
 {% endif %}{% if not first %}<br>
-<small style="color: gray;">{{ match['size'] }} bytes @ {{ '0x%0X' % match['offset'] }}
+<small>{{ match['size'] }} bytes @ {{ '0x%0X' % match['offset'] }}
     ({{ match.get('source', 'file')|e }})</small>
 {% endif %}{% if match.get('decoded') %}<br>
 <button type="button" data-action="decode" data-uid="{{ match['uid'] }}">Decode</button>
@@ -74,10 +116,50 @@
 </li>
 {%- endmacro %}
 
-<ul class="tree" aria-label="File structure">
+<main class="workspace" id="workspace" data-active-pane="bytes">
+<div class="workspace-tabs" role="tablist" aria-label="Inspector panes">
+    <button type="button" id="structure-tab" role="tab" aria-controls="structure-pane"
+            aria-selected="false" tabindex="-1">Structure</button>
+    <button type="button" id="bytes-tab" role="tab" aria-controls="bytes-pane"
+            aria-selected="true">Bytes</button>
+</div>
+<section class="pane structure-pane" id="structure-pane" aria-labelledby="structure-title">
+    <header class="pane-header">
+        <div class="pane-heading">
+            <svg class="pane-icon" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                 aria-hidden="true" stroke="currentColor" stroke-width="1.6">
+                <path d="M4 4h6v5H4zM14 15h6v5h-6zM14 4h6v5h-6zM7 9v8h7M10 6h4" />
+            </svg>
+            <h2 id="structure-title">Structure</h2>
+        </div>
+        <span class="count-badge">{{ viewer_data['nodes']|length }} nodes</span>
+    </header>
+    <ul class="tree" aria-label="File structure">
 {% for match in matches %}{{ render_match(match, True) }}{% endfor %}
-</ul>
-<div class="hexeditor">
+    </ul>
+    <aside class="selection-details" id="selection-details" aria-label="Selection details">
+        <p>Select a structure node to inspect its byte range.</p>
+    </aside>
+</section>
+<div class="pane-separator" id="pane-separator" role="separator" tabindex="0"
+     aria-label="Resize structure pane" aria-orientation="vertical" aria-controls="structure-pane"
+     title="Drag or use the arrow keys to resize"
+     aria-valuemin="20" aria-valuemax="60" aria-valuenow="30"></div>
+<section class="pane bytes-pane" id="bytes-pane" aria-labelledby="bytes-title">
+    <header class="pane-header">
+        <div class="pane-heading">
+            <h2 id="bytes-title">Bytes</h2>
+            <span class="source-badge" id="active-source">file</span>
+        </div>
+        <span class="byte-position" id="byte-position"></span>
+        <div class="segmented-control" role="group" aria-label="Byte display">
+            <button type="button" id="byte-view" aria-pressed="true"
+                    aria-controls="scrollcapture">Bytes</button>
+            <button type="button" id="text-view" aria-pressed="false"
+                    aria-controls="text-pane">Text</button>
+        </div>
+    </header>
+<div class="hexeditor" id="byte-pane">
     <div class="scrollcapture" id="scrollcapture">
         <div class="hexdump" id="hexdump"><span class="byte">00</span></div>
         <div class="bytes" id="ascii"></div>
@@ -85,7 +167,23 @@
     <div class="scrollcontainer" id="scrollcontainer" tabindex="0" aria-label="Byte position">
         <div class="scrollheightproxy" id="scrollheightproxy"></div>
     </div>
-    <div class="readablebyteswrapper"><div class="readablebytes" id="readablebytes"></div></div>
+    <div class="readablebyteswrapper" id="text-pane" hidden>
+        <div class="readablebytes" id="readablebytes"></div>
+    </div>
+</div>
+<div class="coverage">
+{% if undescribed_bytes %}<span class="swatch undescribed"></span>Hatched bytes are undescribed.
+    {{ '{:,}'.format(undescribed_bytes) }} of {{ '{:,}'.format(input_bytes) }} bytes
+    ({{ '%.1f' % undescribed_percent }}%) are undescribed.{% else %}Every one of the
+    {{ '{:,}'.format(input_bytes) }} bytes is described by a match.{% endif %}
+</div>
+</section>
+</main>
+<footer class="app-footer">
+    <p>Generated with <a href="https://github.com/trailofbits/polyfile">PolyFile</a></p>
+    <p class="footer-hint"><kbd>/</kbd> Search <span aria-hidden="true">·</span>
+        Hover to explore, click to select</p>
+</footer>
 </div>
 <p id="loading" role="status">Loading…</p>
 <dialog id="decoded-preview" class="popup" aria-labelledby="decoded-title">

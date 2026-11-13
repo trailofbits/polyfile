@@ -49,6 +49,143 @@ function initImages() {
   }
 }
 
+/** @param {"bytes" | "structure"} pane @param {boolean} [focus] */
+function selectPane(pane, focus = false) {
+  getElement('workspace').dataset['activePane'] = pane;
+  const narrow = window.matchMedia('(max-width: 899px)').matches;
+  for (const name of ['structure', 'bytes']) {
+    const tab = getElement(`${name}-tab`);
+    const selected = name === pane;
+    tab.setAttribute('aria-selected', String(selected));
+    tab.tabIndex = selected ? 0 : -1;
+    const panel = getElement(`${name}-pane`);
+    panel.setAttribute('role', narrow ? 'tabpanel' : 'region');
+    panel.setAttribute('aria-labelledby', `${name}-${narrow ? 'tab' : 'title'}`);
+  }
+  if (focus) getElement(`${pane}-tab`).focus();
+  resizeViewport();
+}
+
+/** @param {"bytes" | "text"} mode */
+function selectByteView(mode) {
+  getElement('scrollcapture').hidden = mode !== 'bytes';
+  getElement('text-pane').hidden = mode !== 'text';
+  getElement('byte-pane').dataset['display'] = mode;
+  getElement('byte-view').setAttribute('aria-pressed', String(mode === 'bytes'));
+  getElement('text-view').setAttribute('aria-pressed', String(mode === 'text'));
+  resizeViewport();
+}
+
+function updateViewportStatus() {
+  const bytes = getSourceBytes(viewerState.activeSource);
+  const start = viewerState.rowOffset * viewerState.bytesPerRow;
+  const end = Math.min(bytes.length, start + viewerState.visibleRows * viewerState.bytesPerRow);
+  getElement('active-source').textContent = viewerState.activeSource;
+  getElement('active-source').title = viewerState.activeSource;
+  getElement('byte-position').textContent =
+    bytes.length === 0
+      ? 'Empty source'
+      : `0x${start.toString(16)}–0x${Math.max(start, end - 1).toString(16)} / ` +
+        `${bytes.length.toLocaleString()} bytes`;
+}
+
+/** @param {number} percentage */
+function setStructureWidth(percentage) {
+  const workspace = getElement('workspace');
+  const minimum = Math.max(20, (240 / Math.max(1, workspace.clientWidth)) * 100);
+  const maximum = Math.max(minimum, Math.min(60, 100 - (320 / workspace.clientWidth) * 100));
+  const value = Math.max(minimum, Math.min(maximum, percentage));
+  workspace.style.setProperty('--structure-width', `${value}%`);
+  const separator = getElement('pane-separator');
+  separator.setAttribute('aria-valuemin', String(Math.round(minimum)));
+  separator.setAttribute('aria-valuemax', String(Math.round(maximum)));
+  separator.setAttribute('aria-valuenow', String(Math.round(value)));
+  resizeViewport();
+}
+
+function initSeparator() {
+  const separator = getElement('pane-separator');
+  separator.addEventListener('keydown', (event) => {
+    const value = Number(separator.getAttribute('aria-valuenow'));
+    const keys = { ArrowLeft: value - 2, ArrowRight: value + 2, Home: 20, End: 60 };
+    if (!(event.key in keys)) return;
+    event.preventDefault();
+    setStructureWidth(keys[/** @type {keyof typeof keys} */ (event.key)]);
+  });
+  separator.addEventListener('pointerdown', (event) => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    separator.setPointerCapture(event.pointerId);
+    separator.focus();
+  });
+  separator.addEventListener('pointermove', (event) => {
+    if (!separator.hasPointerCapture(event.pointerId)) return;
+    const bounds = getElement('workspace').getBoundingClientRect();
+    setStructureWidth(((event.clientX - bounds.left) / bounds.width) * 100);
+  });
+  separator.addEventListener('pointerup', (event) => {
+    if (separator.hasPointerCapture(event.pointerId))
+      separator.releasePointerCapture(event.pointerId);
+  });
+}
+
+function initLayout() {
+  getElement('theme').addEventListener('change', (event) => {
+    document.documentElement.dataset['theme'] = /** @type {HTMLSelectElement} */ (
+      event.target
+    ).value;
+  });
+  for (const pane of /** @type {const} */ (['structure', 'bytes'])) {
+    getElement(`${pane}-tab`).addEventListener('click', () => selectPane(pane));
+    getElement(`${pane}-tab`).addEventListener('keydown', (event) => {
+      if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+      event.preventDefault();
+      const next =
+        event.key === 'Home'
+          ? 'structure'
+          : event.key === 'End'
+            ? 'bytes'
+            : pane === 'bytes'
+              ? 'structure'
+              : 'bytes';
+      selectPane(next, true);
+    });
+  }
+  getElement('byte-view').addEventListener('click', () => selectByteView('bytes'));
+  getElement('text-view').addEventListener('click', () => selectByteView('text'));
+  window.matchMedia('(max-width: 899px)').addEventListener('change', () => {
+    const pane =
+      getElement('workspace').dataset['activePane'] === 'structure' ? 'structure' : 'bytes';
+    selectPane(pane);
+  });
+  document.addEventListener('polyfileviewport', updateViewportStatus);
+  new ResizeObserver(resizeViewport).observe(getElement('byte-pane'));
+  initSeparator();
+  selectPane('bytes');
+  updateViewportStatus();
+}
+
+let wheelRemainder = 0;
+
+/** @param {WheelEvent} event */
+function handleByteWheel(event) {
+  const target = event.target;
+  if (!(target instanceof Element) || target.closest('#scrollcontainer')) return;
+  if (event.ctrlKey || event.shiftKey || Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
+  if (event.deltaY === 0) return;
+  event.preventDefault();
+  const scale =
+    event.deltaMode === 1
+      ? byteHeight
+      : event.deltaMode === 2
+        ? getElement('byte-pane').clientHeight
+        : 1;
+  wheelRemainder += event.deltaY * scale;
+  const rows = Math.trunc(wheelRemainder / byteHeight);
+  wheelRemainder -= rows * byteHeight;
+  if (rows !== 0) scrollToByte((viewerState.rowOffset + rows) * viewerState.bytesPerRow);
+}
+
 function initShell() {
   document.addEventListener('click', handleViewerAction);
   getElement('source').addEventListener('change', (event) => {
@@ -57,23 +194,14 @@ function initShell() {
   });
   const scroll = getElement('scrollcontainer');
   scroll.addEventListener('scroll', () => {
+    if (!scroll.clientHeight || !scroll.getClientRects().length) return;
     const row = Math.floor(scroll.scrollTop / byteHeight);
     if (row !== viewerState.rowOffset) {
       viewerState.rowOffset = row;
       renderViewport();
     }
   });
-  getElement('scrollcapture').addEventListener(
-    'wheel',
-    (event) => {
-      if (event.deltaY === 0) return;
-      event.preventDefault();
-      const rows =
-        Math.sign(event.deltaY) * Math.max(1, Math.round(Math.abs(event.deltaY) / byteHeight));
-      scrollToByte((viewerState.rowOffset + rows) * viewerState.bytesPerRow);
-    },
-    { passive: false },
-  );
+  getElement('byte-pane').addEventListener('wheel', handleByteWheel, { passive: false });
   getElement('hexdump').addEventListener('dblclick', (event) => {
     const target = event.target;
     if (!(target instanceof HTMLElement)) return;
@@ -94,6 +222,7 @@ function initShell() {
 
 initImages();
 initShell();
+initLayout();
 initInspection();
 initSearch();
 resizeViewport();
