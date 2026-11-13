@@ -107,6 +107,9 @@ class PSToken:
     Python's numeric conversion protocols return native values without provenance. Use
     ``as_int()`` or ``as_float()`` when the converted value must retain ``pdf_offset`` and
     ``pdf_bytes`` for subsequent structure mapping.
+
+    These attributes describe a token's source span. Inherited numeric arithmetic can return
+    native values and does not combine the provenance of its operands.
     """
 
     pdf_offset: int
