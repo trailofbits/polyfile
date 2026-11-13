@@ -145,6 +145,17 @@ IMAGE_MIMETYPES = {
 
 
 def ast_to_matches(ast: RootNode, parent: Match, mimetype: str) -> Iterator[Submatch]:
+    """Map view-local AST positions into the parser parent's analysis source.
+
+    Args:
+        ast: The tree whose offsets are relative to the parsed stream view.
+        parent: The match at which that view starts within its analysis source.
+        mimetype: The input's MIME type, used to render supported images.
+
+    Yields:
+        Each AST node positioned in the same source as the parser parent.
+    """
+    source_base = parent.offset
     stack: List[Tuple[Match, ASTNode]] = [(parent, ast)]
     while stack:
         parent, node = stack.pop()
@@ -152,7 +163,7 @@ def ast_to_matches(ast: RootNode, parent: Match, mimetype: str) -> Iterator[Subm
         new_node = Submatch(
             name=node.name,
             match_obj=node.raw_value,
-            relative_offset=node.start - parent.offset,
+            relative_offset=source_base + node.start - parent.offset,
             length=len(node.segment),
             parent=parent
         )
