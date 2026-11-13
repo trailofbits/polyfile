@@ -100,6 +100,13 @@ PDFXRef.load = load_xref
 
 
 class PSToken:
+    """A parsed value whose wrappers carry its original PDF byte span.
+
+    Python's numeric conversion protocols return native values without provenance. Use
+    ``as_int()`` or ``as_float()`` when the converted value must retain ``pdf_offset`` and
+    ``pdf_bytes`` for subsequent structure mapping.
+    """
+
     pdf_offset: int
     pdf_bytes: int
     _pdf_byte_aligned: bool
@@ -123,7 +130,24 @@ class PSToken:
         """Converts a numeric token to an integer while retaining its byte provenance."""
         return PSInt(int(self), pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes)
 
+    def as_float(self) -> "PSFloat":
+        """Convert a numeric token to a float while preserving its original source span.
+
+        Returns:
+            A PSFloat carrying this token's pdf_offset and pdf_bytes.
+
+        Raises:
+            ValueError: If a text or byte token does not represent a floating-point number.
+            OverflowError: If an integer token is too large to convert to a float.
+        """
+        return PSFloat(float(self), pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes)
+
     def __float__(self) -> float:
+        """Return a native float; use as_float() to retain PDF byte provenance.
+
+        Python's float() strips float-subclass metadata and warns when this method returns
+        a strict subclass. The explicit conversion method preserves a tagged result.
+        """
         if isinstance(self, float):
             return float.__float__(self)
         elif isinstance(self, int):

@@ -98,9 +98,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 - **Breaking:** PDF token splitting respects finite split limits, empty separator fields, and
   integer-index protocol arguments without losing unsplit suffixes (#3666).
 
-- **Breaking:** PDF tokens support Python numeric conversion and text encoding/stripping defaults
-  without conversion errors or deprecation warnings. Wrapper operations retain source metadata
-  (#3666).
+- **Breaking:** PDF numeric protocols return native values without conversion errors or
+  deprecation warnings. Use `as_int()` and `as_float()` to retain byte provenance on converted
+  tokens. Text encoding and stripping support built-in defaults (#3666).
 
 - **Breaking:** PolyMerge returns an empty association map for an empty PolyFile structure,
   including when the program trace contains tainted bytes (#3682).
