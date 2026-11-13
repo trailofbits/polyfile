@@ -10,7 +10,7 @@ Nothing here parses a whole ASN.1 document: a ``der`` test only needs the TLV he
 and reading no further lets the tests match DER that is embedded in a larger file.
 """
 
-from typing import NamedTuple, Optional, Tuple
+from typing import NamedTuple, Optional, Self, Tuple
 
 
 TAG_NAMES: Tuple[str, ...] = (
@@ -183,7 +183,7 @@ class DERHeader(NamedTuple):
         return format_value(self.tag, data[self.value_start:self.end])
 
     @classmethod
-    def parse(cls, data: bytes, offset: int) -> "DERHeader":
+    def parse(cls, data: bytes, offset: int) -> Self:
         """Reads the header of the DER object that starts at ``offset``.
 
         Raises:

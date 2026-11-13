@@ -4766,7 +4766,7 @@ class TextEncodingDescription:
         self.has_overstriking: bool = "\b" in text
 
     @classmethod
-    def detect(cls, data: bytes) -> Optional["TextEncodingDescription"]:
+    def detect(cls, data: bytes) -> Self | None:
         """Classifies `data` and measures the line shape libmagic would report for it.
 
         ``file_ascmagic`` hands the same trimmed buffer to ``file_encoding`` and to

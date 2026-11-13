@@ -1,4 +1,4 @@
-from typing import Any, Optional, Union
+from typing import Any, Optional, Self, Union
 from collections.abc import Iterable, Iterator
 
 from .polyfile import Match, Submatch
@@ -80,7 +80,7 @@ class Node:
                 stack.append((child, match))
 
     @classmethod
-    def load(cls, obj: Any) -> "Node":
+    def load(cls, obj: Any) -> Self:
         ancestors: list[tuple[Any, tuple[Node, ...] | None]] = [
             (obj, None)
         ]

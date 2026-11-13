@@ -438,7 +438,7 @@ class PSStr(PSSequence[str, str], str):
 
 
 class PSBytes(PSSequence[int, bytes], bytes):
-    def __new__(cls, *args, **kwargs):
+    def __new__(cls, *args, **kwargs) -> Self:
         kwargs = dict(kwargs)
         if "pdf_bytes" not in kwargs:
             kwargs["pdf_bytes"] = len(args[0])
@@ -473,7 +473,7 @@ class PSBytes(PSSequence[int, bytes], bytes):
 class PDFDeciphered(PSBytes):
     original_bytes: bytes
 
-    def __new__(cls, *args, **kwargs):
+    def __new__(cls, *args, **kwargs) -> Self:
         kwargs = dict(kwargs)
         if "pdf_bytes" not in kwargs:
             kwargs["pdf_bytes"] = len(args[0])
@@ -693,7 +693,7 @@ def make_ps_object(
 class DecodingError(bytes):
     message: str | None
 
-    def __new__(cls, *args, **kwargs):
+    def __new__(cls, *args, **kwargs) -> Self:
         kwargs = dict(kwargs)
         if "message" in kwargs:
             message = kwargs["message"]
@@ -710,7 +710,7 @@ class PDFStreamFilter(PSBytes):
     original_bytes: bytes
     error: DecodingError | None
 
-    def __new__(cls, *args, **kwargs):
+    def __new__(cls, *args, **kwargs) -> Self:
         kwargs = dict(kwargs)
         if "pdf_bytes" not in kwargs:
             kwargs["pdf_bytes"] = len(args[0])
@@ -739,7 +739,7 @@ class PNGPredictor(PSBytes):
     params: PDFDict
     original_bytes: bytes
 
-    def __new__(cls, *args, **kwargs):
+    def __new__(cls, *args, **kwargs) -> Self:
         kwargs = dict(kwargs)
         if "pdf_bytes" not in kwargs:
             kwargs["pdf_bytes"] = len(args[0])
