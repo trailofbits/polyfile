@@ -129,6 +129,14 @@ class FileStream(BinaryIO):
     implemented by parent subclasses. All related views share the root's cursor. Construction
     and slicing move it; content inspection and integer indexing restore it. A sibling may move
     the cursor outside this view, in which case ``tell()`` clamps to its nearest boundary.
+    Consequently, ``offset() + tell()`` equals the root cursor only while it lies in this view.
+
+    For example, a view at root byte 40 containing a subview at parent byte 7 gives that subview
+    ``offset() == 47``. After ``seek(3)``, it reports ``tell() == 3`` and the root cursor is 50.
+    If analyzed as a standalone input, that byte has analysis-source offset 3; if embedded at
+    source offset 47, it has source offset 50. Parser mappings must use their analysis parent's
+    source base, which this class does not know, rather than assume backing and source origins
+    coincide.
 
     A path opened here closes when its outermost context exits. Supplied streams and buffers
     created from bytes stay open by default. ``close_on_exit`` overrides that policy. Closing a
