@@ -1,8 +1,9 @@
 """Bounded stream positions use parent, view, and backing coordinates consistently."""
 
 from collections.abc import Iterator
-from io import BytesIO, SEEK_CUR, SEEK_END, SEEK_SET
+from io import BytesIO, SEEK_CUR, SEEK_END, SEEK_SET, StringIO, UnsupportedOperation
 from pathlib import Path
+from typing import BinaryIO, cast
 
 import pytest
 
@@ -62,6 +63,18 @@ def test_seek_rejects_unknown_origin(stream: FileStream) -> None:
     stream.seek(2)
     with pytest.raises(ValueError, match="origin|whence"):
         stream.seek(0, from_what=99)
+    assert stream.tell() == 2
+
+
+@pytest.mark.parametrize(
+    "origin,offset", ((SEEK_CUR, -3), (SEEK_CUR, 5), (SEEK_END, 1), (SEEK_END, -7))
+)
+def test_relative_seeks_reject_resolved_positions_outside_view(
+    stream: FileStream, origin: int, offset: int
+) -> None:
+    stream.seek(2)
+    with pytest.raises(IndexError):
+        stream.seek(offset, origin)
     assert stream.tell() == 2
 
 
@@ -177,3 +190,117 @@ def test_indexing_and_content_restore_a_cursor_outside_the_view(stream: FileStre
     assert stream[-1] == b"a"
     assert stream.content == DATA[5:11]
     assert stream.root.tell() == 1
+
+
+def test_unnamed_binary_memory_is_supported() -> None:
+    source = BytesIO(DATA)
+    view = FileStream(source, start=2, length=3)
+    assert view.name == "bytes"
+    assert view.read() == b"234"
+
+
+def test_text_streams_are_rejected_without_closing_them(tmp_path: Path) -> None:
+    path = tmp_path / "text.txt"
+    path.write_text("text", encoding="utf-8")
+    with StringIO("text") as memory, path.open(encoding="utf-8") as disk:
+        for source in (memory, disk):
+            with pytest.raises(TypeError, match="binary"):
+                FileStream(cast(BinaryIO, source))
+            assert not source.closed
+            assert source.tell() == 0
+
+
+@pytest.mark.parametrize("mode", ("r", "rt", "w", "wb", "ab", "a+b"))
+def test_invalid_path_modes_are_rejected_before_opening(tmp_path: Path, mode: str) -> None:
+    path = tmp_path / "input.bin"
+    path.write_bytes(DATA)
+    with pytest.raises(ValueError, match="binary|read-only"):
+        FileStream(path, mode=mode)
+    assert path.read_bytes() == DATA
+
+
+def test_readable_binary_update_mode_keeps_the_view_read_only(tmp_path: Path) -> None:
+    path = tmp_path / "input.bin"
+    path.write_bytes(DATA)
+    with FileStream(path, mode="r+b") as view:
+        assert view.read(1) == b"0"
+        assert not view.writable()
+        with pytest.raises(UnsupportedOperation):
+            view.write(b"changed")
+    assert path.read_bytes() == DATA
+
+
+def test_owned_paths_and_borrowed_streams_have_distinct_lifetimes(tmp_path: Path) -> None:
+    path = tmp_path / "input.bin"
+    path.write_bytes(DATA)
+    with FileStream(path) as owned:
+        assert not owned.closed
+    assert owned.closed
+    source = BytesIO(DATA)
+    with FileStream(source) as borrowed:
+        borrowed.read(1)
+    assert not source.closed
+    assert source.tell() == 1
+    borrowed.close()
+    assert source.closed
+
+
+def test_tempfile_preserves_the_shared_cursor(stream: FileStream) -> None:
+    stream.seek(2)
+    with stream.tempfile() as filename:
+        path = Path(filename)
+        assert path.read_bytes() == DATA[5:11]
+        assert stream.tell() == 2
+    assert not path.exists()
+
+
+def test_nested_views_match_a_bytes_model(stream: FileStream) -> None:
+    for start in range(len(stream) + 3):
+        for length in (None, 0, 1, 10):
+            child = FileStream(stream, start=start, length=length)
+            expected = DATA[5:11][start:]
+            if length is not None:
+                expected = expected[:length]
+            assert child.content == expected
+            assert child.offset() == stream.offset() + min(start, len(stream))
+            for position in range(len(child) + 1):
+                assert child.seek(position) == position
+                end = position + 2
+                assert child.read(2) == expected[position:end]
+                assert child.tell() == min(position + 2, len(child))
+
+
+def test_three_levels_of_views_preserve_coordinate_domains(stream: FileStream) -> None:
+    parent = FileStream(stream, start=1, length=4)
+    child = parent[1:3]
+    assert child.offset() == 7
+    assert child.root is stream.root
+    assert child.seek(-1, SEEK_END) == 1
+    assert child.read() == b"8"
+    assert stream.tell() == 4
+
+
+@pytest.mark.parametrize(
+    "operation",
+    ("readline", "readlines", "truncate", "write", "writelines", "__iter__", "__next__"),
+)
+def test_unsupported_operations_leave_the_cursor_unchanged(
+    stream: FileStream, operation: str
+) -> None:
+    stream.seek(2)
+    arguments = {"write": (b"x",), "writelines": ([b"x"],)}
+    with pytest.raises(UnsupportedOperation):
+        getattr(stream, operation)(*arguments.get(operation, ()))
+    assert stream.tell() == 2
+
+
+@pytest.mark.parametrize("capability", ("seekable", "readable"))
+def test_input_capabilities_are_checked_without_closing_the_input(
+    capability: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source = BytesIO(DATA)
+    monkeypatch.setattr(source, capability, lambda: False)
+    with pytest.raises(ValueError, match=capability):
+        FileStream(source)
+    assert not source.closed
+    assert source.tell() == 0
