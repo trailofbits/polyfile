@@ -4,7 +4,7 @@ from typing import BinaryIO, cast
 from collections.abc import Sequence
 from collections.abc import Iterator
 
-from . import serialization
+from polyfile import serialization
 
 
 @serialization.serializable

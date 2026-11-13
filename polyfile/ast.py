@@ -1,7 +1,7 @@
 from typing import Any, Self
 from collections.abc import Iterable, Iterator
 
-from .polyfile import Match, Submatch
+from polyfile.polyfile import Match, Submatch
 
 
 class Node:

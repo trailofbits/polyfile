@@ -6,7 +6,7 @@ from polyfile.fileutils import FileStream
 from polyfile.magic import Match as MagicMatch
 from polyfile.polyfile import Match, Matcher
 
-from .test_zipmatcher import build_zip, temporary_file
+from tests.test_zipmatcher import build_zip, temporary_file
 
 Structure = list[tuple[int, str, int, int]]
 

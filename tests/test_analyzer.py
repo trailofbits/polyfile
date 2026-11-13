@@ -3,7 +3,7 @@ from unittest import TestCase
 
 from polyfile.polyfile import Analyzer
 
-from .test_zipmatcher import MEMBERS, build_zip, temporary_file
+from tests.test_zipmatcher import MEMBERS, build_zip, temporary_file
 
 
 def node_count(element: dict[str, Any]) -> int:

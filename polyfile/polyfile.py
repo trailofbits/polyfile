@@ -13,8 +13,8 @@ from collections.abc import Callable, Iterable, Iterator
 
 from polyfile.analysis import AnalysisContext, AnalysisLimits
 from polyfile.fileutils import FileStream, Streamable
-from . import logger
-from .magic import MagicMatcher, Match as MagicMatch, MatchContext, TestResult
+from polyfile import logger
+from polyfile.magic import MagicMatcher, Match as MagicMatch, MatchContext, TestResult
 
 __version__: str = version("polyfile")
 del version

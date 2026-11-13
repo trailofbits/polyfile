@@ -34,14 +34,14 @@ from uuid import UUID
 
 import re2
 
-from .arithmetic import CStyleInt, make_c_style_int
-from .der import DERHeader, DERSpecification, InvalidDER, mime_type_for_message
-from .fileutils import Streamable
-from .iterators import LazyIterableSet
-from .logger import getStatusLogger, TRACE
-from .repl import ANSIColor, ANSIWriter
+from polyfile.arithmetic import CStyleInt, make_c_style_int
+from polyfile.der import DERHeader, DERSpecification, InvalidDER, mime_type_for_message
+from polyfile.fileutils import Streamable
+from polyfile.iterators import LazyIterableSet
+from polyfile.logger import getStatusLogger, TRACE
+from polyfile.repl import ANSIColor, ANSIWriter
 
-from . import magic_defs
+from polyfile import magic_defs
 
 
 log = getStatusLogger("libmagic")

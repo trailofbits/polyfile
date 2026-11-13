@@ -2,7 +2,7 @@ from functools import wraps
 import time
 from collections.abc import Callable
 from typing import Optional, ParamSpec, Self, TypeVar
-from . import logger
+from polyfile import logger
 
 log = logger.getStatusLogger(__file__)
 

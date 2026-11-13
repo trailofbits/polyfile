@@ -17,7 +17,7 @@ from polyfile.kaitaimatcher import EXTRA_PARSERS, KAITAI_MIME_MAPPING
 from polyfile.magic import MagicMatcher
 from polyfile.polyfile import Matcher, Submatch
 
-from .corkami_corpus import CorkamiCorpus
+from tests.corkami_corpus import CorkamiCorpus
 
 DER_CERTIFICATE = Path(__file__).absolute().parent / "msjdbc.cer.gz"
 PARSE_TIMEOUT_SECONDS = 20

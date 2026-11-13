@@ -7,7 +7,7 @@ from unittest import TestCase
 
 from polyfile.magic import MAGIC_DEFS, MagicMatcher, MatchContext
 
-from .corkami_corpus import CorkamiCorpus
+from tests.corkami_corpus import CorkamiCorpus
 
 FAILED_FILE_DIR = Path(__file__).absolute().parent / "failed_corkami_files"
 SCRIPT_DIR = Path(__file__).absolute().parent

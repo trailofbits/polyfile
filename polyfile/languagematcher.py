@@ -3,9 +3,9 @@ from itertools import chain
 import re
 from collections.abc import Iterable, Sequence
 
-from .logger import StatusLogger
-from .polyfile import Match, Submatch, register_parser
-from .magic import AbsoluteOffset, FailedTest, MagicMatcher, MagicTest, MatchedTest, TestResult, TestType
+from polyfile.logger import StatusLogger
+from polyfile.polyfile import Match, Submatch, register_parser
+from polyfile.magic import AbsoluteOffset, FailedTest, MagicMatcher, MagicTest, MatchedTest, TestResult, TestType
 
 
 log = StatusLogger("polyfile")
