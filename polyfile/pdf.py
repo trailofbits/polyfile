@@ -163,6 +163,17 @@ class Provenance(Protocol):
     def pdf_bytes(self) -> int: ...
 
 
+def _restore_pdf_token(token_class: type[object], value: object) -> object:
+    """Allocate a primitive wrapper before pickle restores its metadata and entries."""
+    for base in (int, float, str, bytes, list, dict):
+        if issubclass(token_class, base):
+            allocate = cast(Callable[..., object], base.__new__)
+            if base in (list, dict):
+                return allocate(token_class)
+            return allocate(token_class, value)
+    raise TypeError(f"Unsupported PDF token class: {token_class.__name__}")
+
+
 class PSToken:
     """A parsed value whose wrappers carry its original PDF byte span.
 
@@ -223,17 +234,46 @@ class PSToken:
         elif isinstance(self, int):
             return float(int(self))
         elif isinstance(self, bytes):
-            return float(self.decode())
+            return float(bytes.__getitem__(self, slice(None)))
         elif isinstance(self, PSStr):
-            return float(str(self))
+            return float(str.__str__(self))
         else:
             raise NotImplementedError()
 
     def __bytes__(self):
         if isinstance(self, PSBytes):
             return self
+        if isinstance(self, str):
+            raise TypeError("string argument without an encoding")
+        if isinstance(self, int):
+            result = PSBytes(bytes(int(self)), pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes)
+            result._pdf_byte_aligned = False
+            return result
+        raise TypeError(f"cannot convert '{type(self).__name__}' object to bytes")
+
+    def __getnewargs_ex__(self) -> tuple[tuple[object, ...], dict[str, object]]:
+        """Supply constructor arguments before copy and pickle restore token state."""
+        if isinstance(self, int):
+            value = int.__int__(self)
+        elif isinstance(self, float):
+            value = float.__float__(self)
+        elif isinstance(self, str):
+            value = str.__str__(self)
+        elif isinstance(self, bytes):
+            value = bytes.__getitem__(self, slice(None))
         else:
-            return PSBytes(self, pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes)
+            return (), dict(self.__dict__)
+        return (value,), dict(self.__dict__)
+
+    def __reduce_ex__(self, protocol: SupportsIndex, /):
+        protocol = operator.index(protocol)
+        if protocol >= 2:
+            return super().__reduce_ex__(protocol)
+        args, _ = self.__getnewargs_ex__()
+        items = iter(self) if isinstance(self, list) else None
+        return (
+            _restore_pdf_token, (type(self), args[0] if args else None), self.__dict__, items,
+        )
 
     def __str__(self):
         raise NotImplementedError()
@@ -250,7 +290,9 @@ class PSInt(PSToken, int):
         return int.__index__(self)
 
     def __str__(self):
-        return str(int(self))
+        result = PSStr(str(int(self)), pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes)
+        result._pdf_byte_aligned = False
+        return result
 
 
 ElementT = TypeVar("ElementT")
@@ -455,6 +497,8 @@ class PSSequence(PSToken, Generic[ElementT, SequenceT]):
 
     def __getitem__(self, item):
         base = cast(PrimitiveSequence[SequenceT], super())
+        if not isinstance(item, (int, slice)) and hasattr(type(item), "__index__"):
+            item = operator.index(item)
         if isinstance(item, int):
             value = base.__getitem__(item)
             if has_provenance(value):
@@ -507,7 +551,7 @@ class PSStr(PSSequence[str, str], str):
         return result
 
     def __str__(self):
-        return str.__str__(self)
+        return self
 
 
 class PSBytes(PSSequence[int, bytes], bytes):
@@ -553,7 +597,9 @@ class PSBytes(PSSequence[int, bytes], bytes):
 
 
     def __str__(self):
-        return bytes.__str__(self)
+        result = PSStr(bytes.__repr__(self), pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes)
+        result._pdf_byte_aligned = False
+        return result
 
 
 class PDFDeciphered(PSBytes):
@@ -575,7 +621,9 @@ class PDFDeciphered(PSBytes):
 
 class PSFloat(PSToken, float):
     def __str__(self):
-        return float.__str__(self)
+        result = PSStr(float.__repr__(self), pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes)
+        result._pdf_byte_aligned = False
+        return result
 
 
 class PSBool:
@@ -600,7 +648,9 @@ class PSBool:
         return hash(self.value)
 
     def __str__(self):
-        return PSStr(self.value, pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes)
+        result = PSStr(self.value, pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes)
+        result._pdf_byte_aligned = False
+        return result
 
     def __repr__(self):
         return f"{self.__class__.__name__}(value={self.value!r}, pdf_offset={self.pdf_offset!r}, "\
@@ -693,6 +743,16 @@ class PDFDict(dict[str, object]):
 
     def __str__(self):
         return dict.__str__(self)
+
+    def __getnewargs_ex__(self) -> tuple[tuple[object, ...], dict[str, object]]:
+        """Reconstruct an empty mapping before restoring entries and provenance."""
+        return (), dict(self.__dict__)
+
+    def __reduce_ex__(self, protocol: SupportsIndex, /):
+        protocol = operator.index(protocol)
+        if protocol >= 2:
+            return super().__reduce_ex__(protocol)
+        return _restore_pdf_token, (type(self), None), self.__dict__, None, iter(self.items())
 
 
 
@@ -970,6 +1030,15 @@ class PDFObjectStream(PDFStream):
 
 class PDFParser(PDFMinerParser):
     auto_flush: bool = False
+
+    def end_type(self, type):
+        """Finalize a composite while leaving nonliteral recovery keys unpositioned."""
+        pos, values = super().end_type(type)
+        if type == "d":
+            for index in range(0, len(values), 2):
+                if not isinstance(values[index], PSLiteral):
+                    values[index] = str.__str__(str(values[index]))
+        return pos, values
 
     @staticmethod
     def string_escape(data: bytes | int) -> str:

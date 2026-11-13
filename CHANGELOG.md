@@ -111,6 +111,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 
 ### Fixed
 
+- **Breaking:** PDF string conversions retain token spans and render floating-point values
+  without debug metadata. Byte conversions use native count/error behavior, copying and
+  pickling preserve wrapper state, and index-protocol selection preserves the selected span
+  (#3742, #3747, #3748, #3749).
+
 - **Breaking:** HTTP AST spans use original UTF-8 byte positions rather than character
   positions, including multibyte headers and bodies within nested or decoded sources (#3712).
   Request-start cursors count bytes and reject positions inside a UTF-8 character.

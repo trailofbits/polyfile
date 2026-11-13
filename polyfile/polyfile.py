@@ -208,7 +208,7 @@ class Match:
         if self.description is not None:
             ret['value'] = self.description
         elif self.match is not None:
-            ret['value'] = str(self.match)
+            ret['value'] = str.__str__(str(self.match))
         ret['subEls'] = [c.to_obj() for c in self]
         if self.img_data is not None:
             ret['img_data'] = self.img_data
