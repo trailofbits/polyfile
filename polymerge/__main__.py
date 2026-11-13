@@ -211,6 +211,13 @@ https://github.com/trailofbits/polytracker/
             polyfile_json_path = args.FILES[0]
             polytracker_json_path = None
         else:
+            path = args.FILES[0]
+            if str(path) != "-":
+                try:
+                    with open(path):
+                        pass
+                except OSError as error:
+                    parser.error(f"can't open {str(path)!r}: {error}")
             return 0
     elif len(args.FILES) != 2:
         parser.print_help()

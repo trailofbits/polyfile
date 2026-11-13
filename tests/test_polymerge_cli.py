@@ -1,6 +1,7 @@
 """PolyMerge compares both trace groups and handles optional CLI inputs."""
 
 import builtins
+import errno
 import io
 import json
 import logging
@@ -39,6 +40,64 @@ def test_single_input_without_a_diff_group_returns_normally(
     source = trace_file(tmp_path, "trace.json", ("reader",))
     assert cli.main(["polymerge", source, *options]) == 0
     assert capsys.readouterr().out == ""
+
+
+@pytest.mark.parametrize("options", [[], ["--diff"]])
+@pytest.mark.parametrize("failure", ["missing", "directory", "unreadable"])
+def test_unused_input_still_requires_a_readable_file(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    options: list[str],
+    failure: str,
+) -> None:
+    source = tmp_path / "source.json"
+    if failure == "directory":
+        source = tmp_path
+    elif failure == "unreadable":
+        source.write_text("not JSON", encoding="utf-8")
+        open_input = builtins.open
+
+        def deny_open(
+            path: str | Path,
+            mode: str = "r",
+            buffering: int = -1,
+            encoding: str | None = None,
+            errors: str | None = None,
+        ) -> TextIO:
+            if Path(path) == source:
+                raise PermissionError(errno.EACCES, "Permission denied", str(source))
+            return cast(TextIO, open_input(path, mode, buffering, encoding, errors))
+
+        monkeypatch.setattr(builtins, "open", deny_open)
+
+    with pytest.raises(SystemExit) as result:
+        cli.main(["polymerge", str(source), *options])
+
+    assert result.value.code == 2
+    assert str(source) in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("options", [[], ["--diff"]])
+def test_unused_readable_input_is_not_decoded_as_json(
+    tmp_path: Path, options: list[str]
+) -> None:
+    source = tmp_path / "source.json"
+    source.write_text("not JSON", encoding="utf-8")
+
+    assert cli.main(["polymerge", str(source), *options]) == 0
+
+
+@pytest.mark.parametrize("options", [[], ["--diff"]])
+def test_unused_standard_input_stays_unread_and_open(
+    monkeypatch: pytest.MonkeyPatch, options: list[str]
+) -> None:
+    stream = io.StringIO("not JSON")
+    monkeypatch.setattr(sys, "stdin", stream)
+
+    assert cli.main(["polymerge", "-", *options]) == 0
+    assert stream.tell() == 0
+    assert not stream.closed
 
 
 def test_normal_merge_accepts_an_empty_legacy_trace(
