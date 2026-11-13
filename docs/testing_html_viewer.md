@@ -18,6 +18,11 @@ Linux environments can pass `--with-deps` to `playwright install` to install sys
 The default test engine is Chromium. Browser tests skip if you have not installed Playwright;
 existing Python tests do not require it. Failed tests save a screenshot under `test-results/`.
 
+The Python CI matrix installs `.[dev,viewer-test]` so the project-wide type check can resolve
+the browser test annotations. It runs `pytest tests --ignore=tests/browser`; the HTML viewer
+workflow installs browser engines and runs `tests/browser` separately. Install the same extras
+locally before running `uv run ty check --error-on-warning`.
+
 Use `report_factory(contents, nodes=None, filename="sample.bin")` to render an independent report.
 `tests.browser.helpers.match` builds match dictionaries and accepts `children`, `source`, and
 additional SBuD fields. `open_report(viewer_page, report)` loads a report and waits for the byte
