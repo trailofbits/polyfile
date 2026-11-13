@@ -1,4 +1,4 @@
-from io import BytesIO, SEEK_END, UnsupportedOperation
+from io import BytesIO, SEEK_CUR, SEEK_END, SEEK_SET, UnsupportedOperation
 import mmap
 import os
 from pathlib import Path
@@ -123,6 +123,8 @@ class FileStream(IO):
             close_on_exit: Whether leaving this stream's context closes the underlying stream,
                 defaulting to True for a path this opened and False for a stream it was handed.
         """
+        if start < 0 or (length is not None and length < 0):
+            raise ValueError("FileStream start and length must be nonnegative")
         if isinstance(path_or_stream, Path):
             path_or_stream = str(path_or_stream)
         if isinstance(path_or_stream, str):
@@ -149,7 +151,8 @@ class FileStream(IO):
                 path_or_stream.seek(orig_pos)
         else:
             stream_length = os.path.getsize(self._stream.name)
-        remaining = max(stream_length - start, 0)
+        start = min(start, stream_length)
+        remaining = stream_length - start
         if length is None:
             self._length = remaining
         else:
@@ -217,14 +220,19 @@ class FileStream(IO):
         else:
             return self.start
 
-    def seek(self, offset, from_what=0):
-        if from_what == 1:
+    def seek(self, offset: int, from_what: int = SEEK_SET) -> int:
+        if from_what == SEEK_CUR:
             offset = self.tell() + offset
-        elif from_what == 2:
+        elif from_what == SEEK_END:
             offset = len(self) + offset
-        if offset - self.start > self._length:
-            raise IndexError(f"{self!r} is {len(self)} bytes long, but seek was requested for byte {offset}")
+        elif from_what != SEEK_SET:
+            raise ValueError(f"Invalid FileStream seek origin: {from_what}")
+        if not 0 <= offset <= self._length:
+            raise IndexError(
+                f"{self!r} is {len(self)} bytes long, but seek requested byte {offset}"
+            )
         self._stream.seek(self.start + offset)
+        return offset
 
     def tell(self):
         return min(max(self._stream.tell() - self.start, 0), self._length)
