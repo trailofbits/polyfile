@@ -27,8 +27,8 @@ import sys
 from time import gmtime, localtime, strftime
 from types import GeneratorType
 from typing import (
-    Any, BinaryIO, Callable, Dict, FrozenSet, Generic, Iterable, Iterator, KeysView, List,
-    NamedTuple, Optional, Set, Tuple, Type, TypeVar, Union
+    Any, BinaryIO, Callable, Collection, Dict, FrozenSet, Generic, Iterable, Iterator, KeysView,
+    List, NamedTuple, Optional, Protocol, Set, Tuple, Type, TypeVar, Union
 )
 from uuid import UUID
 
@@ -1148,7 +1148,7 @@ class MagicTest(ABC):
         self._parent: Optional[MagicTest] = parent
         self.children: List[MagicTest] = []
         if parent is not None:
-            self.level: int = self.parent.level + 1
+            self.level: int = parent.level + 1
             parent.children.append(self)
             self.named_test: Optional[NamedTest] = parent.named_test
             if self.named_test is not None:
@@ -1595,7 +1595,7 @@ class MagicTest(ABC):
             context: MatchContext,
             parent_match: Optional[TestResult] = None,
             flip_endianness: bool = False
-    ) -> Iterator[MatchedTest]:
+    ) -> Iterator[TestResult]:
         if context.only_match_mime and not self.can_match_mime:
             return
         try:
@@ -1656,7 +1656,9 @@ class DynamicMagicTest(MagicTest, ABC):
         return super().message
 
     @property
-    def message(self) -> Message:
+    def message(  # ty: ignore[invalid-property-type-override]  # Bound messages are read-only.
+            self
+    ) -> Message:
         if self._bound_message is None:
             return self.default_message
         else:
@@ -2199,6 +2201,7 @@ class StringLengthTest(StringWildcard):
 
     def matches(self, data: bytes) -> DataTypeMatch:
         match = super().matches(data)
+        assert match.raw_match is not None
         if self.desired_length == 0:
             return match
         elif self.test_smaller and match.raw_match[:self.desired_length] < self.to_match:
@@ -2213,6 +2216,7 @@ class StringLengthTest(StringWildcard):
 
     def search(self, data: bytes) -> DataTypeMatch:
         match = super().search(data)
+        assert match.raw_match is not None
         if self.test_smaller and match.raw_match < self.to_match:
             return match
         elif not self.test_smaller and match.raw_match > self.to_match:
@@ -2613,7 +2617,9 @@ class StringType(DataType[StringTest]):
     STRING_TYPE_FORMAT: Pattern[str] = re.compile(r"^u?string(/(?P<numbytes>\d+))?(?P<opts>/[BbCctTWwf]*)?$")
 
     @classmethod
-    def parse(cls, format_str: str) -> "StringType":
+    def parse(  # ty: ignore[invalid-method-override]  # Factories keep distinct keywords.
+            cls, format_str: str
+    ) -> "StringType":
         m = cls.STRING_TYPE_FORMAT.match(format_str)
         if not m:
             raise ValueError(f"Invalid string type declaration: {format_str!r}")
@@ -2869,7 +2875,9 @@ class PascalStringType(DataType[StringTest]):
     PSTRING_TYPE_FORMAT: Pattern[str] = re.compile(r"^pstring(?P<opts>/[JBHhLlCcTWwft]*)?$")
 
     @classmethod
-    def parse(cls, format_str: str) -> "PascalStringType":
+    def parse(  # ty: ignore[invalid-method-override]  # Factories keep distinct keywords.
+            cls, format_str: str
+    ) -> "PascalStringType":
         m = cls.PSTRING_TYPE_FORMAT.match(format_str)
         if not m:
             raise ValueError(f"Invalid pstring type declaration: {format_str!r}")
@@ -3236,7 +3244,9 @@ class RegexType(DataType[MagicRegex]):
     # NOTE: flags can appear either after length directly (regex/31cs) or with a slash (regex/31/cs).
 
     @classmethod
-    def parse(cls, format_str: str) -> "RegexType":
+    def parse(  # ty: ignore[invalid-method-override]  # Factories keep distinct keywords.
+            cls, format_str: str
+    ) -> "RegexType":
         m = cls.REGEX_TYPE_FORMAT.match(format_str)
         if not m:
             raise ValueError(f"Invalid regex type declaration: {format_str!r}")
@@ -3344,6 +3354,19 @@ class BaseNumericDataType(Enum):
         BASE_NUMERIC_TYPES_BY_NAME[name] = self
 
 
+NumericT = TypeVar("NumericT", int, float, CStyleInt)
+
+
+class NumericComparison(Protocol):
+    def __call__(self, left: NumericT, right: NumericT, /) -> bool:
+        ...
+
+
+class NumericPreprocessor(Protocol):
+    def __call__(self, value: NumericT, /) -> NumericT:
+        ...
+
+
 NUMERIC_OPERATORS_BY_SYMBOL: Dict[str, "NumericOperator"] = {}
 
 
@@ -3355,15 +3378,9 @@ class NumericOperator(Enum):
     ALL_BITS_CLEAR = ("^", lambda a, b: not (a & b))  # value from the file (a) must have clear all bits set in b
     NOT = ("!", lambda a, b: not (a == b))
 
-    def __init__(self, symbol: str, test: Union[
-            Callable[[int, int], bool],
-            Callable[[float, float], bool],
-            Callable[[CStyleInt, CStyleInt], bool]
-    ]):
+    def __init__(self, symbol: str, test: NumericComparison):
         self.symbol: str = symbol
-        self.test: Union[
-            Callable[[int, int], bool], Callable[[float, float], bool], Callable[[CStyleInt, CStyleInt], bool]
-        ] = test
+        self.test: NumericComparison = test
         NUMERIC_OPERATORS_BY_SYMBOL[symbol] = self
 
     @staticmethod
@@ -3374,12 +3391,13 @@ class NumericOperator(Enum):
         return self.symbol
 
 
-class NumericValue(Generic[T]):
-    def __init__(self, value: T, operator: NumericOperator = NumericOperator.EQUALS):
-        self.value: T = value
+class NumericValue(Generic[NumericT]):
+    def __init__(self, value: NumericT, operator: NumericOperator = NumericOperator.EQUALS):
+        self.value: NumericT = value
         self.operator: NumericOperator = operator
 
-    def test(self, to_match: T, unsigned: bool, num_bytes: int, preprocess: Callable[[T], T] = lambda x: x) -> bool:
+    def test(self, to_match: NumericT, unsigned: bool, num_bytes: int,
+             preprocess: NumericPreprocessor = lambda x: x) -> bool:
         return self.operator.test(preprocess(to_match), self.value)
 
     @staticmethod
@@ -3403,7 +3421,8 @@ class NumericWildcard(NumericValue):
     def __init__(self):
         super().__init__(None)
 
-    def test(self, to_match, unsigned, num_bytes, preprocess: Callable[[int], int] = lambda x: x) -> bool:
+    def test(self, to_match, unsigned, num_bytes,
+             preprocess: NumericPreprocessor = lambda x: x) -> bool:
         return True
 
 
@@ -3413,7 +3432,7 @@ class IntegerValue(NumericValue[int]):
             to_match: int,
             unsigned: bool,
             num_bytes: int,
-            preprocess: Callable[[CStyleInt], CStyleInt] = lambda x: x
+            preprocess: NumericPreprocessor = lambda x: x
     ) -> bool:
         to_test = make_c_style_int(value=self.value, num_bytes=num_bytes, signed=not unsigned)
         to_match = make_c_style_int(value=to_match, num_bytes=num_bytes, signed=not unsigned)
@@ -3456,13 +3475,13 @@ class NumericDataType(DataType[NumericValue]):
             base_type: BaseNumericDataType,
             unsigned: bool = False,
             endianness: Endianness = Endianness.NATIVE,
-            preprocess: Callable[[int], int] = lambda x: x
+            preprocess: NumericPreprocessor = lambda x: x
     ):
         super().__init__(name)
         self.base_type: BaseNumericDataType = base_type
         self.unsigned: bool = unsigned
         self.endianness: Endianness = endianness
-        self.preprocess: Callable[[int], int] = preprocess
+        self.preprocess: NumericPreprocessor = preprocess
         if self.endianness == Endianness.PDP and self.base_type.num_bytes != 4:
             raise ValueError(f"PDP endianness can only be used with four byte base types, not {self.base_type}")
 
@@ -3776,6 +3795,7 @@ class ConstantMatchTest(MagicTest, Generic[T]):
         Returns:
             The result of the test, carrying a relative base when either rule applies.
         """
+        assert match.raw_match is not None
         result = MatchedTest(self, offset=absolute_offset + match.initial_offset,
                              length=len(match.raw_match), value=match.value, parent=parent_match)
         if match.relative_base is not None:
@@ -3800,10 +3820,10 @@ class ConstantMatchTest(MagicTest, Generic[T]):
             self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]
     ) -> TestResult:
         if isinstance(self.data_type, NumericDataType):
-            data_type = self.data_type.flip_endianness()
+            assert isinstance(self.constant, NumericValue)
+            match = self.data_type.flip_endianness().match(data[absolute_offset:], self.constant)
         else:
-            data_type = self.data_type
-        match = data_type.match(data[absolute_offset:], self.constant)
+            match = self.data_type.match(data[absolute_offset:], self.constant)
         if match:
             return self.matched_test(match, absolute_offset, parent_match)
         else:
@@ -3819,7 +3839,7 @@ class OffsetMatchTest(MagicTest):
     def __init__(
             self,
             offset: Offset,
-            value: IntegerValue,
+            value: Union[IntegerValue, NumericWildcard],
             mime: Optional[str] = None,
             extensions: Iterable[str] = (),
             message: str = "",
@@ -3828,7 +3848,7 @@ class OffsetMatchTest(MagicTest):
             modulo: int = 0
     ):
         super().__init__(offset=offset, mime=mime, extensions=extensions, message=message, parent=parent)
-        self.value: IntegerValue = value
+        self.value: Union[IntegerValue, NumericWildcard] = value
         self.subtraction: int = subtraction
         self.modulo: int = modulo
 
@@ -3958,6 +3978,7 @@ class NamedTest(MagicTest):
 
     def test_flip_endianness(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
         if parent_match is not None:
+            assert isinstance(parent_match, MatchedTest)
             return MatchedTest(self, offset=parent_match.offset + parent_match.length, length=0, value=self.name,
                                parent=parent_match)
         else:
@@ -3965,6 +3986,7 @@ class NamedTest(MagicTest):
 
     def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> MatchedTest:
         if parent_match is not None:
+            assert isinstance(parent_match, MatchedTest)
             return MatchedTest(self, offset=parent_match.offset + parent_match.length, length=0, value=self.name,
                                parent=parent_match)
         else:
@@ -4990,7 +5012,7 @@ class Match:
 
     @property
     def mimetypes(self) -> LazyIterableSet[str]:
-        return LazyIterableSet((
+        return LazyIterableSet[str]((
             result.test.mime.resolve(self.context) for result in self if result.test.mime is not None)
         )
 
@@ -4999,7 +5021,7 @@ class Match:
         def _extensions():
             for result in self:
                 yield from result.test.extensions
-        return LazyIterableSet(_extensions())
+        return LazyIterableSet[str](_extensions())
 
     def explain(self, file: Streamable, ansi_color: Optional[bool] = None) -> str:
         """Explains every test that contributed to this match.
@@ -5075,6 +5097,7 @@ class Match:
         """
         msg = ""
         for result in self:
+            assert isinstance(result, MatchedTest)
             m = result.test.message.resolve(self.context).lstrip()
             if not m:
                 continue
@@ -5415,7 +5438,7 @@ class MagicMatcher:
 
     def _run_tests(
             self,
-            tests: Iterable[MagicTest],
+            tests: Collection[MagicTest],
             context: MatchContext,
             text_encoding: Optional[TextEncodingDescription],
             description: str,
@@ -5442,18 +5465,19 @@ class MagicMatcher:
             else:
                 test_context = context
             results = test.match(test_context)
+            remaining_results = results
             if type(results) is GeneratorType:
                 # Almost every top-level test fails. Avoid allocating a Match and its
                 # lazy MIME/extension containers when the result generator is empty.
                 # Match.__iter__ also treats IndexError as exhaustion; a generator
                 # that raises it is closed, just like one that raises StopIteration.
                 try:
-                    first = next(results)
+                    first = next(remaining_results)
                 except (StopIteration, IndexError):
                     continue
                 # Keep the first result on the normal path: __getitem__ expands
                 # IndirectResult, and the remaining continuations must stay lazy.
-                results = chain((first,), results)
+                results = chain((first,), remaining_results)
             m = Match(matcher=self, context=test_context, results=results)
             # the description is how a match is rendered, so it must not make an empty message
             # look like a match
@@ -5465,7 +5489,7 @@ class MagicMatcher:
                     m.text_encoding = text_encoding
                 yield test, m
 
-    def binary_pass_tests(self, looks_text: bool) -> Iterable[MagicTest]:
+    def binary_pass_tests(self, looks_text: bool) -> Collection[MagicTest]:
         """The level 0 tests `MagicMatcher.match` runs over the file's own bytes.
 
         ``softmagic`` skips an entry whose declared string flags are exactly ``STRING_BINTEST``
@@ -5487,7 +5511,7 @@ class MagicMatcher:
         return [test for test in self.non_text_tests
                 if test.declared_test_type() != TestType.BINARY]
 
-    def text_pass_tests(self, looks_text: bool) -> Iterable[MagicTest]:
+    def text_pass_tests(self, looks_text: bool) -> Collection[MagicTest]:
         """The level 0 tests `MagicMatcher.match` runs over the decoded text buffer.
 
         This is the other arm of the same condition `binary_pass_tests` reads: ``softmagic`` skips
@@ -5587,6 +5611,7 @@ class MagicMatcher:
             raise ValueError(f"{def_file!s} line {line_number}: {e!s}")
         data_type = m.group("data_type")
         if data_type == "name":
+            assert matcher is not None
             if parent is not None:
                 raise ValueError(f"{def_file!s} line {line_number}: A named test must be at level 0")
             elif test_str in matcher.named_tests:
@@ -5629,10 +5654,12 @@ class MagicMatcher:
             elif data_type == "csv":
                 test = CSVTest(offset=offset, message=message, parent=parent)
             elif data_type == "indirect" or data_type == "indirect/r":
+                assert matcher is not None
                 test = IndirectTest(matcher=matcher, offset=offset,
                                     relative=m.group("data_type").endswith("r"),
                                     message=message, parent=parent)
             elif data_type == "use":
+                assert matcher is not None
                 if test_str.startswith("^"):
                     flip_endianness = True
                     test_str = test_str[1:]
@@ -5655,7 +5682,7 @@ class MagicMatcher:
                 # named_test might be a string here (the test name) rather than an actual NamedTest object.
                 # This will happen if the named test is defined after the use (late binding).
                 # We will resolve this after the entire file is parsed.
-                test = UseTest(  # type: ignore
+                test = UseTest(
                     named_test,
                     offset=offset,
                     message=message,
@@ -5745,6 +5772,7 @@ class MagicMatcher:
     def _parse_file(
             def_file: Union[str, Path], matcher: "MagicMatcher"
     ) -> Tuple[Iterable[MagicTest], Iterable[UseTest], Set[MagicTest], Set[IndirectTest]]:
+        def_file = Path(def_file)
         current_test: Optional[MagicTest] = None
         late_bindings: List[UseTest] = []
         level_zero_tests: List[MagicTest] = []
@@ -5821,7 +5849,7 @@ class MagicMatcher:
 
     @staticmethod
     def parse(*def_files: Union[str, Path]) -> "MagicMatcher":
-        late_bindings: Dict[str, List[UseTest]] = {}
+        late_bindings: Dict[Union[str, Path], List[UseTest]] = {}
         zero_level_tests: List[MagicTest] = []
         tests_with_mime: Set[MagicTest] = set()
         indirect_tests: Set[IndirectTest] = set()
