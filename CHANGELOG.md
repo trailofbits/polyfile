@@ -88,6 +88,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 
 ### Fixed
 
+- **Breaking:** PolyMerge handles commands without `--diff` and compares the functions shared
+  by each actual input group. Empty legacy traces and function source iteration work;
+  unavailable optional demangling reports an argument error (#3675).
+
 - **Breaking:** Lazy sequences support negative indexes and slices over their complete input
   while retaining lazy positive-index access and the Sequence interface.
 
