@@ -27,7 +27,7 @@ from time import gmtime, localtime, strftime
 from types import GeneratorType
 from typing import (
     Any, BinaryIO, Callable, Collection, Dict, FrozenSet, Generic, Iterable, Iterator, KeysView,
-    List, NamedTuple, Optional, Protocol, Set, Tuple, Type, TypeVar, Union
+    List, NamedTuple, Optional, Protocol, Self, Set, Tuple, Type, TypeVar, Union, cast
 )
 from uuid import UUID
 
@@ -446,7 +446,7 @@ def libmagic_base_type(declaration: str) -> str:
     Returns:
         A key of `LIBMAGIC_TYPE_CODES`.
     """
-    name = TYPE_MODIFIER.split(declaration, maxsplit=1)[0]
+    name = cast(str, TYPE_MODIFIER.split(declaration, maxsplit=1)[0])
     if name.startswith("u") and name[1:] in LIBMAGIC_TYPE_CODES:
         return name[1:]
     return name
@@ -1622,17 +1622,30 @@ class DynamicMagicTest(MagicTest, ABC):
         else:
             return self._bound_message
 
-    def bind(self, message: Union[str, Message]) -> MagicTest:
+    def bind(self, message: Union[str, Message]) -> Self:
+        """Bind a message in a new instance that preserves this test's subtype.
+
+        Args:
+            message: The message object or definition text to bind.
+
+        Returns:
+            A dynamically derived test with the same state and the supplied message.
+
+        Raises:
+            ValueError: If this test already has a bound message.
+        """
         if self._bound_message is not None:
             raise ValueError(f"{self!r} already has a bound message: {self.message!s}")
         elif not isinstance(message, Message):
             message = Message.parse(message)
-        result: DynamicMagicTest = type(f"Bound{self.__class__.__name__}", (self.__class__,), dict(self.__dict__))()
+        result = cast(Self, type(
+            f"Bound{self.__class__.__name__}", (self.__class__,), dict(self.__dict__)
+        )())
         result._bound_message = message
         return result
 
 
-TYPES_BY_NAME: Dict[str, "DataType"] = {}
+TYPES_BY_NAME: Dict[str, "_ParsedDataType"] = {}
 
 
 T = TypeVar("T")
@@ -1753,7 +1766,7 @@ class DataType(ABC, Generic[T]):
         raise NotImplementedError()
 
     @staticmethod
-    def parse(fmt: str) -> "DataType":
+    def parse(fmt: str) -> "_ParsedDataType":
         if fmt in TYPES_BY_NAME:
             return TYPES_BY_NAME[fmt]
         elif fmt.startswith("string") or fmt.startswith("ustring"):
@@ -1806,7 +1819,7 @@ class DataType(ABC, Generic[T]):
         return f"{self.__class__.__name__}({self.name})"
 
 
-def _check_name_spells_every_flag(fmt: str, data_type: DataType) -> None:
+def _check_name_spells_every_flag(fmt: str, data_type: DataType[T]) -> None:
     """Checks that a flag-bearing type's name records everything the type does.
 
     `DataType.parse` interns a type under its name, so two declarations that differ only by a flag
@@ -2419,7 +2432,7 @@ def _modifier_groups(format_str: str, names: Tuple[str, ...]) -> Tuple[str, ...]
     match = re.fullmatch(pattern, format_str)
     if match is None:
         raise ValueError(f"Invalid {names[0]} type declaration: {format_str!r}")
-    options: str = match.group("options") or ""
+    options = cast(str, match.group("options") or "")
     return tuple(options.split("/"))
 
 
@@ -2430,7 +2443,7 @@ def _parse_string_modifiers(
     length = None
     options = []
     tokens = (token for group in _modifier_groups(format_str, names)
-              for token in STRING_MODIFIER_TOKEN.findall(group))
+              for token in cast(List[str], STRING_MODIFIER_TOKEN.findall(group)))
     for token in tokens:
         if token[0].isdigit():
             if not allow_range:
@@ -2916,6 +2929,11 @@ class RegexMatch(Protocol):
         ...
 
 
+class _CompiledRegex(Protocol):
+    def search(self, data: bytes) -> RegexMatch | None:
+        ...
+
+
 class MagicRegex:
     """A definition's linear-time regex and the literal count libmagic scores it by."""
 
@@ -2939,7 +2957,7 @@ class MagicRegex:
         options.log_errors = False
         pattern = b"(?m)" + self.pattern if flags & re.MULTILINE else self.pattern
         try:
-            self.compiled = re2.compile(pattern, options=options)
+            self.compiled = cast(_CompiledRegex, re2.compile(pattern, options=options))
         except re2.error as error:
             detail = error.args[0]
             if isinstance(detail, bytes):
@@ -3326,16 +3344,19 @@ class NumericOperator(Enum):
 
 
 class NumericValue(Generic[NumericT]):
-    def __init__(self, value: NumericT, operator: NumericOperator = NumericOperator.EQUALS):
-        self.value: NumericT = value
+    def __init__(
+            self, value: NumericT | None, operator: NumericOperator = NumericOperator.EQUALS
+    ):
+        self.value: NumericT | None = value
         self.operator: NumericOperator = operator
 
     def test(self, to_match: NumericT, unsigned: bool, num_bytes: int,
              preprocess: NumericPreprocessor = lambda x: x) -> bool:
+        assert self.value is not None
         return self.operator.test(preprocess(to_match), self.value)
 
     @staticmethod
-    def parse(value: str, num_bytes: int) -> "NumericValue":
+    def parse(value: str, num_bytes: int) -> "NumericValue[int] | NumericValue[float]":
         value = value.strip()
         try:
             return IntegerValue.parse(value, num_bytes)
@@ -3351,7 +3372,7 @@ class NumericValue(Generic[NumericT]):
         return f"{self.operator}{self.value!s}"
 
 
-class NumericWildcard(NumericValue):
+class NumericWildcard(NumericValue[int]):
     def __init__(self):
         super().__init__(None)
 
@@ -3368,6 +3389,7 @@ class IntegerValue(NumericValue[int]):
             num_bytes: int,
             preprocess: NumericPreprocessor = lambda x: x
     ) -> bool:
+        assert self.value is not None
         to_test = make_c_style_int(value=self.value, num_bytes=num_bytes, signed=not unsigned)
         to_match = make_c_style_int(value=to_match, num_bytes=num_bytes, signed=not unsigned)
         return self.operator.test(preprocess(to_match), to_test)
@@ -3402,7 +3424,7 @@ class FloatValue(NumericValue[float]):
         return FloatValue(value=float(value), operator=operator)
 
 
-class NumericDataType(DataType[NumericValue]):
+class NumericDataType(DataType["NumericValue[int] | NumericValue[float]"]):
     def __init__(
             self,
             name: str,
@@ -3419,22 +3441,24 @@ class NumericDataType(DataType[NumericValue]):
         if self.endianness == Endianness.PDP and self.base_type.num_bytes != 4:
             raise ValueError(f"PDP endianness can only be used with four byte base types, not {self.base_type}")
 
-    def strength_term(self, expected: NumericValue) -> int:
+    def strength_term(self, expected: NumericValue[int] | NumericValue[float]) -> int:
         """One unit per byte the type reads (``file/src/apprentice.c:975-996``)."""
         return self.base_type.num_bytes * STRENGTH_MULT
 
-    def relation(self, expected: NumericValue) -> str:
+    def relation(self, expected: NumericValue[int] | NumericValue[float]) -> str:
         if isinstance(expected, NumericWildcard):
             return "x"
         return expected.operator.symbol
 
-    def parse_expected(self, specification: str) -> NumericValue:
+    def parse_expected(self, specification: str) -> NumericValue[int] | NumericValue[float]:
         if specification.strip() == "x":
             return NumericWildcard()
         else:
             return NumericValue.parse(specification, self.base_type.num_bytes)
 
-    def match(self, data: bytes, expected: NumericValue) -> DataTypeMatch:
+    def match(
+            self, data: bytes, expected: NumericValue[int] | NumericValue[float]
+    ) -> DataTypeMatch:
         if len(data) < self.base_type.num_bytes:
             return DataTypeMatch.INVALID
         elif self.endianness == Endianness.PDP:
@@ -3526,7 +3550,10 @@ class NumericDataType(DataType[NumericValue]):
         )
 
 
-def libmagic_str_range(data_type: DataType) -> int:
+_ParsedDataType = GUIDType | UTF16Type | StringType | PascalStringType | RegexType | NumericDataType
+
+
+def libmagic_str_range(data_type: DataType[T]) -> int:
     """The ``str_range`` libmagic stores for a string type.
 
     It is the number the declaration wrote after the type name, and zero when it wrote none:
@@ -3545,10 +3572,10 @@ def libmagic_str_range(data_type: DataType) -> int:
     """
     if isinstance(data_type, RegexType):
         return data_type.declared_length or 0
-    return getattr(data_type, "num_bytes", None) or 0
+    return cast(int | None, getattr(data_type, "num_bytes", None)) or 0
 
 
-def libmagic_str_flags(data_type: DataType) -> int:
+def libmagic_str_flags(data_type: DataType[T]) -> int:
     """The ``str_flags`` bits the modifier letters on `data_type` set.
 
     Args:
@@ -3583,7 +3610,7 @@ def libmagic_pstring_flags(data_type: PascalStringType) -> int:
     return flags | libmagic_str_flags(data_type.string_type)
 
 
-def libmagic_string_flags(data_type: DataType) -> bytes:
+def libmagic_string_flags(data_type: DataType[T]) -> bytes:
     """The ``str_range`` and ``str_flags`` word libmagic gives a string type.
 
     Args:
@@ -3619,7 +3646,7 @@ def libmagic_string_value(constant: StringTest) -> bytes:
     return b""
 
 
-def libmagic_numeric_value(data_type: DataType, value: Union[int, float]) -> bytes:
+def libmagic_numeric_value(data_type: DataType[T], value: Union[int, float]) -> bytes:
     """The bytes libmagic would copy into a numeric test's value union.
 
     Args:
@@ -3637,7 +3664,7 @@ def libmagic_numeric_value(data_type: DataType, value: Union[int, float]) -> byt
     return libmagic_field(value, 8)
 
 
-def libmagic_value(data_type: DataType, constant: Any) -> Tuple[int, bytes]:
+def libmagic_value(data_type: DataType[T], constant: T) -> Tuple[int, bytes]:
     """The ``vallen`` and value bytes libmagic would store for a parsed test value.
 
     libmagic reads no value at all for the ``x`` relation, so a wildcard leaves both zeroed
@@ -3657,6 +3684,7 @@ def libmagic_value(data_type: DataType, constant: Any) -> Tuple[int, bytes]:
     elif isinstance(constant, bytes):
         return len(constant), constant
     elif isinstance(constant, NumericValue) and not isinstance(constant, NumericWildcard):
+        assert constant.value is not None
         return 0, libmagic_numeric_value(data_type, constant.value)
     return 0, b""
 
@@ -5765,7 +5793,7 @@ class MagicMatcher:
                     except ValueError:
                         raise ValueError(f"{def_file!s} line {line_number}: Invalid offset type: {data_type!r}")
                 if test_str.strip() == "x":
-                    expected_value: NumericValue = NumericWildcard()
+                    expected_value: IntegerValue | NumericWildcard = NumericWildcard()
                 else:
                     expected_value = IntegerValue.parse(test_str, num_bytes=8)
                 test = OffsetMatchTest(offset=offset, value=expected_value, message=message,
@@ -5831,7 +5859,8 @@ class MagicMatcher:
                     raise ValueError(f"{def_file!s} line {line_number}: {e!s}")
                 test = ConstantMatchTest(
                     offset=offset,
-                    data_type=data_type,
+                    # The factory pairs each heterogeneous type with its own parsed value.
+                    data_type=cast(DataType[object], data_type),
                     constant=constant,
                     message=message,
                     parent=parent
