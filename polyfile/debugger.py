@@ -648,6 +648,7 @@ class Debugger(REPL):
 
     def debug_parse(self, instrumented_parser: InstrumentedParser, file_stream, match: Match) -> Iterator[Submatch]:
         log.clear_status()
+        source_base = match.offset
 
         if instrumented_parser.original_parser is None:
             parse = instrumented_parser.parser.parse
@@ -655,9 +656,14 @@ class Debugger(REPL):
             parse = instrumented_parser.original_parser
 
         def print_location():
+            position = file_stream.tell()
             self.write(f"{file_stream.name}", dim=True, color=ANSIColor.CYAN)
             self.write(":", dim=True)
-            self.write(f"{file_stream.tell()} ", dim=True, color=ANSIColor.CYAN)
+            self.write(
+                f"{file_stream.offset() + position} (stream byte {position}; "
+                f"source {match.source} byte {source_base + position}) ",
+                dim=True, color=ANSIColor.CYAN,
+            )
 
         if self._pdb is not None:
             # We are already debugging!
