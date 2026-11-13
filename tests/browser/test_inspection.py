@@ -92,6 +92,18 @@ def test_hover_preserves_source_and_persistent_selection(
     expect(viewer_page.locator("#hexdump .manually-focused")).to_have_count(4)
 
 
+def test_source_switch_clears_old_hover_labels_without_pointer_leave(
+    viewer_page: "Page", report_factory: ReportFactory
+) -> None:
+    decoded = match(0, 4, name="decoded node", source="decoded:0", decoded="ZGF0YQ==")
+    open_report(viewer_page, report_factory(b"file", [match(0, 4, children=[decoded])]))
+    viewer_page.locator("#byte0").hover()
+    expect(viewer_page.locator(".tree_label.highlighted")).to_have_count(1)
+    viewer_page.locator("#source").select_option("decoded:0")
+    expect(viewer_page.locator(".tree_label.highlighted")).to_have_count(0)
+    expect(viewer_page.locator("#hexdump .cursor")).to_have_count(0)
+
+
 def test_cross_source_selection_refreshes_current_source_search(
     viewer_page: "Page", report_factory: ReportFactory
 ) -> None:

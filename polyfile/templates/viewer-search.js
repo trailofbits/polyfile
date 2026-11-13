@@ -80,11 +80,17 @@ function searchPrefix(bytes) {
   const prefix = new Int32Array(bytes.length);
   let matched = 0;
   for (let index = 1; index < bytes.length; index += 1) {
-    while (matched > 0 && bytes[index] !== bytes[matched]) matched = prefix[matched - 1] ?? 0;
+    while (matched > 0 && bytes[index] !== bytes[matched])
+      matched = fallbackSearchMatch(prefix, matched);
     if (bytes[index] === bytes[matched]) matched += 1;
     prefix[index] = matched;
   }
   return prefix;
+}
+
+/** @param {Int32Array} prefix @param {number} matched @returns {number} */
+function fallbackSearchMatch(prefix, matched) {
+  return prefix[matched - 1] ?? 0;
 }
 
 /** @param {Map<string,SearchHit>} hits @param {SearchHit} hit */
@@ -109,7 +115,7 @@ function yieldSearch() {
  * @param {number} matched @param {number} value @returns {number}
  */
 function advanceSearchMatch(bytes, prefix, matched, value) {
-  while (matched > 0 && value !== bytes[matched]) matched = prefix[matched - 1] ?? 0;
+  while (matched > 0 && value !== bytes[matched]) matched = fallbackSearchMatch(prefix, matched);
   return value === bytes[matched] ? matched + 1 : matched;
 }
 
@@ -124,7 +130,8 @@ async function scanSearchBytes(task) {
   const prefix = searchPrefix(bytes);
   let matched = 0;
   for (let index = 0; index < source.length; index += 1) {
-    const value = task.needle.fold ? foldSearchByte(source[index] ?? 0) : (source[index] ?? 0);
+    const byte = source[index] ?? 0;
+    const value = task.needle.fold ? foldSearchByte(byte) : byte;
     matched = advanceSearchMatch(bytes, prefix, matched, value);
     if (matched === bytes.length) {
       addSearchHit(task.hits, {
@@ -134,7 +141,7 @@ async function scanSearchBytes(task) {
         kinds: [task.needle.kind],
         nodes: [],
       });
-      matched = prefix[matched - 1] ?? 0;
+      matched = fallbackSearchMatch(prefix, matched);
     }
     if ((index + 1) % 16384 === 0) {
       if (!(await searchCheckpoint(task.generation, task.source, task.hits.size))) return false;

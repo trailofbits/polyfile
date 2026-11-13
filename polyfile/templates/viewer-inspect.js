@@ -1,6 +1,7 @@
 /** @type {Set<HTMLElement>} */
 const hoveredNodeLabels = new Set();
 let detailsKey = '';
+let inspectionSource = viewerState.activeSource;
 let copyGeneration = 0;
 let clipboardWrites = Promise.resolve();
 /** @type {HTMLElement|null} */
@@ -155,21 +156,8 @@ function inspectionActions(range, node) {
   return actions;
 }
 
-function updateSelectionDetails() {
-  const uid = viewerState.selectedNode;
-  const node = uid === null ? undefined : nodesById.get(uid);
-  const range = viewerState.selectedRange;
-  const key = `${viewerState.activeSource}:${uid}:${range?.start}:${range?.length}`;
-  if (key === detailsKey) return;
-  detailsKey = key;
-  const details = getElement('selection-details');
-  if (!range || range.source !== viewerState.activeSource) {
-    clearSelectedLabels();
-    details.replaceChildren(
-      inspectionText('p', 'Select a structure node to inspect its byte range.'),
-    );
-    return;
-  }
+/** @param {HTMLElement} details @param {ViewerRange} range @param {ViewerNode|undefined} node */
+function renderInspectionDetails(details, range, node) {
   const list = document.createElement('dl');
   appendInspectionDetail(list, 'Source', range.source);
   appendInspectionDetail(list, 'Offset', `0x${range.start.toString(16)} (${range.start})`);
@@ -187,6 +175,30 @@ function updateSelectionDetails() {
     inspectionActions(range, node),
     status,
   );
+}
+
+function updateSelectionDetails() {
+  if (inspectionSource !== viewerState.activeSource) {
+    inspectionSource = viewerState.activeSource;
+    clearHover();
+  }
+  const uid = viewerState.selectedNode;
+  const node = uid === null ? undefined : nodesById.get(uid);
+  const range = viewerState.selectedRange;
+  const key = range
+    ? `${viewerState.activeSource}:${uid}:${range.start}:${range.length}`
+    : `${viewerState.activeSource}:none`;
+  if (key === detailsKey) return;
+  detailsKey = key;
+  const details = getElement('selection-details');
+  if (!range || range.source !== viewerState.activeSource) {
+    clearSelectedLabels();
+    details.replaceChildren(
+      inspectionText('p', 'Select a structure node to inspect its byte range.'),
+    );
+    return;
+  }
+  renderInspectionDetails(details, range, node);
 }
 
 /** @param {string} message */
