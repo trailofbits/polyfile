@@ -122,14 +122,18 @@ artifact: it is gitignored, and never edited by hand.
 
 ### Linting
 
-Both passes lint the same targets. Only the second excludes the auto-generated Kaitai parsers:
-generated code never satisfies the style and complexity checks, but it must still be valid Python,
-and `E9` covers `E999`.
+All checks cover the packages, tests, and build scripts. The blocking syntax pass includes
+auto-generated Kaitai parsers: generated code must still be valid Python, and `E9` covers `E999`.
+Ruff checks only Python modernization (`UP`) rules with a Python 3.11 target. It excludes generated
+parsers, downloaded compilers, and upstream submodules.
 
 ```bash
 # Blocking: syntax errors and undefined names, including the generated parsers
 uv run flake8 polyfile polymerge tests build_backend.py compile_kaitai_parsers.py \
     --count --select=E9,F63,F7,F82 --show-source --statistics
+
+# Blocking: Python modernization in handwritten code
+uv run ruff check polyfile polymerge tests build_backend.py compile_kaitai_parsers.py
 
 # Advisory: style and complexity
 uv run flake8 polyfile polymerge tests build_backend.py compile_kaitai_parsers.py \
@@ -141,6 +145,9 @@ uv run flake8 polyfile polymerge tests build_backend.py compile_kaitai_parsers.p
 The type check covers handwritten code in `polyfile/`, `polymerge/`, and `tests/`, plus the
 build scripts. `pyproject.toml` excludes generated Kaitai parsers and downloaded compiler files.
 CI checks each supported Python version using the interpreter installed for that matrix job.
+Use native generics such as `set[int]` and nullable unions such as `TestResult | None`. Use
+`typing.Self` when a method preserves its receiver's subclass, as `Struct.read()` does. Keep a
+`TypeVar` when it represents an independent value type or preserves a callable signature.
 
 ```bash
 uv run ty check --error-on-warning
@@ -168,6 +175,9 @@ Run all checks before committing changes:
 # Lint (blocking)
 uv run flake8 polyfile polymerge tests build_backend.py compile_kaitai_parsers.py \
     --count --select=E9,F63,F7,F82 --show-source --statistics
+
+# Modernization (handwritten code, tests, and build scripts)
+uv run ruff check polyfile polymerge tests build_backend.py compile_kaitai_parsers.py
 
 # Lint (advisory)
 uv run flake8 polyfile polymerge tests build_backend.py compile_kaitai_parsers.py \
@@ -231,9 +241,9 @@ tests/
 
 ### Adding a Custom Matcher (Python)
 ```python
-from typing import Optional
-
-from polyfile.magic import AbsoluteOffset, FailedTest, MagicMatcher, MagicTest, MatchedTest, TestResult, TestType
+from polyfile.magic import (
+    AbsoluteOffset, FailedTest, MagicMatcher, MagicTest, MatchedTest, TestResult, TestType,
+)
 
 
 class MyMatcher(MagicTest):
@@ -248,7 +258,9 @@ class MyMatcher(MagicTest):
     def subtest_type(self) -> TestType:
         return TestType.BINARY
 
-    def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
+    def test(
+        self, data: bytes, absolute_offset: int, parent_match: TestResult | None,
+    ) -> TestResult:
         if data.startswith(b"MAGIC"):
             return MatchedTest(self, value=data, offset=0, length=len(data))
         return FailedTest(self, offset=0, message="the file does not start with MAGIC")
