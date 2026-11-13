@@ -303,9 +303,15 @@ class PSSequence(PSToken):
         return result
 
     def __add__(self: Type[C], other) -> C:
+        value = super().__add__(other)
+        length = self.pdf_bytes
+        aligned = self._is_byte_aligned() and not other
         if isinstance(other, self.__class__) and other.pdf_offset == self.pdf_offset + self.pdf_bytes:
-            return self.__class__(super().__add__(other), pdf_offset=self.pdf_offset)
-        return self.__class__(super().__add__(other), pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes)
+            length += other.pdf_bytes
+            aligned = self._is_byte_aligned() and other._is_byte_aligned()
+        result = self.__class__(value, pdf_offset=self.pdf_offset, pdf_bytes=length)
+        result._pdf_byte_aligned = aligned
+        return result
 
     def __radd__(self: Type[C], other) -> C:
         return self.__class__(other, pdf_offset=self.pdf_offset - len(other)) + self

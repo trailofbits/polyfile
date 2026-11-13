@@ -1,6 +1,7 @@
 """PDF token operations retain byte-accurate or conservative whole-token source spans."""
 
 import json
+from typing import cast
 
 import pytest
 
@@ -189,3 +190,80 @@ def test_alignment_metadata_is_not_part_of_serialized_matches() -> None:
     value = token(False)[::-1]
     match = Match("token", value, matcher=Matcher())
     assert "_pdf_byte_aligned" not in json.dumps(match.to_obj())
+
+
+@pytest.mark.parametrize("binary", [False, True])
+def test_empty_suffix_preserves_nonlinear_mapping(binary: bool) -> None:
+    source = token(binary)[::-1]
+    assert isinstance(source, (PSStr, PSBytes))
+    result = cast(bytes, source) + b"" if isinstance(source, PSBytes) else cast(str, source) + ""
+    assert result == (b"edcba" if binary else "edcba")
+    assert span(result) == (7, 5)
+    assert span(result[1:2]) == (7, 5)
+    copied = type(source)(result, pdf_offset=7, pdf_bytes=5)
+    assert span(copied[1:2]) == (7, 5)
+
+
+@pytest.mark.parametrize("binary", [False, True])
+def test_unpositioned_suffix_does_not_reactivate_alignment(binary: bool) -> None:
+    source = token(binary, "ab", size=4)
+    result = cast(bytes, source) + b"cd" if isinstance(source, PSBytes) else cast(str, source) + "cd"
+    assert result == (b"abcd" if binary else "abcd")
+    assert span(result) == (7, 4)
+    assert span(result[1:2]) == (7, 4)
+
+
+@pytest.mark.parametrize("binary", [False, True])
+def test_empty_suffix_retains_aligned_mapping(binary: bool) -> None:
+    source = token(binary)
+    result = cast(bytes, source) + b"" if isinstance(source, PSBytes) else cast(str, source) + ""
+    assert span(result) == (7, 5)
+    assert span(result[1:2]) == (8, 1)
+
+
+@pytest.mark.parametrize("binary", [False, True])
+@pytest.mark.parametrize("nonlinear", [None, "left", "right"])
+def test_contiguous_concatenation_combines_source_spans(
+    binary: bool, nonlinear: str | None,
+) -> None:
+    left = token(binary, "abc")
+    right = token(binary, "de")
+    right.pdf_offset = 10
+    if nonlinear == "left":
+        left = left[::-1]
+    elif nonlinear == "right":
+        right = right[::-1]
+    if isinstance(left, PSBytes):
+        assert isinstance(right, PSBytes)
+        result = cast(bytes, left) + cast(bytes, right)
+        expected = bytes(left) + bytes(right)
+    else:
+        assert isinstance(left, PSStr) and isinstance(right, PSStr)
+        result = cast(str, left) + cast(str, right)
+        expected = str(left) + str(right)
+    assert result == expected
+    assert span(result) == (7, 5)
+    assert span(result[1:2]) == ((8, 1) if nonlinear is None else (7, 5))
+
+
+@pytest.mark.parametrize("binary", [False, True])
+def test_contiguous_concatenation_keeps_full_nonlinear_source_spans(binary: bool) -> None:
+    left = token(binary, "abc", size=5)
+    right = token(binary, "de")
+    right.pdf_offset = 12
+    if isinstance(left, PSBytes):
+        assert isinstance(right, PSBytes)
+        result = cast(bytes, left) + cast(bytes, right)
+    else:
+        assert isinstance(right, PSStr)
+        result = cast(str, left) + cast(str, right)
+    assert span(result) == (7, 7)
+    assert span(result[1:2]) == (7, 7)
+
+
+@pytest.mark.parametrize("binary", [False, True])
+def test_split_after_concatenation_preserves_nonlinear_mapping(binary: bool) -> None:
+    source = token(binary, "ab cd")[::-1]
+    assert isinstance(source, (PSStr, PSBytes))
+    result = cast(bytes, source) + b"" if isinstance(source, PSBytes) else cast(str, source) + ""
+    assert [span(part) for part in result.split()] == [(7, 5), (7, 5)]
