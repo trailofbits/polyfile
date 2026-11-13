@@ -94,6 +94,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 - **Breaking:** Prefix concatenation preserves nonlinear PDF token spans. Aligned values retain
   the existing inferred positions for native prefixes, and contiguous token prefixes retain
   their full recorded source spans (#3666).
+- **Breaking:** Text and byte wrappers constructed from numeric PDF tokens retain conservative
+  whole-token spans instead of inferring an exact byte map from matching value lengths (#3666).
 - **Breaking:** PDF token splitting rejects incompatible separator families, accepts contiguous
   byte-buffer separators, and checks platform-sized integer overflow for `maxsplit` (#3666).
 - **Breaking:** PDF slices, split parts, and stripped values report bounded source spans.

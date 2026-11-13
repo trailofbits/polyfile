@@ -308,3 +308,18 @@ def test_reflected_concatenation_combines_known_contiguous_spans(binary: bool) -
     assert result == (b"abcde" if binary else "abcde")
     assert span(result) == (7, 7)
     assert span(result[1:2]) == (7, 7)
+
+
+@pytest.mark.parametrize("binary", [False, True])
+@pytest.mark.parametrize("as_int", [False, True])
+def test_numeric_roundtrip_retains_conservative_source_mapping(binary: bool, as_int: bool) -> None:
+    source = token(binary, "1234")[::-1]
+    assert isinstance(source, (PSStr, PSBytes))
+    number = source.as_int() if as_int else PSInt(source, pdf_offset=7, pdf_bytes=4)
+    assert span(number) == (7, 4)
+    copied = PSInt(number, pdf_offset=7, pdf_bytes=4)
+    result = PSStr(copied, pdf_offset=7, pdf_bytes=4)
+    assert result == "4321"
+    assert span(result[:1]) == (7, 4)
+    assert span(source) == (7, 4)
+

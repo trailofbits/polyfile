@@ -115,8 +115,9 @@ class PSToken:
         ret = super().__new__(cls, *args)
         ret.pdf_offset = kwargs["pdf_offset"]
         ret.pdf_bytes = kwargs["pdf_bytes"]
-        if args and isinstance(args[0], PSSequence):
-            ret._pdf_byte_aligned = args[0]._is_byte_aligned()
+        if args and isinstance(args[0], PSToken):
+            source = args[0]
+            ret._pdf_byte_aligned = isinstance(source, PSSequence) and source._is_byte_aligned()
         return ret
 
     def __int__(self):
