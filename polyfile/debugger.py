@@ -715,6 +715,8 @@ class Debugger(REPL):
                             result = next(generator)
                         else:
                             result = self._pdb.runcall(next, generator)
+                        if result is None:
+                            return
                         self.write(f"Got a submatch:\n", dim=True)
                         self.print_match(result)
                         yield result
