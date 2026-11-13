@@ -88,6 +88,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 
 ### Fixed
 
+- **Breaking:** PDF token splitting respects finite split limits, empty separator fields, and
+  integer-index protocol arguments without losing unsplit suffixes (#3666).
+
 - **Breaking:** PDF tokens support Python numeric conversion and text encoding/stripping defaults
   without conversion errors or deprecation warnings. Wrapper operations retain source metadata
   (#3666).

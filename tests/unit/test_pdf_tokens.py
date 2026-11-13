@@ -1,4 +1,5 @@
 import pytest
+from typing import SupportsIndex, cast
 
 from polyfile.pdf import PSBytes, PSFloat, PSInt, PSStr, PSToken
 
@@ -92,3 +93,63 @@ def test_byte_stripping_remains_supported() -> None:
 
 def test_integer_hex_conversion_uses_python_three_protocol() -> None:
     assert hex(PSInt(42, pdf_offset=7, pdf_bytes=2)) == "0x2a"
+
+
+@pytest.mark.parametrize("value", [-1.5, 0.0, 1.5])
+def test_float_tokens_convert_to_native_integers(value: float) -> None:
+    token = PSFloat(value, pdf_offset=7, pdf_bytes=4)
+    assert type(int(token)) is int
+    assert int(token) == int(value)
+    assert (token.pdf_offset, token.pdf_bytes) == (7, 4)
+
+
+@pytest.mark.parametrize(
+    ("value", "error"), [(float("inf"), OverflowError), (float("nan"), ValueError)]
+)
+def test_invalid_float_to_integer_conversions_keep_builtin_errors(
+    value: float, error: type[Exception]
+) -> None:
+    token = PSFloat(value, pdf_offset=7, pdf_bytes=4)
+    with pytest.raises(error):
+        int(token)
+
+
+@pytest.mark.parametrize("value", ["ab cd ef", " ab cd ef ", "", "a,,b,", "aaaa"])
+@pytest.mark.parametrize("separator", [None, " ", ",", "aa"])
+@pytest.mark.parametrize("maxsplit", [-1, 0, 1, 2])
+def test_text_split_values_match_builtin_sequences(
+    value: str, separator: str | None, maxsplit: int
+) -> None:
+    token = PSStr(value, pdf_offset=7, pdf_bytes=len(value))
+    assert token.split(separator, maxsplit) == value.split(separator, maxsplit)
+    binary = value.encode()
+    byte_token = PSBytes(binary, pdf_offset=7, pdf_bytes=len(binary))
+    byte_separator = None if separator is None else separator.encode()
+    assert byte_token.split(byte_separator, maxsplit) == binary.split(byte_separator, maxsplit)
+
+
+@pytest.mark.parametrize("maximum", [-1, 0, 1])
+def test_split_accepts_index_protocol_arguments(maximum: int) -> None:
+    class SplitLimit:
+        def __index__(self) -> int:
+            return maximum
+
+    value = "ab cd ef"
+    token = PSStr(value, pdf_offset=7, pdf_bytes=len(value))
+    assert token.split(None, SplitLimit()) == value.split(None, maximum)
+
+
+def test_split_rejects_empty_separators() -> None:
+    token = PSStr("value", pdf_offset=7, pdf_bytes=5)
+    with pytest.raises(ValueError, match="empty separator"):
+        token.split("")
+    byte_token = PSBytes(b"value", pdf_offset=7, pdf_bytes=5)
+    with pytest.raises(ValueError, match="empty separator"):
+        byte_token.split(b"")
+
+
+def test_split_rejects_non_index_arguments() -> None:
+    token = PSStr("value", pdf_offset=7, pdf_bytes=5)
+    invalid = cast(SupportsIndex, object())  # Deliberately exercise the runtime input boundary.
+    with pytest.raises(TypeError, match="integer"):
+        token.split(None, invalid)
