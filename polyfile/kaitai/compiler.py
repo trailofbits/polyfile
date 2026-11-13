@@ -21,7 +21,8 @@ import stat
 import subprocess
 import sys
 import tokenize
-from typing import Iterable, List, Optional, Tuple, Union
+from typing import cast
+from collections.abc import Iterable
 from urllib.request import urlopen
 import warnings
 from zipfile import ZipFile
@@ -57,7 +58,7 @@ _HARD_KEYWORDS: str = "|".join(keyword.kwlist)
 # kaitai-struct-compiler 0.11 copies a specification's identifiers into Python verbatim, so these
 # are the three shapes in which a field or enum member named after a hard keyword reaches the
 # generated source. Every one of them is a syntax error, which is what makes matching them safe.
-_KEYWORD_PATTERNS: Tuple[Tuple[re.Pattern, str], ...] = (
+_KEYWORD_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
     # An enum member: `not = 6`
     (re.compile(rf"^(?P<indent>[ \t]+)(?P<kw>{_HARD_KEYWORDS})(?P<tail> = )", re.MULTILINE),
      r"\g<indent>\g<kw>_\g<tail>"),
@@ -74,9 +75,9 @@ _QUOTED_KEYWORD = re.compile('"(?P<kw>' + _HARD_KEYWORDS + ')"')
 _QUOTED_REPLACEMENT = '"\\g<kw>_"'
 
 
-def _escape_seq_fields(match: "re.Match") -> str:
+def _escape_seq_fields(match: re.Match[str]) -> str:
     fields = _QUOTED_KEYWORD.sub(_QUOTED_REPLACEMENT, match.group("fields"))
-    return match.group("head") + fields + "]"
+    return cast(str, match.group("head")) + fields + "]"
 
 
 def _decodes(literal: str) -> bool:
@@ -135,12 +136,12 @@ def _fix_reserved_keywords(python_path: Path) -> None:
 
 
 class CompiledKSY:
-    def __init__(self, class_name: str, python_path: Union[str, Path], dependencies: Iterable["CompiledKSY"] = ()):
+    def __init__(self, class_name: str, python_path: str | Path, dependencies: Iterable["CompiledKSY"] = ()):
         self.class_name: str = class_name
         if not isinstance(python_path, Path):
             python_path = Path(python_path)
         self.python_path: Path = python_path
-        self.dependencies: List[CompiledKSY] = list(dependencies)
+        self.dependencies: list[CompiledKSY] = list(dependencies)
 
     def __repr__(self):
         return f"{self.__class__.__name__}(class_name={self.class_name!r}, python_path={self.python_path!r}, "\
@@ -158,7 +159,7 @@ def install_compiler():
         sys.stderr.write(f"Installed the Kaitai Struct Compiler to {COMPILER_BIN}\n")
 
 
-def compiler_path(auto_install: bool = True) -> Optional[Path]:
+def compiler_path(auto_install: bool = True) -> Path | None:
     if COMPILER_BIN.exists():
         return COMPILER_BIN
     global_path = shutil.which(KAITAI_COMPILER_NAME)
@@ -170,7 +171,7 @@ def compiler_path(auto_install: bool = True) -> Optional[Path]:
     return compiler_path(auto_install=False)
 
 
-def compile(ksy_path: Union[str, Path], output_directory: Union[str, Path], auto_install: bool = True) -> CompiledKSY:
+def compile(ksy_path: str | Path, output_directory: str | Path, auto_install: bool = True) -> CompiledKSY:
     """Returns the list of compiled KSYs; the original spec being first, followed by its dependencies"""
     compiler = compiler_path(auto_install=auto_install)
     if compiler is None:

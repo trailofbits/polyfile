@@ -77,6 +77,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 
 ### Changed
 
+- Modernize handwritten Python annotations for Python 3.11 with native generics, unions, and
+  subclass-preserving `Self` returns, and enforce modernization rules with Ruff (#3670).
+
+- Debugger and command callbacks, generated command subclasses, and command-line output state
+  have explicit Python 3.11 type contracts while retaining existing behavior (#3673).
+- Build helper annotations describe compiler results, parser manifests, and optional progress
+  output while retaining standard-library-only initialization (#3673).
+- PolyMerge annotations describe trace sources, structured documents, and graph nodes. JSON
+  inputs use context-managed streams after argument parsing (#3673).
+
+- Core Python annotations describe nullable analysis caches, callable parsers, generic matchers,
+  search and serialization traversal, and native decoder boundaries without changing their
+  runtime behavior (#3671).
+
+- Remove compatibility imports and runtime bases for Python versions older than 3.11.
+
 - **Breaking:** JSON elements identify their physical or decoded `source`; offsets stop at
   decoded-buffer boundaries. ZIP and PDF decoded content uses explicit `decoded_content` nodes.
   HTML highlighting, downloads, and coverage use the selected source, and decoded text is escaped.
@@ -85,6 +101,74 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
   CI tests Python 3.11 through 3.14 independently so a failing job preserves other results.
 
 ### Fixed
+
+- **Breaking:** HTTP AST spans use original UTF-8 byte positions rather than character
+  positions, including multibyte headers and bodies within nested or decoded sources (#3712).
+  Request-start cursors count bytes and reject positions inside a UTF-8 character.
+
+- **Breaking:** Nested BrainFu loops use their immediate parent's source coordinates, keeping
+  loop and command offsets aligned in bounded stream views (#3711).
+
+- **Breaking:** PDF concatenation retains nonlinear source mappings and combines the full spans
+  of contiguous instrumented operands, including when a later slice or split consumes the result
+  (#3666).
+- **Breaking:** Prefix concatenation preserves nonlinear PDF token spans. Aligned values retain
+  the existing inferred positions for native prefixes, and contiguous token prefixes retain
+  their full recorded source spans (#3666).
+- **Breaking:** Text and byte wrappers constructed from numeric PDF tokens retain conservative
+  whole-token spans instead of inferring an exact byte map from matching value lengths (#3666).
+- **Breaking:** PDF codec conversions retain exact byte mappings only when a native codec and
+  representable input establish one-to-one positions. Lossy and custom conversions keep whole
+  source spans even when their input and output lengths match. Codec registry changes during
+  conversion and custom codecs with altered metadata preserve conservative source spans (#3666).
+- **Breaking:** PDF token splitting rejects incompatible separator families, accepts contiguous
+  byte-buffer separators, and checks platform-sized integer overflow for `maxsplit` (#3666).
+- **Breaking:** PDF slices, split parts, and stripped values report bounded source spans.
+  Byte-aligned selections identify their source interval; nonlinear values without a byte map
+  retain the whole original token span. Structured selections preserve recorded element spans
+  (#3666).
+
+- **Breaking:** PDF token splitting respects finite split limits, empty separator fields, and
+  integer-index protocol arguments without losing unsplit suffixes (#3666).
+
+- **Breaking:** PDF numeric protocols return native values without conversion errors or
+  deprecation warnings. Use `as_int()` and `as_float()` to retain byte provenance on converted
+  tokens. Text encoding and stripping support built-in defaults (#3666).
+
+- **Breaking:** PolyMerge returns an empty association map for an empty PolyFile structure,
+  including when the program trace contains tainted bytes (#3682).
+- **Breaking:** Aborting PDB while stepping through parser matches stops that debugging run
+  without printing or yielding an absent match (#3678).
+
+- **Breaking:** PolyMerge handles commands without `--diff` and compares the functions shared
+  by each actual input group. Empty legacy traces and function source iteration work;
+  unavailable optional demangling reports an argument error (#3675).
+
+- **Breaking:** Lazy sequences support negative indexes and slices over their complete input
+  while retaining lazy positive-index access and the Sequence interface.
+
+- **Breaking:** Loading a serialized multi-sequence search returns its result without printing
+  or terminating the process, and rejects serialized values that are not search roots.
+
+- **Breaking:** FileStream seeks use bounded view-relative positions and return the new
+  position. Negative view origins and lengths are rejected, and past-EOF origins consistently
+  produce empty views at EOF, including when views are nested (#3664).
+- **Breaking:** FileStream integer indexes and unit-step slices normalize negative and omitted
+  bounds consistently with bytes. Missing integer indexes raise `IndexError` (#3664).
+- **Breaking:** FileStream accepts readable binary inputs and rejects text streams and destructive
+  or text path modes before opening a file. Unnamed binary buffers are supported, and public
+  docstrings specify parent, view, backing-buffer, cursor, and ownership semantics (#3664).
+- **Breaking:** PDF, Kaitai, and HTTP AST offsets stay within their sources across nested stream
+  views and decoded data. Parser debugger locations distinguish backing-file, stream, and
+  analysis-source coordinates (#3665).
+- **Breaking:** Brainfuck matching returns successful results after optional arithmetic noop
+  validation, while retaining cancelling-pair rejection and existing thresholds (#3668).
+- **Breaking:** JPEG2000 image previews encode PNG bytes into the data URL without raising
+  `TypeError` (#3667).
+- **Breaking:** HTTP chunk decoding accepts full hexadecimal sizes and extensions, counts each
+  decoded byte once, and retains available prefixes with their actual length on incomplete input.
+  Trailer fields stop at the terminating empty line, so subsequent pipelined request headers
+  cannot populate or overwrite trailer metadata (#3674).
 
 - Bounded file regions now limit reads before allocating data, including `read()` and
   `read(-1)`, so archive members cannot expose neighboring bytes or copy the remaining archive.
