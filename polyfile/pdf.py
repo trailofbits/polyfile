@@ -386,10 +386,15 @@ class PSSequence(PSToken):
 
 class PSStr(PSSequence, str):
     def encode(self, encoding: str = "utf-8", errors: str = "strict") -> "PSBytes":
+        if (
+            not isinstance(encoding, str) or not isinstance(errors, str)
+            or str.__contains__(encoding, "\x00") or str.__contains__(errors, "\x00")
+        ):
+            super().encode(encoding, errors)
+        encoder = codecs.lookup(encoding).encode
         result = PSBytes(
             super().encode(encoding, errors), pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes
         )
-        encoder = codecs.lookup(encoding).encode
         ascii_encoding = encoder is codecs.ascii_encode or encoder is codecs.utf_8_encode
         one_byte_mapping = (
             ascii_encoding and str.isascii(self)
@@ -427,10 +432,15 @@ class PSBytes(PSSequence, bytes):
                 return PSInt(ret, pdf_offset=self.pdf_offset + item)
 
     def decode(self, encoding: str = "utf-8", errors: str = "strict") -> PSStr:
+        if (
+            not isinstance(encoding, str) or not isinstance(errors, str)
+            or str.__contains__(encoding, "\x00") or str.__contains__(errors, "\x00")
+        ):
+            super().decode(encoding, errors)
+        decoder = codecs.lookup(encoding).decode
         result = PSStr(
             super().decode(encoding, errors), pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes
         )
-        decoder = codecs.lookup(encoding).decode
         ascii_decoding = decoder is codecs.ascii_decode or decoder is decode_utf8
         one_byte_mapping = (
             ascii_decoding and bytes.isascii(self)

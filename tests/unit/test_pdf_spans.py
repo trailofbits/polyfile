@@ -397,3 +397,97 @@ def test_custom_codec_names_do_not_claim_native_byte_mappings(
     )
     assert converted == ("ba" if binary else b"ba")
     assert span(converted[:1]) == (7, 2)
+
+
+@pytest.fixture(params=["unregister", "replace"])
+def transient_codec(request: pytest.FixtureRequest) -> Iterator[tuple[str, list[str]]]:
+    calls: list[str] = []
+
+    def encode(value: str, errors: str = "strict") -> tuple[bytes, int]:
+        calls.append("encode")
+        codecs.unregister(search)
+        if request.param == "replace":
+            codecs.register(replacement)
+        return value[::-1].encode("ascii"), len(value)
+
+    def decode(value: object, errors: str = "strict") -> tuple[str, int]:
+        assert isinstance(value, (bytes, bytearray, memoryview))
+        calls.append("decode")
+        codecs.unregister(search)
+        if request.param == "replace":
+            codecs.register(replacement)
+        raw = bytes(value)
+        return raw[::-1].decode("ascii"), len(raw)
+
+    def replacement(name: str) -> codecs.CodecInfo | None:
+        return codecs.lookup("ascii") if name == "pdf_provenance_transient" else None
+
+    def search(name: str) -> codecs.CodecInfo | None:
+        if name == "pdf_provenance_transient":
+            return codecs.CodecInfo(name="utf-8", encode=encode, decode=decode)
+        return None
+
+    codecs.register(search)
+    try:
+        yield "pdf_provenance_transient", calls
+    finally:
+        codecs.unregister(search)
+        codecs.unregister(replacement)
+
+
+@pytest.mark.parametrize("binary", [False, True])
+def test_codec_registry_changes_do_not_affect_returned_provenance(
+    binary: bool, transient_codec: tuple[str, list[str]],
+) -> None:
+    name, calls = transient_codec
+    source = token(binary, "ab")
+    converted = source.decode(name) if isinstance(source, PSBytes) else source.encode(name)
+    assert converted == ("ba" if binary else b"ba")
+    assert span(converted[:1]) == (7, 2)
+    assert calls == (["decode"] if binary else ["encode"])
+
+
+@pytest.mark.parametrize("binary", [False, True])
+def test_native_codec_registry_change_control(
+    binary: bool, transient_codec: tuple[str, list[str]],
+) -> None:
+    name, calls = transient_codec
+    converted = b"ab".decode(name) if binary else "ab".encode(name)
+    assert converted == ("ba" if binary else b"ba")
+    assert calls == (["decode"] if binary else ["encode"])
+
+
+@pytest.mark.parametrize("binary", [False, True])
+@pytest.mark.parametrize(
+    ("encoding", "errors"),
+    [
+        (None, "strict"),
+        (42, "strict"),
+        (b"ascii", "strict"),
+        ("missing_codec", None),
+        ("missing_codec", 42),
+        (None, None),
+        (42, None),
+        ("\x00", "strict"),
+        ("ascii", "\x00"),
+        ("missing_codec", "\x00"),
+        ("\x00", None),
+        ("missing_codec", "strict"),
+    ],
+)
+def test_codec_arguments_preserve_native_validation_order(
+    binary: bool, encoding: object, errors: object,
+) -> None:
+    encoding, errors = cast(str, encoding), cast(str, errors)
+    source = token(binary, "ab")
+    with pytest.raises((TypeError, ValueError, LookupError)) as expected:
+        if isinstance(source, PSBytes):
+            b"ab".decode(encoding, errors)
+        else:
+            "ab".encode(encoding, errors)
+    with pytest.raises(type(expected.value)) as actual:
+        if isinstance(source, PSBytes):
+            source.decode(encoding, errors)
+        else:
+            source.encode(encoding, errors)
+    assert str(actual.value) == str(expected.value)
