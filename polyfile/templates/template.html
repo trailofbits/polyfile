@@ -2,37 +2,31 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>PolyFile | {{ filename|e }}</title>
     <style>
 {% include "hexdump.css" %}
     </style>
-    <script type="text/javascript">
-        /* BEGIN JQUERY */
-{% include "jquery-3.4.1.min.js" %}
-        /* END JQUERY */
-    </script>
-    <script type="text/javascript">
-        /* BEGIN download.js */
-{% include "download.js" %}
-        /* END download.js */
-    </script>
-    <script type="text/javascript">
-{% include "hexdump.js" %}
-    </script>
 </head>
 <body>
-<input type="button" onclick="downloadFile()" value="Download File" />
-<label>Source <select id="source" onchange="selectSource(this.value)">
+<button type="button" data-action="download-file">Download File</button>
+<label>Source <select id="source">
 {% for source in source_buffers %}<option value="{{ source|e }}">{{ source|e }}</option>{% endfor %}
 </select></label>
-<input type="search" placeholder="search" id="search" onsearch="pageSearch()" />
-<span id="searchinfo"></span>
-<span id="searchbuttons" style="display:none;">
-    <input type="button" value="⬆" id="searchup" onclick="searchUp()" />
-    <input type="button" value="⬇" id="searchdown" onclick="searchDown()" />
+<label>Search <input type="search" placeholder="Search" id="search"></label>
+<label>Mode <select id="searchmode">
+    <option value="combined">Combined</option><option value="text">Text</option>
+    <option value="hex">Hex bytes</option><option value="structure">Structure</option>
+</select></label>
+<label>Scope <select id="searchscope">
+    <option value="all">All sources</option><option value="current">Current source</option>
+</select></label>
+<label><input type="checkbox" id="matchcase"> Match case</label>
+<span id="searchinfo" role="status" aria-live="polite"></span>
+<span id="searchbuttons" hidden>
+    <button type="button" id="searchup" aria-label="Previous search result">↑</button>
+    <button type="button" id="searchdown" aria-label="Next search result">↓</button>
 </span>
-<span style="display:none;" id="clickinfo">Double-click to jump to an address</span>
-
 <div class="coverage">
 {% if undescribed_bytes %}<span class="swatch undescribed"></span>Hatched, gray bytes are undescribed:
     no match covers them. {{ '{:,}'.format(undescribed_bytes) }} of
@@ -42,90 +36,74 @@
 </div>
 
 {% macro render_match_name(match, first) -%}
-<a href="#" class="download" title="download" onclick='downloadFile({{ match["offset"] }}, {{ match["size"] }}, {{ match["type"]|tojson }}, {{ match.get("extension")|tojson }}, {{ match.get("source", "file")|tojson }}); return false'>⇩</a>
-{{ match['name']|e }}{% if match.get('analysis_status') %}<br />
-<small class="analysis-status">{{ match['analysis_status']|e }}: {{ match.get('analysis_message', '')|e }}</small>
-{% endif %}{% if not first %}<br />
-<small style="color: gray;">{{ match['size'] }} bytes @ {{ '0x%0X' % match['offset'] }} ({{ match.get('source', 'file')|e }})</small>
-{% endif %}{% if match['decoded'] %}<br />
-[<a href="#decoded{{ match['uid'] }}">Decode</a>]{% endif %}{% if match['img_data'] %}
-        <span class="tree_custom">
-            <img src="{{ match['img_data'] }}" style="max-width: 8em;" />
-        </span>{% endif %}
+<button type="button" class="download" title="Download this range" data-action="download"
+        data-uid="{{ match['uid'] }}" aria-label="Download {{ match['name']|e }}">⇩</button>
+<span class="node-name">{{ match['name']|e }}</span>
+{% if match.get('analysis_status') %}<br>
+<small class="analysis-status">{{ match['analysis_status']|e }}:
+    {{ match.get('analysis_message', '')|e }}</small>
+{% endif %}{% if not first %}<br>
+<small style="color: gray;">{{ match['size'] }} bytes @ {{ '0x%0X' % match['offset'] }}
+    ({{ match.get('source', 'file')|e }})</small>
+{% endif %}{% if match.get('decoded') %}<br>
+<button type="button" data-action="decode" data-uid="{{ match['uid'] }}">Decode</button>
+{% endif %}
+{% if match.get('img_data') %}<span class="tree_custom"
+    data-image-uid="{{ match['uid'] }}"></span>{% endif %}
 {%- endmacro %}
 
 {% macro render_match(match, first) -%}
-<li>
-    {% if 'subEls' in match and match['subEls'] %}
-    <input type="checkbox" {{'checked="checked" ' if first}}id="match{{ match['uid'] }}" />
-    <label class="tree_label" for="match{{ match['uid'] }}" matchbyte="{{ match['offset'] }}" matchlength="{{ match['size'] }}" matchsource="{{ match.get('source', 'file')|e }}">
+<li data-node-uid="{{ match['uid'] }}">
+    {% if match.get('subEls') %}
+    <input type="checkbox" {{ 'checked ' if first }}id="match{{ match['uid'] }}">
+    <label class="tree_label" for="match{{ match['uid'] }}" data-uid="{{ match['uid'] }}"
+           data-offset="{{ match['offset'] }}" data-size="{{ match['size'] }}"
+           data-source="{{ match.get('source', 'file')|e }}">
         {{ render_match_name(match, first) }}
     </label>
     <ul>
-        {% for child in match['subEls'] %}
-        {{ render_match(child, False) }}
-        {% endfor %}
+        {% for child in match['subEls'] %}{{ render_match(child, False) }}{% endfor %}
     </ul>
     {% else %}
-    <span class="tree_label" matchbyte="{{ match['offset'] }}" matchlength="{{ match['size'] }}" matchsource="{{ match.get('source', 'file')|e }}">
+    <span class="tree_label" data-uid="{{ match['uid'] }}" data-offset="{{ match['offset'] }}"
+          data-size="{{ match['size'] }}" data-source="{{ match.get('source', 'file')|e }}"
+          tabindex="0">
         {{ render_match_name(match, first) }}
     </span>
     {% endif %}
 </li>
 {%- endmacro %}
 
-<ul class="tree">
-    {% for match in matches %}
-        {{ render_match(match, True) }}
-    {% endfor %}
+<ul class="tree" aria-label="File structure">
+{% for match in matches %}{{ render_match(match, True) }}{% endfor %}
 </ul>
-
 <div class="hexeditor">
-    <div class="scrollcapture">
-        <div class="hexdump">
-            <center id="loading" style="cursor: wait;">
-                <br />Loading…<br />
-            </center>
-            <span class="byterow">{% for i in range(address_digits) %}&nbsp;{% endfor %}</span>{% for col in range(16) %}<span class="byte" style="color:gray">{{ '%x' % col }}</span>{% endfor %}
-            <br />
-            {#
-    {% for row in range(input_bytes // 16 + 1) %}
-    <div class="byteline"><span class="byterow">{{ '%05x' % row }}</span>
-        {% for col in range(16) %}<span class="byte" byteid="{{ input_file.tell() }}">{{ input_file.read(1).hex() }}</span>{% endfor %}</div>
-    {% endfor %}
-            #}
-        </div>
-        <div class="bytes">
-            <br />
-    {#{% for row in range(input_bytes // 16 + 1) %}
-            <div class="byteline">{% for col in range(16) %}<span class="byte" byteid="{{ read_unicode.tell() }}">{{ read_unicode() }}</span>{% endfor %}</div>
-    {% endfor %}#}
-        </div>
+    <div class="scrollcapture" id="scrollcapture">
+        <div class="hexdump" id="hexdump"><span class="byte">00</span></div>
+        <div class="bytes" id="ascii"></div>
     </div>
-    <div class="scrollcontainer">
-        <div class="scrollheightproxy"></div>
+    <div class="scrollcontainer" id="scrollcontainer" tabindex="0" aria-label="Byte position">
+        <div class="scrollheightproxy" id="scrollheightproxy"></div>
     </div>
-    <div class="readablebyteswrapper">
-        <br />
-        <div class="readablebytes"></div>
-    </div>
+    <div class="readablebyteswrapper"><div class="readablebytes" id="readablebytes"></div></div>
 </div>
-
-{% for match, decoded in decoded_matches() %}
-<div id="decoded{{ match['uid'] }}" class="overlay">
-    <div class="popup">
-        <h2>Decoded {{ match['name']|e }}</h2>
-		<a class="close" href="#">&times;</a>
-        <div class="content rawdump">{{ decoded|safe }}</div>
-    </div>
-</div>
-{% endfor %}
-
-{#
-<div class="rawdump">
-{% for i, byte in read_unicode %}<span class="byte" byteid="{{ i }}">{{ byte|safe }}</span>{% endfor %}
-</div>
-#}
-
+<p id="loading" role="status">Loading…</p>
+<dialog id="decoded-preview" class="popup" aria-labelledby="decoded-title">
+    <h2 id="decoded-title"></h2>
+    <button type="button" data-action="close-preview" aria-label="Close decoded preview">×</button>
+    <pre id="decoded-text" class="rawdump"></pre>
+</dialog>
+<script id="viewer-data" type="application/json">{{ viewer_data|tojson }}</script>
+<script>
+{% include "download.js" %}
+</script>
+<script type="module">
+{{ asset("viewer-state.js")|safe }}
+{{ asset("viewer-render.js")|safe }}
+{{ asset("viewer-download.js")|safe }}
+{{ asset("viewer-search.js")|safe }}
+{{ asset("viewer-inspect.js")|safe }}
+{{ asset("viewer-shell.js")|safe }}
+</script>
 </body>
 </html>
