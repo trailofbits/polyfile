@@ -22,3 +22,9 @@ polyfile/kaitai/kaitai-struct-compiler-*/
 
 # uv resolves dependencies fresh across Python 3.11-3.14 in CI, so a lock file is not tracked
 uv.lock
+
+# Optional HTML viewer development tools and browser test artifacts
+.venv/
+node_modules/
+.pnpm-store/
+test-results/

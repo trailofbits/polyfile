@@ -1,11 +1,9 @@
 import base64
-import json
-import math
 import mimetypes
 import os
-import unicodedata
-
-from markupsafe import escape
+from copy import deepcopy
+from pathlib import Path
+from typing import Any
 
 jinja2 = None
 
@@ -16,7 +14,7 @@ TEMPLATE = None
 
 def assign_ids(sbud):
     i = 0
-    matches = list(sbud['struc'])
+    matches = deepcopy(sbud['struc'])
     stack = list(matches)
     while stack:
         m = stack.pop()
@@ -118,122 +116,87 @@ def encoded_contents(file_path, sbud):
             ``Analyzer.sbud(include_contents=False)`` produces.
     """
     if 'b64contents' not in sbud:
-        raise ValueError(f"cannot render a hex viewer for {file_path!r}: the SBuD object has no 'b64contents' key. "
-                         "Build it with Analyzer.sbud(include_contents=True), which is the default.")
+        raise ValueError(
+            f"cannot render a hex viewer for {file_path!r}: "
+            "the SBuD object has no 'b64contents' key. "
+            "Build it with Analyzer.sbud(include_contents=True), which is the default."
+        )
     return sbud['b64contents']
 
 
-def generate(file_path, sbud):
-    encoded = encoded_contents(file_path, sbud)
+def _viewer_nodes(matches: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Collect source-aware metadata without duplicating embedded byte buffers."""
+    nodes = []
+    stack = [(match, None) for match in reversed(matches)]
+    while stack:
+        match, parent = stack.pop()
+        nodes.append({
+            'uid': match['uid'],
+            'parent': parent,
+            'source': match.get('source', 'file'),
+            'offset': match['offset'],
+            'size': match['size'],
+            'name': match['name'],
+            'type': match['type'],
+            'extension': match.get('extension', ''),
+            'analysis_status': match.get('analysis_status', ''),
+            'analysis_message': match.get('analysis_message', ''),
+            'decoded': 'decoded' in match,
+            'image': match.get('img_data', ''),
+        })
+        stack.extend((child, match['uid']) for child in reversed(match.get('subEls', [])))
+    return nodes
 
+
+def _template_asset(name: str) -> str:
+    return Path(TEMPLATE_DIR, name).read_text(encoding='utf-8')
+
+
+def generate(file_path: str, sbud: dict[str, Any]) -> str:
+    """Render a standalone HTML viewer from an analysis with embedded contents.
+
+    Args:
+        file_path: Original input path, used for its display name and MIME type.
+        sbud: Source-aware analysis containing the original and decoded contents.
+
+    Returns:
+        A complete HTML document with inline styles, scripts, and one JSON payload.
+    """
+    encoded_contents(file_path, sbud)
     global TEMPLATE, jinja2
     if jinja2 is None:
-        # Load jinja2 lazily so that importing this module does not require it
         import jinja2 as j2
         jinja2 = j2
-
     if TEMPLATE is None:
-        TEMPLATE = jinja2.Environment(loader=jinja2.FileSystemLoader(TEMPLATE_DIR)).get_template('template.html')
-
+        environment = jinja2.Environment(loader=jinja2.FileSystemLoader(TEMPLATE_DIR))
+        TEMPLATE = environment.get_template('template.html')
     matches = assign_ids(sbud)
-
+    sources = source_buffers(sbud)
     input_bytes = sbud['length']
-    # the hex viewer's column header is indented by the width of its address gutter, and an empty
-    # file has no address to print
-    address_digits = math.ceil(math.log(input_bytes, 16)) if input_bytes > 0 else 0
-    regions = undescribed_regions(matches, input_bytes)
-    undescribed_bytes = sum(size for _, size in regions)
-    with open(file_path, 'rb') as input_file:
-        class ReadUnicode:
-            def __init__(self):
-                self.reset = False
-
-            def tell(self):
-                if not self.reset:
-                    return 0
-                else:
-                    return input_file.tell()
-
-            def translate(self, b, monospace=True):
-                if b is None or len(b) == 0 or b == b' ':
-                    return '&nbsp;'
-                elif b == b'\n':
-                    if monospace:
-                        return '\u2424'
-                    else:
-                        return '\u2424</span><br /><span>'
-                elif b == b'\t':
-                    if monospace:
-                        return b'\xE2\xAD\xBE'
-                    else:
-                        return '\t'
-                elif b == b'\r':
-                    return '\u240d'
-                try:
-                    u = b.decode('utf-8')
-                    if unicodedata.category(u) == 'Cc':
-                        # This is a control character
-                        return '\ufffd'
-                    else:
-                        return u
-                except UnicodeDecodeError:
-                    return '\ufffd'
-
-            def __iter__(self):
-                input_file.seek(0)
-                i = 0
-                while True:
-                    b = input_file.read(1)
-                    if b is None or len(b) < 1:
-                        break
-                    yield i, self.translate(b, monospace=False)
-                    i += 1
-
-            def __call__(self):
-                if not self.reset:
-                    input_file.seek(0)
-                    self.reset = True
-                b = input_file.read(1)
-                return self.translate(b)
-
-        mime_type = mimetypes.guess_type(file_path)[0]
-        if mime_type is None:
-            mime_type = 'application/octet-stream'
-
-        def _decoded_matches(m=None):
-            if m is None:
-                return
-            if 'decoded' in m:
-                text = base64.b64decode(m['decoded']).decode('utf-8', errors='backslashreplace')
-                decoded = str(escape(text)).replace('\r\n', '\n').replace('\r', '⏎') \
-                    .replace('\n', '<br />')
-                yield m, decoded
-            if 'subEls' in m:
-                for a in m['subEls']:
-                    yield from _decoded_matches(a)
-
-        def decoded_matches():
-            for m in matches:
-                yield from _decoded_matches(m)
-
-        return TEMPLATE.render(
-            filename=os.path.split(file_path)[-1],
-            encoded=encoded,
-            matches=matches,
-            input_file=input_file,
-            input_bytes=input_bytes,
-            address_digits=address_digits,
-            read_unicode=ReadUnicode(),
-            mime_type=mime_type,
-            decoded_matches=decoded_matches,
-            source_buffers=source_buffers(sbud),
-            undescribed_regions=json.dumps(regions, separators=(',', ':')),
-            undescribed_bytes=undescribed_bytes,
-            undescribed_percent=undescribed_bytes * 100.0 / max(input_bytes, 1)
-        )
+    undescribed_bytes = sum(size for _, size in sources['file']['regions'])
+    filename = os.path.basename(file_path)
+    return TEMPLATE.render(
+        asset=_template_asset,
+        brand_logo=base64.b64encode(
+            _template_asset('polyfile.svg').encode('utf-8')
+        ).decode('ascii'),
+        filename=filename,
+        matches=matches,
+        source_buffers=sources,
+        input_bytes=input_bytes,
+        undescribed_bytes=undescribed_bytes,
+        undescribed_percent=undescribed_bytes * 100.0 / max(input_bytes, 1),
+        viewer_data={
+            'filename': filename,
+            'mime': mimetypes.guess_type(file_path)[0] or 'application/octet-stream',
+            'sources': sources,
+            'nodes': _viewer_nodes(matches),
+        },
+    )
 
 
 if __name__ == '__main__':
+    import json
     import sys
 
     with open(sys.argv[2]) as f:

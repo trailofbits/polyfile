@@ -1,6 +1,7 @@
 import base64
 import json
 import re
+from pathlib import Path
 from unittest import TestCase
 
 from polyfile.fileutils import Tempfile
@@ -95,10 +96,15 @@ class GeneratedHtmlTests(TestCase):
             return generate(file_path, sbud(contents, struc, include_contents))
 
     def emitted_regions(self, html):
-        emitted = re.search(r'const UNDESCRIBED_REGIONS = (\[.*?]);', html)
-        self.assertIsNotNone(emitted, 'the viewer script declares no undescribed regions')
+        return [tuple(region) for region in self.viewer_data(html)['sources']['file']['regions']]
+
+    def viewer_data(self, html):
+        emitted = re.search(
+            r'<script id="viewer-data" type="application/json">(.*?)</script>', html, re.DOTALL
+        )
+        self.assertIsNotNone(emitted, 'the viewer has no inert JSON payload')
         assert emitted is not None
-        return [tuple(region) for region in json.loads(emitted.group(1))]
+        return json.loads(emitted.group(1))
 
     def legend(self, html):
         found = re.search(r'<div class="coverage">(.*?)</div>', html, re.DOTALL)
@@ -131,7 +137,6 @@ class GeneratedHtmlTests(TestCase):
 
     def test_the_style_the_viewer_applies_is_defined(self):
         html = self.render(bytes(16), [match(0, 16)])
-        self.assertIn(".toggleClass('undescribed'", html)
         self.assertIn('.undescribed {', html)
         self.assertIn('repeating-linear-gradient', html)
 
@@ -139,6 +144,14 @@ class GeneratedHtmlTests(TestCase):
         contents = bytes(range(16))
         html = self.render(contents, [match(0, 16)])
         self.assertIn(base64.b64encode(contents).decode('utf-8'), html)
+
+    def test_the_repository_logo_is_embedded_in_the_report(self):
+        html = self.render(b'file', [match(0, 4)])
+        embedded = re.search(r'src="data:image/svg\+xml;base64,([^"]+)"', html)
+        self.assertIsNotNone(embedded, 'the viewer has no embedded SVG logo')
+        assert embedded is not None
+        logo = Path(__file__).resolve().parents[2] / 'logo' / 'polyfile.svg'
+        self.assertEqual(logo.read_bytes(), base64.b64decode(embedded.group(1), validate=True))
 
     def test_an_sbud_without_contents_is_refused(self):
         """`--no-contents` omits `b64contents`, which the hex viewer is built from.
@@ -159,10 +172,10 @@ class GeneratedHtmlTests(TestCase):
         buffers = source_buffers(sbud(b'file', structure))
         self.assertEqual({'file', 'decoded:0'}, set(buffers))
         html = self.render(b'file', structure)
-        self.assertIn('matchsource="decoded:0"', html)
+        self.assertIn('data-source="decoded:0"', html)
         self.assertIn('value="decoded:0"', html)
-        self.assertIn('SOURCE_BUFFERS[source].encoded', html)
-        self.assertIn('selectSource($(this).attr(\'matchsource\'))', html)
+        self.assertEqual(payload, base64.b64decode(
+            self.viewer_data(html)['sources']['decoded:0']['encoded']))
 
     def test_decoded_text_and_names_are_escaped(self):
         payload = b'<script>alert("decoded")</script>'
@@ -170,7 +183,8 @@ class GeneratedHtmlTests(TestCase):
                    'name': '<img src=x onerror=alert(1)>',
                    'decoded': base64.b64encode(payload).decode('ascii')}
         html = self.render(b'file', [match(0, 4, [decoded])])
-        self.assertIn('&lt;script&gt;', html)
+        self.assertEqual(payload, base64.b64decode(
+            self.viewer_data(html)['sources']['decoded:0']['encoded']))
         self.assertNotIn('<script>alert', html)
         self.assertNotIn('<img src=x onerror=', html)
 
@@ -184,3 +198,29 @@ class GeneratedHtmlTests(TestCase):
         self.assertIn('class="analysis-status">unsupported:', html)
         self.assertIn("&lt;img src=x", html)
         self.assertNotIn('<img src=x onerror=', html)
+
+
+    def test_source_contents_are_embedded_once(self):
+        contents = b'unique original bytes'
+        payload = b'unique decoded bytes'
+        decoded = {**match(0, len(payload)), 'source': 'decoded:0',
+                   'decoded': base64.b64encode(payload).decode('ascii')}
+        html = self.render(contents, [match(0, len(contents), [decoded])])
+        for value in (contents, payload):
+            self.assertEqual(1, html.count(base64.b64encode(value).decode('ascii')))
+
+    def test_rendering_keeps_the_supplied_analysis_reusable(self):
+        analysis = sbud(b'file', [match(0, 4)])
+        first = generate('sample.bin', analysis)
+        second = generate('sample.bin', analysis)
+        self.assertEqual(first, second)
+        self.assertNotIn('uid', analysis['struc'][0])
+
+    def test_viewer_metadata_cannot_close_its_script_element(self):
+        name = '</script><script>alert("metadata")</script>'
+        html = self.render(b'file', [{**match(0, 4), 'name': name}])
+        self.assertEqual(name, self.viewer_data(html)['nodes'][0]['name'])
+        self.assertNotIn('<script>alert("metadata")', html)
+        self.assertNotIn('onclick=', html)
+        self.assertNotIn('onmouseover=', html)
+        self.assertNotIn('BEGIN JQUERY', html)

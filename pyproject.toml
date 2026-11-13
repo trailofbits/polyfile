@@ -51,6 +51,7 @@ dependencies = [
 [project.optional-dependencies]
 demangle = ["cxxfilt"]
 dev = ["pytest", "flake8", "ruff==0.17.5", "ty==0.0.98"]
+viewer-test = ["playwright==1.64.1"]
 
 [project.scripts]
 polyfile = "polyfile.__main__:main"
