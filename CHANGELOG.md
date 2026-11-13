@@ -88,6 +88,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 
 ### Fixed
 
+- **Breaking:** PDF slices, split parts, and stripped values report bounded source spans.
+  Byte-aligned selections identify their source interval; nonlinear values without a byte map
+  retain the whole original token span. Structured selections preserve recorded element spans
+  (#3666).
+
 - **Breaking:** PDF token splitting respects finite split limits, empty separator fields, and
   integer-index protocol arguments without losing unsplit suffixes (#3666).
 
