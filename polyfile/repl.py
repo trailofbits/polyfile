@@ -1,5 +1,6 @@
 import atexit
 from abc import ABC, abstractmethod
+from collections.abc import Callable, Iterable, Iterator
 from enum import Enum
 from functools import partial, wraps
 from io import StringIO
@@ -7,23 +8,24 @@ import os
 from pathlib import Path
 import sys
 import traceback
-from typing import Any, Callable, Dict, Iterable, Iterator, List, Optional, Set, Tuple, Type, TypeVar, Union
+from typing import Any, Self, TypeVar, cast
 
 from polyfile.fileutils import FileStream, Streamable
-from .profiling import Unprofiled
+from polyfile.profiling import Unprofiled
 
 if os.name == "posix":
     import readline
 else:
     import pyreadline3 as readline
 
-from .logger import getStatusLogger
+from polyfile.logger import getStatusLogger
 
 log = getStatusLogger("polyfile")
 
 HISTORY_PATH = Path.home() / ".polyfile_history"
 
-T = TypeVar("T")
+FunctionT = TypeVar("FunctionT", bound=Callable[..., object])
+ReplT = TypeVar("ReplT", bound="REPL")
 
 
 class ANSIColor(Enum):
@@ -40,7 +42,7 @@ class ANSIColor(Enum):
         return f"\u001b[{self.value}m"
 
 
-def string_escape(data: Union[bytes, int]) -> str:
+def string_escape(data: bytes | int) -> str:
     if not isinstance(data, int):
         return "".join(string_escape(d) for d in data)
     elif data == ord('\n'):
@@ -67,10 +69,10 @@ class ANSIWriter:
 
     @staticmethod
     def format(
-            message: Any, bold: bool = False, dim: bool = False, color: Optional[ANSIColor] = None,
+            message: Any, bold: bool = False, dim: bool = False, color: ANSIColor | None = None,
             escape_for_readline: bool = False
     ) -> str:
-        prefixes: List[str] = []
+        prefixes: list[str] = []
         if bold and not dim:
             prefixes.append("\u001b[1m")
         elif dim and not bold:
@@ -86,8 +88,8 @@ class ANSIWriter:
             message = str(message)
         return message
 
-    def write(self, message: Any, bold: bool = False, dim: bool = False, color: Optional[ANSIColor] = None,
-              escape_for_readline: Optional[bool] = None) -> str:
+    def write(self, message: Any, bold: bool = False, dim: bool = False, color: ANSIColor | None = None,
+              escape_for_readline: bool | None = None) -> None:
         if self.use_ansi:
             if escape_for_readline is None:
                 escape_for_readline = self.escape_for_readline
@@ -97,17 +99,17 @@ class ANSIWriter:
             self.data.write(str(message))
 
     def write_context(self, file: Streamable, offset: int, context_bytes: int = 32, num_bytes: int = 1,
-                      indent: str = "", max_num_bytes: Optional[int] = 80):
+                      indent: str = "", max_num_bytes: int | None = 80):
         ellipsis = ""
         if max_num_bytes is not None and num_bytes > max_num_bytes:
             ellipsis = "⋯"
             num_bytes = max_num_bytes - 1
         with FileStream(file) as stream:
             bytes_before = min(offset, context_bytes)
-            context_before = string_escape(stream[offset - bytes_before:offset].content)
-            current_byte = string_escape(stream[offset:offset + num_bytes].content)
+            context_before = string_escape(bytes(stream[offset - bytes_before:offset]))
+            current_byte = string_escape(bytes(stream[offset:offset + num_bytes]))
             context_after = string_escape(
-                stream[offset + num_bytes:offset + num_bytes + context_bytes].content
+                bytes(stream[offset + num_bytes:offset + num_bytes + context_bytes])
             )
         self.write(indent)
         self.write(context_before)
@@ -128,12 +130,12 @@ class ANSIWriter:
 
 class CommandInfo:
     def __init__(self, name: str, help: str, aliases: Iterable[str], allows_abbreviation: bool = False,
-                 completer: Optional[Callable[["Command", str, int, int], List[str]]] = None):
+                 completer: Callable[["Command", str, int, int], list[str]] | None = None):
         self.name: str = name
         self.help: str = help
-        self.aliases: List[str] = list(aliases)
+        self.aliases: list[str] = list(aliases)
         self.allows_abbreviation: bool = allows_abbreviation
-        self.completer: Optional[Callable[["Command", str, int, int], List[str]]] = completer
+        self.completer: Callable[[Command, str, int, int], list[str]] | None = completer
 
 
 class Command(ABC):
@@ -141,7 +143,7 @@ class Command(ABC):
         self.repl: REPL = repl
         self.name: str = name
         self.allows_abbreviation: bool = allows_abbreviation
-        self.aliases: Set[str] = set(aliases)
+        self.aliases: set[str] = set(aliases)
 
     @abstractmethod
     def usage(self) -> str:
@@ -151,7 +153,7 @@ class Command(ABC):
     def run(self, arguments: str):
         raise NotImplementedError()
 
-    def complete(self, args: str, begin_idx: int, end_idx: int) -> List[str]:
+    def complete(self, args: str, begin_idx: int, end_idx: int) -> list[str]:
         return []
 
     def __hash__(self):
@@ -161,8 +163,12 @@ class Command(ABC):
         return isinstance(other, Command) and other.name == self.name
 
     @classmethod
-    def wrap(cls: T, function: Callable[["REPL", str], Any], info: CommandInfo) -> T:
-        class WrappedCommand(cls):
+    def wrap(
+        cls, function: Callable[["REPL", str], object], info: CommandInfo
+    ) -> type[Self]:
+        command_base = cast(type[Command], cls)
+
+        class WrappedCommand(command_base):  # ty: ignore[unsupported-base]  # Runtime base.
             def __init__(self, repl: "REPL"):
                 super().__init__(
                     repl, name=info.name, allows_abbreviation=info.allows_abbreviation, aliases=info.aliases
@@ -174,13 +180,16 @@ class Command(ABC):
             def run(self, arguments: str):
                 return function(self.repl, arguments)
 
-            def complete(self, args: str, begin_idx: int, end_idx: int) -> List[str]:
+            def complete(self, args: str, begin_idx: int, end_idx: int) -> list[str]:
                 if info.completer is None:
                     return []
                 else:
                     return info.completer(self, args, begin_idx, end_idx)
 
-        return WrappedCommand
+        return cast(type[Self], WrappedCommand)
+
+
+CommandConstructor = Callable[["REPL"], Command]
 
 
 class ExitREPL(Exception):
@@ -192,10 +201,11 @@ def _write_history(repl: "REPL"):
 
 
 def command(help: str, name: str = "", aliases: Iterable[str] = (), allows_abbreviation: bool = False,
-            completer: Optional[Callable[["Command", str, int, int], List[str]]] = None):
-    def wrapper(func):
+            completer: Callable[["Command", str, int, int], list[str]] | None = None
+            ) -> Callable[[FunctionT], FunctionT]:
+    def wrapper(func: FunctionT) -> FunctionT:
         if not name:
-            func_name = func.__name__
+            func_name = cast(str, getattr(func, "__name__"))
         else:
             func_name = name
         setattr(func, "command_info", CommandInfo(
@@ -206,19 +216,23 @@ def command(help: str, name: str = "", aliases: Iterable[str] = (), allows_abbre
     return wrapper
 
 
-def completer(for_command: Union[str, "Command"]):
-    def wrapper(func: Callable[["REPL", str, int, int], List[str]]):
+def completer(for_command: str | Command) -> Callable[[FunctionT], FunctionT]:
+    def wrapper(func: FunctionT) -> FunctionT:
         setattr(func, "completer_for", for_command)
         return func
 
     return wrapper
 
 
-def arg_completer(for_command: Union[str, "Command"]):
-    def transformer(func: Callable[["REPL", int, str, Tuple[str, ...]], List[str]]):
+def arg_completer(for_command: str | Command) -> Callable[
+    [Callable[[ReplT, int, str, tuple[str, ...]], list[str]]], Callable[..., list[str]]
+]:
+    def transformer(
+        func: Callable[[ReplT, int, str, tuple[str, ...]], list[str]]
+    ) -> Callable[..., list[str]]:
         @completer(for_command=for_command)
         @wraps(func)
-        def wrapper(repl: "REPL", *args, **kwargs):
+        def wrapper(repl: ReplT, *args, **kwargs) -> list[str]:
             if kwargs or args and isinstance(args[0], int):
                 # chances are the caller is trying to call using the original function signature
                 try:
@@ -236,8 +250,8 @@ def arg_completer(for_command: Union[str, "Command"]):
                 raise TypeError(f"{func!r} received unexpected positional arguments {remainder!r}")
             num_arguments = 0
             last_token_start = 0
-            arg_indexes: List[int] = []
-            tokens: List[str] = []
+            arg_indexes: list[int] = []
+            tokens: list[str] = []
             for i, (prev, c) in enumerate(zip(f"\0{arguments[:begin_idx+1]}", arguments[:begin_idx+1])):
                 if prev == " " and c != " ":
                     tokens.append(arguments[last_token_start:i].rstrip())
@@ -254,21 +268,21 @@ def arg_completer(for_command: Union[str, "Command"]):
 
 
 class REPLMeta(type):
-    _commands: Dict[str, Type[Command]]
-    _completers: Dict[str, Callable[["REPL", str, int, int], List[str]]]
+    _commands: dict[str, CommandConstructor]
+    _completers: dict[str, Callable[["REPL", str, int, int], list[str]]]
 
-    def add_command(cls, name: str, command: Type[Command]):
+    def add_command(cls, name: str, command: CommandConstructor):
         if name in cls._commands:
             raise ValueError(f"A command named {name} is already registered to {cls}")
         cls._commands[name] = command
 
-    def add_completer(cls, for_command_name: str, completer: Callable[["REPL", str, int, int], List[str]]):
+    def add_completer(cls, for_command_name: str, completer: Callable[["REPL", str, int, int], list[str]]):
         if for_command_name in cls._completers:
             raise ValueError(f"A completer for command {for_command_name} is already registered to {cls}")
         cls._completers[for_command_name] = completer
 
     @property
-    def command_types(self) -> Iterator[Tuple[str, Type[Command]]]:
+    def command_types(self) -> Iterator[tuple[str, CommandConstructor]]:
         yielded_names = set()
         for cls in self.mro():
             if isinstance(cls, REPLMeta):
@@ -278,7 +292,7 @@ class REPLMeta(type):
                         yielded_names.add(name)
 
     @property
-    def completers(self) -> Iterator[Tuple[str, Callable[["REPL", str, int, int], List[str]]]]:
+    def completers(self) -> Iterator[tuple[str, Callable[["REPL", str, int, int], list[str]]]]:
         yielded_names = set()
         for cls in self.mro():
             if isinstance(cls, REPLMeta):
@@ -294,7 +308,8 @@ class REPLMeta(type):
         for func_name, func in namespace.items():
             if hasattr(func, "command_info") and isinstance(func.command_info, CommandInfo):
                 try:
-                    cls.add_command(func.command_info.name, Command.wrap(func, func.command_info))
+                    constructor = cast(CommandConstructor, Command.wrap(func, func.command_info))
+                    cls.add_command(func.command_info.name, constructor)
                 except ValueError as e:
                     raise TypeError(str(e))
             elif hasattr(func, "completer_for"):
@@ -312,7 +327,7 @@ class SetCompleter:
     def __init__(self, possibilities: Callable[[], Iterable[str]]):
         self.possibilities: Callable[[], Iterable[str]] = possibilities
 
-    def __call__(self, args: str, begin_idx: Optional[int] = None, end_idx: Optional[int] = None) -> List[str]:
+    def __call__(self, args: str, begin_idx: int | None = None, end_idx: int | None = None) -> list[str]:
         if begin_idx is None:
             begin_idx = 0
         if end_idx is None:
@@ -325,18 +340,18 @@ class SetCompleter:
 
 
 class REPL(metaclass=REPLMeta):
-    def __init__(self, name: str, prompt: Optional[str] = None,
-                 completer: Optional[Callable[[str, int], Optional[str]]] = None):
+    def __init__(self, name: str, prompt: str | None = None,
+                 completer: Callable[[str, int], str | None] | None = None):
         self.name: str = name
         self._prev_history_length: int = 0
         if completer is None:
-            self.completer: Callable[[str, int], Optional[str]] = REPLCompleter(self).complete
+            self.completer: Callable[[str, int], str | None] = REPLCompleter(self).complete
         else:
             self.completer = completer
-        self.commands: Dict[str, Command] = {
+        self.commands: dict[str, Command] = {
             name: command_type(self) for name, command_type in self.__class__.command_types
         }
-        self.last_command: Optional[str] = None
+        self.last_command: str | None = None
         if prompt is None:
             if sys.stderr.isatty():
                 self.repl_prompt: str = ANSIWriter.format("(polyfile) ", bold=True, escape_for_readline=True)
@@ -351,10 +366,10 @@ class REPL(metaclass=REPLMeta):
         for cmd in self.commands.values():
             yield from cmd.aliases
 
-    def get_completer(self, for_command: Command) -> Callable[[str, int, int], List[str]]:
+    def get_completer(self, for_command: Command) -> Callable[[str, int, int], list[str]]:
         for cmd_name, cmd_completer in self.__class__.completers:
             if cmd_name == for_command.name:
-                return partial(cmd_completer, self)  # type: ignore
+                return partial(cmd_completer, self)
         return for_command.complete
 
     @arg_completer(for_command="help")
@@ -453,7 +468,7 @@ class REPL(metaclass=REPLMeta):
             if hasattr(readline, "append_history_file"):
                 readline.append_history_file(max(new_length - self._prev_history_length, 0), HISTORY_PATH)
             self._prev_history_length = readline.get_current_history_length()
-        except IOError as e:
+        except OSError as e:
             log.warning(f"Unable to save history to {HISTORY_PATH!s}: {e!s}")
 
     def input(self, prompt: str = "") -> str:
@@ -472,7 +487,7 @@ class REPL(metaclass=REPLMeta):
         finally:
             readline.set_completer(prev_completer)
 
-    def write(self, message: Any, bold: bool = False, dim: bool = False, color: Optional[ANSIColor] = None):
+    def write(self, message: Any, bold: bool = False, dim: bool = False, color: ANSIColor | None = None):
         if sys.stdout.isatty():
             message = ANSIWriter.format(message=message, bold=bold, dim=dim, color=color)
         sys.stdout.write(str(message))
@@ -572,12 +587,12 @@ class REPLCompleter:
             return self.traverse(tokens[1:],tree[tokens[0]])
         return []
 
-    def complete(self, text: str, state: int) -> Optional[str]:
+    def complete(self, text: str, state: int) -> str | None:
         commandline = readline.get_line_buffer()
         space_index = commandline.find(" ")
         if space_index < 0 or (space_index > 0 and readline.get_endidx() < space_index):
             # we are completing the command name
-            possible_names = sorted({
+            possible_names: list[str | None] = sorted({
                 cmd_name for cmd_name in self.repl.commands.keys()
                 if cmd_name.startswith(text)
             } | {
@@ -604,9 +619,9 @@ class REPLCompleter:
             return None
         completer = self.repl.get_completer(for_command=command)
         try:
-            possibilities = completer(
+            possibilities: list[str | None] = completer(
                 args, readline.get_begidx() - space_index - 1, readline.get_endidx() - space_index - 1
-            ) + [None]  # type: ignore
+            ) + [None]
         except Exception as e:
             traceback.print_tb(e.__traceback__)
             log.warning(f"Command {completer!r}({args!r}, "
