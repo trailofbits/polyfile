@@ -321,14 +321,19 @@ viewer is built from the contents."""))
 
     reject_html_without_contents(parser, args)
 
-    if args.quiet:
-        logger.setLevel(logging.CRITICAL)
-    elif args.trace:
-        logger.setLevel(logger.TRACE)
+    if args.trace:
+        level = logger.TRACE
     elif args.debug:
-        logger.setLevel(logging.DEBUG)
+        level = logging.DEBUG
     else:
-        logger.setLevel(logger.STATUS)
+        level = logger.STATUS
+
+    with logger.logging_context(level, quiet=args.quiet, interactive=not args.debugger):
+        run_analysis(args)
+
+
+def run_analysis(args):
+    """Analyze the requested input using the invocation's logging configuration."""
 
     if args.filetype:
         regex = r'|'.join(fr"({ f.replace('*', '.*').replace('?', '.?') })" for f in args.filetype)

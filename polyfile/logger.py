@@ -1,135 +1,280 @@
+"""Logging and terminal status shared by PolyFile's command-line tools."""
+
 import logging
 import sys
-from time import time
-from typing import Collection, Iterator, Optional, TypeVar
+from collections.abc import Collection, Generator
+from contextlib import contextmanager
+from contextvars import ContextVar
+from copy import copy
+from dataclasses import dataclass
+from time import monotonic
+from typing import Any, TextIO, TypeVar
 
+from rich.console import Console, Group, RenderableType
+from rich.highlighter import NullHighlighter
+from rich.live import Live
+from rich.logging import RichHandler
+from rich.progress import BarColumn, Progress, TaskID, TextColumn, TimeElapsedColumn
+from rich.text import Text
 
 STATUS = 15
 TRACE = 5
-
-
-class StatusLogHandler(logging.StreamHandler):
-    def __init__(self, stream=sys.stderr):
-        super().__init__(stream=stream)
-        self._status: str = ''
-
-    def print(self, text):
-        if self._status and self.stream.isatty():
-            self.stream.write(f"\r{' ' * len(self._status)}\r")
-            self.stream.flush()
-            sys.stdout.write(str(text))
-            sys.stdout.write("\n")
-            sys.stdout.flush()
-            self.stream.write(self._status)
-            self.stream.flush()
-        else:
-            sys.stdout.write(str(text))
-            sys.stdout.write("\n")
-
-    def emit(self, record):
-        isatty = self.stream.isatty()
-        if self._status and isatty:
-            self.stream.write(f"\r{' ' * len(self._status)}\r")
-        msg = record.getMessage()
-        if isinstance(msg, bytes):
-            msg = msg.decode('utf-8')
-        if record.levelno == STATUS and isatty:
-            self._status = msg
-        else:
-            self.stream.write(msg)
-            self.stream.write('\n')
-        if self._status and isatty:
-            self.stream.write(self._status)
-        self.stream.flush()
-
-
 logging.addLevelName(STATUS, "STATUS")
 logging.addLevelName(TRACE, "TRACE")
-
-DEFAULT_STATUS_LOG_HANDLER = StatusLogHandler()
-
-
 T = TypeVar("T")
 
 
-class StatusLogger(logging.getLoggerClass()):
-    def __init__(self, name, level=logging.NOTSET):
-        super().__init__(name, level)
-        self.addHandler(DEFAULT_STATUS_LOG_HANDLER)
+def literal(value: object, *, multiline: bool = False) -> str:
+    """Escape terminal controls without interpreting markup in input-derived text."""
+    return "".join(
+        char
+        if (char.isprintable() or (multiline and char == "\n"))
+        else ascii(char)[1:-1]
+        for char in str(value)
+    )
 
-    def status(self, msg, *args, **kwargs):
-        if self.isEnabledFor(STATUS):
-            self._log(STATUS, msg, args, **kwargs)
 
-    def print(self, text: str):
-        DEFAULT_STATUS_LOG_HANDLER.print(text)
+@dataclass
+class _Task:
+    identifier: TaskID
+    started: float
+    delay: float
+    interval: float
+    completed: int = 0
+    updated: float = 0.0
 
-    def range(
-            self,
-            iterable: Collection[T],
-            desc: str = "",
-            unit: str = "",
-            delay: float = 0.0,
-            update_interval: float = 0.5
-    ) -> Iterator[T]:
-        if not self.isEnabledFor(STATUS) or len(iterable) == 0:
-            yield from iterable
-            return
-        size = len(iterable)
-        start_time = time()
-        last_update_time: float = 0.0
-        last_percent: float = -1.0
-        def print_msg(percent: float, item: int):
-            msg = desc.strip()
-            if msg:
-                msg = f"{msg} "
-            bar = "=" * int(30 * percent)
-            if bar and percent < 1.0:
-                bar = f"{bar[:-1]}>"
-            bar = f"|{bar}{'-' * (30 - len(bar))}|"
-            pct = f"{percent * 100.0:.1f}%"
-            pct_pos = (len(bar) - len(pct)) // 2
-            bar = f"{bar[:pct_pos]}{pct}{bar[pct_pos + len(pct):]}"
-            msg = f"{msg}{bar} {item}/{size}{unit}"
-            self.status(msg)
-        if delay == 0.0:
-            print_msg(0.0, 0)
-        for i, obj in enumerate(iterable):
-            current_time = time()
-            elapsed_time = current_time - start_time
-            if size == 1:
-                new_percent = 1.0
+
+class TerminalSession:
+    """Own one invocation's console and live rendering lifecycle."""
+
+    def __init__(self, console: Console, *, interactive: bool):
+        self.console = console
+        self.interactive = interactive
+        self.progress = Progress(
+            TextColumn("{task.description}", markup=False),
+            BarColumn(),
+            TextColumn(
+                "{task.completed:.0f}/{task.total:.0f}{task.fields[unit]}", markup=False
+            ),
+            TimeElapsedColumn(),
+            console=console,
+            auto_refresh=False,
+        )
+        self._tasks: list[_Task] = []
+        self._status = Text()
+        self.live = Live(
+            console=console,
+            get_renderable=self.render,
+            refresh_per_second=4,
+            transient=True,
+            redirect_stdout=False,
+            redirect_stderr=False,
+        )
+
+    def render(self) -> RenderableType:
+        """Build the current status frame."""
+        return Group(self._status, self.progress)
+
+    def status(self, message: str) -> None:
+        """Update the current activity without emitting a permanent log line."""
+        self._status = Text(literal(message), style="cyan")
+        if self.interactive:
+            if message:
+                self.live.start()
             else:
-                new_percent = i / (size - 1)
-            if (elapsed_time >= delay and (
-                    current_time - last_update_time >= update_interval or new_percent >= last_percent + 0.1
-            )) or i == size - 1:
-                last_update_time = current_time
-                last_percent = new_percent
-                print_msg(new_percent, i + 1)
-            yield obj
+                self.live.stop()
 
-    def trace(self, msg, *args, **kwargs):
-        if self.isEnabledFor(TRACE):
-            self._log(TRACE, msg, args, **kwargs)
+    @contextmanager
+    def task(
+        self, description: str, total: int, unit: str, *, delay: float, interval: float
+    ) -> Generator[_Task, None, None]:
+        """Track a bounded unit of work and remove it even when iteration stops early."""
+        for current in self._tasks:
+            self.progress.update(current.identifier, visible=False)
+        identifier = self.progress.add_task(
+            literal(description), total=total, unit=literal(unit), visible=delay == 0
+        )
+        task = _Task(identifier, monotonic(), delay, interval)
+        self._tasks.append(task)
+        self._update(task)
+        try:
+            yield task
+        finally:
+            self._tasks.remove(task)
+            self.progress.remove_task(identifier)
+            if self._tasks:
+                self._update(self._tasks[-1])
+            elif not self._status:
+                self.live.stop()
 
-    def clear_status(self):
+    def _update(self, task: _Task) -> None:
+        task.updated = monotonic()
+        visible = task.updated - task.started >= task.delay
+        self.progress.update(task.identifier, completed=task.completed, visible=visible)
+        if visible and self.interactive:
+            self.live.start()
+
+    def advance(self, task: _Task) -> None:
+        """Count an item only after its consumer has processed it."""
+        task.completed += 1
+        if monotonic() - task.updated >= task.interval:
+            self._update(task)
+
+    @contextmanager
+    def suspend(self) -> Generator[None, None, None]:
+        """Clear the live frame while another stream writes or a prompt reads."""
+        running = self.live.is_started
+        self.live.stop()
+        try:
+            yield
+        finally:
+            if running:
+                self.live.start()
+
+    def close(self) -> None:
+        """Restore the terminal before the invocation exits."""
+        self.live.stop()
+
+
+_session: ContextVar[TerminalSession | None] = ContextVar(
+    "polyfile_terminal", default=None
+)
+
+
+class _LogHandler(RichHandler):
+    def __init__(self, session: TerminalSession, *, quiet: bool, verbose: bool):
+        super().__init__(
+            console=session.console,
+            show_time=False,
+            show_path=False,
+            highlighter=NullHighlighter(),
+            markup=False,
+        )
+        self.session = session
+        self.quiet = quiet
+        self.verbose = verbose
+
+    def emit(self, record: logging.LogRecord) -> None:
+        if self.quiet:
+            return
+        if record.levelno == STATUS:
+            self.session.status(record.getMessage())
+            return
+        if (
+            not self.console.is_terminal
+            and not self.verbose
+            and record.levelno < logging.WARNING
+        ):
+            return
+        record = copy(record)
+        record.msg = literal(record.getMessage(), multiline=True)
+        record.args = ()
+        super().emit(record)
+
+
+@contextmanager
+def logging_context(
+    level: int = STATUS,
+    *,
+    quiet: bool = False,
+    interactive: bool = True,
+    stream: TextIO | None = None,
+) -> Generator[TerminalSession, None, None]:
+    """Configure stderr logging for one invocation and restore the host's logging state.
+
+    Args:
+        level: Minimum diagnostic level, including STATUS and TRACE.
+        quiet: Suppress every logger message and live update.
+        interactive: Allow cursor movement; disable for interactive debuggers.
+        stream: Stderr destination, resolved at invocation time when omitted.
+
+    Yields:
+        The invocation's terminal session.
+    """
+    stream = sys.stderr if stream is None else stream
+    tty = stream.isatty()
+    console = Console(
+        file=stream,
+        force_terminal=None if tty else False,
+        force_jupyter=False,
+        markup=False,
+        highlight=False,
+    )
+    session = TerminalSession(
+        console,
+        interactive=tty and console.is_interactive and interactive and not quiet,
+    )
+    handler = _LogHandler(session, quiet=quiet, verbose=level <= logging.DEBUG)
+    root = logging.getLogger()
+    previous_level = root.level
+    root.setLevel(logging.CRITICAL + 1 if quiet else level)
+    root.addHandler(handler)
+    token = _session.set(session)
+    try:
+        yield session
+    finally:
+        session.close()
+        _session.reset(token)
+        root.removeHandler(handler)
+        handler.close()
+        root.setLevel(previous_level)
+
+
+class StatusLogger(logging.LoggerAdapter):
+    """Add status and trace helpers to a standard Python logger."""
+
+    def __init__(self, name: str):
+        super().__init__(logging.getLogger(name), {})
+
+    def status(self, msg: object, *args: object, **kwargs: Any) -> None:
+        """Set the current terminal activity."""
+        self.log(STATUS, msg, *args, **kwargs)
+
+    def trace(self, msg: object, *args: object, **kwargs: Any) -> None:
+        """Emit extra-verbose diagnostic output."""
+        self.log(TRACE, msg, *args, **kwargs)
+
+    def clear_status(self) -> None:
+        """Clear the current terminal activity."""
         self.status("")
 
+    def range(
+        self,
+        iterable: Collection[T],
+        desc: str = "",
+        unit: str = "",
+        *,
+        delay: float = 0.0,
+        update_interval: float = 0.5,
+    ) -> Generator[T, None, None]:
+        """Yield items while tracking completed work on an interactive terminal."""
+        session = _session.get()
+        if (
+            session is None
+            or not session.interactive
+            or not iterable
+            or not self.isEnabledFor(STATUS)
+        ):
+            yield from iterable
+            return
+        with session.task(
+            desc, len(iterable), unit, delay=delay, interval=update_interval
+        ) as task:
+            for item in iterable:
+                yield item
+                session.advance(task)
 
-logging.setLoggerClass(StatusLogger)
+
+def getStatusLogger(name: str) -> StatusLogger:
+    """Return a status adapter without changing Python's global logger class."""
+    return StatusLogger(name)
 
 
-def getStatusLogger(name) -> StatusLogger:
-    return logging.getLogger(name)
+def get_root_logger() -> logging.Logger:
+    """Return the standard root logger."""
+    return logging.getLogger()
 
 
-def get_root_logger():
-    l = getStatusLogger(__name__)
-    while l.parent:
-        l = l.parent
-    return l
-
-
-def setLevel(levelno):
+def setLevel(levelno: int) -> None:
+    """Set the root diagnostic threshold."""
     get_root_logger().setLevel(levelno)
