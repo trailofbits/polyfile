@@ -97,6 +97,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 - **Breaking:** PDF, Kaitai, and HTTP AST offsets stay within their sources across nested stream
   views and decoded data. Parser debugger locations distinguish backing-file, stream, and
   analysis-source coordinates (#3665).
+- **Breaking:** JPEG2000 image previews encode PNG bytes into the data URL without raising
+  `TypeError` (#3667).
 - Bounded file regions now limit reads before allocating data, including `read()` and
   `read(-1)`, so archive members cannot expose neighboring bytes or copy the remaining archive.
 
