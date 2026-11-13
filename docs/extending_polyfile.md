@@ -40,6 +40,9 @@ definition containing unsupported syntax fails with its filename and line number
 using supported expressions or a Python matcher. Regex tests never fall back to a backtracking
 engine.
 
+See [custom magic compatibility](libmagic_compatibility.md) for supported modifier spellings,
+value boundaries, and deliberate differences from libmagic.
+
 ### Pure Python Matchers
 
 The `libmagic` DSL can be eschewed by programmatically defining a matcher using PolyFile’s `MagicTest` API.

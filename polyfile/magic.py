@@ -901,6 +901,7 @@ class MatchContext:
         self.path: Optional[Path] = path
         self.only_match_mime: bool = only_match_mime
         self.decoded_from: Optional[str] = decoded_from
+        self._is_indirect: bool = False
 
     def __getitem__(self, s: slice) -> "MatchContext":
         if not isinstance(s, slice):
@@ -2059,7 +2060,7 @@ class StringWildcard(StringTest):
         return self.post_process(data[:self.value_end(data, max_bytes)])
 
     def is_always_text(self) -> bool:
-        return False
+        return True
 
     def search(self, data: bytes) -> DataTypeMatch:
         """Reads the value that a `search` test reports.
@@ -2067,14 +2068,18 @@ class StringWildcard(StringTest):
         `num_bytes` bounds the start offsets a search tries, not the extent of the value it
         yields, and a search reads the buffer in place rather than copying it into libmagic's
         128-byte value union (``file/src/softmagic.c:1389-1395``), so neither bound applies here.
+        The wildcard keeps line breaks; other relations retain their line-delimited values.
 
         Args:
             data: The bytes at the offset being tested.
 
         Returns:
-            The value, ending at the first null byte, carriage return, or line feed.
+            The wildcard value before the first NUL, retaining carriage returns and line feeds.
         """
-        return self.post_process(data[:self.value_end(data)])
+        if self.relation != "x":
+            return self.post_process(data[:self.value_end(data)])
+        end = data.find(b"\0")
+        return self.post_process(data if end < 0 else data[:end])
 
     def __str__(self):
         return "null-terminated string"
@@ -2399,25 +2404,39 @@ class StringMatch(StringTest):
         return repr(self.string)
 
 
-def reject_pascal_string_flags(declaration: str, format_str: str, options: str) -> None:
-    """Raises if `options` carries a length modifier that only ``pstring`` accepts.
+STRING_MODIFIER_TOKEN: Pattern[str] = re.compile(
+    r"0[xX][\dA-Fa-f]+|0[0-7]*|[1-9]\d*|[A-Za-z]"
+)
 
-    ``B``, ``H``, ``h``, ``L`` and ``J`` size a Pascal string's length prefix, and libmagic's flag
-    loop jumps to its error label for any other type (``file/src/apprentice.c:1983-2020``). ``l``
-    is the exception, because on a ``regex`` it means ``REGEX_LINE_COUNT``.
 
-    Args:
-        declaration: The word the type was declared with.
-        format_str: The whole declaration, for the error message.
-        options: The flag letters that followed it.
+def _modifier_groups(format_str: str, names: Tuple[str, ...]) -> Tuple[str, ...]:
+    names_pattern = "|".join(re.escape(name) for name in names)
+    pattern = rf"(?:{names_pattern})(?:/(?P<options>[A-Za-z0-9]+(?:/[A-Za-z0-9]+)*))?"
+    match = re.fullmatch(pattern, format_str)
+    if match is None:
+        raise ValueError(f"Invalid {names[0]} type declaration: {format_str!r}")
+    options: str = match.group("options") or ""
+    return tuple(options.split("/"))
 
-    Raises:
-        ValueError: If `options` carries a modifier only ``pstring`` accepts.
-    """
-    invalid = "".join(sorted({opt for opt in options if opt in "BHhLJ"}))
-    if invalid:
-        raise ValueError(f"Invalid {declaration} type declaration: {format_str!r} carries the {invalid!r} "
-                         f"modifier(s), which libmagic accepts only on pstring")
+
+def _parse_string_modifiers(
+        format_str: str, names: Tuple[str, ...], flags: str, *, allow_range: bool = True
+) -> Tuple[Optional[int], str]:
+    """Read slash-separated flag groups and numeric ranges in their declared order."""
+    length = None
+    options = []
+    tokens = (token for group in _modifier_groups(format_str, names)
+              for token in STRING_MODIFIER_TOKEN.findall(group))
+    for token in tokens:
+        if token[0].isdigit():
+            if not allow_range:
+                raise ValueError(f"Invalid {names[0]} range in declaration: {format_str!r}")
+            length = parse_numeric(token)
+        else:
+            if token not in flags:
+                raise ValueError(f"Invalid {names[0]} modifier {token!r}: {format_str!r}")
+            options.append(token)
+    return length, "".join(options)
 
 
 class StringType(DataType[StringTest]):
@@ -2559,21 +2578,13 @@ class StringType(DataType[StringTest]):
             return expected.out_of_bounds_match(data)
         return expected.matches(data)
 
-    STRING_TYPE_FORMAT: Pattern[str] = re.compile(r"^u?string(/(?P<numbytes>\d+))?(?P<opts>/[BbCctTWwf]*)?$")
-
     @classmethod
     def parse(  # ty: ignore[invalid-method-override]  # Factories keep distinct keywords.
             cls, format_str: str
     ) -> "StringType":
-        m = cls.STRING_TYPE_FORMAT.match(format_str)
-        if not m:
-            raise ValueError(f"Invalid string type declaration: {format_str!r}")
-        if m.group("numbytes") is None:
-            num_bytes: Optional[int] = None
-        else:
-            num_bytes = int(m.group("numbytes"))
-        options = m.group("opts") or ""
-        reject_pascal_string_flags(cls.DECLARATION, format_str, options)
+        num_bytes, options = _parse_string_modifiers(
+            format_str, ("string", "ustring"), "WwCcTftb"
+        )
         return StringType(
             case_insensitive_lower="c" in options,
             case_insensitive_upper="C" in options,
@@ -2583,7 +2594,7 @@ class StringType(DataType[StringTest]):
             trim="T" in options,
             force_text="t" in options,
             force_binary="b" in options,
-            num_bytes=num_bytes
+            num_bytes=num_bytes or None
         )
 
 
@@ -2681,35 +2692,11 @@ class SearchType(StringType):
     def match(self, data: bytes, expected: StringTest) -> DataTypeMatch:
         return expected.search(data)
 
-    SEARCH_TYPE_FORMAT: Pattern[str] = re.compile(
-        r"^search"
-        r"((/(?P<repetitions1>(0[xX][\dA-Fa-f]+|\d+)))(/(?P<flags1>[BbCctTWwsf]*)?)?|"
-        r"/((?P<flags2>[BbCctTWwsf]*)/?)?(?P<repetitions2>(0[xX][\dA-Fa-f]+|\d+)))$"
-    )
-    # NOTE: `ber` writes `search/b64`, which the documentation does not describe. libmagic reads the
-    #       digits of a string declaration as the repetition count and every letter as a flag
-    #       (`file/src/apprentice.c:1940-1956`), so that is `search/64` with `b` set.
-
     @classmethod
     def parse(cls, format_str: str) -> "SearchType":
-        if format_str == "search":
-            # it's undocumented, but you can apparently use the search test without an explicit repetition number
-            return SearchType()
-        m = cls.SEARCH_TYPE_FORMAT.match(format_str)
-        if not m:
-            raise ValueError(f"Invalid search type declaration: {format_str!r}")
-        if m.group("repetitions1") is not None:
-            repetitions = parse_numeric(m.group("repetitions1"))
-            flags = m.group("flags1")
-        elif m.group("repetitions2") is not None:
-            repetitions = parse_numeric(m.group("repetitions2"))
-            flags = m.group("flags2")
-        else:
-            raise ValueError(f"Invalid search type declaration: {format_str!r}")
-        options = flags or ""
-        reject_pascal_string_flags(cls.DECLARATION, format_str, options)
+        repetitions, options = _parse_string_modifiers(format_str, ("search",), "WwCcTftbs")
         return SearchType(
-            repetitions=repetitions,
+            repetitions=repetitions or None,
             case_insensitive_lower="c" in options,
             case_insensitive_upper="C" in options,
             compact_whitespace="W" in options,
@@ -2723,7 +2710,7 @@ class SearchType(StringType):
 
 
 class PascalStringType(DataType[StringTest]):
-    STRING_FLAGS: str = "CcTWwft"
+    STRING_FLAGS: str = "CcTWwftb"
 
     def __init__(
             self,
@@ -2773,7 +2760,8 @@ class PascalStringType(DataType[StringTest]):
         self.byte_length: int = byte_length
         self.endianness: Endianness = endianness
         self.count_includes_length: int = count_includes_length
-        self.string_type: StringType = StringType.parse(f"string/{string_flags}")
+        declaration = f"string/{string_flags}" if string_flags else "string"
+        self.string_type: StringType = StringType.parse(declaration)
 
     def strength_term(self, expected: StringTest) -> int:
         """Scored like a `string`, counting the length prefix as part of the value.
@@ -2785,6 +2773,9 @@ class PascalStringType(DataType[StringTest]):
 
     def relation(self, expected: StringTest) -> str:
         return expected.relation
+
+    def declared_test_types(self) -> TestType:
+        return self.string_type.declared_test_types()
 
     def parse_expected(self, specification: str) -> StringTest:
         return self.string_type.parse_expected(specification)
@@ -2817,39 +2808,27 @@ class PascalStringType(DataType[StringTest]):
             m.raw_match = data[:self.byte_length + effective_len]
         return m
 
-    PSTRING_TYPE_FORMAT: Pattern[str] = re.compile(r"^pstring(?P<opts>/[JBHhLlCcTWwft]*)?$")
-
     @classmethod
     def parse(  # ty: ignore[invalid-method-override]  # Factories keep distinct keywords.
             cls, format_str: str
     ) -> "PascalStringType":
-        m = cls.PSTRING_TYPE_FORMAT.match(format_str)
-        if not m:
-            raise ValueError(f"Invalid pstring type declaration: {format_str!r}")
-        if m.group("opts") is None:
-            options: str = ""
-        else:
-            options = m.group("opts")
-        if "H" in options:
-            byte_length = 2
-            endianness = Endianness.BIG
-        elif "h" in options:
-            byte_length = 2
-            endianness = Endianness.LITTLE
-        elif "L" in options:
-            byte_length = 4
-            endianness = Endianness.BIG
-        elif "l" in options:
-            byte_length = 4
-            endianness = Endianness.LITTLE
-        else:
-            byte_length = 1
-            endianness = Endianness.BIG
+        _, options = _parse_string_modifiers(
+            format_str, ("pstring",), "JBHhLl" + cls.STRING_FLAGS, allow_range=False
+        )
+        modifier = next((option for option in reversed(options) if option in "BHhLl"), "B")
+        prefixes = {
+            "B": (1, Endianness.BIG),
+            "H": (2, Endianness.BIG),
+            "h": (2, Endianness.LITTLE),
+            "L": (4, Endianness.BIG),
+            "l": (4, Endianness.LITTLE),
+        }
+        byte_length, endianness = prefixes[modifier]
         return PascalStringType(
             byte_length=byte_length,
             endianness=endianness,
             count_includes_length="J" in options,
-            string_flags="".join(opt for opt in options if opt in cls.STRING_FLAGS)
+            string_flags="".join(option for option in cls.STRING_FLAGS if option in options)
         )
 
 
@@ -3013,6 +2992,7 @@ def line_region_length(region: bytes, line_count: int) -> int:
 class RegexType(DataType[MagicRegex]):
     FLAGS: Tuple[Tuple[str, str], ...] = (
         ("c", "case_insensitive"),
+        ("C", "case_insensitive_upper"),
         ("s", "match_to_start"),
         ("l", "limit_lines"),
         ("T", "trim"),
@@ -3033,7 +3013,9 @@ class RegexType(DataType[MagicRegex]):
             limit_lines: bool = False,
             trim: bool = False,
             force_text: bool = False,
-            force_binary: bool = False
+            force_binary: bool = False,
+            *,
+            case_insensitive_upper: bool = False
     ):
         self.declared_length: Optional[int] = length
         """The number the declaration wrote after ``regex``, or None if it wrote none.
@@ -3043,13 +3025,11 @@ class RegexType(DataType[MagicRegex]):
         (``file/src/softmagic.c:1411-1422``).
         """
         if length is None:
-            if limit_lines:
-                length = 8 * 1024 // 80  # libmagic assumes 80 bytes per line
-            else:
-                length = 8 * 1024  # libmagic limits to 8KiB by default
+            length = 0 if limit_lines else REGEX_MAX
         self.limit_lines: bool = limit_lines
         self.length: int = length
         self.case_insensitive: bool = case_insensitive
+        self.case_insensitive_upper: bool = case_insensitive_upper
         self.match_to_start: bool = match_to_start
         self.trim: bool = trim
         self.force_text: bool = force_text
@@ -3072,8 +3052,6 @@ class RegexType(DataType[MagicRegex]):
         if not length and not flags:
             return "regex"
         return f"regex/{length}{flags}"
-
-    DOLLAR_PATTERN = re.compile(rb"(^|[^\\])\$", re.MULTILINE)
 
     def declared_test_types(self) -> TestType:
         return declared_passes(self.force_text, self.force_binary)
@@ -3122,7 +3100,7 @@ class RegexType(DataType[MagicRegex]):
             # (`file/src/apprentice.c:2383-2384`)
             specification = specification[1:]
         flags = re.MULTILINE
-        if self.case_insensitive:
+        if self.case_insensitive or self.case_insensitive_upper:
             flags |= re.IGNORECASE
         return MagicRegex(unescape(specification), flags, negated=negated)
 
@@ -3205,30 +3183,15 @@ class RegexType(DataType[MagicRegex]):
             return DataTypeMatch.INVALID
         return self.matched_extent(m, 0)
 
-    REGEX_TYPE_FORMAT: Pattern[str] = re.compile(
-        r"^regex(/(?P<length>\d+)?(?P<flags1>[bcslTt]*)(/(?P<flags2>[bcslTt]*))?)?$"
-    )
-    # NOTE: flags can appear either after length directly (regex/31cs) or with a slash (regex/31/cs).
-
     @classmethod
     def parse(  # ty: ignore[invalid-method-override]  # Factories keep distinct keywords.
             cls, format_str: str
     ) -> "RegexType":
-        m = cls.REGEX_TYPE_FORMAT.match(format_str)
-        if not m:
-            raise ValueError(f"Invalid regex type declaration: {format_str!r}")
-        options: str = ""
-        if m.group("flags1") is not None:
-            options += m.group("flags1")
-        if m.group("flags2") is not None:
-            options += m.group("flags2")
-        if m.group("length") is None:
-            length: Optional[int] = None
-        else:
-            length = int(m.group("length"))
+        length, options = _parse_string_modifiers(format_str, ("regex",), "cCslTtb")
         return RegexType(
             length=length,
             case_insensitive="c" in options,
+            case_insensitive_upper="C" in options,
             match_to_start="s" in options,
             limit_lines="l" in options,
             trim="T" in options,
@@ -5167,6 +5130,7 @@ class Match:
                     # classifying it (`file/src/softmagic.c:1949-1977`), so an offset at the end of
                     # the file dispatches nothing instead of reporting the empty file
                     if indirect.data:
+                        indirect._is_indirect = True
                         nested_matches = self._indirect_matches.setdefault(id(result), [])
                         for match in self.matcher.match(indirect):
                             nested_matches.append(match)
@@ -5628,10 +5592,11 @@ class MagicMatcher:
             to_match = MatchContext(to_match)
         elif not isinstance(to_match, MatchContext):
             to_match = MatchContext.load(to_match)
-        if not to_match.data:
-            # `file_buffer` reports an empty buffer before it classifies the encoding and before it
-            # runs a single test (`file/src/funcs.c:360-362`)
-            yield Match(matcher=self, context=to_match, results=EmptyFileTest().match(to_match))
+        if len(to_match.data) < 2 and not to_match._is_indirect:
+            # `file_buffer` handles short inputs before encoding and soft magic (src/funcs.c).
+            test = (EmptyFileTest() if not to_match.data else
+                    OctetStreamTest(message="very short file (no magic)"))
+            yield Match(matcher=self, context=to_match, results=test.match(to_match))
             return
         text_encoding = TextEncodingDescription.detect(to_match.data)
         # `file_buffer` gates both soft magic passes on the file's own bytes
