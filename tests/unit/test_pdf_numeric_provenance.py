@@ -77,3 +77,25 @@ def test_float_conversion_retains_integer_overflow() -> None:
     token = PSInt(10**1000, pdf_offset=7, pdf_bytes=1001)
     with pytest.raises(OverflowError):
         token.as_float()
+
+
+@pytest.mark.parametrize(
+    ("token", "expected"),
+    [
+        (PSStr(" 42 ", pdf_offset=7, pdf_bytes=4), 42),
+        (PSBytes(b"-42", pdf_offset=7, pdf_bytes=5), -42),
+        (PSFloat(42.5, pdf_offset=7, pdf_bytes=9), 42),
+    ],
+)
+def test_integer_conversion_preserves_the_emitted_value(token: PSToken, expected: int) -> None:
+    converted = token.as_int()
+
+    assert isinstance(converted, PSInt)
+    assert converted == expected
+    assert (converted.pdf_offset, converted.pdf_bytes) == (token.pdf_offset, token.pdf_bytes)
+    parent = Match("PDF", None, length=32, matcher=Matcher(parse=False))
+    assert parent.matcher is not None
+    emitted = list(parse_object(converted, parent.matcher, parent))
+    assert len(emitted) == 1
+    assert emitted[0].match is converted
+    assert (emitted[0].offset, emitted[0].length) == (token.pdf_offset, token.pdf_bytes)

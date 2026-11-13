@@ -7,7 +7,16 @@ from pdfminer.pdftypes import float_value, int_value, num_value
 import pytest
 
 from polyfile.fileutils import FileStream
-from polyfile.pdf import PDFParser, PSFloat, PSInt, RawPDFStream, parse_object
+from polyfile.pdf import (
+    PDFLiteral,
+    PDFParser,
+    PSBytes,
+    PSFloat,
+    PSInt,
+    PSStr,
+    RawPDFStream,
+    parse_object,
+)
 from polyfile.polyfile import Match, Matcher
 
 NUMBERS = (
@@ -26,7 +35,9 @@ READ_POSITIONS = (
 )
 
 
-def _parse_number(literal: bytes, position: int, nested: bool) -> PSInt | PSFloat:
+def _parse_token(
+    literal: bytes, position: int, nested: bool
+) -> PSInt | PSFloat | PSBytes | PDFLiteral:
     data = b" " * position + literal + b" "
     prefix = b"nested!" if nested else b""
     backing = b"!" * 37 + prefix + data + b"outside"
@@ -37,7 +48,7 @@ def _parse_number(literal: bytes, position: int, nested: bool) -> PSInt | PSFloa
         parser = PDFParser(cast(BinaryIO, RawPDFStream(stream)))
         offset, token = parser.nexttoken()
     assert offset == position
-    assert isinstance(token, (PSInt, PSFloat))
+    assert isinstance(token, (PSInt, PSFloat, PSBytes, PDFLiteral))
     return token
 
 
@@ -50,7 +61,7 @@ def test_numeric_parser_returns_instrumented_values_across_read_boundaries(
     nested: bool,
 ) -> None:
     literal, token_type, expected = number
-    token = _parse_number(literal, position, nested)
+    token = _parse_token(literal, position, nested)
 
     assert type(token) is token_type
     assert token == expected
@@ -67,7 +78,7 @@ def test_numeric_parser_output_retains_token_metadata_and_analysis_source(
 ) -> None:
     literal, token_type, expected = number
     position = PDFParser.BUFSIZ - 1
-    token = _parse_number(literal, position, nested=True)
+    token = _parse_token(literal, position, nested=True)
     parent = Match(
         "PDF",
         None,
@@ -78,9 +89,7 @@ def test_numeric_parser_output_retains_token_metadata_and_analysis_source(
     )
     assert parent.matcher is not None
 
-    matches = list(
-        parse_object(token, parent.matcher, parent, pdf_header_offset=source_base)
-    )
+    matches = list(parse_object(token, parent.matcher, parent, pdf_header_offset=source_base))
 
     assert len(matches) == 1
     match = matches[0]
@@ -115,10 +124,46 @@ def test_pdfminer_numeric_resolvers_retain_the_returned_token(
     resolver: Callable[[object], int | float],
 ) -> None:
     position = PDFParser.BUFSIZ - 1
-    token = _parse_number(literal, position, nested=True)
+    token = _parse_token(literal, position, nested=True)
 
     resolved = resolver(token)
 
     assert resolved is token
     assert isinstance(resolved, (PSInt, PSFloat))
     assert (resolved.pdf_offset, resolved.pdf_bytes) == (position, len(literal))
+
+
+@pytest.mark.parametrize(
+    ("literal", "expected", "relative_offset", "length"),
+    [(b"/Token", "Token", 0, 6), (b"(abc)", b"abc", 1, 3)],
+)
+@pytest.mark.parametrize("position", READ_POSITIONS)
+@pytest.mark.parametrize("nested", (False, True))
+def test_text_parser_retains_metadata_after_string_and_bytes_conversions(
+    literal: bytes,
+    expected: str | bytes,
+    relative_offset: int,
+    length: int,
+    position: int,
+    nested: bool,
+) -> None:
+    token = _parse_token(literal, position, nested)
+
+    assert (token.pdf_offset, token.pdf_bytes) == (position + relative_offset, length)
+    if isinstance(expected, str):
+        assert isinstance(token, PDFLiteral)
+        assert isinstance(token.name, PSStr)
+        assert token.name == expected
+        assert (token.name.pdf_offset, token.name.pdf_bytes) == (position + 1, length - 1)
+    else:
+        assert isinstance(token, PSBytes)
+        assert bytes(token) is token
+        assert token == expected
+
+    parent = Match("PDF", None, length=position + len(literal), matcher=Matcher(parse=False))
+    assert parent.matcher is not None
+    list(parse_object(token, parent.matcher, parent))
+    emitted = next(match for match in parent.children if match.match is token)
+    assert (emitted.offset, emitted.length) == (position + relative_offset, length)
+    serialized = emitted.to_obj()
+    assert (serialized["offset"], serialized["size"]) == (position + relative_offset, length)
