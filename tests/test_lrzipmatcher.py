@@ -10,6 +10,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.fixture_types import FixtureProvenance
+
 from polyfile import AnalysisLimits
 from polyfile.__main__ import main
 from polyfile.compression import DecodeError, DecodeResult
@@ -51,7 +53,7 @@ def replace(data: bytes, offset: int, value: bytes) -> bytes:
 
 @pytest.mark.parametrize("item", PROVENANCE, ids=lambda item: item["fixture"])
 def test_real_archives_round_trip_with_verified_provenance(
-    lrzip: str, item: dict
+    lrzip: str, item: FixtureProvenance
 ) -> None:
     encoded = (FIXTURES / item["fixture"]).read_bytes()
     expected = (FIXTURES / item["payload"]).read_bytes()

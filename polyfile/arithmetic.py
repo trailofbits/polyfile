@@ -1,4 +1,4 @@
-from typing import Callable, Dict, Tuple
+from collections.abc import Callable
 
 import cint
 
@@ -6,7 +6,7 @@ import cint
 CStyleInt = cint.Cint
 
 
-INT_TYPES: Dict[Tuple[int, bool], Callable[[int], CStyleInt]] = {
+INT_TYPES: dict[tuple[int, bool], Callable[[int], CStyleInt]] = {
     (1, False): cint.U8,
     (1, True): cint.I8,
     (2, False): cint.U16,

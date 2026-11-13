@@ -1,12 +1,16 @@
 import concurrent.futures
-from datetime import datetime, timezone
+from collections.abc import Callable, Iterable
+from datetime import UTC, datetime
+from importlib import import_module
 import json
 from multiprocessing import cpu_count
 from pathlib import Path
 import re
+from re import Pattern
 import subprocess
 import sys
-from typing import Any, Dict, FrozenSet, Iterable, List, Optional, Pattern, Tuple
+from types import TracebackType
+from typing import Protocol, Self, TypedDict, cast
 
 POLYFILE_DIR: Path = Path(__file__).absolute().parent
 COMPILE_SCRIPT: Path = POLYFILE_DIR / "polyfile" / "kaitai" / "compiler.py"
@@ -14,12 +18,34 @@ KAITAI_FORMAT_LIBRARY: Path = POLYFILE_DIR / "kaitai_struct_formats"
 KAITAI_PARSERS_DIR: Path = POLYFILE_DIR / "polyfile" / "kaitai" / "parsers"
 MANIFEST_PATH: Path = KAITAI_PARSERS_DIR / "manifest.json"
 
+
+class _ParserReference(TypedDict):
+    class_name: str
+    python_path: str
+
+
+class _ParserManifestEntry(_ParserReference):
+    dependencies: list[_ParserReference]
+
+
+class _ProgressBar(Protocol):
+    def __enter__(self) -> Self: ...
+
+    def __exit__(
+        self, exc_type: type[BaseException] | None, exc_value: BaseException | None,
+        traceback: TracebackType | None, /
+    ) -> None: ...
+
+    def write(self, message: str) -> None: ...
+
+    def update(self, n: int) -> object: ...
+
 # PolyFile is distributed under the Apache 2.0 license. A parser generated from a format
 # specification is a derivative work of that specification, so PolyFile can only ship parsers
 # generated from specifications under a compatible permissive license. Every specification whose
 # license is not in this set is excluded from compilation, including specifications that declare no
 # license at all. See docs/extending_polyfile.md before adding a license here.
-PERMISSIVE_LICENSES: FrozenSet[str] = frozenset({
+PERMISSIVE_LICENSES: frozenset[str] = frozenset({
     "Apache-2.0",
     "BSD-2-Clause",
     "BSD-3-Clause-Attribution",
@@ -38,7 +64,7 @@ if not (KAITAI_FORMAT_LIBRARY / "README.md").exists():
     subprocess.check_call(["git", "submodule", "update"], cwd=str(POLYFILE_DIR))
 
 
-def spec_license(spec: Path) -> Optional[str]:
+def spec_license(spec: Path) -> str | None:
     """Reads the license declared by a Kaitai Struct format specification.
 
     Args:
@@ -51,17 +77,17 @@ def spec_license(spec: Path) -> Optional[str]:
         ValueError: if the specification is not valid UTF-8.
     """
     try:
-        with open(spec, "r", encoding="utf-8") as f:
+        with open(spec, encoding="utf-8") as f:
             for line in f:
                 match = LICENSE_PATTERN.match(line)
                 if match is not None:
-                    return match.group("license")
+                    return cast(str, match.group("license"))
     except UnicodeDecodeError as e:
         raise ValueError(f"Could not read the license of {spec}: it is not valid UTF-8") from e
     return None
 
 
-def excluded_specs(library: Path = KAITAI_FORMAT_LIBRARY) -> Dict[Path, Optional[str]]:
+def excluded_specs(library: Path = KAITAI_FORMAT_LIBRARY) -> dict[Path, str | None]:
     """Finds the format specifications that PolyFile is not permitted to redistribute.
 
     Args:
@@ -71,7 +97,7 @@ def excluded_specs(library: Path = KAITAI_FORMAT_LIBRARY) -> Dict[Path, Optional
         Each specification whose license is not in :data:`PERMISSIVE_LICENSES`, mapped to the
         license it declares, or :const:`None` if it declares none.
     """
-    excluded: Dict[Path, Optional[str]] = {}
+    excluded: dict[Path, str | None] = {}
     for spec in sorted(library.glob("**/*.ksy")):
         license_name = spec_license(spec)
         if license_name not in PERMISSIVE_LICENSES:
@@ -79,7 +105,7 @@ def excluded_specs(library: Path = KAITAI_FORMAT_LIBRARY) -> Dict[Path, Optional
     return excluded
 
 
-def report_excluded(excluded: Dict[Path, Optional[str]]):
+def report_excluded(excluded: dict[Path, str | None]):
     if not excluded:
         return
     print(f"Excluding {len(excluded)} format specification(s) without a permissive license:")
@@ -87,15 +113,17 @@ def report_excluded(excluded: Dict[Path, Optional[str]]):
         print(f"  {license_name or 'no license':<24} {spec.relative_to(KAITAI_FORMAT_LIBRARY)}")
 
 
-def compile_ksy(path: Path) -> List[Tuple[str, str]]:
+def compile_ksy(path: Path) -> list[tuple[str, str]]:
     output = subprocess.check_output(
         [sys.executable, str(COMPILE_SCRIPT), str(path), str(KAITAI_PARSERS_DIR)],
         cwd=str(KAITAI_FORMAT_LIBRARY)
     ).decode("utf-8")
-    return [  # type: ignore
-        tuple(line.split("\t")[:2])  # (class_name, python_path)
-        for line in output.split("\n") if line.strip()
-    ]
+    compiled = []
+    for line in output.splitlines():
+        if line.strip():
+            class_name, python_path = line.split("\t")[:2]
+            compiled.append((class_name, python_path))
+    return compiled
 
 
 def mtime(path: Path) -> datetime:
@@ -106,7 +134,7 @@ def mtime(path: Path) -> datetime:
     ) != 0
     if was_modified:
         # the file was modified since the last commit, so use its filesystem mtime
-        return datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)
+        return datetime.fromtimestamp(path.stat().st_mtime, tz=UTC)
 
     # the file has not been modified since the last commit, so use the last commit time
     last_commit_date = subprocess.check_output(["git", "log", "-1", "--format=\"%cd\"", str(path)],
@@ -116,7 +144,7 @@ def mtime(path: Path) -> datetime:
 
 def is_stale(specs: Iterable[Path]) -> bool:
     """Determines whether any specification has been modified since the manifest was written."""
-    newest_definition: Optional[datetime] = None
+    newest_definition: datetime | None = None
     for definition in specs:
         modtime = mtime(definition)
         if newest_definition is None or newest_definition < modtime:
@@ -124,29 +152,32 @@ def is_stale(specs: Iterable[Path]) -> bool:
     return newest_definition is not None and newest_definition > mtime(MANIFEST_PATH)
 
 
-def progress_bar(total: int):
+def progress_bar(total: int) -> _ProgressBar:
     try:
-        from tqdm import tqdm
+        tqdm = cast(Callable[..., _ProgressBar], getattr(import_module("tqdm"), "tqdm"))
     except ModuleNotFoundError:
         class TQDM:
-            def __enter__(self):
+            def __enter__(self) -> Self:
                 return self
 
-            def __exit__(self, exc_type, exc_val, exc_tb):
+            def __exit__(
+                self, exc_type: type[BaseException] | None, exc_val: BaseException | None,
+                exc_tb: TracebackType | None
+            ) -> None:
                 pass
 
-            def write(self, message, *_, **__):
+            def write(self, message: str, *_: object, **__: object) -> None:
                 sys.stderr.write(message)
                 sys.stderr.write("\n")
                 sys.stderr.flush()
 
-            def update(self, n: int):
+            def update(self, n: int) -> None:
                 pass
         return TQDM()
     return tqdm(leave=False, desc="Compiling the Kaitai Struct Format Library", total=total)
 
 
-def manifest_entry(compiled: List[Tuple[str, str]]) -> Dict[str, Any]:
+def manifest_entry(compiled: list[tuple[str, str]]) -> _ParserManifestEntry:
     (class_name, python_path), *dependencies = compiled
     return {
         "class_name": class_name,
@@ -161,12 +192,12 @@ def manifest_entry(compiled: List[Tuple[str, str]]) -> Dict[str, Any]:
     }
 
 
-def compile_all(specs: List[Path]) -> Dict[str, Dict[str, Any]]:
+def compile_all(specs: list[Path]) -> dict[str, _ParserManifestEntry]:
     """Compiles format specifications in parallel and returns the manifest describing them."""
-    ksy_manifest: Dict[str, Dict[str, Any]] = {}
+    ksy_manifest: dict[str, _ParserManifestEntry] = {}
     with progress_bar(len(specs)) as t:
         with concurrent.futures.ThreadPoolExecutor(max_workers=cpu_count()) as executor:
-            futures_to_path: Dict[concurrent.futures.Future, Path] = {
+            futures_to_path: dict[concurrent.futures.Future[list[tuple[str, str]]], Path] = {
                 executor.submit(compile_ksy, spec): spec
                 for spec in specs
             }

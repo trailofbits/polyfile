@@ -1,4 +1,5 @@
 from collections import deque
+from collections.abc import Mapping
 from enum import Enum
 from io import StringIO
 import itertools
@@ -286,7 +287,7 @@ class Expression:
         self.tokens = tuple(rpn)
 
     @staticmethod
-    def get_value(token: Token, assignments: dict):
+    def get_value(token: Token, assignments: Mapping[str, object]):
         if isinstance(token, IntegerToken):
             return token.value
         elif isinstance(token, IdentifierToken):
