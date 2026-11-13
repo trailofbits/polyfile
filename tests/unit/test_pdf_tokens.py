@@ -1,3 +1,7 @@
+from array import array
+import ctypes
+import sys
+
 import pytest
 from typing import SupportsIndex, cast
 
@@ -14,9 +18,7 @@ from polyfile.pdf import PSBytes, PSFloat, PSInt, PSStr, PSToken
     ],
     ids=["integer", "float", "text", "bytes"],
 )
-def test_float_conversion_preserves_source_token(
-    token: PSToken, expected: float
-) -> None:
+def test_float_conversion_preserves_source_token(token: PSToken, expected: float) -> None:
     provenance = token.pdf_offset, token.pdf_bytes
 
     result = float(token)
@@ -153,3 +155,87 @@ def test_split_rejects_non_index_arguments() -> None:
     invalid = cast(SupportsIndex, object())  # Deliberately exercise the runtime input boundary.
     with pytest.raises(TypeError, match="integer"):
         token.split(None, invalid)
+
+
+@pytest.mark.parametrize("binary", [False, True])
+@pytest.mark.parametrize("maximum", [-1, 0])
+@pytest.mark.parametrize("separator", ["wrong-family", "", 0, False, [], object()])
+def test_split_rejects_incompatible_separator_types(
+    binary: bool,
+    maximum: int,
+    separator: object,
+) -> None:
+    if isinstance(separator, str) and not binary:
+        separator = separator.encode()
+    token = (
+        PSBytes(b"ab,cd", pdf_offset=7, pdf_bytes=5)
+        if binary
+        else PSStr("ab,cd", pdf_offset=7, pdf_bytes=5)
+    )
+    invalid = cast(str | bytes, separator)  # Exercise the runtime separator boundary.
+    with pytest.raises(TypeError):
+        token.split(invalid, maximum)
+
+
+@pytest.mark.parametrize("maximum", [-1, 0, 1])
+@pytest.mark.parametrize("kind", ["bytearray", "memoryview", "array", "wide-array", "scalar"])
+def test_byte_split_accepts_contiguous_buffer_separators(kind: str, maximum: int) -> None:
+    if kind == "bytearray":
+        separator = bytearray(b",")
+    elif kind == "memoryview":
+        separator = memoryview(b",")
+    elif kind == "array":
+        separator = array("B", [44])
+    elif kind == "wide-array":
+        separator = array("H", [0x2C2C])
+    else:
+        separator = ctypes.c_ubyte(44)
+    value = b"a,,b,,"
+    token = PSBytes(value, pdf_offset=7, pdf_bytes=len(value))
+    argument = cast(bytes, separator)  # The builtin accepts any contiguous buffer provider.
+    assert token.split(argument, maximum) == value.split(argument, maximum)
+
+
+def test_byte_split_rejects_noncontiguous_and_released_buffers() -> None:
+    token = PSBytes(b"a,,b", pdf_offset=7, pdf_bytes=4)
+    sparse = memoryview(b",x,y")[::2]
+    with pytest.raises(BufferError):
+        token.split(cast(bytes, sparse))
+    released = memoryview(b",")
+    released.release()
+    with pytest.raises(ValueError):
+        token.split(cast(bytes, released))
+
+
+@pytest.mark.parametrize("binary", [False, True])
+@pytest.mark.parametrize("maximum", [sys.maxsize + 1, -sys.maxsize - 2])
+def test_split_rejects_index_size_overflow(binary: bool, maximum: int) -> None:
+    token = (
+        PSBytes(b"ab cd", pdf_offset=7, pdf_bytes=5)
+        if binary
+        else PSStr("ab cd", pdf_offset=7, pdf_bytes=5)
+    )
+    with pytest.raises(OverflowError):
+        token.split(None, maximum)
+
+
+def test_split_checks_overflow_after_index_conversion() -> None:
+    class LargeIndex:
+        def __index__(self) -> int:
+            return sys.maxsize + 1
+
+    token = PSStr("ab cd", pdf_offset=7, pdf_bytes=5)
+    with pytest.raises(OverflowError):
+        token.split(None, LargeIndex())
+
+
+@pytest.mark.parametrize("binary", [False, True])
+@pytest.mark.parametrize("maximum", [sys.maxsize, -sys.maxsize - 1])
+def test_split_accepts_index_size_boundaries(binary: bool, maximum: int) -> None:
+    value = b"ab cd" if binary else "ab cd"
+    token = (
+        PSBytes(value, pdf_offset=7, pdf_bytes=5)
+        if binary
+        else PSStr(value, pdf_offset=7, pdf_bytes=5)
+    )
+    assert token.split(None, maximum) == value.split(None, maximum)

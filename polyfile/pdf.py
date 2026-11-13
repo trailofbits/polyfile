@@ -195,6 +195,16 @@ class PSSequence(PSToken):
         aligned = len(positions) == 1 or positions.step == 1
         return self.pdf_offset + start, end - start, aligned
 
+    @staticmethod
+    def _byte_separator(separator) -> bytes:
+        """Validate a contiguous buffer and expose its raw bytes as a separator."""
+        if type(separator) is bytes:
+            return separator
+        with memoryview(separator) as buffer:
+            if not buffer.c_contiguous:
+                raise BufferError("split separator must be a C-contiguous buffer")
+            return buffer.tobytes()
+
     def split(
         self,
         sep: Optional[Union[str, bytes, "PSSequence"]] = None,
@@ -203,7 +213,8 @@ class PSSequence(PSToken):
         """Split token values while retaining their slice wrappers.
 
         Args:
-            sep: Separator sequence, or None to use the token's whitespace rules.
+            sep: Separator sequence, or None to use the token's whitespace rules. Text values
+                require str separators; byte values accept contiguous buffer providers.
             maxsplit: Maximum splits; negative values split every separator. Values supporting
                 Python's integer index protocol are accepted, like builtin str and bytes.
 
@@ -212,11 +223,20 @@ class PSSequence(PSToken):
 
         Raises:
             ValueError: If the separator is empty.
-            TypeError: If maxsplit does not support the integer index protocol.
+            TypeError: If the separator has an incompatible type or maxsplit is not an index.
+            OverflowError: If maxsplit exceeds the platform's index-sized integer range.
+            BufferError: If a byte separator's buffer is not C-contiguous.
         """
         maximum = operator.index(maxsplit)
+        if not -sys.maxsize - 1 <= maximum <= sys.maxsize:
+            raise OverflowError("Python int too large to convert to C ssize_t")
         if sep is None:
             return self._split_whitespace(maximum)
+        if isinstance(self, str):
+            if not isinstance(sep, str):
+                raise TypeError(f"must be str or None, not {type(sep).__name__}")
+        elif isinstance(self, bytes):
+            sep = self._byte_separator(sep)
         if not sep:
             raise ValueError("empty separator")
         return self._split_separator(sep, maximum)
