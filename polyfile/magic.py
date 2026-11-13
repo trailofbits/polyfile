@@ -5523,12 +5523,12 @@ class MagicMatcher:
         return iter(self._tests)
 
     @property
-    def mimetypes(self) -> Iterable[str]:
+    def mimetypes(self) -> KeysView[str]:
         """Returns the set of MIME types this matcher is capable of matching"""
         return self.tests_by_mime.keys()
 
     @property
-    def extensions(self) -> Iterable[str]:
+    def extensions(self) -> KeysView[str]:
         """Returns the set of extensions this matcher is capable of matching"""
         return self.tests_by_ext.keys()
 

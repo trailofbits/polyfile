@@ -33,7 +33,7 @@ class BFCommandType(Enum):
 _BF_COMMAND_TYPES = {ord(command.value): command for command in BFCommandType}
 
 
-def _bf_tokens(data: bytes) -> Iterable[Tuple[int, int]]:
+def _bf_tokens(data: Iterable[int]) -> Iterable[Tuple[int, int]]:
     if type(data) is bytes:
         # Scan whole command runs, so dense programs need only one regex
         # match per run, even when they start with a long comment header.
@@ -95,7 +95,7 @@ class BFProgram:
         return "".join(ret)
 
     @classmethod
-    def parse(cls, data: bytes) -> "BFProgram":
+    def parse(cls, data: Iterable[int]) -> "BFProgram":
         opened = 0
         offset = 0
         commands: List[BFCommand] = []
@@ -116,7 +116,7 @@ class BFProgram:
                 if opened < 0:
                     break
         if opened != 0:
-            if opened > 0 and native_bytes:
+            if opened > 0 and type(data) is bytes:
                 # An unmatched opening bracket is reported at EOF, including
                 # trailing comments that the command iterator skipped.
                 offset = len(data) - 1

@@ -110,6 +110,7 @@ def test_record_payload_json_recursion() -> None:
     json_nodes = [node for node in nodes if node.name == "application/json"]
     assert len(json_nodes) == 1
     assert json_nodes[0].offset == 4
+    assert json_nodes[0].parent is not None
     assert json_nodes[0].parent.name == "record_payload"
 
 
@@ -225,10 +226,10 @@ def test_many_records_use_bounded_linear_reads() -> None:
             self.bytes_read = 0
             self.unsized_reads = 0
 
-        def read(self, size: int = -1) -> bytes:
+        def read(self, size: int | None = -1) -> bytes:
             data = super().read(size)
             self.bytes_read += len(data)
-            self.unsized_reads += size < 0
+            self.unsized_reads += size is None or size < 0
             return data
 
     data = record(b"\xff" * 64) * 80
