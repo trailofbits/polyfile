@@ -1,4 +1,6 @@
-from typing import Callable, Dict, Iterator, List, Optional, Tuple, Type, TypeVar, Union
+import sys
+from typing import Callable, Dict, Iterator, List, Optional, SupportsIndex, Tuple, Type, TypeVar, Union
+import operator
 import zlib
 
 from pdfminer.ascii85 import ascii85decode, asciihexdecode
@@ -110,6 +112,8 @@ class PSToken:
     def __int__(self):
         if isinstance(self, int):
             return int.__int__(self)
+        if isinstance(self, float):
+            return float.__int__(self)
         return int(self, base=10)
 
     def as_int(self):
@@ -155,38 +159,67 @@ C = TypeVar("C")
 
 
 class PSSequence(PSToken):
-    def split(self: Type[C], sep: Optional[C] = None, maxsplit: int = -1) -> List[C]:
-        remainder = self
-        current: Optional[C] = None
-        result: List[C] = []
+    def split(
+        self,
+        sep: Optional[Union[str, bytes, "PSSequence"]] = None,
+        maxsplit: SupportsIndex = -1,
+    ) -> List["PSSequence"]:
+        """Split token values while retaining their slice wrappers.
+
+        Args:
+            sep: Separator sequence, or None to use the token's whitespace rules.
+            maxsplit: Maximum splits; negative values split every separator. Values supporting
+                Python's integer index protocol are accepted, like builtin str and bytes.
+
+        Returns:
+            Token slices, retaining empty fields for explicit separators and respecting maxsplit.
+
+        Raises:
+            ValueError: If the separator is empty.
+            TypeError: If maxsplit does not support the integer index protocol.
+        """
+        maximum = operator.index(maxsplit)
         if sep is None:
-            remainder = remainder.strip()
-        while remainder and (maxsplit < 0 or len(result) <= maxsplit):
-            c = remainder[0:1]
-            remainder = remainder[1:]
-            if sep is None:
-                if not c.strip():
-                    if current is not None:
-                        result.append(current)
-                        current = None
-                else:
-                    if current is None:
-                        current = c
-                    else:
-                        current += c
+            return self._split_whitespace(maximum)
+        if not sep:
+            raise ValueError("empty separator")
+        return self._split_separator(sep, maximum)
+
+    def _split_whitespace(self, maximum: int) -> List["PSSequence"]:
+        result: List[PSSequence] = []
+        start = 0
+        while start < len(self):
+            while start < len(self) and not self[start:start + 1].strip():
+                start += 1
+            if start == len(self):
+                break
+            if maximum == 0:
+                result.append(self[start:])
+                break
+            stop = start
+            while stop < len(self) and self[stop:stop + 1].strip():
+                stop += 1
+            result.append(self[start:stop])
+            start = stop
+            maximum -= 1
+        return result
+
+    def _split_separator(
+        self, separator: Union[str, bytes, "PSSequence"], maximum: int
+    ) -> List["PSSequence"]:
+        result: List[PSSequence] = []
+        start = 0
+        offset = 0
+        width = len(separator)
+        while offset <= len(self) - width and maximum != 0:
+            if self[offset:offset + width] == separator:
+                result.append(self[start:offset])
+                start = offset + width
+                offset = start
+                maximum -= 1
             else:
-                if current is None:
-                    current = c
-                else:
-                    current += c
-                if current[-len(sep):] == sep:
-                    result.append(current[:-len(sep)])
-                    current = None
-        if current is not None:
-            if not result or maxsplit < 0 or len(result) <= maxsplit:
-                result.append(current)
-            else:
-                result[-1] += current
+                offset += 1
+        result.append(self[start:])
         return result
 
     def __add__(self: Type[C], other) -> C:
