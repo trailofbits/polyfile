@@ -42,6 +42,18 @@ def decoded_node(source: str, contents: bytes) -> dict[str, object]:
     )
 
 
+def test_all_source_search_preserves_manual_source_choice(
+    viewer_page: "Page", report_factory: ReportFactory
+) -> None:
+    nodes = [decoded_node("decoded:0", b"needle")]
+    open_report(viewer_page, report_factory(b"needle", nodes))
+    submit_search(viewer_page, "needle")
+    viewer_page.locator("#source").select_option("decoded:0")
+    expect(viewer_page.locator("#source")).to_have_value("decoded:0")
+    expect(viewer_page.locator("#byte0")).to_have_text("6e")
+    expect(viewer_page.locator("#searchinfo")).to_contain_text("of 2")
+
+
 def test_combined_default_merges_identical_ranges(
     viewer_page: "Page", report_factory: ReportFactory
 ) -> None:

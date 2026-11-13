@@ -190,7 +190,7 @@ function initShell() {
   document.addEventListener('click', handleViewerAction);
   getElement('source').addEventListener('change', (event) => {
     const select = /** @type {HTMLSelectElement} */ (event.target);
-    setSource(select.value, { preserveSearch: false });
+    setSource(select.value, { preserveSearch: searchOptions().scope === 'all' });
   });
   const scroll = getElement('scrollcontainer');
   scroll.addEventListener('scroll', () => {
