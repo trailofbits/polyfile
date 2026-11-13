@@ -23,7 +23,7 @@ def test_accepted_program_retains_offsets_and_value(
 
     assert isinstance(result, MatchedTest)
     assert result.offset == len(b"preamble")
-    assert result.length == len(prefix) + len(PROGRAM) - 1
+    assert result.length == len(prefix) + len(PROGRAM)
     assert result.value == commands + PROGRAM
 
 
