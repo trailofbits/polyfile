@@ -18,7 +18,7 @@ ResultT = TypeVar("ResultT")
 
 
 class Profiler:
-    def __init__(self, parent: Optional["Profiler"] = None):
+    def __init__(self, parent: 'Profiler | None' = None):
         self.start_time_ms: float | None = None
         self.end_time_ms: float | None = None
         self.parent: Profiler | None = parent

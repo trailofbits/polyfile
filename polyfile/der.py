@@ -10,10 +10,10 @@ Nothing here parses a whole ASN.1 document: a ``der`` test only needs the TLV he
 and reading no further lets the tests match DER that is embedded in a larger file.
 """
 
-from typing import NamedTuple, Optional, Self, Tuple
+from typing import NamedTuple, Self
 
 
-TAG_NAMES: Tuple[str, ...] = (
+TAG_NAMES: tuple[str, ...] = (
     "eoc", "bool", "int", "bit_str", "octet_str",
     "null", "obj_id", "obj_desc", "ext", "real",
     "enum", "embed", "utf8_str", "rel_oid", "time",
@@ -47,7 +47,7 @@ class DERMismatch(InvalidDER):
     """Raised when a well-formed DER header does not satisfy a :class:`DERSpecification`."""
 
 
-def read_tag(data: bytes, offset: int) -> Tuple[int, int]:
+def read_tag(data: bytes, offset: int) -> tuple[int, int]:
     """Reads the tag number of the DER object that starts at ``offset``.
 
     Args:
@@ -77,7 +77,7 @@ def read_tag(data: bytes, offset: int) -> Tuple[int, int]:
         offset += 1
 
 
-def read_length(data: bytes, offset: int) -> Tuple[int, int]:
+def read_length(data: bytes, offset: int) -> tuple[int, int]:
     """Reads the length of a DER value.
 
     Args:
@@ -106,7 +106,7 @@ def read_length(data: bytes, offset: int) -> Tuple[int, int]:
     return length, offset
 
 
-MIME_TYPES: Tuple[Tuple[str, str], ...] = (
+MIME_TYPES: tuple[tuple[str, str], ...] = (
     ("Certificate, Version=", "application/pkix-cert"),
     ("DER Encoded Certificate, ", "application/pkix-cert"),
     ("DER Encoded Certificate request", "application/pkcs10"),
@@ -121,7 +121,7 @@ there is no registered media type for a raw PKCS#1 key pair.
 """
 
 
-def mime_type_for_message(message: str) -> Optional[str]:
+def mime_type_for_message(message: str) -> str | None:
     """Returns the MIME type that a ``der`` test's message identifies, if PolyFile assigns one.
 
     Args:
@@ -211,7 +211,7 @@ class DERSpecification:
     def __init__(self, specification: str):
         self.specification: str = specification
 
-    def match(self, header: DERHeader, data: bytes) -> Optional[str]:
+    def match(self, header: DERHeader, data: bytes) -> str | None:
         """Tests a DER header against this specification.
 
         Args:

@@ -1,4 +1,4 @@
-from typing import Any, Optional, Self, Union
+from typing import Any, Self
 from collections.abc import Iterable, Iterator
 
 from .polyfile import Match, Submatch
@@ -10,7 +10,7 @@ class Node:
                  value: bytes | None = None,
                  offset: int | None = None,
                  length: int | None = None,
-                 older_sibling: Optional["Node"] = None,
+                 older_sibling: 'Node | None' = None,
                  children: Iterable["Node"] = ()
     ):
         self.name: str = name
@@ -61,7 +61,7 @@ class Node:
             offsets remain relative to their own parents; backing-stream origins are irrelevant.
         """
         source_base = 0 if parent is None else parent.offset
-        stack: list[tuple["Node", Match | None]] = [(self, parent)]
+        stack: list[tuple[Node, Match | None]] = [(self, parent)]
         while stack:
             node, parent = stack.pop()
             if parent is None:

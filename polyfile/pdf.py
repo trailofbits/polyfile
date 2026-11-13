@@ -116,12 +116,12 @@ def load_xref(self: PDFXRef, parser: PDFMinerParser) -> None:
             break
         f = line.split(b" ")
         if len(f) != 2:
-            error_msg = "Trailer not found: {!r}: line={!r}".format(parser, line)
+            error_msg = f"Trailer not found: {parser!r}: line={line!r}"
             raise PDFNoValidXRef(error_msg)
         try:
             (start, nobjs) = map(int, f)
         except ValueError:
-            error_msg = "Invalid line: {!r}: line={!r}".format(parser, line)
+            error_msg = f"Invalid line: {parser!r}: line={line!r}"
             raise PDFNoValidXRef(error_msg)
         for objid in range(start, start + nobjs):
             try:
@@ -131,7 +131,7 @@ def load_xref(self: PDFXRef, parser: PDFMinerParser) -> None:
                 raise PDFNoValidXRef("Unexpected EOF - file corrupted?")
             f = line.split(b" ")
             if len(f) != 3:
-                error_msg = "Invalid XRef format: {!r}, line={!r}".format(parser, line)
+                error_msg = f"Invalid XRef format: {parser!r}, line={line!r}"
                 raise PDFNoValidXRef(error_msg)
             (pos_b, genno_b, use_b) = f
             if use_b != b"n":
@@ -840,7 +840,7 @@ class PDFObjectStream(PDFStream):
                 # not yet..
                 raise PDFNotImplementedError('/Crypt filter is unsupported')
             else:
-                raise PDFNotImplementedError('Unsupported filter: %r' % f)
+                raise PDFNotImplementedError(f"Unsupported filter: {f!r}")
             if decoded is not None:
                 if isinstance(f, PDFLiteral):
                     name = f.name
@@ -875,7 +875,7 @@ class PDFObjectStream(PDFStream):
                         params=params
                     )
                 else:
-                    error_msg = 'Unsupported predictor: %r' % pred
+                    error_msg = f"Unsupported predictor: {pred!r}"
                     raise PDFNotImplementedError(error_msg)
         self.data = data
         self.rawdata = None

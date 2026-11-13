@@ -220,7 +220,7 @@ class EndOfCentralDirectory(PolyFileStruct):
             return False
 
     @staticmethod
-    def read_at(file_stream: FileStream, offset: int) -> Optional["EndOfCentralDirectory"]:
+    def read_at(file_stream: FileStream, offset: int) -> 'EndOfCentralDirectory | None':
         """Reads a record at a byte offset.
 
         Args:
@@ -240,7 +240,7 @@ class EndOfCentralDirectory(PolyFileStruct):
     @staticmethod
     def read_before(
             file_stream: FileStream, data: bytes, base: int, search_end: int
-    ) -> Optional["EndOfCentralDirectory"]:
+    ) -> 'EndOfCentralDirectory | None':
         """Reads the last record that starts before a byte offset.
 
         Args:
@@ -327,7 +327,7 @@ class EndOfCentralDirectory(PolyFileStruct):
             yield eocd
 
     @staticmethod
-    def load(file_stream: FileStream) -> Optional["EndOfCentralDirectory"]:
+    def load(file_stream: FileStream) -> 'EndOfCentralDirectory | None':
         """Reads the end of central directory record of the last archive in the file.
 
         Args:

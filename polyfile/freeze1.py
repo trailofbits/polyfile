@@ -62,12 +62,12 @@ class _Bits:
 
 class _AdaptiveHuffman:
     def __init__(self) -> None:
-        self.frequency: "array[int]" = array("I", [0]) * (_ROOT + 1)
-        self.index: "array[int]" = array("I", range(_ROOT + 1))
-        self.parent: "array[int]" = array("I", [0]) * (_ROOT + 1)
-        self.left: "array[int]" = array("I", [0]) * (_ROOT + 1)
-        self.right: "array[int]" = array("I", [0]) * (_ROOT + 1)
-        self.order: "array[int]" = array("I", range(_ROOT + 1))
+        self.frequency: array[int] = array("I", [0]) * (_ROOT + 1)
+        self.index: array[int] = array("I", range(_ROOT + 1))
+        self.parent: array[int] = array("I", [0]) * (_ROOT + 1)
+        self.left: array[int] = array("I", [0]) * (_ROOT + 1)
+        self.right: array[int] = array("I", [0]) * (_ROOT + 1)
+        self.order: array[int] = array("I", range(_ROOT + 1))
         for code in range(_SYMBOLS):
             self.frequency[code] = 1
             self.parent[code] = _SYMBOLS + (code >> 1)

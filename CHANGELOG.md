@@ -77,6 +77,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 
 ### Changed
 
+- Modernize handwritten Python annotations for Python 3.11 with native generics, unions, and
+  subclass-preserving `Self` returns, and enforce modernization rules with Ruff (#3670).
+
 - Debugger and command callbacks, generated command subclasses, and command-line output state
   have explicit Python 3.11 type contracts while retaining existing behavior (#3673).
 - Build helper annotations describe compiler results, parser manifests, and optional progress

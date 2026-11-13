@@ -8,7 +8,7 @@ from mimetypes import guess_extension
 from pathlib import Path
 from time import localtime
 import traceback
-from typing import Any, Optional, Union
+from typing import Any
 from collections.abc import Callable, Iterable, Iterator
 
 from polyfile.analysis import AnalysisContext, AnalysisLimits
@@ -75,8 +75,8 @@ class Match:
             match_obj: Any,
             relative_offset: int = 0,
             length: int | None = None,
-            parent: Optional["Match"] = None,
-            matcher: Optional["Matcher"] = None,
+            parent: 'Match | None' = None,
+            matcher: 'Matcher | None' = None,
             display_name: str | None = None,
             img_data: str | None = None,
             decoded: bytes | None = None,
@@ -144,7 +144,7 @@ class Match:
         return self._children[index]
 
     @property
-    def parent(self) -> Optional["Match"]:
+    def parent(self) -> 'Match | None':
         return self._parent
 
     @property

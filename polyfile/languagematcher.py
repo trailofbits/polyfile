@@ -1,7 +1,7 @@
 from enum import Enum
 from itertools import chain
 import re
-from typing import Iterable, List, Optional, Sequence, Tuple
+from collections.abc import Iterable, Sequence
 
 from .logger import StatusLogger
 from .polyfile import Match, Submatch, register_parser
@@ -33,7 +33,7 @@ class BFCommandType(Enum):
 _BF_COMMAND_TYPES = {ord(command.value): command for command in BFCommandType}
 
 
-def _bf_tokens(data: Iterable[int]) -> Iterable[Tuple[int, int]]:
+def _bf_tokens(data: Iterable[int]) -> Iterable[tuple[int, int]]:
     if type(data) is bytes:
         # Scan whole command runs, so dense programs need only one regex
         # match per run, even when they start with a long comment header.
@@ -64,7 +64,7 @@ class BFParseError(RuntimeError):
 class BFProgram:
     def __init__(self, commands: Sequence[BFCommand]):
         self.commands: Sequence[BFCommand] = commands
-        self._num_loops: Optional[int] = None
+        self._num_loops: int | None = None
 
     @property
     def num_loops(self) -> int:
@@ -98,7 +98,7 @@ class BFProgram:
     def parse(cls, data: Iterable[int]) -> "BFProgram":
         opened = 0
         offset = 0
-        commands: List[BFCommand] = []
+        commands: list[BFCommand] = []
         native_bytes = type(data) is bytes
         for offset, c in _bf_tokens(data):
             try:
@@ -124,7 +124,7 @@ class BFProgram:
         return BFProgram(tuple(commands))
 
 
-def _bf_missing_commands(data: bytes) -> Optional[Tuple[int, str]]:
+def _bf_missing_commands(data: bytes) -> tuple[int, str] | None:
     # INPUT is optional, so it is located only once a required command is
     # known to be missing; otherwise its absence would cost a full scan.
     positions = [(data.find(bytes((byte,))), command) for byte, command in _BF_COMMAND_TYPES.items()
@@ -192,7 +192,7 @@ class BFMatcher(MagicTest):
         # so declare this as a binary test so we don't miss BF polyglots.
         return TestType.BINARY
 
-    def test(self, data: bytes, absolute_offset: int, parent_match: Optional[TestResult]) -> TestResult:
+    def test(self, data: bytes, absolute_offset: int, parent_match: TestResult | None) -> TestResult:
         try:
             program = _bf_match_program(self, data[absolute_offset:])
         except BFParseError as e:
@@ -208,7 +208,7 @@ class BFMatcher(MagicTest):
         if important_commands - unique_commands:
             return FailedTest(self, offset=first_command,
                               message=f"missing commands "
-                                      f"{', '.join((cmd.value for cmd in important_commands - unique_commands))}")
+                                      f"{', '.join(cmd.value for cmd in important_commands - unique_commands)}")
         elif self.min_bf_loops > program.num_loops:
             return FailedTest(self, offset=first_command, message=f"expected at least {self.min_bf_loops} BrainFu loops "
                                                                   f"but only found {program.num_loops}")
