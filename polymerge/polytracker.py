@@ -26,7 +26,7 @@ class FunctionInfo:
         return self.input_bytes[input_source_name]
 
     def __iter__(self):
-        return self.taint_sources
+        return iter(self.taint_sources)
 
     def items(self):
         return self.input_bytes.items()
@@ -104,6 +104,7 @@ def parse(polytracker_json_obj: dict) -> ProgramTrace:
             return parse_format_v2(polytracker_json_obj)
         else:
             return parse_format_v1(polytracker_json_obj)
+    return parse_format_v1(polytracker_json_obj)
 
 
 @polytracker_version(0, 0, 1, '')
