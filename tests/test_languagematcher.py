@@ -79,11 +79,11 @@ class TestBFMatcher(TestCase):
         self.assertEqual(result.message, "missing commands .")
         self.assertEqual(result.offset, len(prefix))
 
-    def test_offsets_remain_relative_to_slice(self):
+    def test_offsets_include_the_slice_base(self):
         for offset in (7, -6):
             result = BFMatcher().test(b"ignored[]><+-", offset, None)
             self.assertEqual(result.message, "missing commands .")
-            self.assertEqual(result.offset, 0)
+            self.assertEqual(result.offset, offset)
 
     def test_all_required_commands_still_use_thresholds(self):
         matcher = BFMatcher()
@@ -96,7 +96,7 @@ class TestBFMatcher(TestCase):
         result = matcher.test(data, 0, None)
         self.assertTrue(result)
         self.assertEqual(result.value, data)
-        self.assertEqual(result.length, len(data) - 1)
+        self.assertEqual(result.length, len(data))
 
     def test_noop_validation_returns_successful_matches(self) -> None:
         matcher = BFMatcher()
