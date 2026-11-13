@@ -1,60 +1,72 @@
 import math
+from collections.abc import Callable, Hashable, Iterable, Iterator
+from typing import Self, cast
 
 import graphviz
 import networkx as nx
 
-from . import polymerge, polytracker
+from polymerge import polymerge, polytracker
+from polymerge._types import PolyfileDocument
 
 
-def roots(graph):
-    return (n for n, d in graph.in_degree() if d == 0)
+def roots(graph: "DiGraph") -> Iterator[Hashable]:
+    degrees = cast(Iterable[tuple[Hashable, int]], graph.in_degree())
+    return (node for node, degree in degrees if degree == 0)
 
 
 class DiGraph(nx.DiGraph):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self._dominator_forest: DiGraph = None
-        self._roots = None
-        self._path_lengths = None
+        self._dominator_forest: DAG | None = None
+        self._roots: Iterable[Hashable] | None = None
+        self._path_lengths: dict[Hashable, dict[Hashable, int]] | None = None
 
-    def path_length(self, from_node, to_node):
+    def path_length(self, from_node: Hashable, to_node: Hashable) -> float:
         if self._path_lengths is None:
-            self._path_lengths = dict(nx.all_pairs_shortest_path_length(self, cutoff=None))
+            self._path_lengths = cast(
+                dict[Hashable, dict[Hashable, int]],
+                dict(nx.all_pairs_shortest_path_length(self, cutoff=None)),
+            )
         if from_node not in self._path_lengths or to_node not in self._path_lengths[from_node]:
             return math.inf
         else:
             return self._path_lengths[from_node][to_node]
 
-    def set_roots(self, roots):
+    def set_roots(self, roots: Iterable[Hashable]) -> None:
         self._roots = roots
 
     @property
-    def roots(self):
+    def roots(self) -> Iterable[Hashable]:
         if self._roots is None:
             self._roots = tuple(roots(self))
         return self._roots
 
-    def depth(self, node):
+    def depth(self, node: Hashable) -> float:
         return min(self.path_length(root, node) for root in self.roots)
 
-    def ancestors(self, node) -> set:
-        return nx.ancestors(self, node)
+    def ancestors(self, node: Hashable) -> set[Hashable]:
+        return cast(set[Hashable], nx.ancestors(self, node))
 
-    def descendants(self, node) -> frozenset:
-        return frozenset(nx.dfs_successors(self, node).keys())
+    def descendants(self, node: Hashable) -> frozenset[Hashable]:
+        successors = cast(dict[Hashable, list[Hashable]], nx.dfs_successors(self, node))
+        return frozenset(successors)
 
     @property
-    def dominator_forest(self):
+    def dominator_forest(self) -> "DAG":
         if self._dominator_forest is not None:
             return self._dominator_forest
         self._dominator_forest = DAG()
         for root in self.roots:
-            for node, dominated_by in nx.immediate_dominators(self, root).items():
+            dominators = cast(dict[Hashable, Hashable], nx.immediate_dominators(self, root))
+            for node, dominated_by in dominators.items():
                 if node != dominated_by:
                     self._dominator_forest.add_edge(dominated_by, node)
         return self._dominator_forest
 
-    def to_dot(self, comment: str = None, labeler=str, node_filter=None) -> graphviz.Digraph:
+    def to_dot(
+        self, comment: str | None = None, labeler: Callable[[Hashable], str] = str,
+        node_filter: Callable[[Hashable], bool] | None = None
+    ) -> graphviz.Digraph:
         if comment is not None:
             dot = graphviz.Digraph(comment=comment)
         else:
@@ -70,9 +82,9 @@ class DiGraph(nx.DiGraph):
 
 
 class DAG(DiGraph):
-    def vertex_induced_subgraph(self, vertices):
+    def vertex_induced_subgraph(self, vertices: Iterable[Hashable]) -> Self:
         vertices = frozenset(vertices)
-        subgraph = self.copy()
+        subgraph = cast(Self, self.copy())
         to_remove = set(self.nodes) - vertices
         for v in vertices:
             node = v
@@ -97,15 +109,15 @@ class DAG(DiGraph):
 
 
 class CFG(DiGraph):
-    def __init__(self, trace):
+    def __init__(self, trace: "polytracker.ProgramTrace"):
         super().__init__()
         self.trace: polytracker.ProgramTrace = trace
 
-    def to_dot(self,
+    def to_dot(self,  # ty: ignore[invalid-method-override]  # Legacy metadata positional API.
                comment='PolyTracker Program Trace',
-               merged_json_obj=None,
+               merged_json_obj: PolyfileDocument | None = None,
                only_labeled_functions=False,
-               labeler=None,
+               labeler: Callable[["polytracker.FunctionInfo"], str] | None = None,
                **kwargs
                ) -> graphviz.Digraph:
         if merged_json_obj is not None:
@@ -116,7 +128,8 @@ class CFG(DiGraph):
         else:
             function_labels = {}
 
-        def func_labeler(f):
+        def func_labeler(node: Hashable) -> str:
+            f = cast(polytracker.FunctionInfo, node)
             if labeler is not None:
                 return labeler(f)
             elif f.name in function_labels:

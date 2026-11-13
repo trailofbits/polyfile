@@ -17,7 +17,7 @@ class ScriptedTest(MagicTest):
     def test(self, data, absolute_offset, parent_match):
         raise AssertionError("match supplies its own results")
 
-    def match(self, context):
+    def match(self, to_match):
         return self.results(self)
 
 

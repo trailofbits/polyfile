@@ -1,9 +1,8 @@
 from abnf.grammars.misc import load_grammar_rules
-from abnf.grammars import rfc9110, rfc3986, rfc9111
+from abnf.grammars import rfc9110
 from abnf import Rule as _Rule
-from typing import List, Tuple
 
-inherited_rulelist: List[Tuple[str, _Rule]] = [
+inherited_rulelist: list[tuple[str, _Rule]] = [
     ("Accept-Charset", rfc9110.Rule("Accept-Charset")),
     ("Authentication-Info", rfc9110.Rule("Authentication-Info")),
     ("token", rfc9110.Rule("token")),
@@ -19,7 +18,7 @@ class Rule(_Rule):
     Request headers which are in general deprecated by modern browsers, but may still be included from spoofed user agents or unusual user agents.
     """
 
-    grammar: List[str] = [
+    grammar: list[str] | str = [
         'deprecated-header = "Accept-Charset:" OWS Accept-Charset OWS / "Authentication-Info:" OWS Authentication-Info OWS / "DNT:" OWS DNT OWS / "DPR:" OWS DPR OWS / "Expect-CT:" OWS Expect-CT OWS / "Pragma:" OWS Pragma OWS / "Viewport-Width:" OWS Viewport-Width OWS / "Warning:" OWS Warning OWS / "Width:" OWS Width OWS',
         # https://www.w3.org/TR/tracking-dnt/#dnt-header-field
         'DNT = ( "0" / "1" ) *DNT-extension',

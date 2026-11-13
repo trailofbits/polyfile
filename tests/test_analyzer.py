@@ -1,17 +1,17 @@
-from typing import Any, Dict
+from typing import Any
 from unittest import TestCase
 
 from polyfile.polyfile import Analyzer
 
-from .test_zipmatcher import MEMBERS, build_zip, temporary_file
+from tests.test_zipmatcher import MEMBERS, build_zip, temporary_file
 
 
-def node_count(element: Dict[str, Any]) -> int:
+def node_count(element: dict[str, Any]) -> int:
     """Counts an SBuD element and everything nested under it."""
     return 1 + sum(node_count(child) for child in (element.get("subEls") or ()))
 
 
-def tree_size(sbud: Dict[str, Any]) -> int:
+def tree_size(sbud: dict[str, Any]) -> int:
     """Counts every element in an SBuD object's structure."""
     return sum(node_count(element) for element in sbud["struc"])
 
@@ -27,6 +27,11 @@ class AnalyzerSbudTest(TestCase):
 
     Regression test for trailofbits/polyfile#3584.
     """
+
+    def test_caches_are_absent_before_analysis_starts(self):
+        analyzer = Analyzer("not-opened-before-iteration")
+        self.assertIsNone(analyzer.matches_so_far)
+        self.assertIsNone(analyzer.magic_matches_so_far)
 
     def test_sbud_agrees_however_the_matches_are_supplied(self):
         with temporary_file(build_zip(members=MEMBERS)) as path:
@@ -58,6 +63,8 @@ class AnalyzerSbudTest(TestCase):
         with temporary_file(build_zip(members=MEMBERS)) as path:
             analyzer = Analyzer(str(path))
             first = analyzer.sbud(include_contents=False)
-            self.assertGreater(len(analyzer.matches_so_far), 0)
+            matches = analyzer.matches_so_far
+            assert matches is not None
+            self.assertGreater(len(matches), 0)
             second = analyzer.sbud(include_contents=False)
         self.assertEqual(first, second)

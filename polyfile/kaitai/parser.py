@@ -7,25 +7,49 @@ import inspect
 from io import BufferedReader, BytesIO
 import json
 from pathlib import Path
-import sys
-from typing import Any, Dict, Iterator, List, Optional, Set, Type, Union
+from typing import Protocol, TypedDict, cast
+from collections.abc import Iterator, Sequence
 
-from . import parsers
-from .compiler import CompiledKSY
-from ..fileutils import FileStream
+from polyfile.kaitai import parsers
+from polyfile.kaitai.compiler import CompiledKSY
+from polyfile.fileutils import FileStream
 
-from kaitaistruct import KaitaiStruct
+from kaitaistruct import KaitaiStruct, KaitaiStream
+
+
+class DebugEntry(TypedDict, total=False):
+    start: int
+    end: int
+    arr: list["DebugEntry"]
+
+
+class ParserLocation(TypedDict):
+    class_name: str
+    python_path: str
+
+
+class ManifestEntry(ParserLocation):
+    dependencies: list[ParserLocation]
+
+
+class GeneratedStruct(Protocol):
+    """Metadata emitted by the generated Kaitai parsers used for AST mapping."""
+
+    SEQ_FIELDS: Sequence[str]
+    _debug: dict[str, DebugEntry]
+    _io: KaitaiStream
+
+    def _read(self) -> None: ...
+
+
+Scalar = int | float | str | bytes | Enum
 
 with resources.as_file(resources.files(parsers) / "manifest.json") as manifest_path:
     PARSER_DIR: Path = manifest_path.parent
-if sys.version_info >= (3, 9):
-    with (resources.files(parsers) / "manifest.json").open("r") as f:
-        MANIFEST: Dict[str, Dict[str, Any]] = json.load(f)
-else:
-    with resources.open_text(parsers, "manifest.json") as f:
-        MANIFEST = json.load(f)
+with (resources.files(parsers) / "manifest.json").open("r") as f:
+    MANIFEST: dict[str, ManifestEntry] = json.load(f)
 
-COMPILED_INFO_BY_KSY: Dict[str, CompiledKSY] = {
+COMPILED_INFO_BY_KSY: dict[str, CompiledKSY] = {
     ksy_path: CompiledKSY(
         class_name=component["class_name"],
         python_path=PARSER_DIR / component["python_path"],
@@ -38,11 +62,11 @@ COMPILED_INFO_BY_KSY: Dict[str, CompiledKSY] = {
 }
 del MANIFEST
 
-_IMPORTED_SPECS: Set[Path] = set()
-_PARSERS_BY_KSY: Dict[str, Type[KaitaiStruct]] = {}
+_IMPORTED_SPECS: set[Path] = set()
+_PARSERS_BY_KSY: dict[str, type[KaitaiStruct]] = {}
 
 
-def import_spec(compiled: CompiledKSY) -> Optional[Type[KaitaiStruct]]:
+def import_spec(compiled: CompiledKSY) -> type[KaitaiStruct] | None:
     if compiled.python_path in _IMPORTED_SPECS:
         return None
     _IMPORTED_SPECS.add(compiled.python_path)
@@ -51,11 +75,13 @@ def import_spec(compiled: CompiledKSY) -> Optional[Type[KaitaiStruct]]:
     module_name = module_name[:-3]
     module_name = f"{__name__}.parsers.{module_name}"
     spec = importlib.util.spec_from_file_location(module_name, compiled.python_path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"Could not load a Python module from {compiled.python_path}")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     for objname, obj in inspect.getmembers(module):
-        if inspect.isclass(obj) and objname == compiled.class_name:
-            return obj
+        if inspect.isclass(obj) and objname == compiled.class_name and issubclass(obj, KaitaiStruct):
+            return cast(type[KaitaiStruct], obj)
     raise ImportError(f"Could not find parser class {compiled.class_name!r} in {compiled.python_path}")
 
 
@@ -73,7 +99,7 @@ class Segment:
     def __bool__(self):
         return len(self) > 0
 
-    def __getitem__(self, index_or_slice: Union[int, slice]):
+    def __getitem__(self, index_or_slice: int | slice):
         if isinstance(index_or_slice, slice):
             if index_or_slice.step is not None and index_or_slice.step != 1:
                 raise ValueError(f"{self.__class__.__name__}.__getitem__ only supports slices with step=1")
@@ -108,7 +134,7 @@ class ASTNode:
             name: str,
             segment: Segment,
             offset: int,
-            parent: Optional["CompoundNode"] = None
+            parent: "CompoundNode | None" = None
     ):
         self.name: str = name
         self.segment: Segment = segment
@@ -121,7 +147,7 @@ class ASTNode:
         else:
             self.root = parent.root
             self.level = parent.level + 1
-        self.parent: Optional[CompoundNode] = parent
+        self.parent: CompoundNode | None = parent
 
     def dfs(self) -> Iterator["ASTNode"]:
         yield self
@@ -144,7 +170,7 @@ class ASTNode:
         return self.end - self.start
 
     @property
-    def children(self) -> List["ASTNode"]:
+    def children(self) -> list["ASTNode"]:
         return []
 
     def __repr__(self):
@@ -156,12 +182,12 @@ class ValueNode(ASTNode):
 
     TYPES = (int, float, str, bytes, Enum)
 
-    def __init__(self, value: bytes, *args, **kwargs):
-        self._value: bytes = value
+    def __init__(self, value: Scalar, *args, **kwargs):
+        self._value: Scalar = value
         super().__init__(*args, **kwargs)
 
     @property
-    def value(self) -> bytes:
+    def value(self) -> Scalar:
         return self._value
 
     def __repr__(self):
@@ -171,13 +197,13 @@ class ValueNode(ASTNode):
 class CompoundNode(ASTNode, ABC):
     """A node that can have children"""
 
-    def __init__(self, obj: KaitaiStruct, *args, **kwargs):
-        self.obj: KaitaiStruct = obj
+    def __init__(self, obj: object, *args, **kwargs):
+        self.obj: object = obj
         super().__init__(*args, **kwargs)
-        self._children: Optional[List[ASTNode]] = None
+        self._children: list[ASTNode] | None = None
 
     @property
-    def children(self) -> List[ASTNode]:
+    def children(self) -> list[ASTNode]:
         if self._children is None:
             self._children = list(self.explore())
         return self._children
@@ -187,7 +213,7 @@ class CompoundNode(ASTNode, ABC):
         raise NotImplementedError()
 
     def dfs(self) -> Iterator[ASTNode]:
-        stack = [self]
+        stack: list[ASTNode] = [self]
         while stack:
             top = stack.pop()
             yield top
@@ -195,37 +221,35 @@ class CompoundNode(ASTNode, ABC):
 
     def make_child(
             self,
-            obj: KaitaiStruct,
+            obj: object,
             name: str,
             segment: Segment,
             offset: int,
     ) -> ASTNode:
         if isinstance(obj, KaitaiStruct):
-            node_class = StructNode
+            return StructNode(obj, name, segment, offset, self)
         elif isinstance(obj, ValueNode.TYPES):
-            node_class = ValueNode
+            return ValueNode(cast(Scalar, obj), name, segment, offset, self)
         elif isinstance(obj, list):
-            node_class = ArrayNode
+            return ArrayNode(obj, name, segment, offset, self)
         else:
             raise TypeError(f"Unknown object type: {type(obj)}")
-
-        return node_class(obj, name, segment, offset, self)
-
 
 class StructNode(CompoundNode):
     """Represents node of the subtype."""
 
     def explore(self) -> Iterator[ASTNode]:
-        for name in self.obj.SEQ_FIELDS:
-            markers = self.obj._debug[name].copy()
+        obj = cast(GeneratedStruct, self.obj)
+        for name in obj.SEQ_FIELDS:
+            markers = obj._debug[name].copy()
             if "arr" in markers:
                 del markers["arr"]
             if "start" not in markers or "end" not in markers:
                 continue
-            segment = Segment(**markers)
+            segment = Segment(markers["start"], markers["end"])
             offset = self.offset
             if isinstance(self.parent, StructNode):
-                if self.obj._io != self.parent.obj._io:
+                if obj._io != cast(GeneratedStruct, self.parent.obj)._io:
                     offset = self.start
             if hasattr(self.obj, name):
                 yield self.make_child(getattr(self.obj, name), name, segment, offset)
@@ -235,9 +259,11 @@ class ArrayNode(CompoundNode):
     """Represents node of array of subtype items."""
 
     def explore(self) -> Iterator[ASTNode]:
-        for i, obj in enumerate(self.obj):
-            markers = self.parent.obj._debug[self.name]["arr"][i]
-            segment = Segment(**markers)
+        assert self.parent is not None
+        parent = cast(GeneratedStruct, self.parent.obj)
+        for i, obj in enumerate(cast(list[object], self.obj)):
+            markers = parent._debug[self.name]["arr"][i]
+            segment = Segment(markers["start"], markers["end"])
             name = f"{self.name}[{i}]"
             yield self.make_child(obj, name, segment, self.offset)
 
@@ -254,7 +280,7 @@ class RootNode(StructNode):
 class KaitaiInspector:
     def __init__(self, struct: KaitaiStruct):
         self.struct: KaitaiStruct = struct
-        self._ast: Optional[RootNode] = None
+        self._ast: RootNode | None = None
 
     @property
     def ast(self) -> RootNode:
@@ -276,8 +302,8 @@ class KaitaiInspector:
 
 
 class KaitaiParser:
-    def __init__(self, struct_type: Type[KaitaiStruct]):
-        self.struct_type: Type[KaitaiStruct] = struct_type
+    def __init__(self, struct_type: type[KaitaiStruct]):
+        self.struct_type: type[KaitaiStruct] = struct_type
 
     @staticmethod
     def load(ksy_path: str) -> "KaitaiParser":
@@ -295,10 +321,13 @@ class KaitaiParser:
             if ksy_path not in COMPILED_INFO_BY_KSY:
                 raise KeyError(ksy_path)
             info = COMPILED_INFO_BY_KSY[ksy_path]
-            _PARSERS_BY_KSY[ksy_path] = import_spec(info)  # type: ignore
+            parser = import_spec(info)
+            if parser is None:
+                raise ImportError(f"Parser {info.class_name} from {info.python_path} is already imported")
+            _PARSERS_BY_KSY[ksy_path] = parser
         return KaitaiParser(_PARSERS_BY_KSY[ksy_path])
 
-    def parse(self, input_file_path_or_content: Union[str, Path, bytes, BytesIO]) -> KaitaiInspector:
+    def parse(self, input_file_path_or_content: str | Path | bytes | BytesIO | FileStream) -> KaitaiInspector:
         if isinstance(input_file_path_or_content, Path):
             input_file_path_or_content = str(input_file_path_or_content)
         if isinstance(input_file_path_or_content, str):
@@ -308,5 +337,5 @@ class KaitaiParser:
         else:
             # Treat it like BytesIO
             struct = self.struct_type.from_io(input_file_path_or_content)
-        struct._read()
+        cast(GeneratedStruct, struct)._read()
         return KaitaiInspector(struct)
