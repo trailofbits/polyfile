@@ -147,7 +147,7 @@ def merge(polyfile_json_obj: dict, program_trace: polytracker.ProgramTrace) -> d
         ret['versions']['polymerge'] = __version__
     else:
         ret['versions'] = {'polymerge': __version__}
-    intervals = None
+    intervals = IntervalTree()
     for match in ret['struc']:
         intervals = build_intervals(match, tree=intervals)
     matches = defaultdict(set)
