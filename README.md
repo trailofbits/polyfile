@@ -80,6 +80,33 @@ such bytes the file has above the hex dump.
 
 Run `polyfile --help` for full usage instructions.
 
+### Large files and recursive analysis
+
+The default `file` output and `--format mime` identify the input without running format parsers.
+Identification continues after finding a format so that secondary formats and polyglots remain
+visible. Some matching rules search the entire input, so identification time can still grow with
+the file size.
+
+JSON, SBuD, and HTML output also parse recognized formats and recursively analyze supported
+embedded or decoded content. Use `--max-depth 0` to prevent recursive content analysis while
+retaining the input's identification and top-level structure:
+
+```console
+$ polyfile archive.zip --format json --no-contents --max-depth 0
+```
+
+The input has depth zero; higher limits allow more levels of content analysis. Depth limits do
+not bound the input's identification work or speed up the default `file` and MIME output paths.
+They help with formats that have recursive parsers. PolyFile currently identifies 7z archives
+but does not parse their members; [issue #3685](https://github.com/trailofbits/polyfile/issues/3685)
+tracks that capability.
+
+Use `--only-match` with structured output to disable format parsing entirely. It does not reduce
+the matching work for the default `file` or MIME outputs. For JSON and SBuD output,
+`--no-contents` omits the input's base64 copy and reduces serialization work; it does not skip
+identification or recursive analysis. HTML output requires that copy and cannot use
+`--no-contents`.
+
 ### Interactive Debugger
 
 PolyFile has an interactive debugger both for its file matching and parsing. It can be used to debug a libmagic pattern 

@@ -1,14 +1,14 @@
 import base64
 from pathlib import Path
-from typing import Dict, Iterator, List, Tuple
+from collections.abc import Iterator
 
 from kaitaistruct import KaitaiStructError
 
-from .fileutils import ExactNamedTempfile
-from .kaitai.parser import ASTNode, KaitaiParser, RootNode
-from .logger import getStatusLogger
-from .magic import MagicMatcher, TestType
-from .polyfile import register_parser, InvalidMatch, Match, Submatch
+from polyfile.fileutils import ExactNamedTempfile
+from polyfile.kaitai.parser import ASTNode, KaitaiParser, RootNode
+from polyfile.logger import getStatusLogger
+from polyfile.magic import MagicMatcher, TestType
+from polyfile.polyfile import register_parser, InvalidMatch, Match, Submatch
 
 
 log = getStatusLogger(__name__)
@@ -38,7 +38,7 @@ with ExactNamedTempfile(b"""# Doom WAD; see the description-only test in magic_d
 # Every key must be a MIME type that some PolyFile matcher can emit, and every value must name an
 # importable parser. `tests/test_kaitai.py` enforces both: dispatch is an exact lookup on the
 # resolved MIME type, so a key nothing emits is dead code that fails silently.
-KAITAI_MIME_MAPPING: Dict[str, str] = {
+KAITAI_MIME_MAPPING: dict[str, str] = {
     # Images
     "image/gif": "image/gif.ksy",
     "image/png": "image/png.ksy",
@@ -131,7 +131,7 @@ KAITAI_MIME_MAPPING: Dict[str, str] = {
 
 # A universal Mach-O binary shares `application/x-mach-binary` with a thin one, so its parser is
 # registered separately rather than displacing the thin parser in the mapping above.
-EXTRA_PARSERS: Tuple[Tuple[str, str], ...] = (
+EXTRA_PARSERS: tuple[tuple[str, str], ...] = (
     ("application/x-mach-binary", "executable/mach_o_fat.ksy"),
 )
 
@@ -145,14 +145,25 @@ IMAGE_MIMETYPES = {
 
 
 def ast_to_matches(ast: RootNode, parent: Match, mimetype: str) -> Iterator[Submatch]:
-    stack: List[Tuple[Match, ASTNode]] = [(parent, ast)]
+    """Map view-local AST positions into the parser parent's analysis source.
+
+    Args:
+        ast: The tree whose offsets are relative to the parsed stream view.
+        parent: The match at which that view starts within its analysis source.
+        mimetype: The input's MIME type, used to render supported images.
+
+    Yields:
+        Each AST node positioned in the same source as the parser parent.
+    """
+    source_base = parent.offset
+    stack: list[tuple[Match, ASTNode]] = [(parent, ast)]
     while stack:
         parent, node = stack.pop()
 
         new_node = Submatch(
             name=node.name,
             match_obj=node.raw_value,
-            relative_offset=node.start - parent.offset,
+            relative_offset=source_base + node.start - parent.offset,
             length=len(node.segment),
             parent=parent
         )
@@ -167,10 +178,13 @@ def ast_to_matches(ast: RootNode, parent: Match, mimetype: str) -> Iterator[Subm
 class LazyKaitaiParser:
     """Parser that lazily loads the Kaitai struct parser on first use."""
 
+    __name__: str
+    __qualname__: str
+
     def __init__(self, kaitai_path: str, mimetype: str):
         self.kaitai_path = kaitai_path
         self.mimetype = mimetype
-        self._kaitai_parser = None
+        self._kaitai_parser: KaitaiParser | None = None
 
     @property
     def kaitai_parser(self):
@@ -202,6 +216,3 @@ def _register(mimetype: str, kaitai_path: str) -> None:
 
 for _mimetype, _kaitai_path in tuple(KAITAI_MIME_MAPPING.items()) + EXTRA_PARSERS:
     _register(_mimetype, _kaitai_path)
-
-del _mimetype
-del _kaitai_path

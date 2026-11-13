@@ -97,11 +97,13 @@ class GeneratedHtmlTests(TestCase):
     def emitted_regions(self, html):
         emitted = re.search(r'const UNDESCRIBED_REGIONS = (\[.*?]);', html)
         self.assertIsNotNone(emitted, 'the viewer script declares no undescribed regions')
+        assert emitted is not None
         return [tuple(region) for region in json.loads(emitted.group(1))]
 
     def legend(self, html):
         found = re.search(r'<div class="coverage">(.*?)</div>', html, re.DOTALL)
         self.assertIsNotNone(found, 'the viewer has no coverage legend')
+        assert found is not None
         return ' '.join(found.group(1).split())
 
     def test_a_file_with_gaps_emits_them(self):

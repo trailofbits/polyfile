@@ -144,7 +144,7 @@ def generate(file_path, sbud):
     regions = undescribed_regions(matches, input_bytes)
     undescribed_bytes = sum(size for _, size in regions)
     with open(file_path, 'rb') as input_file:
-        class ReadUnicode():
+        class ReadUnicode:
             def __init__(self):
                 self.reset = False
 
@@ -236,5 +236,5 @@ def generate(file_path, sbud):
 if __name__ == '__main__':
     import sys
 
-    with open(sys.argv[2], 'r') as f:
+    with open(sys.argv[2]) as f:
         print(generate(sys.argv[1], json.load(f)))
