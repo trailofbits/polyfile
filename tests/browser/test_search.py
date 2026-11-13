@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 from zipfile import ZIP_DEFLATED, ZipFile
 
 import pytest
+
 from tests.browser.helpers import ReportFactory, match, open_report
 
 if TYPE_CHECKING:
@@ -187,6 +188,19 @@ def test_new_query_cancels_old_search(
     expect(viewer_page.locator("#searchinfo")).to_contain_text(
         "1 of 1 · file @ 0x200000"
     )
+
+
+def test_dense_search_results_are_not_truncated(
+    viewer_page: "Page", report_factory: ReportFactory
+) -> None:
+    open_report(viewer_page, report_factory(b"x" * 12001))
+    submit_search(viewer_page, "x")
+    expect(viewer_page.locator("#searchinfo")).to_contain_text("1 of 12001")
+    viewer_page.locator("#searchup").click()
+    expect(viewer_page.locator("#searchinfo")).to_contain_text(
+        "12001 of 12001 · file @ 0x2ee0"
+    )
+    expect(viewer_page.locator("#hexdump .search-current")).to_have_text("78")
 
 
 def pdf_stream(contents: bytes) -> bytes:

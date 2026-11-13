@@ -13,21 +13,21 @@ const viewerSearch = {
 
 /** @returns {HTMLInputElement} */
 function searchInput() {
-  const input = getElement("search");
-  if (!(input instanceof HTMLInputElement)) throw new Error("Search input is unavailable.");
+  const input = getElement('search');
+  if (!(input instanceof HTMLInputElement)) throw new Error('Search input is unavailable.');
   return input;
 }
 
 /** @returns {SearchOptions} */
 function searchOptions() {
-  const mode = getElement("searchmode");
-  const scope = getElement("searchscope");
-  const matchCase = getElement("matchcase");
+  const mode = getElement('searchmode');
+  const scope = getElement('searchscope');
+  const matchCase = getElement('matchcase');
   if (!(mode instanceof HTMLSelectElement) || !(scope instanceof HTMLSelectElement)) {
-    throw new Error("Search mode and scope controls are unavailable.");
+    throw new Error('Search mode and scope controls are unavailable.');
   }
   if (!(matchCase instanceof HTMLInputElement))
-    throw new Error("Match case control is unavailable.");
+    throw new Error('Match case control is unavailable.');
   return {
     query: searchInput().value,
     mode: /** @type {ViewerSearchMode} */ (mode.value),
@@ -48,7 +48,7 @@ function foldSearchText(value) {
 
 /** @param {string} query @returns {Uint8Array|null} */
 function hexSearchBytes(query) {
-  const compact = query.trim().replace(/^0x/i, "").replace(/\s/g, "");
+  const compact = query.trim().replace(/^0x/i, '').replace(/\s/g, '');
   if (!compact || compact.length % 2 !== 0 || !/^[\da-f]+$/i.test(compact)) return null;
   const bytes = new Uint8Array(compact.length / 2);
   for (let index = 0; index < bytes.length; index += 1) {
@@ -61,15 +61,15 @@ function hexSearchBytes(query) {
 function searchNeedles(options) {
   /** @type {SearchNeedle[]} */
   const needles = [];
-  if (options.mode === "combined" || options.mode === "text") {
+  if (options.mode === 'combined' || options.mode === 'text') {
     const bytes = new TextEncoder().encode(options.query);
-    needles.push({ bytes, kind: "text", fold: !options.matchCase });
+    needles.push({ bytes, kind: 'text', fold: !options.matchCase });
   }
-  if (options.mode === "combined" || options.mode === "hex") {
+  if (options.mode === 'combined' || options.mode === 'hex') {
     const bytes = hexSearchBytes(options.query);
-    if (bytes) needles.push({ bytes, kind: "hex", fold: false });
-    else if (options.mode === "hex") {
-      throw new Error("Enter hexadecimal byte pairs, such as 0x48 65 6c 6c 6f.");
+    if (bytes) needles.push({ bytes, kind: 'hex', fold: false });
+    else if (options.mode === 'hex') {
+      throw new Error('Enter hexadecimal byte pairs, such as 0x48 65 6c 6c 6f.');
     }
   }
   return needles;
@@ -105,6 +105,15 @@ function yieldSearch() {
 }
 
 /**
+ * @param {Uint8Array} bytes @param {Int32Array} prefix
+ * @param {number} matched @param {number} value @returns {number}
+ */
+function advanceSearchMatch(bytes, prefix, matched, value) {
+  while (matched > 0 && value !== bytes[matched]) matched = prefix[matched - 1] ?? 0;
+  return value === bytes[matched] ? matched + 1 : matched;
+}
+
+/**
  * @param {{source:string, needle:SearchNeedle, generation:number,
  *   hits:Map<string,SearchHit>}} task
  * @returns {Promise<boolean>}
@@ -115,9 +124,8 @@ async function scanSearchBytes(task) {
   const prefix = searchPrefix(bytes);
   let matched = 0;
   for (let index = 0; index < source.length; index += 1) {
-    const value = task.needle.fold ? foldSearchByte(source[index] ?? 0) : source[index];
-    while (matched > 0 && value !== bytes[matched]) matched = prefix[matched - 1] ?? 0;
-    if (value === bytes[matched]) matched += 1;
+    const value = task.needle.fold ? foldSearchByte(source[index] ?? 0) : (source[index] ?? 0);
+    matched = advanceSearchMatch(bytes, prefix, matched, value);
     if (matched === bytes.length) {
       addSearchHit(task.hits, {
         source: task.source,
@@ -139,7 +147,7 @@ async function scanSearchBytes(task) {
 async function searchCheckpoint(generation, source, count) {
   if (generation !== viewerSearch.generation) return false;
   if (performance.now() - viewerSearch.lastYield < 8) return true;
-  getElement("searchinfo").textContent = `Searching ${source}… ${count} matches`;
+  getElement('searchinfo').textContent = `Searching ${source}… ${count} matches`;
   await yieldSearch();
   if (generation === viewerSearch.generation) viewerSearch.lastYield = performance.now();
   return generation === viewerSearch.generation;
@@ -147,7 +155,7 @@ async function searchCheckpoint(generation, source, count) {
 
 /** @param {ViewerNode} node @param {SearchOptions} options @returns {boolean} */
 function searchNodeMatches(node, options) {
-  const text = [node.name, node.type, node.analysis_status, node.analysis_message].join(" ");
+  const text = [node.name, node.type, node.analysis_status, node.analysis_message].join(' ');
   if (options.matchCase) return text.includes(options.query);
   return foldSearchText(text).includes(foldSearchText(options.query));
 }
@@ -157,7 +165,7 @@ function searchNodeMatches(node, options) {
  * @param {Map<string,SearchHit>} hits @param {number} generation
  */
 async function scanSearchNodes(options, sources, hits, generation) {
-  if (options.mode !== "combined" && options.mode !== "structure") return true;
+  if (options.mode !== 'combined' && options.mode !== 'structure') return true;
   const included = new Set(sources);
   let index = 0;
   for (const node of viewerData.nodes) {
@@ -166,12 +174,12 @@ async function scanSearchNodes(options, sources, hits, generation) {
         source: node.source,
         start: node.offset,
         length: node.size,
-        kinds: ["structure"],
+        kinds: ['structure'],
         nodes: [node.uid],
       });
     }
     index += 1;
-    if (index % 512 === 0 && !(await searchCheckpoint(generation, "structure", hits.size))) {
+    if (index % 512 === 0 && !(await searchCheckpoint(generation, 'structure', hits.size))) {
       return false;
     }
   }
@@ -180,8 +188,8 @@ async function scanSearchNodes(options, sources, hits, generation) {
 
 /** @param {SearchOptions} options @returns {string[]} */
 function searchSources(options) {
-  if (options.scope === "current") return [viewerState.activeSource];
-  return ["file", ...Object.keys(viewerData.sources).filter((source) => source !== "file")];
+  if (options.scope === 'current') return [viewerState.activeSource];
+  return ['file', ...Object.keys(viewerData.sources).filter((source) => source !== 'file')];
 }
 
 /** @param {Map<string,SearchHit>} hits @param {string[]} sources @returns {SearchHit[]} */
@@ -195,20 +203,21 @@ function orderedSearchHits(hits, sources) {
 
 /** @param {boolean} enabled */
 function searchNavigationEnabled(enabled) {
-  const buttons = getElement("searchbuttons");
+  const buttons = getElement('searchbuttons');
   buttons.hidden = false;
-  buttons.style.removeProperty("display");
-  for (const id of ["searchup", "searchdown"]) {
-    getElement(id).toggleAttribute("disabled", !enabled);
+  buttons.style.removeProperty('display');
+  for (const id of ['searchup', 'searchdown']) {
+    getElement(id).toggleAttribute('disabled', !enabled);
   }
 }
 
 /** @param {SearchHit[]} results */
 function markStructureSearchResults(results) {
+  /** @type {Set<number>} */
   const matches = new Set();
   for (const result of results) for (const uid of result.nodes) matches.add(uid);
-  document.querySelectorAll(".tree_label[data-uid]").forEach((label) => {
-    label.classList.toggle("searchresult", matches.has(Number(label.getAttribute("data-uid"))));
+  document.querySelectorAll('.tree_label[data-uid]').forEach((label) => {
+    label.classList.toggle('searchresult', matches.has(Number(label.getAttribute('data-uid'))));
   });
 }
 
@@ -216,11 +225,11 @@ function markStructureSearchResults(results) {
 function resetSearch(message) {
   viewerSearch.results = [];
   viewerSearch.current = 0;
-  clearHighlight("searchresult");
-  clearHighlight("search-current");
+  clearHighlight('searchresult');
+  clearHighlight('search-current');
   markStructureSearchResults([]);
   searchNavigationEnabled(false);
-  getElement("searchinfo").textContent = message;
+  getElement('searchinfo').textContent = message;
 }
 
 /** @param {SearchOptions} options @param {number} generation */
@@ -238,9 +247,9 @@ async function executeSearch(options, generation) {
   if (generation !== viewerSearch.generation) return;
   viewerSearch.results = orderedSearchHits(hits, sources);
   markStructureSearchResults(viewerSearch.results);
-  setHighlights("searchresult", viewerSearch.results);
+  setHighlights('searchresult', viewerSearch.results);
   searchNavigationEnabled(viewerSearch.results.length > 0);
-  if (viewerSearch.results.length === 0) getElement("searchinfo").textContent = "0 results";
+  if (viewerSearch.results.length === 0) getElement('searchinfo').textContent = '0 results';
   else showSearchResult();
 }
 
@@ -250,11 +259,11 @@ function runSearch() {
   viewerSearch.lastYield = performance.now();
   const generation = viewerSearch.generation;
   const options = searchOptions();
-  resetSearch(options.query ? "Searching…" : "");
+  resetSearch(options.query ? 'Searching…' : '');
   if (!options.query) return;
   void executeSearch(options, generation).catch((error) => {
     if (generation !== viewerSearch.generation) return;
-    resetSearch(error instanceof Error ? error.message : "Search could not complete.");
+    resetSearch(error instanceof Error ? error.message : 'Search could not complete.');
   });
 }
 
@@ -266,10 +275,10 @@ function showSearchResult() {
   const uid = result.nodes[0];
   if (uid !== undefined) selectNode(uid);
   scrollToByte(result.start);
-  setHighlight("search-current", result.source, result.start, result.length);
+  setHighlight('search-current', result.source, result.start, result.length);
   const count = `${viewerSearch.current + 1} of ${viewerSearch.results.length}`;
   const location = `${result.source} @ 0x${result.start.toString(16)}`;
-  getElement("searchinfo").textContent = `${count} · ${location} · ${result.kinds.join(", ")}`;
+  getElement('searchinfo').textContent = `${count} · ${location} · ${result.kinds.join(', ')}`;
 }
 
 /** @param {number} delta */
@@ -284,39 +293,53 @@ function navigateSearch(delta) {
 function searchEditableTarget(target) {
   if (!(target instanceof HTMLElement)) return false;
   return (
-    target.isContentEditable || target.closest("input,textarea,select,[contenteditable]") !== null
+    target.isContentEditable || target.closest('input,textarea,select,[contenteditable]') !== null
   );
+}
+
+/** @typedef {'focus'|'previous'|'next'|null} SearchShortcut */
+
+/** @param {KeyboardEvent} event @returns {SearchShortcut} */
+function searchCommandShortcut(event) {
+  const key = event.key.toLowerCase();
+  if (key === 'f') return 'focus';
+  if (key === 'g') return event.shiftKey ? 'previous' : 'next';
+  return null;
+}
+
+/** @param {KeyboardEvent} event @returns {SearchShortcut} */
+function searchInputShortcut(event) {
+  const key = event.key.toLowerCase();
+  if (key === '/' && !searchEditableTarget(event.target) && !event.altKey) return 'focus';
+  if (event.target === searchInput() && key === 'enter') {
+    return event.shiftKey ? 'previous' : 'next';
+  }
+  return null;
 }
 
 /** @param {KeyboardEvent} event */
 function handleSearchShortcut(event) {
-  const key = event.key.toLowerCase();
-  const command = event.ctrlKey || event.metaKey;
-  const slash = key === "/" && !searchEditableTarget(event.target) && !command && !event.altKey;
-  if ((command && key === "f") || slash) {
-    event.preventDefault();
+  const action =
+    event.ctrlKey || event.metaKey ? searchCommandShortcut(event) : searchInputShortcut(event);
+  if (!action) return;
+  event.preventDefault();
+  if (action === 'focus') {
     searchInput().focus();
     searchInput().select();
-  } else if (command && key === "g") {
-    event.preventDefault();
-    navigateSearch(event.shiftKey ? -1 : 1);
-  } else if (event.target === searchInput() && key === "enter") {
-    event.preventDefault();
-    navigateSearch(event.shiftKey ? -1 : 1);
-  }
+  } else navigateSearch(action === 'previous' ? -1 : 1);
 }
 
 /** Wire search controls once after the report DOM is available. */
 function initSearch() {
-  const status = getElement("searchinfo");
-  status.setAttribute("role", "status");
-  status.setAttribute("aria-live", "polite");
-  searchInput().addEventListener("input", runSearch);
-  for (const id of ["searchmode", "searchscope", "matchcase"]) {
-    getElement(id).addEventListener("change", runSearch);
+  const status = getElement('searchinfo');
+  status.setAttribute('role', 'status');
+  status.setAttribute('aria-live', 'polite');
+  searchInput().addEventListener('input', runSearch);
+  for (const id of ['searchmode', 'searchscope', 'matchcase']) {
+    getElement(id).addEventListener('change', runSearch);
   }
-  getElement("searchup").addEventListener("click", () => navigateSearch(-1));
-  getElement("searchdown").addEventListener("click", () => navigateSearch(1));
-  document.addEventListener("keydown", handleSearchShortcut);
+  getElement('searchup').addEventListener('click', () => navigateSearch(-1));
+  getElement('searchdown').addEventListener('click', () => navigateSearch(1));
+  document.addEventListener('keydown', handleSearchShortcut);
   searchNavigationEnabled(false);
 }
