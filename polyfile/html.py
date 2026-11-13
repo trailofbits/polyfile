@@ -199,5 +199,5 @@ if __name__ == '__main__':
     import json
     import sys
 
-    with open(sys.argv[2], 'r') as f:
+    with open(sys.argv[2]) as f:
         print(generate(sys.argv[1], json.load(f)))

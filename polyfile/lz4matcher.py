@@ -4,6 +4,7 @@ import importlib
 import struct
 from collections.abc import Iterator
 from types import ModuleType
+from typing import TypedDict, cast
 
 from polyfile.compression import (
     CHUNK_SIZE,
@@ -26,6 +27,14 @@ from polyfile.magic import (
 from polyfile.polyfile import Match, register_parser
 
 LZ4_MAGIC = b"\x04\x22\x4d\x18"
+
+
+class _FrameInfo(TypedDict):
+    block_size: int
+    block_linked: bool
+    content_size: int
+
+
 LEGACY_MAGICS = frozenset((b"\x02\x21\x4c\x18", b"\x03\x21\x4c\x18"))
 SKIPPABLE_BASE = 0x184D2A50
 FRAME_SIGNATURES = frozenset(
@@ -99,11 +108,11 @@ def _skippable(stream: FileStream) -> RawRegion:
     return RawRegion("skippable_frame", start, size + 8)
 
 
-def _frame_info(stream: FileStream, backend: ModuleType) -> tuple[dict, bytes]:
+def _frame_info(stream: FileStream, backend: ModuleType) -> tuple[_FrameInfo, bytes]:
     with stream.save_pos():
         header = stream.read(19)
     try:
-        info = backend.get_frame_info(header)
+        info = cast(_FrameInfo, backend.get_frame_info(header))
     except RuntimeError as error:
         raise DecodeError(
             f"invalid LZ4 frame header at offset {stream.tell()}: {error}"
@@ -119,7 +128,7 @@ def _frame_info(stream: FileStream, backend: ModuleType) -> tuple[dict, bytes]:
     return info, header
 
 
-def _codec_memory(info: dict) -> int:
+def _codec_memory(info: _FrameInfo) -> int:
     """Returns a conservative allowance for LZ4's native buffers and frame context.
 
     Args:

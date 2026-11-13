@@ -1,8 +1,9 @@
 import base64
+from collections.abc import Iterator
 from io import BytesIO
 
-from .fileutils import FileStream, Tempfile
-from .polyfile import Match, register_parser, Submatch
+from polyfile.fileutils import FileStream, Tempfile
+from polyfile.polyfile import Match, register_parser, Submatch
 
 
 def _get_pil_image():
@@ -12,13 +13,14 @@ def _get_pil_image():
 
 
 @register_parser("image/jp2")
-def parse_jpeg2000(file_stream: FileStream, parent: Match):
+def parse_jpeg2000(file_stream: FileStream, parent: Match) -> Iterator[Submatch]:
+    """Yields a PNG preview for the image while retaining its source span."""
     Image = _get_pil_image()
     with Tempfile(file_stream.read(parent.length)) as input_bytes:
-        img = Image.open(input_bytes)
-        with BytesIO() as img_data:
+        with Image.open(input_bytes) as img, BytesIO() as img_data:
             img.save(img_data, "PNG")
-            b64data = f"data:image/png;base64,{base64.b64encode(img_data).decode('utf-8')}"
+            png_data = base64.b64encode(img_data.getvalue()).decode("ascii")
+            b64data = f"data:image/png;base64,{png_data}"
     yield Submatch(
         name='ImageData',
         img_data=b64data,

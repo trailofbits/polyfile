@@ -22,7 +22,7 @@ format library is missing.
 
 import shutil
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 from setuptools import build_meta as _setuptools
 
@@ -77,8 +77,8 @@ def _rebuild_parsers() -> None:
 
 def build_wheel(
     wheel_directory: str,
-    config_settings: Optional[Dict[str, Any]] = None,
-    metadata_directory: Optional[str] = None,
+    config_settings: dict[str, Any] | None = None,
+    metadata_directory: str | None = None,
 ) -> str:
     _rebuild_parsers()
     _stage_changelog()
@@ -87,14 +87,14 @@ def build_wheel(
 
 def build_editable(
     wheel_directory: str,
-    config_settings: Optional[Dict[str, Any]] = None,
-    metadata_directory: Optional[str] = None,
+    config_settings: dict[str, Any] | None = None,
+    metadata_directory: str | None = None,
 ) -> str:
     _rebuild_parsers()
     _stage_changelog()
     return _setuptools.build_editable(wheel_directory, config_settings, metadata_directory)
 
 
-def build_sdist(sdist_directory: str, config_settings: Optional[Dict[str, Any]] = None) -> str:
+def build_sdist(sdist_directory: str, config_settings: dict[str, Any] | None = None) -> str:
     _rebuild_parsers()
     return _setuptools.build_sdist(sdist_directory, config_settings)

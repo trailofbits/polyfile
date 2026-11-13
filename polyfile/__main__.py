@@ -1,5 +1,6 @@
 import argparse
-from contextlib import ExitStack
+from collections.abc import Sequence
+from contextlib import AbstractContextManager, ExitStack
 import json
 import logging
 import math
@@ -7,16 +8,15 @@ import re
 import signal
 import sys
 from textwrap import dedent
-from typing import ContextManager, Optional, TextIO
+from typing import TextIO, cast
 
 from polyfile.analysis import AnalysisLimits
-from . import html
-from . import logger
-from .fileutils import PathOrStdin, PathOrStdout
-from .magic import MagicMatcher
-from .debugger import Debugger
-from .polyfile import __version__, Analyzer
-from .repl import ExitREPL
+from polyfile import html, logger
+from polyfile.fileutils import PathOrStdin, PathOrStdout
+from polyfile.magic import MagicMatcher
+from polyfile.debugger import Debugger
+from polyfile.polyfile import __version__, Analyzer
+from polyfile.repl import ExitREPL
 
 
 log = logger.getStatusLogger("polyfile")
@@ -62,18 +62,18 @@ class FormatOutput:
     valid_formats = ("file", "mime", "html", "json", "sbud", "explain")
     default_format = "file"
 
-    def __init__(self, output_format: Optional[str] = None, output_path: Optional[str] = None):
+    def __init__(self, output_format: str | None = None, output_path: str | None = None):
         if output_format is None:
             output_format = self.default_format
         self.output_format: str = output_format
-        self.output_path: Optional[str] = output_path
+        self.output_path: str | None = output_path
 
     @property
     def output_to_stdout(self) -> bool:
         return self.output_path is None or self.output_path == "-"
 
     @property
-    def output_stream(self) -> ContextManager[TextIO]:
+    def output_stream(self) -> AbstractContextManager[TextIO]:
         if self.output_path is None:
             return PathOrStdout("-")
         else:
@@ -111,8 +111,11 @@ class ValidateOutput(argparse.Action):
         else:
             existing_format.output_path = path
 
-    def __call__(self, parser, args, values, option_string=None):
-        ValidateOutput.add_output(args, values)
+    def __call__(
+        self, parser: argparse.ArgumentParser, namespace: argparse.Namespace, values: object,
+        option_string: str | None = None
+    ) -> None:
+        ValidateOutput.add_output(namespace, cast(str, values))
 
 
 def reject_html_without_contents(parser: argparse.ArgumentParser, args: argparse.Namespace):
@@ -171,7 +174,7 @@ def add_analysis_limits(parser: argparse.ArgumentParser) -> None:
                              "(default: unlimited)")
 
 
-def main(argv=None):
+def main(argv: Sequence[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description='A utility to recursively map the structure of a file.',
                                      formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument('FILE', nargs='?', default='-',
@@ -338,7 +341,7 @@ viewer is built from the contents."""))
             log.error(f"Filetype argument(s) { args.filetype } did not match any known definitions!")
             exit(1)
         log.info(f"Only matching against these types: {', '.join(mimetypes)}")
-        magic_matcher: Optional[MagicMatcher] = MagicMatcher.DEFAULT_INSTANCE.only_match(mimetypes=mimetypes)
+        magic_matcher: MagicMatcher | None = MagicMatcher.DEFAULT_INSTANCE.only_match(mimetypes=mimetypes)
     else:
         magic_matcher = None
 
@@ -352,7 +355,6 @@ viewer is built from the contents."""))
     except KeyboardInterrupt:
         # this will happen if the user presses ^C wile reading from STDIN
         exit(1)
-        return  # this is here because linters are dumb and will complain about the next line without it
 
     with path_or_stdin as file_path, ExitStack() as stack:
         if args.debugger:
@@ -381,6 +383,7 @@ viewer is built from the contents."""))
                             limits=limits)
 
         needs_sbud = any(output_format.output_format in {"html", "json", "sbud"} for output_format in args.format)
+        sbud: dict[str, object] | None = None
         with KeyboardInterruptHandler():
             # do we need to do a full match? if so, do that up front:
             if needs_sbud:
@@ -389,7 +392,10 @@ viewer is built from the contents."""))
                         if sigterm_handler.terminated:
                             break
                         if match.parent is None:
-                            if args.max_matches is not None and len(analyzer.matches_so_far) >= args.max_matches:
+                            if (
+                                args.max_matches is not None
+                                and len(analyzer.matches_so_far or ()) >= args.max_matches
+                            ):
                                 log.info(f"Found {args.max_matches} matches; stopping early")
                                 break
         if needs_sbud:
@@ -419,6 +425,7 @@ viewer is built from the contents."""))
                         log.clear_status()
                 elif output_format.output_format in ("mime", "explain"):
                     omm = sys.stderr.isatty() and output.isatty() and logging.root.level <= logging.INFO
+                    longest_mimetype = 0
                     if omm:
                         # figure out the longest MIME type so we can make sure the columns are aligned
                         longest_mimetype = max(len(mimetype) for mimetype in analyzer.magic_matcher.mimetypes)
@@ -448,12 +455,12 @@ viewer is built from the contents."""))
                     elif not output_format.output_to_stdout:
                         log.info(f"Saved MIME output to {output_format.output_path}")
                 elif output_format.output_format == "json" or output_format.output_format == "sbud":
-                    assert needs_sbud
+                    assert needs_sbud and sbud is not None
                     json.dump(sbud, output)
                     if not output_format.output_to_stdout:
                         log.info(f"Saved {output_format.output_format.upper()} output to {output_format.output_path}")
                 elif output_format.output_format == "html":
-                    assert needs_sbud
+                    assert needs_sbud and sbud is not None
                     output.write(html.generate(file_path, sbud))
                     if not output_format.output_to_stdout:
                         log.info(f"Saved HTML output to {output_format.output_path}")

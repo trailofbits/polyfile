@@ -1,10 +1,10 @@
 from io import BytesIO
 from unittest import TestCase
 
-from abnf.parser import ParseError
+from abnf.parser import ParseError, Rule
 
 from polyfile.fileutils import FileStream, Tempfile
-from polyfile.http.http_11 import *
+from polyfile.http.http_11 import Http11RequestGrammar, HttpMethod, HttpVisitor
 from polyfile.http.matcher import http_11_matcher, HTTP_11_MIME_TYPE
 from polyfile.magic import MagicMatcher, MatchedTest
 
@@ -16,13 +16,9 @@ class Http11RequestUnitTests(TestCase):
     """
 
     def setUp(self) -> None:
-        self.request_grammar: Http11RequestGrammar = Http11RequestGrammar("request")
+        self.request_grammar: Rule = Http11RequestGrammar("request")
         self.visitor: HttpVisitor = HttpVisitor()
         return super().setUp()
-
-    def tearDown(self) -> None:
-        self.visitor = None
-        return super().tearDown()
 
     def test_post_body_form_encoded(self):
         """Most HTTP request smuggling vulnerabilities arise because the HTTP specification provides two different ways to specify where a request ends: the Content-Length header and the Transfer-Encoding header.
@@ -33,6 +29,8 @@ class Http11RequestUnitTests(TestCase):
         request = """POST /search HTTP/1.1\r\nHost: normal-website.com\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 11\r\n\r\nq=smuggling"""
         ast, offset = self.request_grammar.parse(request, 0)
         self.visitor.visit(ast)
+        assert self.visitor.body_raw is not None
+        assert self.visitor.body_parsed is not None
 
         self.assertEqual(self.visitor.method, HttpMethod.POST)
         self.assertEqual(self.visitor.request_target, "/search")
@@ -49,6 +47,9 @@ class Http11RequestUnitTests(TestCase):
         request = """POST /search HTTP/1.1\r\nHost: normal-website.com\r\nContent-Type: application/x-www-form-urlencoded\r\nTransfer-Encoding: chunked\r\n\r\nb\r\nq=smuggling\r\n0\r\n"""
         ast, offset = self.request_grammar.parse(request, 0)
         self.visitor.visit(ast)
+        assert self.visitor.headers is not None
+        assert self.visitor.body_raw is not None
+        assert self.visitor.body_parsed is not None
 
         self.assertEqual(self.visitor.method, HttpMethod.POST)
         self.assertEqual(self.visitor.request_target, "/search")
@@ -78,6 +79,8 @@ class Http11RequestUnitTests(TestCase):
         request = """POST / HTTP/1.1\r\nHost: vulnerable-website.com\r\nContent-Length: 13\r\nTransfer-Encoding: chunked\r\n\r\n0\r\nSMUGGLED\r\n"""
         ast, offset = self.request_grammar.parse(request, 0)
         self.visitor.visit(ast)
+        assert self.visitor.body_raw is not None
+        assert self.visitor.body_parsed is not None
 
         self.assertEqual(self.visitor.method, HttpMethod.POST)
         self.assertIsNone(self.visitor.content_type)
@@ -99,6 +102,7 @@ class Http11RequestUnitTests(TestCase):
         request = """POST / HTTP/1.1\r\nHost: vulnerable-website.com\r\nTransfer-Encoding: chunked\r\nContent-Length: 4\r\n\r\n1\r\nA\r\nX"""
         ast, offset = self.request_grammar.parse(request, 0)
         self.visitor.visit(ast)
+        assert self.visitor.body_parsed is not None
         self.assertEqual("1\r\nA\r\nX", self.visitor.body_raw)
         self.assertEqual(self.visitor.transfer_encoding, "chunked")
         self.assertNotEqual(self.visitor.content_length, 4)
@@ -131,6 +135,8 @@ class Http11RequestUnitTests(TestCase):
         request = """POST / HTTP/1.1\r\nHost: vulnerable-website.com\r\nContent-Length: 3\r\nTransfer-Encoding: chunked\r\n\r\n8\r\nSMUGGLED\r\n0\r\n"""
         ast, offset = self.request_grammar.parse(request, 0)
         self.visitor.visit(ast)
+        assert self.visitor.body_raw is not None
+        assert self.visitor.body_parsed is not None
 
         self.assertEqual(self.visitor.method, HttpMethod.POST)
         self.assertNotEqual(self.visitor.content_length, 3)
@@ -149,6 +155,7 @@ class Http11RequestUnitTests(TestCase):
         request = """POST / HTTP/1.1\r\nHost: vulnerable-website.com\r\nTransfer-Encoding: chunked\r\nContent-Length: 6\r\n\r\n0\r\n\r\nX"""
         ast, offset = self.request_grammar.parse(request, 0)
         self.visitor.visit(ast)
+        assert self.visitor.body_parsed is not None
         self.assertEqual("0\r\n\r\nX", self.visitor.body_raw)
         self.assertEqual(self.visitor.content_length, 0)
         self.assertNotIn("X", container=self.visitor.body_parsed)
@@ -159,6 +166,7 @@ class Http11RequestUnitTests(TestCase):
         request = """POST /search HTTP/1.1\r\nHost: vulnerable-website.com\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 4\r\nTransfer-Encoding: chunked\r\n\r\n7c\r\nGET /404 HTTP/1.1\r\nHost: vulnerable-website.com\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 144\r\n\r\nx=\r\n0"""
         ast, offset = self.request_grammar.parse(request, 0)
         self.visitor.visit(ast)
+        assert self.visitor.body_parsed is not None
 
         self.assertEqual(
             "7c\r\nGET /404 HTTP/1.1\r\nHost: vulnerable-website.com\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 144\r\n\r\nx=\r\n0",
@@ -203,6 +211,7 @@ class Http11RequestUnitTests(TestCase):
         )
         ast, offset = self.request_grammar.parse(request, 0)
         self.visitor.visit(ast)
+        assert self.visitor.headers is not None
         self.assertIn(member="Transfer-Encoding", container=self.visitor.headers)
         self.assertEqual(self.visitor.headers["Transfer-Encoding"], "x")
         # TODO kaoudis should these Transfer-Encoding headers be deduped. by spec?
@@ -247,6 +256,7 @@ class Http11RequestUnitTests(TestCase):
         request = """HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nTransfer-Encoding: chunked\r\n\r\n7\r\nMozilla\r\n9\r\nDeveloper\r\n7\r\nNetwork\r\n0\r\n"""
         ast, offset = self.request_grammar.parse(request, 0)
         self.visitor.visit(ast)
+        assert self.visitor.body_parsed is not None
 
         self.assertEqual(self.visitor.transfer_encoding, "chunked")
         self.assertFalse(hasattr(self.visitor, "trailer"))
@@ -271,6 +281,7 @@ class Http11RequestUnitTests(TestCase):
         request = """HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nTransfer-Encoding: chunked\r\nTrailer: Trailer\r\n\r\n7\r\nMozilla\r\n9\r\nDeveloper\r\n7\r\nNetwork\r\n0\r\nTrailer: coolstuff\r\n\r\n"""
         ast, offset = self.request_grammar.parse(request, 0)
         self.visitor.visit(ast)
+        assert self.visitor.headers is not None
 
         self.assertEqual(self.visitor.transfer_encoding, "chunked")
         self.assertTrue(hasattr(self.visitor, "trailer"))
@@ -284,6 +295,8 @@ class Http11RequestUnitTests(TestCase):
         request = """HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nTransfer-Encoding: chunked\r\nTrailer: Expires\r\n\r\n7\r\nMozilla\r\n9\r\nDeveloper\r\n7\r\nNetwork\r\n0\r\nExpires: Wed, 21 Oct 2015 07:28:00 GMT\r\n\r\n"""
         ast, offset = self.request_grammar.parse(request, 0)
         self.visitor.visit(ast)
+        assert self.visitor.body_parsed is not None
+        assert self.visitor.headers is not None
 
         self.assertEqual(self.visitor.transfer_encoding, "chunked")
         self.assertEqual(
@@ -312,6 +325,7 @@ class Http11RequestUnitTests(TestCase):
         self.assertGreaterEqual(len(matches), 1)
         match = matches[0]
         self.assertIsInstance(match, MatchedTest)
+        assert isinstance(match, MatchedTest)
         self.assertEqual(match.offset, 0)
         self.assertEqual(match.length, 22)
         self.assertEqual(match.value, "POST /search HTTP/1.1\r")

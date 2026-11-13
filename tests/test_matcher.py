@@ -1,14 +1,14 @@
 from pathlib import Path
-from typing import Iterable, Iterator, List, Tuple
+from collections.abc import Iterable, Iterator
 from unittest import TestCase
 
 from polyfile.fileutils import FileStream
 from polyfile.magic import Match as MagicMatch
 from polyfile.polyfile import Match, Matcher
 
-from .test_zipmatcher import build_zip, temporary_file
+from tests.test_zipmatcher import build_zip, temporary_file
 
-Structure = List[Tuple[int, str, int, int]]
+Structure = list[tuple[int, str, int, int]]
 
 
 def structure(matches: Iterable[Match]) -> Structure:
@@ -32,7 +32,7 @@ def structure(matches: Iterable[Match]) -> Structure:
     return flattened
 
 
-def mime_types(matches: Iterator[MagicMatch]) -> List[str]:
+def mime_types(matches: Iterator[MagicMatch]) -> list[str]:
     """Returns every MIME type a :meth:`polyfile.polyfile.Matcher.identify` call reported."""
     return sorted(mimetype for match in matches for mimetype in match.mimetypes)
 

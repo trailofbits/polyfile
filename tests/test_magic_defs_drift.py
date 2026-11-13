@@ -1,5 +1,4 @@
 from pathlib import Path
-from typing import Dict, FrozenSet, Set
 from unittest import TestCase, skipUnless
 
 POLYFILE_DIR: Path = Path(__file__).absolute().parent.parent
@@ -11,22 +10,22 @@ HAVE_MAGDIR: bool = UPSTREAM_MAGDIR.is_dir() and any(UPSTREAM_MAGDIR.iterdir())
 
 SYNC_DOC: str = "docs/updating_libmagic_defs.md"
 
-IGNORED: FrozenSet[str] = frozenset({"magic.mgc", "__pycache__"})
+IGNORED: frozenset[str] = frozenset({"magic.mgc", "__pycache__"})
 """Entries `polyfile.magic.MAGIC_DEFS` skips, so they are neither definitions nor PolyFile's own."""
 
-POLYFILE_OWNED: FrozenSet[str] = frozenset({
+POLYFILE_OWNED: frozenset[str] = frozenset({
     "__init__.py", "COPYING", "csv", "json", "polyfile_zip"
 })
 """The entries of `polyfile/magic_defs` that PolyFile writes rather than copies from upstream."""
 
-LOCAL_PATCHES: Dict[str, str] = {}
+LOCAL_PATCHES: dict[str, str] = {}
 """Definitions that deliberately differ from upstream, each mapped to the issue that justifies it.
 
 Add an entry only alongside the issue explaining why the patch has to exist, and delete it in the
 change that drops the patch. Anything not listed here has to be a byte-for-byte copy of upstream.
 """
 
-PENDING_PATCHES: FrozenSet[str] = frozenset()
+PENDING_PATCHES: frozenset[str] = frozenset()
 """Allowlist entries whose patch is still in review, so the bundled file still matches upstream.
 
 Naming an entry here disarms the allowlist check for it, which lets a `LOCAL_PATCHES` entry land
@@ -36,7 +35,7 @@ patch lands, so the allowlist cannot stay disarmed by accident.
 """
 
 
-def definition_names(directory: Path) -> Set[str]:
+def definition_names(directory: Path) -> set[str]:
     """Lists the entries of a definition directory that `MAGIC_DEFS` loads as definitions."""
     return {
         entry.name
