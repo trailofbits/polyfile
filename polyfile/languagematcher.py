@@ -259,7 +259,7 @@ def parse_bf(file_stream, match):
                 loop = Submatch(
                     "Loop",
                     match_obj="",
-                    relative_offset=relative_offset,
+                    relative_offset=relative_offset - (parent.offset - match.offset),
                     parent=parent,
                     matcher=match.matcher
                 )

@@ -92,6 +92,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 
 ### Fixed
 
+- **Breaking:** Nested BrainFu loops use their immediate parent's source coordinates, keeping
+  loop and command offsets aligned in bounded stream views (#3711).
+
 - **Breaking:** PDF token splitting rejects incompatible separator families, accepts contiguous
   byte-buffer separators, and checks platform-sized integer overflow for `maxsplit` (#3666).
 - **Breaking:** PDF slices, split parts, and stripped values report bounded source spans.
