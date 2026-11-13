@@ -1,34 +1,38 @@
 import copy
 from collections import Counter, defaultdict
+from collections.abc import Hashable as HashableValue, Iterable, Sized
 import heapq
 import math
 from statistics import stdev
-from typing import Dict, Set, Tuple
+from typing import cast
 
 from intervaltree import IntervalTree
 
 from polyfile import logger, __version__
 
-from . import polytracker
-from . import cfg
+from polymerge import polytracker, cfg
+from polymerge._types import PolyfileDocument, PolyfileElement
 
 log = logger.getStatusLogger("PolyMerge")
 
 
-def _function_labels(merged: dict, labeling: Dict[str, Set[Tuple[str]]], ancestry: Tuple[str] = ()):
+def _function_labels(
+    merged: PolyfileElement, labeling: dict[str, set[tuple[str, ...]]],
+    ancestry: tuple[str, ...] = ()
+) -> None:
     if 'type' in merged:
         name = merged['type']
     else:
         name = merged['name']
-    label: Tuple[str] = ancestry + (name,)
+    label = ancestry + (name,)
     for f in merged.get('functions', ()):
         labeling[f].add(label)
     for s in merged.get('subEls', ()):
         _function_labels(s, labeling, ancestry=label)
 
 
-def function_labels(merged_json_obj: dict) -> Dict[str, Set[Tuple[str]]]:
-    labels = defaultdict(set)
+def function_labels(merged_json_obj: PolyfileDocument) -> dict[str, set[tuple[str, ...]]]:
+    labels: dict[str, set[tuple[str, ...]]] = defaultdict(set)
     for merged in merged_json_obj['struc']:
         _function_labels(merged, labels)
     return labels
@@ -58,7 +62,7 @@ class Hashable:
 
 
 class IDHashable:
-    def __init__(self, value):
+    def __init__(self, value: PolyfileElement):
         self.value = value
 
     def __hash__(self):
@@ -68,7 +72,9 @@ class IDHashable:
         return f"{self.__class__.__name__}(value={self.value!r})"
 
 
-def build_intervals(elem: dict, tree: IntervalTree = None):
+def build_intervals(
+    elem: PolyfileElement, tree: IntervalTree | None = None
+) -> IntervalTree:
     if tree is None:
         tree = IntervalTree()
     if 'size' in elem:
@@ -81,21 +87,24 @@ def build_intervals(elem: dict, tree: IntervalTree = None):
     return tree
 
 
-def shannon_entropy(data):
+def shannon_entropy(data: Iterable[HashableValue]) -> float:
     if not hasattr(data, '__len__'):
         data = list(data)
 
-    if len(data) <= 1:
+    length = len(cast(Sized, data))
+    if length <= 1:
         return 0
 
     counts = Counter(data)
 
-    probabilities = [float(c) / len(data) for c in counts.values()]
+    probabilities = [float(c) / length for c in counts.values()]
 
     return -sum(p * math.log(p, 2) for p in probabilities if p > 0.)
 
 
-def _build_type_graph(graph: cfg.DiGraph, elem: dict, parent: str = None):
+def _build_type_graph(
+    graph: cfg.DiGraph, elem: PolyfileElement, parent: str | None = None
+) -> None:
     node_name = elem['type']
     graph.add_node(node_name)
     if parent is not None:
@@ -105,7 +114,7 @@ def _build_type_graph(graph: cfg.DiGraph, elem: dict, parent: str = None):
             _build_type_graph(graph, child, node_name)
 
 
-def polyfile_type_graph(polyfile_json_obj: dict) -> cfg.DiGraph:
+def polyfile_type_graph(polyfile_json_obj: PolyfileDocument) -> cfg.DiGraph:
     graph = cfg.DiGraph()
     roots = []
     for match in polyfile_json_obj['struc']:
@@ -118,8 +127,8 @@ def polyfile_type_graph(polyfile_json_obj: dict) -> cfg.DiGraph:
 def _filter_function_matches(
         type_dominators: cfg.DAG,
         node: str,
-        matches: dict,
-        disallowed: Dict[str, int],
+        matches: dict[str, list[str]],
+        disallowed: dict[str, int],
         depth: int = 0):
     if node in matches:
         orig_matches = matches[node]
@@ -136,12 +145,14 @@ def _filter_function_matches(
         _filter_function_matches(type_dominators, child, matches, disallowed, depth + 1)
 
 
-def filter_function_matches(type_dominators: cfg.DAG, matches: dict):
+def filter_function_matches(type_dominators: cfg.DAG, matches: dict[str, list[str]]) -> None:
     for root in type_dominators.roots:
-        _filter_function_matches(type_dominators, root, matches, {})
+        _filter_function_matches(type_dominators, cast(str, root), matches, {})
 
 
-def merge(polyfile_json_obj: dict, program_trace: polytracker.ProgramTrace) -> dict:
+def merge(
+    polyfile_json_obj: PolyfileDocument, program_trace: polytracker.ProgramTrace
+) -> PolyfileDocument:
     ret = copy.deepcopy(polyfile_json_obj)
     if 'versions' in ret:
         ret['versions']['polymerge'] = __version__
@@ -150,23 +161,24 @@ def merge(polyfile_json_obj: dict, program_trace: polytracker.ProgramTrace) -> d
     intervals = IntervalTree()
     for match in ret['struc']:
         intervals = build_intervals(match, tree=intervals)
-    matches = defaultdict(set)
-    elems_by_function = defaultdict(set)
-    functions_by_type = defaultdict(set)
-    elems_by_type = defaultdict(set)
+    matches: dict[IDHashable, set[str]] = defaultdict(set)
+    elems_by_function: dict[str, set[IDHashable]] = defaultdict(set)
+    functions_by_type: dict[str, set[str]] = defaultdict(set)
+    elems_by_type: dict[str, set[IDHashable]] = defaultdict(set)
     ret['versions']['polytracker'] = '.'.join(map(str, program_trace.polytracker_version))
     # The following code assumes that taint was tracked from a single input file.
+    total_bytes = 0
+    progress = 0
     if log.isEnabledFor(logger.STATUS):
-        total_bytes = 0
         for function_info in program_trace.functions.values():
             for _, tainted_bytes in function_info.items():
                 total_bytes += len(tainted_bytes)
-        progress = 0
     for function_name, function_info in program_trace.functions.items():
+        function_bytes = 0
+        function_progress = 0
+        function_percent = -1
         if log.isEnabledFor(logger.STATUS):
             function_bytes = sum(len(tainted_bytes) for _, tainted_bytes in function_info.items())#.cmp_bytes.items())
-            function_progress = 0
-            function_percent = -1
         for input_source, tainted_bytes in function_info.items():#cmp_bytes.items():
             for offset in tainted_bytes:
                 if log.isEnabledFor(logger.STATUS):
@@ -177,7 +189,7 @@ def merge(polyfile_json_obj: dict, program_trace: polytracker.ProgramTrace) -> d
                     if function_percent > last_percent:
                         log.status(f"{(progress / total_bytes) * 100.0:.2f}% processing function {function_name}... ({function_percent}%)")
                 for interval in intervals[offset]:
-                    elem = IDHashable(interval.data)
+                    elem = IDHashable(cast(PolyfileElement, interval.data))
                     elems_by_function[function_name].add(elem)
                     elem_type = elem.value['type']
                     functions_by_type[elem_type].add(function_name)
@@ -209,7 +221,7 @@ def merge(polyfile_json_obj: dict, program_trace: polytracker.ProgramTrace) -> d
                 func_matches.append(best_match_func)
         # now choose the functions that are roots in the vertex-induced subgraph of the CFG dominator tree:
         ret['best_function_matches'][elem_type] = [
-            root.name
+            cast(polytracker.FunctionInfo, root).name
             for root in cfg.roots(
                 dominator_tree.vertex_induced_subgraph(program_trace.functions[func] for func in func_matches)
             )

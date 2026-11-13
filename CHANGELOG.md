@@ -81,6 +81,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
   have explicit Python 3.11 type contracts while retaining existing behavior (#3673).
 - Build helper annotations describe compiler results, parser manifests, and optional progress
   output while retaining standard-library-only initialization (#3673).
+- PolyMerge annotations describe trace sources, structured documents, and graph nodes. JSON
+  inputs use context-managed streams after argument parsing (#3673).
 
 - Core Python annotations describe nullable analysis caches, callable parsers, generic matchers,
   search and serialization traversal, and native decoder boundaries without changing their
