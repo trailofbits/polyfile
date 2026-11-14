@@ -118,7 +118,7 @@ function setSource(source, options = {}) {
   /** @type {HTMLSelectElement} */ (getElement('source')).value = source;
   if (options.scroll !== false) viewerState.rowOffset = 0;
   updateCoverage();
-  renderViewport();
+  resizeViewport();
   if (options.preserveSearch === false) runSearch();
 }
 

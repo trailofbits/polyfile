@@ -10,6 +10,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 
 ### Added
 
+- **Breaking:** HTML reports show embedded image previews beside the ASCII column as you scroll
+  their byte ranges. Nearby previews share browsing controls, decoded images identify their encoded
+  containers, and narrow layouts use a strip below the bytes. Activate a preview to enlarge it
+  or reveal its structure node; the existing tree previews remain available.
 - **Breaking:** PDF tokens and mapped elements retain source-qualified input dependencies through
   supported arithmetic, conversions, selection, and reconstruction. Computed values use zero-size
   owner anchors, and disjoint or cross-source inputs remain separate. Untagged prefixes no longer

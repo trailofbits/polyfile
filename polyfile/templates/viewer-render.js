@@ -244,13 +244,11 @@ function measuredWidth(element, fallback) {
   return element?.getBoundingClientRect().width || fallback;
 }
 
-/** @returns {number} */
-function fittedColumns() {
-  const pane = document.getElementById('byte-pane');
-  const width =
-    pane?.clientWidth ??
-    document.documentElement.clientWidth - measuredWidth(document.querySelector('.tree'), 0) - 80;
-  const style = getComputedStyle(pane ?? getElement('scrollcapture'));
+/** @param {boolean} [includeImages] @returns {number} */
+function availableByteWidth(includeImages = true) {
+  const pane = getElement('byte-pane');
+  const width = pane.clientWidth;
+  const style = getComputedStyle(pane);
   const captureStyle = getComputedStyle(getElement('scrollcapture'));
   const padding = Number.parseFloat(style.paddingLeft) + Number.parseFloat(style.paddingRight);
   const chrome =
@@ -258,10 +256,19 @@ function fittedColumns() {
     (Number.parseFloat(style.columnGap) || 0) +
     (Number.parseFloat(captureStyle.columnGap) || 0) +
     padding;
+  const images =
+    includeImages && pane.dataset['images'] === 'gutter'
+      ? imageGutterWidth + (Number.parseFloat(style.columnGap) || 0)
+      : 0;
+  return width - chrome - images;
+}
+
+/** @returns {number} */
+function fittedColumns() {
   const hex = measuredWidth(document.querySelector('#hexdump .byte'), 30);
   const ascii = measuredWidth(document.querySelector('#ascii .byte'), 10);
   const gutter = Math.max(measuredWidth(document.querySelector('#hexdump .byterow'), 0), 64);
-  return width >= 16 * (hex + ascii) + gutter + chrome ? 16 : 8;
+  return availableByteWidth() >= 16 * (hex + ascii) + gutter ? 16 : 8;
 }
 
 /** @returns {number} */
@@ -271,13 +278,15 @@ function measuredRowHeight() {
 }
 
 function resizeViewport() {
-  const pane = document.getElementById('byte-pane');
-  const height = getElement('scrollcontainer').clientHeight;
-  if (pane && (!pane.clientWidth || !height)) return;
-  const start = viewerState.rowOffset * viewerState.bytesPerRow;
+  const pane = getElement('byte-pane');
+  if (!pane.clientWidth) return;
   if (!hexCells.length) rebuildRows();
+  layoutImagePreviews();
+  const height = getElement('scrollcontainer').clientHeight;
+  if (!height) return;
+  const start = viewerState.rowOffset * viewerState.bytesPerRow;
   if (!getElement('scrollcapture').hidden) viewerState.bytesPerRow = fittedColumns();
-  pane?.style.setProperty('--byte-columns', String(viewerState.bytesPerRow));
+  pane.style.setProperty('--byte-columns', String(viewerState.bytesPerRow));
   byteHeight = measuredRowHeight();
   viewerState.visibleRows = Math.max(1, Math.floor(height / byteHeight));
   viewerState.rowOffset = Math.floor(start / viewerState.bytesPerRow);

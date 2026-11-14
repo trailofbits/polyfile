@@ -326,6 +326,7 @@ function searchInputShortcut(event) {
 
 /** @param {KeyboardEvent} event */
 function handleSearchShortcut(event) {
+  if (document.querySelector('dialog[open]')) return;
   const action =
     event.ctrlKey || event.metaKey ? searchCommandShortcut(event) : searchInputShortcut(event);
   if (!action) return;
