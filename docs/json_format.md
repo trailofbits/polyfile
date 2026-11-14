@@ -90,6 +90,22 @@ physical offset. Consumers must use `(source, offset)` to identify a byte locati
 downloads, and coverage use the selected source. The source selector lets you inspect the original
 input and each decoded buffer separately.
 
+Elements can also carry an optional `dependencies` array of contributing input intervals:
+
+```json
+"dependencies": [
+  {"source": "file", "offset": 12, "size": 2},
+  {"source": "decoded:0", "offset": 7, "size": 3}
+]
+```
+
+Dependencies are conservative input ranges, independent of the element's lexical location.
+Overlapping or adjacent intervals merge within one source; gaps and different sources remain
+separate. A computed value without a lexical span has size zero at its consuming parent's
+position. Its dependencies identify the inputs, not a precise output-to-input byte mapping.
+Elements without dependency metadata omit this field. See [PDF token provenance](pdf_provenance.md)
+for the supported tracking boundaries.
+
 Gzip analysis preserves headers, optional fields, compressed bodies, and trailers for each member.
 It validates header checksums, payload CRCs, and decoded sizes before analyzing the concatenated
 decoded content. Zero padding is preserved; other trailing data reports an invalid stream without

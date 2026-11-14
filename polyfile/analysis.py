@@ -46,12 +46,21 @@ class AnalysisContext:
     total_bytes: int = 0
     members: int = 0
     _source_count: int = field(default=0, init=False, repr=False)
+    _sources: set[str] = field(default_factory=set, init=False, repr=False)
 
     def next_source(self) -> str:
         """Return the next deterministic decoded-buffer identifier in this analysis."""
         source = f"decoded:{self._source_count}"
+        while source in self._sources:
+            self._source_count += 1
+            source = f"decoded:{self._source_count}"
+        self.reserve_source(source)
         self._source_count += 1
         return source
+
+    def reserve_source(self, source: str) -> None:
+        """Keep an explicitly named source distinct from future decoded buffers."""
+        self._sources.add(source)
 
     @property
     def remaining_members(self) -> int | None:

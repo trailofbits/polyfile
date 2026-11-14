@@ -30,8 +30,6 @@ def test_object_stream_values_are_emitted_under_one_decoded_buffer(
     parent = Match(
         "PDF", None, relative_offset=source_base, length=len(data), matcher=matcher, source=source,
     )
-    if source == "decoded:0":
-        assert parent.analysis_context.next_source() == "decoded:0"
     with FileStream(b"prefix" + data + b"suffix", start=6, length=len(data)) as outer:
         with FileStream(outer) as stream:
             nodes = list(pdf_parser(stream, parent))

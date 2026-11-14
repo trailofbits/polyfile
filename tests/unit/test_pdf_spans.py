@@ -290,13 +290,13 @@ def test_native_prefix_preserves_nonlinear_mapping(binary: bool, prefix: str) ->
 
 
 @pytest.mark.parametrize("binary", [False, True])
-def test_aligned_native_prefix_keeps_legacy_inferred_positions(binary: bool) -> None:
+def test_native_prefix_keeps_only_the_available_input_span(binary: bool) -> None:
     source = token(binary)
     result = (
         b"xy" + cast(bytes, source) if isinstance(source, PSBytes) else "xy" + cast(str, source)
     )
-    assert span(result) == (5, 7)
-    assert span(result[1:2]) == (6, 1)
+    assert span(result) == (7, 5)
+    assert span(result[1:2]) == (7, 5)
     assert span(source) == (7, 5)
 
 

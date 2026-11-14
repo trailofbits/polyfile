@@ -32,15 +32,18 @@ def token_values() -> list[PSToken]:
     ]
 
 
-@pytest.mark.parametrize("token", token_values(), ids=lambda token: type(token).__name__)
+@pytest.mark.parametrize(
+    "token_index", range(7), ids=[type(token).__name__ for token in token_values()],
+)
 @pytest.mark.parametrize(
     "operation", [copy.copy, copy.deepcopy, lambda value: pickle.loads(pickle.dumps(value))],
 )
 @pytest.mark.parametrize("source", ["file", "decoded:0"])
 @pytest.mark.parametrize("source_base", [0, 117])
 def test_copy_preserves_value_wrapper_state_and_emitted_span(
-    token: PSToken, operation: Callable[[PSToken], PSToken], source: str, source_base: int,
+    token_index: int, operation: Callable[[PSToken], PSToken], source: str, source_base: int,
 ) -> None:
+    token = token_values()[token_index]
     result = operation(token)
     assert type(result) is type(token)
     assert result == token

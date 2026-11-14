@@ -10,6 +10,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 
 ### Added
 
+- **Breaking:** PDF tokens and mapped elements retain source-qualified input dependencies through
+  supported arithmetic, conversions, selection, and reconstruction. Computed values use zero-size
+  owner anchors, and disjoint or cross-source inputs remain separate. Untagged prefixes no longer
+  invent lexical positions. Hex and escaped string payloads recurse in decoded coordinates.
+- **Breaking:** Qualify PDF instrumentation against `pdfminer.six==20260107`, isolate private API
+  hooks, and report unsupported status for unqualified releases. Preserve raw lexeme extents,
+  dictionary names and values, compressed-object sources, encrypted arrays, and wrapper metadata.
+- Document the PDFminer upgrade qualification procedure and supported provenance boundaries.
+
 - **Breaking:** Unencrypted LRZIP 0.6 and 0.7 archives are recursively analyzed through an
   installed LRZIP 0.7.3 or newer helper, preserving physical framing and decoded source
   coordinates. Missing helpers and unsupported archive variants report explicit status; declared

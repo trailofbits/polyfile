@@ -46,8 +46,6 @@ def test_decrypted_containers_and_children_reach_serialized_structure(
         "PDF", None, relative_offset=source_base, length=len(data),
         matcher=Matcher(parse=False), source=source,
     )
-    if source == "decoded:0":
-        parent.analysis_context.next_source()
     with FileStream(b"prefix" + data, start=6) as stream:
         nodes = list(pdf_parser(stream, parent))
     obj = next(node for node in nodes if node.name == "PDFObject" and node.match == 3)

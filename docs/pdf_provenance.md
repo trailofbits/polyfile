@@ -1,8 +1,17 @@
 # PDF token provenance
 
-Instrumented PDF values retain their original byte spans through supported conversions,
-selection, copying, and pickling. A transformed value keeps the complete available input span
-when individual output positions cannot be mapped to individual source bytes.
+Instrumented PDF values carry a lexical location and contributing input intervals separately.
+`pdf_location` is a `SourceSpan(source, offset, size)`, or `None` for computed values without a
+lexeme. `pdf_dependencies` contains normalized input intervals. The view-relative legacy fields
+`pdf_offset` and `pdf_bytes` describe a lexical location only when `pdf_location` is present.
+Unattached parser values use `source=None`; mapping binds them to the selected analysis view.
+Qualified locations stay in their original source when a value is consumed elsewhere.
+
+Conversions, selection, copying, and pickling preserve this metadata. A transformed value keeps
+the complete available input intervals when individual output positions cannot be mapped to
+individual source bytes. Concatenation merges lexical locations only for adjacent inputs in the
+same source. Adding an untagged prefix retains the available tagged input span without inventing
+positions for the prefix. Noncontiguous or cross-source inputs produce a computed value.
 
 Literal and hex strings map their raw bodies, excluding delimiters. Literal names map their
 complete lexeme, including `/`; their wrapped name maps the raw body. `PDFLiteral.raw_name`
@@ -20,6 +29,28 @@ their bounds from children. Decrypted strings have a physical `PDFDeciphered` re
 separate decoded buffer. Empty strings retain native PDFminer behavior, and authentication
 failures propagate unchanged.
 
+Hex strings, escaped strings, stream filters, predictors, and decryption recurse into separate
+decoded buffers when the output has no direct byte mapping. Opaque transformation dependencies
+include the complete tagged input buffers and available tagged parameters. Encryption inputs
+include tagged object IDs, generations, identifiers, and encryption dictionary data available at
+the adapter boundary. These are conservative input sets, not per-output-byte mappings or a
+cryptographic execution trace. Passwords and other untagged inputs have no file span.
+
+## Arithmetic and report dependencies
+
+Numeric `+`, `-`, `*`, `/`, `//`, and `%`, reflected forms, and unary `+`, `-`, and `abs()` retain
+all tagged operands' dependencies. Operations preserve Python values, exceptions, and reflected
+dispatch. They do not infer a lexical location for the result. Integer powers, bit operations,
+comparisons, formatting, arbitrary native methods, and caller code outside these hooks use
+native behavior and do not promise tracking.
+
+Reports add optional `dependencies` entries using the existing `source`, `offset`, and `size`
+vocabulary. Overlapping or adjacent intervals merge only within one source; disjoint ranges and
+source boundaries remain separate. Computed elements have size zero at their consuming parent
+and carry their inputs through `dependencies`. This anchor is not a claim that input bytes occur
+at the parent's position. Lexical elements retain their usual location fields. Existing viewers
+continue to highlight lexical regions; dependency visualization is not implemented.
+
 ## Conversion boundaries
 
 Python normalizes `int()`, `float()`, and `operator.index()` results to native numbers.
@@ -33,8 +64,8 @@ plain text and stores their location separately. `bytes(PSBytes)` retains the by
 Text requires an explicit encoding, and floating-point values cannot be converted to bytes.
 
 Copies and pickle protocols 0 through the current highest protocol preserve the wrapper family,
-span, nonlinear mapping state, and transformation attributes. Arrays and dictionaries retain
-their recorded delimiter spans and support recursive container reconstruction.
+location, dependencies, nonlinear mapping state, and transformation attributes. Arrays and
+dictionaries retain their recorded delimiter spans and support recursive container reconstruction.
 
 ## Index audit
 
@@ -51,5 +82,5 @@ The structural adapter distinguishes selected values from control inputs:
 - Lexer numeric constructors produce native numbers; the token attachment hook records their
   lexical span before the values enter the structural parser.
 
-These guarantees cover the structural parser paths PolyFile executes. Primitive wrappers alone
-do not track arbitrary arithmetic or preserve metadata through normalized builtins in caller code.
+These guarantees cover the structural parser paths PolyFile executes and the operations listed
+above. Normalized builtins and arbitrary external code can discard metadata.

@@ -12,6 +12,7 @@ from typing import Any
 
 from polyfile.analysis import AnalysisContext, AnalysisLimits
 from polyfile.fileutils import FileStream, Streamable
+from polyfile.provenance import SourceSpan, normalize_spans
 from polyfile import logger
 from polyfile.magic import MagicMatcher, Match as MagicMatch, MatchContext, TestResult
 
@@ -84,7 +85,8 @@ class Match:
             description: str | None = None,
             analysis_context: AnalysisContext | None = None,
             analysis_depth: int | None = None,
-            source: str | None = None
+            source: str | None = None,
+            dependencies: Iterable[SourceSpan] = (),
     ):
         self._children: list[Match] = []
         self.name: str = name
@@ -99,6 +101,9 @@ class Match:
         self.source = source if source is not None else (
             parent.source if parent is not None else "file"
         )
+        self.dependencies = normalize_spans(dependencies)
+        if any(span.source is None for span in self.dependencies):
+            raise ValueError("Match dependencies must identify an analysis source")
         if parent is not None:
             if not isinstance(parent, Match):
                 raise ValueError("The parent must be an instance of a Match")
@@ -111,6 +116,8 @@ class Match:
         if parent is not None:
             analysis_context = parent.analysis_context
         self.analysis_context = analysis_context or AnalysisContext(matcher.limits)
+        if parent is None or self.source != parent.source:
+            self.analysis_context.reserve_source(self.source)
         if analysis_depth is None:
             analysis_depth = parent.analysis_depth if parent is not None else 0
         self.analysis_depth = analysis_depth
@@ -210,6 +217,8 @@ class Match:
         elif self.match is not None:
             ret['value'] = str.__str__(str(self.match))
         ret['subEls'] = [c.to_obj() for c in self]
+        if self.dependencies:
+            ret['dependencies'] = [span.to_obj() for span in self.dependencies]
         if self.img_data is not None:
             ret['img_data'] = self.img_data
         if self.decoded is not None:

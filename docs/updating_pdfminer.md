@@ -6,6 +6,20 @@ document, xref, and decryption interfaces that can change without a public API c
 The lazy PDF parser checks the installed version before importing these interfaces. Unqualified
 installations retain PDF identification and report `analysis_status: unsupported`.
 
+## Instrumentation approach
+
+The adapter owns local document and xref subclasses and explicit parser hooks. Native PDFminer
+classes and singleton keywords remain unmodified. The facade in `_pdfminer_adapter.py` contains
+the private imports and document lifecycle operations; `pdf.py` attaches lexical spans, tracks
+supported operations, and maps physical and decoded sources.
+
+[Oomox](https://github.com/trailofbits/oomox) combines Python audit events with execution context.
+Its boundary-oriented design is useful inspiration for keeping instrumentation localized, but
+audit events do not expose every arithmetic operand/result or PDF lexer span. PolyFile therefore
+uses explicit hooks and value wrappers rather than adding tracing, audit hooks, or a dependency
+on Oomox. This also avoids AST or bytecode rewriting and keeps upstream API differences reviewable
+in one qualified adapter.
+
 ## Qualify a release
 
 Dependabot proposes PDFminer updates through the `uv` ecosystem after a seven-day cooldown.
