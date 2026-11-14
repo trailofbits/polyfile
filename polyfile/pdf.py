@@ -1281,6 +1281,24 @@ def _set_pdf_source(value: object, source: str) -> None:
         _set_pdf_source(value.objid, source)
 
 
+def _decipher_pdf_object(
+    decipher: DecipherCallable, objid: int, generation: int, value: object,
+) -> object:
+    if isinstance(value, bytes):
+        return decipher(objid, generation, value) if value else value
+    if isinstance(value, list):
+        items = [_decipher_pdf_object(decipher, objid, generation, item) for item in value]
+        if isinstance(value, PDFList):
+            result = type(value)(items, pdf_offset=value.pdf_offset, pdf_bytes=value.pdf_bytes)
+            result.__dict__.update(value.__dict__)
+            return result
+        return items
+    if isinstance(value, dict):
+        for key, item in value.items():
+            value[key] = _decipher_pdf_object(decipher, objid, generation, item)
+    return value
+
+
 def _match_pdf_decoded(
     parent: Match, data: bytes, sources: _PDFSources | None,
 ) -> Iterator[Match]:
@@ -1516,6 +1534,10 @@ class InstrumentedPDFDocument(AdapterPDFDocument):
             except PSEOF:
                 pass
         return objects, count
+
+    def _decipher_object(self, objid: int, generation: int, obj: object) -> object:
+        assert self.decipher is not None
+        return _decipher_pdf_object(self.decipher, objid, generation, obj)
 
     @property
     def decipher(self) -> DecipherCallable | None:

@@ -111,6 +111,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 
 ### Fixed
 
+- **Breaking:** Decrypted PDF arrays retain their original container spans, including empty
+  and nested arrays. Decrypted strings remain in separate decoded sources (#3744).
+
 - **Breaking:** Indirect objects in PDF object streams now appear under their decoded buffer,
   preserving token spans, names, arrays, and references. Cached lookups reuse the same source,
   including when the catalog itself is compressed (#3743).

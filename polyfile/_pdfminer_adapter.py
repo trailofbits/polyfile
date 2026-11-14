@@ -49,6 +49,7 @@ from pdfminer.pdftypes import (
 
 from pdfminer.pdfdocument import PDFBaseXRef, PDFXRefFallback, PDFXRefStream
 from pdfminer.pdftypes import list_value
+from pdfminer.pdftypes import PDFException, decipher_all, stream_value
 
 
 class AdapterPDFDocument(PDFDocument):
@@ -126,6 +127,52 @@ class AdapterPDFDocument(PDFDocument):
         for key in ("XRefStm", "Prev"):
             if key in trailer:
                 self.read_xref_from(parser, int_value(trailer[key]), xrefs)
+
+    def getobj(self, objid: int) -> object:
+        """Return an indirect object through this document's decryption hook.
+
+        Args:
+            objid: The indirect object identifier.
+
+        Returns:
+            The parsed object, reusing it when document caching is enabled.
+
+        Raises:
+            PDFObjectNotFound: If no cross-reference entry resolves the object.
+        """
+        if not self.xrefs:
+            raise PDFException("PDFDocument is not initialized")
+        if objid in self._cached_objs:
+            return self._cached_objs[objid][0]
+        obj, generation = self._load_object(objid)
+        if isinstance(obj, PDFStream):
+            obj.set_objid(objid, generation)
+        if self.caching:
+            self._cached_objs[objid] = obj, generation
+        return obj
+
+    def _load_object(self, objid: int) -> tuple[object, int]:
+        for xref in self.xrefs:
+            try:
+                stream_id, index, generation = xref.get_pos(objid)
+            except KeyError:
+                continue
+            try:
+                if stream_id is not None:
+                    stream = stream_value(self.getobj(stream_id))
+                    obj = self._getobj_objstm(stream, index, objid)
+                else:
+                    obj = self._getobj_parse(index, objid)
+                    if self.decipher:
+                        obj = self._decipher_object(objid, generation, obj)
+                return obj, generation
+            except (PSEOF, PDFSyntaxError):
+                continue
+        raise PDFObjectNotFound(objid)
+
+    def _decipher_object(self, objid: int, generation: int, obj: object) -> object:
+        assert self.decipher is not None
+        return decipher_all(self.decipher, objid, generation, obj)
 
 
 __all__ = [

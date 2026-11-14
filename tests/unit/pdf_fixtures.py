@@ -1,6 +1,11 @@
 """Deterministic PDF fixtures with byte-accurate cross-reference tables."""
 
 import zlib
+from hashlib import md5
+import struct
+
+from pdfminer.arcfour import Arcfour
+from pdfminer.pdfdocument import PDFStandardSecurityHandler
 
 
 def pdf_fixture(objects: list[bytes], trailer: bytes = b"/Root 1 0 R") -> bytes:
@@ -63,3 +68,23 @@ def object_stream_pdf(
     data += f"{xref_id} 0 obj\n".encode() + _stream_object(attributes, xref_data) + b"\nendobj\n"
     data += f"startxref\n{positions[xref_id]}\n%%EOF\n".encode()
     return data, decoded
+
+
+def encrypted_pdf(body: bytes, *, plaintext: bytes = b"a\nb") -> bytes:
+    """Build a revision-2 encrypted PDF with a blank user password and object 3."""
+    padding = PDFStandardSecurityHandler.PASSWORD_PADDING
+    owner_key = md5((b"owner" + padding)[:32]).digest()[:5]
+    owner_entry = Arcfour(owner_key).encrypt(padding)
+    identifier = b"polyfile-fixture"
+    key = md5(padding + owner_entry + struct.pack("<i", -4) + identifier).digest()[:5]
+    user_entry = Arcfour(key).encrypt(padding)
+    object_key = md5(key + b"\x03\x00\x00\x00\x00").digest()[:10]
+    ciphertext = Arcfour(object_key).encrypt(plaintext)
+    body = body.replace(b"{secret}", b"<" + ciphertext.hex().encode() + b">")
+    encryption = (
+        b"<< /Filter /Standard /V 1 /R 2 /Length 40 /P -4 /O <"
+        + owner_entry.hex().encode() + b"> /U <" + user_entry.hex().encode() + b"> >>"
+    )
+    identifier = identifier.hex().encode()
+    trailer = b"/Root 1 0 R /Encrypt 4 0 R /ID [<" + identifier + b"> <" + identifier + b">]"
+    return pdf_fixture([*CATALOG, body, encryption], trailer)

@@ -15,6 +15,11 @@ Object-stream values use offsets within a registered `decoded_content` buffer. T
 stream framing stays in the containing source. Repeated lookups reuse the decoded source;
 instrumentation also covers compressed catalogs loaded during document initialization.
 
+Decryption preserves array containers and their original delimiters rather than inferring
+their bounds from children. Decrypted strings have a physical `PDFDeciphered` region and a
+separate decoded buffer. Empty strings retain native PDFminer behavior, and authentication
+failures propagate unchanged.
+
 ## Conversion boundaries
 
 Python normalizes `int()`, `float()`, and `operator.index()` results to native numbers.
