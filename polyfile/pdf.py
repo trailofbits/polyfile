@@ -71,15 +71,6 @@ from polyfile.analysis import AnalysisContext, AnalysisLimits
 from polyfile.fileutils import FileStream
 from polyfile.fileutils import Tempfile
 from polyfile.logger import getStatusLogger
-from polyfile.magic import (
-    AbsoluteOffset,
-    FailedTest,
-    MagicMatcher,
-    MagicTest,
-    MatchedTest,
-    TestResult,
-    TestType,
-)
 from polyfile.polyfile import Match, Matcher, Submatch
 from polyfile.provenance import SourceSpan, normalize_spans
 
@@ -1845,30 +1836,6 @@ class InstrumentedPDFDocument(AdapterPDFDocument):
                     )
                     break
         return deciphered
-
-
-# The default libmagic test for detecting PDFs is too restrictive:
-class RelaxedPDFMatcher(MagicTest):
-    def __init__(self):
-        super().__init__(
-            offset=AbsoluteOffset(0),
-            mime="application/pdf",
-            extensions=("pdf",),
-            message="Malformed PDF"
-        )
-
-    def subtest_type(self) -> TestType:
-        return TestType.BINARY
-
-    def test(
-        self, data: bytes, absolute_offset: int, parent_match: TestResult | None,
-    ) -> TestResult:
-        if b"%PDF-" in data:
-            return MatchedTest(self, value=data, offset=0, length=len(data))
-        return FailedTest(self, offset=0, message="data did not contain \"%PDF-\"")
-
-
-MagicMatcher.DEFAULT_INSTANCE.add(RelaxedPDFMatcher())
 
 
 def reverse_skip_whitespace(file_stream) -> bool:
