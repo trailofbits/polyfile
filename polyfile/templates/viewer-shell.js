@@ -31,19 +31,6 @@ function handleViewerAction(event) {
   event.stopPropagation();
 }
 
-function initImages() {
-  for (const node of viewerData.nodes) {
-    if (!/^data:image\/(?:png|jpeg|gif|bmp|webp);base64,/.test(node.image)) continue;
-    const holder = document.querySelector(`[data-image-uid="${node.uid}"]`);
-    if (!holder) continue;
-    const image = document.createElement('img');
-    image.src = node.image;
-    image.alt = node.name;
-    image.style.maxWidth = '8em';
-    holder.append(image);
-  }
-}
-
 /** @param {"bytes" | "structure"} pane @param {boolean} [focus] */
 function selectPane(pane, focus = false) {
   getElement('workspace').dataset['activePane'] = pane;

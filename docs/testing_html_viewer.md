@@ -18,6 +18,34 @@ Linux environments can pass `--with-deps` to `playwright install` to install sys
 The default test engine is Chromium. Browser tests skip if you have not installed Playwright;
 existing Python tests do not require it. Failed tests save a screenshot under `test-results/`.
 
+## Embedded image previews
+
+Reports show existing image previews beside the ASCII column without requiring you to expand
+the structure tree. A preview stays visible while its byte range intersects the viewport. The
+marker beside each preview identifies the visible part of its range; hover or focus the preview
+to highlight those bytes. Nearby images share a card with previous and next controls.
+
+Images from decoded sources also appear beside their enclosing encoded containers. The caption
+identifies both sources; container ranges do not claim an exact mapping from decoded bytes to
+encoded bytes. Select the decoded source to see the image at its own byte offset.
+
+Activate a preview to open a larger image. The dialog shows the image's source and range.
+**Reveal structure** selects its original node and source, while **Close** or Escape returns focus
+to the preview. Existing previews in the structure tree remain available.
+
+When the gutter cannot fit beside eight byte columns, previews move to a browsable strip below
+the bytes. The strip uses at most one-third of the byte pane's height. Preview space is hidden
+in Text mode and for sources without images.
+
+View the [desktop gutter](images/html-images-desktop.png) and
+[narrow preview strip](images/html-images-narrow.png) examples.
+
+`tests/browser/test_images.py` covers scrolling, image groups, source boundaries, responsive
+layouts, dialog accessibility, and invalid previews. Its screenshot cases save light and dark
+desktop and narrow layouts under `test-results/images-*.png`.
+
+## Test fixtures and JavaScript checks
+
 The Python CI matrix installs `.[dev,viewer-test]` so the project-wide type check can resolve
 the browser test annotations. It runs `pytest tests --ignore=tests/browser`; the HTML viewer
 workflow installs browser engines and runs `tests/browser` separately. Install the same extras
