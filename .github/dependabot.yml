@@ -1,6 +1,14 @@
 version: 2
 
 updates:
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: daily
+    cooldown:
+      default-days: 7
+    allow:
+      - dependency-name: pdfminer-six
   - package-ecosystem: github-actions
     directory: /
     schedule:

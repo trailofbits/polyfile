@@ -10,6 +10,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 
 ### Added
 
+- **Breaking:** PDF tokens and mapped elements retain source-qualified input dependencies through
+  supported arithmetic, conversions, selection, and reconstruction. Computed values use zero-size
+  owner anchors, and disjoint or cross-source inputs remain separate. Untagged prefixes no longer
+  invent lexical positions. Hex and escaped string payloads recurse in decoded coordinates.
+- **Breaking:** Qualify PDF instrumentation against `pdfminer.six==20260107`, isolate private API
+  hooks, and report unsupported status for unqualified releases. Preserve raw lexeme extents,
+  dictionary names and values, compressed-object sources, encrypted arrays, and wrapper metadata.
+- Document the PDFminer upgrade qualification procedure and supported provenance boundaries.
+
 - **Breaking:** Unencrypted LRZIP 0.6 and 0.7 archives are recursively analyzed through an
   installed LRZIP 0.7.3 or newer helper, preserving physical framing and decoded source
   coordinates. Missing helpers and unsupported archive variants report explicit status; declared
@@ -77,6 +86,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 
 ### Changed
 
+- Pin PDFminer to the qualified 20260107 release, isolate document-local xref instrumentation,
+  and qualify future updates through locked dependencies and PDF contract tests. Unqualified
+  installations retain identification and report unsupported PDF instrumentation.
+
 - **Breaking:** Terminal logging uses Rich 15.0.0 on stderr, with live matcher-pass progress,
   a bounded file-type tree during analysis, and a complete tree and summary at completion.
   Redirected stderr retains plain warnings, errors, and explicitly requested debug/trace logs;
@@ -106,6 +119,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
   CI tests Python 3.11 through 3.14 independently so a failing job preserves other results.
 
 ### Fixed
+
+- **Breaking:** Decrypted PDF arrays retain their original container spans, including empty
+  and nested arrays. Decrypted strings remain in separate decoded sources (#3744).
+
+- **Breaking:** Indirect objects in PDF object streams now appear under their decoded buffer,
+  preserving token spans, names, arrays, and references. Cached lookups reuse the same source,
+  including when the catalog itself is compressed (#3743).
+
+- **Breaking:** PDF strings, hex strings, and escaped names retain their complete raw spans.
+  Non-UTF-8 dictionary names preserve their original bytes, and dictionary pairs, values, and
+  containing objects map their complete source extents (#3740, #3741, #3746).
+
+- **Breaking:** PDF string conversions retain token spans and render floating-point values
+  without debug metadata. Byte conversions use native count/error behavior, copying and
+  pickling preserve wrapper state, and index-protocol selection preserves the selected span
+  (#3742, #3747, #3748, #3749).
 
 - **Breaking:** HTTP AST spans use original UTF-8 byte positions rather than character
   positions, including multibyte headers and bodies within nested or decoded sources (#3712).
