@@ -8,6 +8,7 @@
 {% include "hexdump.css" %}
 {{ asset("viewer-inspect.css")|safe }}
 {{ asset("viewer-tree.css")|safe }}
+{{ asset("viewer-images.css")|safe }}
     </style>
 </head>
 <body>
@@ -176,6 +177,7 @@
     <div class="scrollcontainer" id="scrollcontainer" tabindex="0" aria-label="Byte position">
         <div class="scrollheightproxy" id="scrollheightproxy"></div>
     </div>
+    <aside id="image-previews" class="image-previews" aria-label="Embedded images" hidden></aside>
     <div class="readablebyteswrapper" id="text-pane" hidden>
         <div class="readablebytes" id="readablebytes"></div>
     </div>
@@ -204,6 +206,7 @@
 {{ asset("viewer-search.js")|safe }}
 {{ asset("viewer-inspect.js")|safe }}
 {{ asset("viewer-tree.js")|safe }}
+{{ asset("viewer-images.js")|safe }}
 {{ asset("viewer-shell.js")|safe }}
 </script>
 </body>
