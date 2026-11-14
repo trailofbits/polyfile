@@ -10,6 +10,7 @@ from pdfminer.pdfparser import PDFSyntaxError
 from pdfminer.pdftypes import PDFNotImplementedError
 from pdfminer.runlength import rldecode
 from pdfminer.pdfparser import PDFParser as PDFMinerParser, PDFStream, PDFObjRef
+from pdfminer.pdfparser import safe_int
 from pdfminer.psparser import (
     PSBaseParserToken,
     PSKeyword,
@@ -128,6 +129,8 @@ class AdapterPDFDocument(PDFDocument):
 
 
 __all__ = [
+    "settings",
+    "safe_int",
     "ascii85decode",
     "asciihexdecode",
     "ccittfaxdecode",

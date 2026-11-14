@@ -111,6 +111,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 
 ### Fixed
 
+- **Breaking:** Indirect objects in PDF object streams now appear under their decoded buffer,
+  preserving token spans, names, arrays, and references. Cached lookups reuse the same source,
+  including when the catalog itself is compressed (#3743).
+
 - **Breaking:** PDF strings, hex strings, and escaped names retain their complete raw spans.
   Non-UTF-8 dictionary names preserve their original bytes, and dictionary pairs, values, and
   containing objects map their complete source extents (#3740, #3741, #3746).

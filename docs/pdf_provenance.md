@@ -10,6 +10,11 @@ and dictionary-key `pdf_raw_name` retain the original encoded name bytes, includ
 Dictionary lookup uses PDFminer's decoded name or its existing byte-repr fallback for invalid
 UTF-8. Shared PDFminer keyword singletons carry no parser-specific positions.
 
+Object-stream values use offsets within a registered `decoded_content` buffer. Their
+`pdf_source` identifies that buffer, including for nested values and reference IDs. Physical
+stream framing stays in the containing source. Repeated lookups reuse the decoded source;
+instrumentation also covers compressed catalogs loaded during document initialization.
+
 ## Conversion boundaries
 
 Python normalizes `int()`, `float()`, and `operator.index()` results to native numbers.

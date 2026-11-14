@@ -1,4 +1,5 @@
 import codecs
+from dataclasses import dataclass
 from encodings.utf_8 import decode as decode_utf8
 from typing import (
     TYPE_CHECKING,
@@ -60,9 +61,12 @@ from polyfile._pdfminer_adapter import (
     int_value,
     apply_png_predictor,
     AdapterPDFDocument,
+    settings,
+    safe_int,
 )
 
 from polyfile.compression import match_decoded
+from polyfile.analysis import AnalysisContext, AnalysisLimits
 
 from polyfile.fileutils import FileStream
 from polyfile.fileutils import Tempfile
@@ -79,6 +83,16 @@ from polyfile.magic import (
 from polyfile.polyfile import Match, Matcher, Submatch
 
 log = getStatusLogger("PDF")
+
+
+@dataclass
+class _DecodedPDFSource:
+    source: str
+    data: bytes
+    match: Match | None = None
+
+
+_PDFSources = dict[int, _DecodedPDFSource]
 
 
 def load_trailer(self: PDFXRef, parser: PDFMinerParser) -> None:
@@ -1144,7 +1158,8 @@ class PDFParser(PDFMinerParser):
                 assert stream.rawdata is not None
                 pos = obj[0]
                 transformed.append((pos, PDFObjectStream(stream, pdf_offset=pos, pdf_bytes=len(stream.rawdata))))
-            elif len(obj) == 2 and isinstance(obj[1], PSObject) and not isinstance(obj[1], PDFLiteral):
+            elif len(obj) == 2 and isinstance(obj[1], PSObject) \
+                    and not isinstance(obj[1], (PDFLiteral, PSKeyword)):
                 pos = obj[0]
                 psobj = obj[1]
                 length = self._curtokenpos + 1 - obj[0]
@@ -1197,6 +1212,43 @@ class RawPDFStream:
         return getattr(self._file_stream, item)
 
 
+class _ObjectStreamParser(PDFParser):
+    auto_flush = True
+    KEYWORD_OBJ = KWD(b"obj")
+
+    def flush(self):
+        """Retain the last two numbers until a reference marker can consume them."""
+        while len(self.curstack) > 2:
+            self.add_results(self.curstack.pop(0))
+        if any(not isinstance(value, (int, float)) for _, value in self.curstack):
+            self.add_results(*self.popall())
+
+    def nextobject(self):
+        try:
+            return super().nextobject()
+        except PSEOF:
+            if self.context or not self.curstack:
+                raise
+            self.add_results(*self.popall())
+            return self.results.pop(0)
+
+    def do_keyword(self, pos: int, token: PSKeyword):
+        if token is self.KEYWORD_R:
+            (_, value), _ = self.pop(2)
+            object_id = safe_int(value)
+            if object_id is not None:
+                if has_provenance(value):
+                    object_id = PSInt(
+                        object_id, pdf_offset=value.pdf_offset, pdf_bytes=value.pdf_bytes,
+                    )
+                self.push((pos, PDFObjRef(self.doc, object_id)))
+        elif token in (self.KEYWORD_OBJ, self.KEYWORD_ENDOBJ):
+            if settings.STRICT:
+                raise PDFSyntaxError("Keyword obj/endobj found in object stream")
+        else:
+            self.push((pos, token))
+
+
 def has_provenance(obj: object) -> TypeGuard[Provenance]:
     """Reports whether a parsed object records where it came from in the file.
 
@@ -1211,6 +1263,36 @@ def has_provenance(obj: object) -> TypeGuard[Provenance]:
         True if `obj` carries both byte-provenance attributes.
     """
     return hasattr(obj, "pdf_offset") and hasattr(obj, "pdf_bytes")
+
+
+def _set_pdf_source(value: object, source: str) -> None:
+    if has_provenance(value):
+        setattr(value, "pdf_source", source)
+    if isinstance(value, PDFLiteral):
+        _set_pdf_source(value.name, source)
+    elif isinstance(value, dict):
+        for key, item in value.items():
+            _set_pdf_source(key, source)
+            _set_pdf_source(item, source)
+    elif isinstance(value, list):
+        for item in value:
+            _set_pdf_source(item, source)
+    elif isinstance(value, PDFObjRef):
+        _set_pdf_source(value.objid, source)
+
+
+def _match_pdf_decoded(
+    parent: Match, data: bytes, sources: _PDFSources | None,
+) -> Iterator[Match]:
+    record = sources.get(id(data)) if sources is not None else None
+    if record is not None and record.match is not None:
+        return
+    matches = match_decoded(parent, data, source=record.source if record is not None else None)
+    decoded = next(matches)
+    if record is not None:
+        record.match = decoded
+    yield decoded
+    yield from matches
 
 
 def dict_value_with_provenance(
@@ -1248,6 +1330,7 @@ def dict_value_with_provenance(
 
 def parse_dict(
     obj: PDFDict, matcher: Matcher, parent: Match, pdf_header_offset: int,
+    *, sources: _PDFSources | None = None,
 ) -> Iterator[Match]:
     """Yields the submatches that map a PDF dictionary and each of its key/value pairs.
 
@@ -1298,11 +1381,57 @@ def parse_dict(
             parent=pair
         )
         yield value_match
-        yield from parse_object(value, matcher=matcher, parent=value_match, pdf_header_offset=pdf_header_offset)
+        yield from parse_object(
+            value, matcher, value_match, pdf_header_offset, sources=sources,
+        )
+
+
+def _pdf_submatch(
+    name: str, value: object, provenance: Provenance, parent: Match, source_base: int,
+) -> Submatch:
+    return Submatch(
+        name, value, relative_offset=provenance.pdf_offset - (parent.offset - source_base),
+        length=provenance.pdf_bytes, parent=parent,
+    )
+
+
+def _parse_pdf_filter(
+    obj: PDFStreamFilter, matcher: Matcher, parent: Match, source_base: int,
+    *, sources: _PDFSources | None,
+) -> Iterator[Match]:
+    node = _pdf_submatch(obj.name, bytes(obj.original_bytes), obj, parent, source_base)
+    yield node
+    if obj.error is None:
+        yield from _match_pdf_decoded(node, bytes(obj), sources)
+    else:
+        yield Submatch("DecodingError", obj.error.message, length=obj.pdf_bytes, parent=node)
+    yield from parse_object(
+        obj.original_bytes, matcher, node, source_base, sources=sources,
+    )
+
+
+def _parse_pdf_bytes(
+    obj: PSBytes, matcher: Matcher, parent: Match, source_base: int,
+    *, sources: _PDFSources | None,
+) -> Iterator[Match]:
+    if isinstance(obj, PNGPredictor):
+        node = _pdf_submatch("PNGPredictor", bytes(obj.original_bytes), obj, parent, source_base)
+        yield from parse_object(obj.params, matcher, node, source_base, sources=sources)
+        yield from parse_object(obj.original_bytes, matcher, node, source_base, sources=sources)
+    else:
+        node = _pdf_submatch(type(obj).__name__, bytes(obj), obj, parent, source_base)
+    if hasattr(obj, "original_bytes"):
+        yield from parse_object(obj.original_bytes, matcher, node, source_base, sources=sources)
+    if hasattr(obj, "original_bytes") or sources is not None and id(obj) in sources:
+        yield from _match_pdf_decoded(node, bytes(obj), sources)
+    else:
+        with Tempfile(obj) as stream:
+            yield from matcher.match(stream, parent=node)
 
 
 def parse_object(
     obj: object, matcher: Matcher, parent: Match | None = None, pdf_header_offset: int = 0,
+    *, sources: _PDFSources | None = None,
 ) -> Iterator[Match]:
     if parent is None:
         if isinstance(obj, (PDFStreamFilter, PDFList, PDFDict, PDFDeciphered, PSBytes)) \
@@ -1310,101 +1439,83 @@ def parse_object(
             raise ValueError("Mapping an instrumented PDF value requires a parent match")
         return
     if isinstance(obj, PDFStreamFilter):
-        filter_obj = Submatch(
-            f"{obj.name!s}",
-            bytes(obj.original_bytes),
-            relative_offset=obj.pdf_offset - (parent.offset - pdf_header_offset),
-            length=obj.pdf_bytes,
-            parent=parent
-        )
-        yield filter_obj
-        if obj.error is None:
-            yield from match_decoded(filter_obj, bytes(obj))
-        else:
-            stream = Submatch(
-                "DecodingError",
-                obj.error.message,
-                relative_offset=0,
-                length=obj.pdf_bytes,
-                parent=filter_obj
-            )
-            yield stream
-        yield from parse_object(obj.original_bytes, matcher=matcher, parent=filter_obj,
-                                pdf_header_offset=pdf_header_offset)
+        yield from _parse_pdf_filter(obj, matcher, parent, pdf_header_offset, sources=sources)
     elif isinstance(obj, PDFList):
-        list_obj = Submatch(
-            "PDFList",
-            '',
-            relative_offset=obj.pdf_offset - (parent.offset - pdf_header_offset),
-            length=obj.pdf_bytes,
-            parent=parent
-        )
-        yield list_obj
+        node = _pdf_submatch("PDFList", "", obj, parent, pdf_header_offset)
+        yield node
         for item in obj:
-            yield from parse_object(item, matcher=matcher, parent=list_obj, pdf_header_offset=pdf_header_offset)
+            yield from parse_object(item, matcher, node, pdf_header_offset, sources=sources)
     elif isinstance(obj, PDFDict):
-        yield from parse_dict(obj, matcher=matcher, parent=parent, pdf_header_offset=pdf_header_offset)
+        yield from parse_dict(obj, matcher, parent, pdf_header_offset, sources=sources)
     elif isinstance(obj, PDFDeciphered):
-        deciphered = Submatch(
-            "PDFDeciphered",
-            obj.original_bytes,
-            relative_offset=obj.pdf_offset - (parent.offset - pdf_header_offset),
-            length=obj.pdf_bytes,
-            parent=parent
-        )
-        yield deciphered
-        yield from match_decoded(deciphered, bytes(obj))
+        node = _pdf_submatch("PDFDeciphered", obj.original_bytes, obj, parent, pdf_header_offset)
+        yield node
+        yield from _match_pdf_decoded(node, bytes(obj), sources)
     elif isinstance(obj, PSBytes):
-        if isinstance(obj, PNGPredictor):
-            match = Submatch(
-                "PNGPredictor",
-                bytes(obj.original_bytes),
-                relative_offset=obj.pdf_offset - (parent.offset - pdf_header_offset),
-                length=obj.pdf_bytes,
-                parent=parent
-            )
-            yield from parse_object(obj.params, matcher=matcher, parent=match, pdf_header_offset=pdf_header_offset)
-            yield from parse_object(obj.original_bytes, matcher=matcher, parent=match,
-                                    pdf_header_offset=pdf_header_offset)
-        else:
-            match = Submatch(
-                obj.__class__.__name__,
-                bytes(obj),
-                relative_offset=obj.pdf_offset - (parent.offset - pdf_header_offset),
-                length=obj.pdf_bytes,
-                parent=parent
-            )
-        if hasattr(obj, "original_bytes"):
-            yield from parse_object(obj.original_bytes, matcher=matcher, parent=match,
-                                    pdf_header_offset=pdf_header_offset)
-        # recursively match against the deflated contents
-        if hasattr(obj, "original_bytes"):
-            yield from match_decoded(match, bytes(obj))
-        else:
-            with Tempfile(obj) as f:
-                yield from matcher.match(f, parent=match)
+        yield from _parse_pdf_bytes(obj, matcher, parent, pdf_header_offset, sources=sources)
     elif has_provenance(obj):
-        yield Submatch(
-            obj.__class__.__name__,
-            obj,
-            relative_offset=obj.pdf_offset - (parent.offset - pdf_header_offset),
-            length=obj.pdf_bytes,
-            parent=parent
-        )
+        yield _pdf_submatch(type(obj).__name__, obj, obj, parent, pdf_header_offset)
 
 
 class InstrumentedPDFDocument(AdapterPDFDocument):
     xref_class = InstrumentedPDFXRef
     fallback_xref_class = InstrumentedPDFXRefFallback
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, analysis_context: AnalysisContext | None = None, **kwargs):
         self._decipher: DecipherCallable | None = None
+        self._analysis_context = analysis_context or AnalysisContext(AnalysisLimits())
+        self._decoded_sources: _PDFSources = {}
+        self._decoded_streams: dict[tuple[int, int | None], _DecodedPDFSource] = {}
         try:
             super().__init__(*args, **kwargs)
         except PDFSyntaxError as error:
             if "No /Root object" not in str(error):
                 raise
             log.debug("Mapping a malformed PDF without a /Root object")
+
+    def _object_stream_source(self, stream: PDFStream, data: bytes) -> _DecodedPDFSource:
+        if not hasattr(self, "_decoded_sources"):
+            self._decoded_sources = {}
+            self._decoded_streams = {}
+            self._analysis_context = AnalysisContext(AnalysisLimits())
+        key = (stream.objid, stream.genno) if stream.objid is not None else (id(stream), None)
+        record = self._decoded_streams.get(key)
+        if record is None:
+            record = _DecodedPDFSource(self._analysis_context.next_source(), data)
+            self._decoded_sources[id(data)] = record
+            self._decoded_streams[key] = record
+        return record
+
+    def _bind_object_stream(self, stream: PDFObjectStream) -> None:
+        if stream.objid is not None:
+            record = self._decoded_streams.get((stream.objid, stream.genno))
+            if record is not None:
+                stream.data = record.data
+
+    def _get_objects(self, stream: PDFStream) -> tuple[list[object], int]:
+        if stream.get("Type") is not LITERAL_OBJSTM and settings.STRICT:
+            raise PDFSyntaxError(f"Not an object stream: {stream.objid}")
+        try:
+            count = cast(int, stream["N"])
+        except KeyError:
+            if settings.STRICT:
+                raise PDFSyntaxError(f"Missing /N in object stream {stream.objid}") from None
+            count = 0
+        data = stream.get_data()
+        source = self._object_stream_source(stream, data)
+        data = source.data
+        objects: list[object] = []
+        with FileStream(data) as view:
+            parser = _ObjectStreamParser(cast(BinaryIO, RawPDFStream(view)))
+            parser.set_document(self)
+            try:
+                while True:
+                    _, value = parser.nextobject()
+                    _set_pdf_source(value, source.source)
+                    objects.append(value)
+            except PSEOF:
+                pass
+        return objects, count
 
     @property
     def decipher(self) -> DecipherCallable | None:
@@ -1517,64 +1628,70 @@ def reverse_expect(
         file_stream.seek(start_pos - skipped_bytes)
 
 
+def _pdf_object_start(stream: FileStream, position: int) -> int:
+    stream.seek(position)
+    reverse_skip_whitespace(stream)
+    if not reverse_expect(stream, b"obj") or not reverse_skip_whitespace(stream):
+        return position
+    version = reverse_expect(stream, lambda _, byte: ord("0") <= byte[0] <= ord("9"))
+    if not version or not reverse_skip_whitespace(stream):
+        return position
+    number = reverse_expect(stream, lambda _, byte: ord("0") <= byte[0] <= ord("9"))
+    return stream.tell() if number else position
+
+
+def _pdf_object_extent(stream: FileStream, obj: Provenance) -> tuple[int, int]:
+    if isinstance(obj, PDFObjectStream):
+        attributes = obj.attrs
+        if not has_provenance(attributes):
+            raise ValueError("PDF stream attributes have no lexical source span")
+        position = attributes.pdf_offset
+        end = obj.data_value.pdf_offset + obj.data_value.pdf_bytes
+    else:
+        position, end = obj.pdf_offset, obj.pdf_offset + obj.pdf_bytes
+    with stream.save_pos():
+        start = _pdf_object_start(stream, position)
+        stream.seek(end)
+        skip_whitespace(stream)
+        if isinstance(obj, PDFObjectStream) and stream.read(9) != b"endstream":
+            return start, end - start
+        skip_whitespace(stream)
+        if stream.read(6) == b"endobj":
+            skip_whitespace(stream)
+            end = stream.tell()
+    return start, end - start
+
+
 def pdf_obj_parser(
     file_stream: FileStream, obj, objid: int, parent: Match, pdf_header_offset: int = 0,
+    *, sources: _PDFSources | None = None,
 ) -> Iterator[Match]:
+    """Map one physical indirect object and its instrumented body."""
     assert parent.matcher is not None
-    data: bytes | None = None
+    assert has_provenance(obj)
+    log.status(f"Parsing PDF obj {objid}")
+    values = [obj]
+    display_name, value = f"PDFObject{objid}", objid
     if isinstance(obj, PDFObjectStream):
-        log.status(f"Parsing PDF obj {obj.objid!s} {obj.genno!s}")
+        display_name, value = f"PDFObject{obj.objid}.{obj.genno}", (obj.objid, obj.genno)
+        values = [obj.attrs]
         try:
-            data = obj.get_data()
-        except PDFNotImplementedError as e:
-            log.error(f"Unsupported PDF stream filter in object {obj.objid!s} {obj.genno!s}: {e!s}")
-        relative_offset = obj.attrs.pdf_offset
-        obj_length = obj.data_value.pdf_offset - obj.attrs.pdf_offset + obj.data_value.pdf_bytes - 1
-    else:
-        log.status(f"Parsing PDF obj {objid!s}")
-        relative_offset = obj.pdf_offset
-        obj_length = obj.pdf_bytes
-    with file_stream.save_pos():
-        file_stream.seek(relative_offset)
-        reverse_skip_whitespace(file_stream)
-        if reverse_expect(file_stream, b"obj") and reverse_skip_whitespace(file_stream):
-            version = reverse_expect(file_stream, lambda _, b: ord('0') <= b[0] <= ord('9'))
-            if version and reverse_skip_whitespace(file_stream):
-                obj_id = reverse_expect(file_stream, lambda _, b: ord('0') <= b[0] <= ord('9'))
-                if obj_id:
-                    obj_offset = relative_offset - file_stream.tell()
-                    relative_offset -= obj_offset
-                    obj_length += obj_offset
-        file_stream.seek(relative_offset + obj_length)
-        skip_whitespace(file_stream)
-        if file_stream.read(6) == b"endobj":
-            skip_whitespace(file_stream)
-            obj_length = file_stream.tell() - relative_offset
-    if isinstance(obj, PDFObjectStream):
-        match = Submatch(
-            name="PDFObject",
-            display_name=f"PDFObject{obj.objid!s}.{obj.genno!s}",
-            match_obj=(obj.objid, obj.genno),
-            relative_offset=relative_offset,
-            length=obj_length,
-            parent=parent
-        )
-        yield match
-        yield from parse_object(obj.attrs, matcher=parent.matcher, parent=match, pdf_header_offset=pdf_header_offset)
-        if data is not None:
-            yield from parse_object(data, matcher=parent.matcher, parent=match, pdf_header_offset=pdf_header_offset)
-    else:
-        match = Submatch(
-            name="PDFObject",
-            display_name=f"PDFObject{objid}",
-            match_obj=objid,
-            relative_offset=relative_offset,
-            length=obj_length,
-            parent=parent
-        )
-        yield match
-        yield from parse_object(obj, parent.matcher, match, pdf_header_offset=pdf_header_offset)
-    log.clear_status()
+            values.append(obj.get_data())
+        except PDFNotImplementedError as error:
+            log.error(f"Unsupported PDF stream filter in object {obj.objid}: {error}")
+    position, size = _pdf_object_extent(file_stream, obj)
+    node = Submatch(
+        "PDFObject", value, display_name=display_name, relative_offset=position,
+        length=size, parent=parent,
+    )
+    yield node
+    try:
+        for item in values:
+            yield from parse_object(
+                item, parent.matcher, node, pdf_header_offset, sources=sources,
+            )
+    finally:
+        log.clear_status()
 
 
 def parse_trailer(
@@ -1582,8 +1699,8 @@ def parse_trailer(
 ) -> Iterator[Match]:
     """Yields the submatches that map a cross-reference section's trailer dictionary.
 
-    `InstrumentedPDFDocument` recovers from a missing `/Root` by patching `PDFXRef.get_trailer`,
-    and a PDF damaged enough to need that recovery usually reaches here with a trailer that is
+    `InstrumentedPDFDocument` retains a missing-root document's local state. A damaged
+    PDF usually reaches here with a trailer that is
     empty or whose entries pdfminer rebuilt without byte provenance. Those entries are logged and
     skipped so that the cross-reference table after them is still mapped.
 
@@ -1747,6 +1864,70 @@ def parse_xref_row(
                             pdf_header_offset=pdf_header_offset)
 
 
+def _document_objects(document: InstrumentedPDFDocument, parent: Match) -> dict[int, object]:
+    objects: dict[int, object] = {}
+    for xref in document.xrefs:
+        for number in xref.get_objids():
+            if number in objects:
+                continue
+            try:
+                obj = document.getobj(number)
+            except PDFObjectNotFound:
+                continue
+            except PDFNotImplementedError as error:
+                parent.analysis_status = "unsupported"
+                parent.analysis_message = f"PDF object {number}: {error}"
+                continue
+            if has_provenance(obj):
+                objects[number] = obj
+    return objects
+
+
+def _map_decoded_objects(
+    objects: dict[int, object], sources: _PDFSources, parent: Match,
+) -> Iterator[Match]:
+    by_source = {record.source: record for record in sources.values()}
+    assert parent.matcher is not None
+    for number, obj in objects.items():
+        source = getattr(obj, "pdf_source", parent.source)
+        if source == parent.source:
+            continue
+        record = by_source.get(source)
+        if record is None or record.match is None:
+            parent.analysis_status = "unsupported"
+            parent.analysis_message = f"PDF object {number} has no emitted decoded source {source}"
+            continue
+        if record.match.analysis_status == "limited":
+            continue
+        assert has_provenance(obj)
+        node = Submatch(
+            "PDFObject", number, display_name=f"PDFObject{number}",
+            relative_offset=obj.pdf_offset, length=obj.pdf_bytes, parent=record.match,
+        )
+        yield node
+        yield from parse_object(obj, parent.matcher, node, sources=sources)
+
+
+def _map_pdf_document(
+    stream: FileStream, document: InstrumentedPDFDocument, parent: Match,
+) -> Iterator[Match]:
+    objects = _document_objects(document, parent)
+    sources = document._decoded_sources
+    assert parent.matcher is not None
+    for number, obj in objects.items():
+        if getattr(obj, "pdf_source", parent.source) == parent.source:
+            if isinstance(obj, PDFObjectStream):
+                document._bind_object_stream(obj)
+            yield from pdf_obj_parser(stream, obj, number, parent, parent.offset, sources=sources)
+    yield from _map_decoded_objects(objects, sources, parent)
+    for xref in document.xrefs:
+        trailer = xref.get_trailer()
+        if trailer is not None:
+            yield from parse_trailer(trailer, parent.matcher, parent, parent.offset)
+        if isinstance(xref, PDFXRef):
+            yield from parse_xref(xref, parent.matcher, parent, parent.offset)
+
+
 # Note: PDF parser is registered lazily in __init__.py to defer pdfminer import
 def pdf_parser(file_stream: FileStream, parent: Match) -> Iterator[Match]:
     """Map a PDF view into its parent's physical or decoded analysis source.
@@ -1785,29 +1966,5 @@ def pdf_parser(file_stream: FileStream, parent: Match) -> Iterator[Match]:
     pdf_header_offset = source_base
     assert parent.matcher is not None
     parser = PDFParser(cast(BinaryIO, RawPDFStream(file_stream)))
-    doc = InstrumentedPDFDocument(parser)
-    yielded = set()
-    for xref in doc.xrefs:
-        for objid in xref.get_objids():
-            try:
-                obj = doc.getobj(objid)
-            except PDFObjectNotFound:
-                continue
-            if isinstance(obj, PDFObjectStream):
-                if (obj.objid, obj.genno) in yielded:
-                    continue
-                yielded.add((obj.objid, obj.genno))
-            else:
-                if objid in yielded or not has_provenance(obj):
-                    continue
-                yielded.add(objid)
-            yield from pdf_obj_parser(file_stream, obj, objid, parent, pdf_header_offset=pdf_header_offset)
-
-        trailer = xref.get_trailer()
-        if trailer is not None:
-            yield from parse_trailer(trailer, matcher=parent.matcher, parent=parent,
-                                     pdf_header_offset=pdf_header_offset)
-
-        if isinstance(xref, PDFXRef):
-            yield from parse_xref(xref, matcher=parent.matcher, parent=parent,
-                                  pdf_header_offset=pdf_header_offset)
+    doc = InstrumentedPDFDocument(parser, analysis_context=parent.analysis_context)
+    yield from _map_pdf_document(file_stream, doc, parent)
