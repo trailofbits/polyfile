@@ -120,6 +120,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 
 ### Fixed
 
+- **Breaking:** Register relaxed PDF identification independently of lazy PDF parser imports,
+  restoring PDF matches in binary polyglots and files with long preambles (#3763).
+
 - **Breaking:** Decrypted PDF arrays retain their original container spans, including empty
   and nested arrays. Decrypted strings remain in separate decoded sources (#3744).
 
