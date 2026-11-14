@@ -111,6 +111,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 
 ### Fixed
 
+- **Breaking:** PDF strings, hex strings, and escaped names retain their complete raw spans.
+  Non-UTF-8 dictionary names preserve their original bytes, and dictionary pairs, values, and
+  containing objects map their complete source extents (#3740, #3741, #3746).
+
 - **Breaking:** PDF string conversions retain token spans and render floating-point values
   without debug metadata. Byte conversions use native count/error behavior, copying and
   pickling preserve wrapper state, and index-protocol selection preserves the selected span

@@ -526,6 +526,8 @@ class PSSequence(PSToken, Generic[ElementT, SequenceT]):
 
 
 class PSStr(PSSequence[str, str], str):
+    pdf_raw_name: bytes | None = None
+
     def __getitem__(self, item: SupportsIndex | slice) -> str:
         return super().__getitem__(item)
 
@@ -658,13 +660,22 @@ class PSBool:
 
 
 class PDFLiteral(PSLiteral):
-    def __init__(self, name: PSLiteral.NameType, pdf_offset: int, pdf_bytes: int):
-        if isinstance(name, str) and not isinstance(name, PSStr):
-            super().__init__(PSStr(name, pdf_offset=pdf_offset + 1, pdf_bytes=pdf_bytes))
-        elif isinstance(name, bytes) and not isinstance(name, PSBytes):
-            super().__init__(PSBytes(name, pdf_offset=pdf_offset + 1, pdf_bytes=pdf_bytes))
+    def __init__(
+        self, name: PSLiteral.NameType, pdf_offset: int, pdf_bytes: int,
+        *, raw_name: bytes | None = None,
+    ):
+        """Wrap a name with its full lexical span, including the leading slash."""
+        self.raw_name = raw_name
+        if isinstance(name, str):
+            wrapped = PSStr(name, pdf_offset=pdf_offset + 1, pdf_bytes=pdf_bytes - 1)
+            if raw_name is not None:
+                wrapped._pdf_byte_aligned = str.isascii(name) and str.encode(name) == raw_name
+            wrapped.pdf_raw_name = raw_name
         else:
-            super().__init__(name)
+            wrapped = PSBytes(name, pdf_offset=pdf_offset + 1, pdf_bytes=pdf_bytes - 1)
+            if raw_name is not None:
+                wrapped._pdf_byte_aligned = name == raw_name
+        super().__init__(wrapped)
 
     @property
     def pdf_bytes(self) -> int:
@@ -808,7 +819,10 @@ def make_ps_object(
     value: object, pdf_offset: int, pdf_bytes: int,
 ) -> PDFBaseParserToken | PSStr | PDFDict | PSObject:
     if isinstance(value, PSLiteral):
-        return PDFLiteral(value.name, pdf_offset=pdf_offset, pdf_bytes=pdf_bytes)
+        return PDFLiteral(
+            value.name, pdf_offset=pdf_offset, pdf_bytes=pdf_bytes,
+            raw_name=value.raw_name if isinstance(value, PDFLiteral) else None,
+        )
     # Unfortunately, we can't convert PSKeywords to PDFKeywords here because pdfminer requires them to be singletons
     elif isinstance(value, PDFDict):
         value.pdf_offset = pdf_offset
@@ -816,11 +830,10 @@ def make_ps_object(
         return value
     elif isinstance(value, dict):
         return PDFDict(value, pdf_offset=pdf_offset, pdf_bytes=pdf_bytes)
+    elif isinstance(value, PSKeyword):
+        return value
     elif isinstance(value, PSObject):
         setattr(value, "pdf_offset", pdf_offset)
-        if isinstance(value, PSKeyword):
-            # sometimes the byte count gets off, so set it to the name size
-            pdf_bytes = len(value.name)
         setattr(value, "pdf_bytes", pdf_bytes)
         return value
     elif isinstance(value, int):
@@ -1036,9 +1049,47 @@ class PDFParser(PDFMinerParser):
         pos, values = super().end_type(type)
         if type == "d":
             for index in range(0, len(values), 2):
-                if not isinstance(values[index], PSLiteral):
+                key = values[index]
+                if isinstance(key, PDFLiteral) and isinstance(key.name, bytes):
+                    try:
+                        text = bytes.decode(key.name, "utf-8")
+                    except UnicodeDecodeError:
+                        text = bytes.__repr__(key.name)
+                    name = PSStr(text, pdf_offset=key.pdf_offset + 1, pdf_bytes=key.pdf_bytes - 1)
+                    name._pdf_byte_aligned = False
+                    name.pdf_raw_name = key.raw_name
+                    key.name = name
+                elif not isinstance(key, PSLiteral):
                     values[index] = str.__str__(str(values[index]))
         return pos, values
+
+    def _lexical_bytes(self, start: int, end: int) -> bytes:
+        position = self.fp.tell()
+        try:
+            self.fp.seek(start)
+            return self.fp.read(end - start)
+        finally:
+            self.fp.seek(position)
+
+    def nexttoken(self) -> tuple[int, PSBaseParserToken]:
+        """Attach raw extents after the lexer advances past a complete token."""
+        position, value = super().nexttoken()
+        if isinstance(value, PSKeyword):
+            return position, value
+        end = self.bufpos + self.charpos
+        if isinstance(value, PSLiteral):
+            raw_name = self._lexical_bytes(position + 1, end)
+            return position, PDFLiteral(
+                value.name, position, end - position, raw_name=raw_name,
+            )
+        if isinstance(value, bytes):
+            raw = self._lexical_bytes(position, end)
+            body = raw[1:-1] if raw.startswith(b"(") else raw[1:]
+            token = PSBytes(value, pdf_offset=position + 1, pdf_bytes=len(body))
+            token._pdf_byte_aligned = body == value
+        else:
+            token = make_ps_object(value, pdf_offset=position, pdf_bytes=end - position)
+        return position, cast(PSBaseParserToken, token)
 
     @staticmethod
     def string_escape(data: bytes | int) -> str:
@@ -1081,9 +1132,9 @@ class PDFParser(PDFMinerParser):
         transformed: list[PSStackEntry[PSKeyword | PDFStream | PDFObjRef | None]] = []
         for obj in objs:
             if len(obj) == 2 and isinstance(obj[1], dict):
-                length = self._curtokenpos + 1 - obj[0]
+                length = self._curtokenpos + 2 - obj[0]
                 assert length > 0
-                transformed.append((obj[0], PDFDict(obj[1], pdf_offset=obj[0], pdf_bytes=length + 2)))
+                transformed.append((obj[0], PDFDict(obj[1], pdf_offset=obj[0], pdf_bytes=length)))
             elif len(obj) == 2 and isinstance(obj[1], list):
                 length = self._curtokenpos + 1 - obj[0]
                 assert length > 0
@@ -1109,20 +1160,6 @@ class PDFParser(PDFMinerParser):
             else:
                 transformed.append(obj)
         return super().push(*transformed)
-
-    def _add_token(self, obj: PSBaseParserToken):
-        if has_provenance(obj):
-            pos = obj.pdf_offset
-        else:
-            pos = self._curtokenpos
-        if has_provenance(obj):
-            length = obj.pdf_bytes
-        elif isinstance(obj, PSLiteral):
-            length = len(self._curtoken)
-        else:
-            length = len(self._curtoken)
-        token = make_ps_object(obj, pdf_offset=pos, pdf_bytes=length)
-        return super()._add_token(cast(PSBaseParserToken, token))
 
     def flush(self):
         if self.auto_flush:
@@ -1227,7 +1264,7 @@ def parse_dict(
         "PDFDictionary",
         '',
         relative_offset=obj.pdf_offset - (parent.offset - pdf_header_offset),
-        length=obj.pdf_bytes - 1,
+        length=obj.pdf_bytes,
         parent=parent
     )
     yield dict_obj
@@ -1242,7 +1279,7 @@ def parse_dict(
             "KeyValuePair",
             '',
             relative_offset=key.pdf_offset - (dict_obj.offset - pdf_header_offset) - 1,
-            length=value.pdf_offset + value.pdf_bytes - key.pdf_offset,
+            length=value.pdf_offset + value.pdf_bytes - (key.pdf_offset - 1),
             parent=dict_obj
         )
         yield pair
@@ -1256,7 +1293,7 @@ def parse_dict(
         value_match = Submatch(
             "Value",
             value,
-            relative_offset=value.pdf_offset - key.pdf_offset,
+            relative_offset=value.pdf_offset - (key.pdf_offset - 1),
             length=value.pdf_bytes,
             parent=pair
         )
@@ -1496,7 +1533,7 @@ def pdf_obj_parser(
     else:
         log.status(f"Parsing PDF obj {objid!s}")
         relative_offset = obj.pdf_offset
-        obj_length = obj.pdf_bytes - 1
+        obj_length = obj.pdf_bytes
     with file_stream.save_pos():
         file_stream.seek(relative_offset)
         reverse_skip_whitespace(file_stream)

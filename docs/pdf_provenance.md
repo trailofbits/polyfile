@@ -4,6 +4,12 @@ Instrumented PDF values retain their original byte spans through supported conve
 selection, copying, and pickling. A transformed value keeps the complete available input span
 when individual output positions cannot be mapped to individual source bytes.
 
+Literal and hex strings map their raw bodies, excluding delimiters. Literal names map their
+complete lexeme, including `/`; their wrapped name maps the raw body. `PDFLiteral.raw_name`
+and dictionary-key `pdf_raw_name` retain the original encoded name bytes, including escapes.
+Dictionary lookup uses PDFminer's decoded name or its existing byte-repr fallback for invalid
+UTF-8. Shared PDFminer keyword singletons carry no parser-specific positions.
+
 ## Conversion boundaries
 
 Python normalizes `int()`, `float()`, and `operator.index()` results to native numbers.
