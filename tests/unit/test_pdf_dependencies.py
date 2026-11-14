@@ -231,6 +231,21 @@ def test_real_pdf_values_combine_physical_and_decoded_dependencies() -> None:
     assert output["size"] == 0
 
 
+def test_lossy_numeric_conversion_keeps_all_inputs_in_the_report() -> None:
+    left, right = numbers()
+    computed = left.as_float() + right
+    assert isinstance(computed, PSFloat)
+    truncated = computed.as_int()
+    assert truncated == 6
+    assert truncated.pdf_location is None
+    matcher = Matcher(False)
+    parent = Match("owner", None, length=32, matcher=matcher)
+    output = list(parse_object(truncated, matcher, parent))[0].to_obj()
+    assert output["value"] == "6"
+    assert output["size"] == 0
+    assert output["dependencies"] == [span.to_obj() for span in computed.pdf_dependencies]
+
+
 @pytest.mark.parametrize("protocol", range(pickle.HIGHEST_PROTOCOL + 1))
 def test_pickle_retains_cross_source_dependencies(protocol: int) -> None:
     left, right = numbers()

@@ -83,4 +83,5 @@ The structural adapter distinguishes selected values from control inputs:
   lexical span before the values enter the structural parser.
 
 These guarantees cover the structural parser paths PolyFile executes and the operations listed
-above. Normalized builtins and arbitrary external code can discard metadata.
+above. PDFminer graphics and layout computations fall outside this structural adapter's executed
+paths. Normalized builtins and arbitrary external code can discard metadata.
