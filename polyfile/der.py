@@ -50,6 +50,8 @@ class DERMismatch(InvalidDER):
 def read_tag(data: bytes, offset: int) -> tuple[int, int]:
     """Reads the tag number of the DER object that starts at ``offset``.
 
+    Arithmetic follows libmagic's unsigned 32-bit tag accumulator.
+
     Args:
         data: The buffer to read from.
         offset: The absolute offset of the identifier octet.
@@ -73,7 +75,7 @@ def read_tag(data: bytes, offset: int) -> tuple[int, int]:
             raise InvalidDER(f"the high tag number at offset {offset} is past the end of the data")
         elif data[offset] < 0x80:
             return tag, offset
-        tag = tag * 128 + data[offset] - 0x80
+        tag = (tag * 128 + data[offset] - 0x80) & UINT32_MAX
         offset += 1
 
 
