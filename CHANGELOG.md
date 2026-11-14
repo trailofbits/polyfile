@@ -120,6 +120,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 
 ### Fixed
 
+- **Breaking:** DER high-tag-number decoding follows libmagic's 32-bit wraparound, avoiding
+  quadratic tag arithmetic when recursively analyzing long continuation-byte runs (#3761).
+
 - **Breaking:** Decrypted PDF arrays retain their original container spans, including empty
   and nested arrays. Decrypted strings remain in separate decoded sources (#3744).
 

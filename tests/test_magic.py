@@ -958,7 +958,7 @@ MATCH_TIMEOUT_SECONDS: int = 60
 MATCH_BUDGET_SECONDS: float = 5.0
 """The seconds a classification may take before `match_in_subprocess` fails the test.
 
-Every input these tests classify takes well under a tenth of a second once its definition is fixed,
+Every input these tests classify takes a fraction of a second once its definition is fixed,
 and tens of seconds or more while it is broken, so the budget is loose enough to survive a loaded
 runner and still separate the two.
 """
@@ -1088,6 +1088,10 @@ class MagicMatchingRegressionTest(TestCase):
     def test_cpp_class_test_terminates(self):
         """Matching a C++ header used to backtrack exponentially in the `c-lang` class test."""
         self.match_in_subprocess(self.CRLF_CPP_HEADER)
+
+    def test_long_der_tag_terminates(self):
+        """Classifying a decoded image mask must finish within the matching budget (#3761)."""
+        self.match_in_subprocess(b"\xff" * 100_000)
 
     def test_cpp_class_test_semantics(self):
         """The rewritten `c-lang` class test accepts and rejects the same sources as before."""
