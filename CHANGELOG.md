@@ -18,7 +18,6 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
   hooks, and report unsupported status for unqualified releases. Preserve raw lexeme extents,
   dictionary names and values, compressed-object sources, encrypted arrays, and wrapper metadata.
 - Document the PDFminer upgrade qualification procedure and supported provenance boundaries.
-
 - **Breaking:** Unencrypted LRZIP 0.6 and 0.7 archives are recursively analyzed through an
   installed LRZIP 0.7.3 or newer helper, preserving physical framing and decoded source
   coordinates. Missing helpers and unsupported archive variants report explicit status; declared
@@ -89,28 +88,23 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 - Pin PDFminer to the qualified 20260107 release, isolate document-local xref instrumentation,
   and qualify future updates through locked dependencies and PDF contract tests. Unqualified
   installations retain identification and report unsupported PDF instrumentation.
-
 - **Breaking:** Terminal logging uses Rich 15.0.0 on stderr, with live matcher-pass progress,
   a bounded file-type tree during analysis, and a complete tree and summary at completion.
   Redirected stderr retains plain warnings, errors, and explicitly requested debug/trace logs;
   status and ordinary informational messages are suppressed. Quiet mode suppresses all logging.
   MIME descriptions move from interleaved stderr fragments into the match display. Scan scope
   and result formats are unchanged.
-
 - Modernize handwritten Python annotations for Python 3.11 with native generics, unions, and
   subclass-preserving `Self` returns, and enforce modernization rules with Ruff (#3670).
-
 - Debugger and command callbacks, generated command subclasses, and command-line output state
   have explicit Python 3.11 type contracts while retaining existing behavior (#3673).
 - Build helper annotations describe compiler results, parser manifests, and optional progress
   output while retaining standard-library-only initialization (#3673).
 - PolyMerge annotations describe trace sources, structured documents, and graph nodes. JSON
   inputs use context-managed streams after argument parsing (#3673).
-
 - Core Python annotations describe nullable analysis caches, callable parsers, generic matchers,
   search and serialization traversal, and native decoder boundaries without changing their
   runtime behavior (#3671).
-
 - Remove compatibility imports and runtime bases for Python versions older than 3.11.
 - **Breaking:** JSON elements identify their physical or decoded `source`; offsets stop at
   decoded-buffer boundaries. ZIP and PDF decoded content uses explicit `decoded_content` nodes.
@@ -122,30 +116,25 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 
 - **Breaking:** Register relaxed PDF identification independently of lazy PDF parser imports,
   restoring PDF matches in binary polyglots and files with long preambles (#3763).
-
+- **Breaking:** DER high-tag-number decoding follows libmagic's 32-bit wraparound, avoiding
+  quadratic tag arithmetic when recursively analyzing long continuation-byte runs (#3761).
 - **Breaking:** Decrypted PDF arrays retain their original container spans, including empty
   and nested arrays. Decrypted strings remain in separate decoded sources (#3744).
-
 - **Breaking:** Indirect objects in PDF object streams now appear under their decoded buffer,
   preserving token spans, names, arrays, and references. Cached lookups reuse the same source,
   including when the catalog itself is compressed (#3743).
-
 - **Breaking:** PDF strings, hex strings, and escaped names retain their complete raw spans.
   Non-UTF-8 dictionary names preserve their original bytes, and dictionary pairs, values, and
   containing objects map their complete source extents (#3740, #3741, #3746).
-
 - **Breaking:** PDF string conversions retain token spans and render floating-point values
   without debug metadata. Byte conversions use native count/error behavior, copying and
   pickling preserve wrapper state, and index-protocol selection preserves the selected span
   (#3742, #3747, #3748, #3749).
-
 - **Breaking:** HTTP AST spans use original UTF-8 byte positions rather than character
   positions, including multibyte headers and bodies within nested or decoded sources (#3712).
   Request-start cursors count bytes and reject positions inside a UTF-8 character.
-
 - **Breaking:** Nested BrainFu loops use their immediate parent's source coordinates, keeping
   loop and command offsets aligned in bounded stream views (#3711).
-
 - **Breaking:** PDF concatenation retains nonlinear source mappings and combines the full spans
   of contiguous instrumented operands, including when a later slice or split consumes the result
   (#3666).
@@ -164,14 +153,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
   Byte-aligned selections identify their source interval; nonlinear values without a byte map
   retain the whole original token span. Structured selections preserve recorded element spans
   (#3666).
-
 - **Breaking:** PDF token splitting respects finite split limits, empty separator fields, and
   integer-index protocol arguments without losing unsplit suffixes (#3666).
-
 - **Breaking:** PDF numeric protocols return native values without conversion errors or
   deprecation warnings. Use `as_int()` and `as_float()` to retain byte provenance on converted
   tokens. Text encoding and stripping support built-in defaults (#3666).
-
 - **Breaking:** PolyMerge returns an empty association map for an empty PolyFile structure,
   including when the program trace contains tainted bytes (#3682).
 - **Breaking:** Aborting PDB while stepping through parser matches stops that debugging run

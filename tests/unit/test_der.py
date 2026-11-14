@@ -29,6 +29,13 @@ class ReadTagTest(TestCase):
         # that behavior so that it reports what `file` reports.
         self.assertEqual((31 * 128 + 1, 2), read_tag(b"\x1f\x81\x00\x00\x00", 0))
 
+    def test_high_tag_number_wraps_to_uint32(self):
+        self.assertEqual((0xF0204081, 5), read_tag(b"\x1f\x81\x81\x81\x81\x00", 0))
+
+    def test_high_tag_number_can_wrap_to_a_known_tag(self):
+        data = b"prefix\x1f" + b"\x80" * 5 + b"\x82\x00"
+        self.assertEqual((2, len(data) - 1), read_tag(data, 6))
+
     def test_empty_data(self):
         with self.assertRaises(InvalidDER):
             read_tag(b"", 0)
@@ -36,6 +43,10 @@ class ReadTagTest(TestCase):
     def test_truncated_high_tag_number(self):
         with self.assertRaises(InvalidDER):
             read_tag(b"\x1f", 0)
+
+    def test_long_truncated_high_tag_number(self):
+        with self.assertRaises(InvalidDER):
+            read_tag(b"\xff" * 16_384, 0)
 
 
 class ReadLengthTest(TestCase):
