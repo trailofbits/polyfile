@@ -118,8 +118,6 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 
 ### Fixed
 
-- **Breaking:** Saved multi-sequence searches serialize trie structure and rebuild derived links
-  when loaded, so ordinary search tries round-trip without a serialization loop (#3728).
 - **Breaking:** Register relaxed PDF identification independently of lazy PDF parser imports,
   restoring PDF matches in binary polyglots and files with long preambles (#3763).
 - **Breaking:** DER high-tag-number decoding follows libmagic's 32-bit wraparound, avoiding
@@ -175,6 +173,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
   while retaining lazy positive-index access and the Sequence interface.
 - **Breaking:** Loading a serialized multi-sequence search returns its result without printing
   or terminating the process, and rejects serialized values that are not search roots.
+- **Breaking:** Saved multi-sequence searches serialize trie structure and rebuild derived links
+  when loaded, so ordinary search tries round-trip without a serialization loop (#3728).
 - **Breaking:** FileStream seeks use bounded view-relative positions and return the new
   position. Negative view origins and lengths are rejected, and past-EOF origins consistently
   produce empty views at EOF, including when views are nested (#3664).
