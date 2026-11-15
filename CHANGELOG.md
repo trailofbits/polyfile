@@ -199,6 +199,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 - Bounded file regions now limit reads before allocating data, including `read()` and
   `read(-1)`, so archive members cannot expose neighboring bytes or copy the remaining archive.
 
+### Security
+
+- Pin build and runtime setuptools to 84.2.1, excluding releases affected by the Windows
+  legacy wheel path escape in GHSA-xmj3-9gf7-h52w (#3752).
+
 ## [0.6.0] - 2026-09-12
 
 This release is seven months of work: 253 commits and 67 pull requests since v0.5.6, which was
