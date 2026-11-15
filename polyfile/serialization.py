@@ -15,7 +15,7 @@ decoding invokes their constructors and does not enforce resource limits.
 Binary streams need read/write operations at their current position, without
 seeking. Short reads and writes are supported; operations that make no progress
 fail. ``load`` consumes the stream through EOF. I/O failures propagate, and an
-output stream can contain a partial record if writing fails.
+output stream can contain a partial record if encoding or writing fails.
 """
 
 from collections.abc import Callable, Iterable, Iterator, Mapping
@@ -152,7 +152,21 @@ def encode_bytes(s: bytes, _: Mapping[int, int] | None, stream: BinaryWriter) ->
 
 
 def encode_string(s: str, _: Mapping[int, int] | None, stream: BinaryWriter) -> None:
-    encode_bytes(s.encode("utf-8"), None, stream)
+    """Write UTF-8 text, reporting unencodable strings as EncodingError.
+
+    Args:
+        s: Text to encode.
+        _: The unused object identifier table.
+        stream: Writable binary output at the desired position.
+
+    Raises:
+        EncodingError: If the text contains an unencodable surrogate.
+    """
+    try:
+        encoded = s.encode("utf-8")
+    except UnicodeEncodeError as error:
+        raise EncodingError("Cannot encode STRING value as UTF-8") from error
+    encode_bytes(encoded, None, stream)
 
 
 def decode_bytes(_: Mapping[int, object] | None, stream: BinaryReader) -> bytes:

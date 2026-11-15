@@ -231,6 +231,13 @@ def test_unsupported_value_types_fail_clearly() -> None:
         serialization.dumps(1.5)
 
 
+@pytest.mark.parametrize("text", ["\ud800", "\udfff", "before\ud800after"])
+def test_unencodable_strings_have_context(text: str) -> None:
+    with pytest.raises(serialization.EncodingError, match="STRING.*UTF-8") as error:
+        serialization.dumps(text)
+    assert isinstance(error.value.__cause__, UnicodeEncodeError)
+
+
 def test_direct_unsigned_writer_rejects_negative_values() -> None:
     with pytest.raises(serialization.EncodingError, match="nonnegative"):
         serialization.write_int(-1, BytesIO())
