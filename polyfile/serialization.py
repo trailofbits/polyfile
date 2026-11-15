@@ -104,10 +104,10 @@ def write_int(i: int, stream: BinaryWriter) -> None:
         stream: Writable binary output at the desired position.
 
     Raises:
-        EncodingError: If the value is negative or output makes no progress.
+        EncodingError: If the value is not a nonnegative integer or output makes no progress.
     """
-    if i < 0:
-        raise EncodingError("Integer serialization requires a nonnegative value")
+    if not isinstance(i, int) or i < 0:
+        raise EncodingError("Integer serialization requires a nonnegative integer")
     bits = max(i.bit_length(), 1)
     for bit_group in reversed(range((bits - 1) // 7 + 1)):
         byte = (i >> (bit_group * 7)) & 0b01111111
@@ -312,8 +312,10 @@ def serializable(SerializableClass: type[SerializableT]) -> type[SerializableT]:
         The original class, suitable for use as a decorator.
 
     Raises:
-        ValueError: If the class has no callable serialize method.
+        ValueError: If the value is not a class with a callable serialize method.
     """
+    if not isinstance(SerializableClass, type):
+        raise ValueError("Serializable registration requires a class")
     if not callable(getattr(SerializableClass, "serialize", None)):
         raise ValueError(
             f"Serializable class {SerializableClass} needs a callable serialize method"

@@ -3,7 +3,7 @@
 from io import BytesIO
 import subprocess
 import sys
-from typing import BinaryIO, cast
+from typing import cast
 
 import pytest
 
@@ -144,10 +144,10 @@ class _ShortWriter:
 def test_short_reads_and_writes_do_not_require_seeking(payload: bytes) -> None:
     output = _ShortWriter()
     value = {"message": payload, "values": [1, 128, None, True]}
-    serialization.dump(value, cast(BinaryIO, output))
+    serialization.dump(value, output)
     source = _ShortReader(bytes(output.value))
 
-    assert serialization.load(cast(BinaryIO, source)) == value
+    assert serialization.load(source) == value
 
 
 @pytest.mark.parametrize("result", [None, 0, -1, 100, "invalid", 1.5])
@@ -157,7 +157,7 @@ def test_invalid_write_progress_fails_clearly(result: object) -> None:
             return result
 
     with pytest.raises(serialization.EncodingError, match="writ"):
-        serialization.dump(b"abc", cast(BinaryIO, Writer()))
+        serialization.dump(b"abc", cast(serialization.BinaryWriter, Writer()))
 
 
 @pytest.mark.parametrize("result", [None, "invalid", b"too many bytes"])
@@ -167,7 +167,7 @@ def test_invalid_binary_reads_fail_clearly(result: object) -> None:
             return result
 
     with pytest.raises(serialization.EncodingError, match="read"):
-        serialization.load(cast(BinaryIO, Reader()))
+        serialization.load(cast(serialization.BinaryReader, Reader()))
 
 
 def test_custom_serialization_errors_have_context(registry: None) -> None:
@@ -213,6 +213,19 @@ def test_missing_serialization_method_is_rejected() -> None:
         serialization.serializable(Missing)
 
 
+def test_nonclass_registration_preserves_the_registry(registry: None) -> None:
+    class Instance:
+        def serialize(self) -> tuple[object, ...]:
+            return ()
+
+    before_classes = dict(serialization.CUSTOM_ENCODINGS)
+    before_ids = dict(serialization.CUSTOM_ENCODINGS_BY_ID)
+    with pytest.raises(ValueError, match="class"):
+        serialization.serializable(cast(type[object], Instance()))
+    assert serialization.CUSTOM_ENCODINGS == before_classes
+    assert serialization.CUSTOM_ENCODINGS_BY_ID == before_ids
+
+
 def test_unsupported_value_types_fail_clearly() -> None:
     with pytest.raises(serialization.EncodingError, match="float"):
         serialization.dumps(1.5)
@@ -221,6 +234,20 @@ def test_unsupported_value_types_fail_clearly() -> None:
 def test_direct_unsigned_writer_rejects_negative_values() -> None:
     with pytest.raises(serialization.EncodingError, match="nonnegative"):
         serialization.write_int(-1, BytesIO())
+
+
+@pytest.mark.parametrize("value", [1.5, "1", None, b"1"])
+def test_direct_unsigned_writer_rejects_nonintegers(value: object) -> None:
+    with pytest.raises(serialization.EncodingError, match="nonnegative integer"):
+        serialization.write_int(cast(int, value), BytesIO())
+
+
+@pytest.mark.parametrize("value", [False, True, 0, 127, 128])
+def test_direct_unsigned_writer_retains_integer_and_bool_handling(value: int) -> None:
+    stream = BytesIO()
+    serialization.write_int(value, stream)
+    stream.seek(0)
+    assert serialization.read_int(stream) == value
 
 
 def test_io_failures_propagate() -> None:
@@ -232,9 +259,9 @@ def test_io_failures_propagate() -> None:
             raise OSError("output failed")
 
     with pytest.raises(OSError, match="input failed"):
-        serialization.load(cast(BinaryIO, Broken()))
+        serialization.load(Broken())
     with pytest.raises(OSError, match="output failed"):
-        serialization.dump(1, cast(BinaryIO, Broken()))
+        serialization.dump(1, Broken())
 
 
 def test_stream_position_is_respected() -> None:
