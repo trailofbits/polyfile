@@ -118,10 +118,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 
 ### Fixed
 
+- **Breaking:** Identify HWP 5.0 from its compound-document `FileHeader` stream with the
+  standalone libmagic description and `application/x-hwp`. Validate sector chains and stream
+  bounds before replacing the definitions' OLE-prefixed `application/hwp+zip` result (#3535).
 - **Breaking:** Register relaxed PDF identification independently of lazy PDF parser imports,
   restoring PDF matches in binary polyglots and files with long preambles (#3763).
 - **Breaking:** DER high-tag-number decoding follows libmagic's 32-bit wraparound, avoiding
   quadratic tag arithmetic when recursively analyzing long continuation-byte runs (#3761).
+- **Breaking:** PDF byte parsing yields byte and PNG predictor containers before their contents.
+  Predictor parameters and original-byte structure are traversed once (#3754).
 - **Breaking:** Decrypted PDF arrays retain their original container spans, including empty
   and nested arrays. Decrypted strings remain in separate decoded sources (#3744).
 - **Breaking:** Indirect objects in PDF object streams now appear under their decoded buffer,
@@ -162,6 +167,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 - **Breaking:** PDF numeric protocols return native values without conversion errors or
   deprecation warnings. Use `as_int()` and `as_float()` to retain byte provenance on converted
   tokens. Text encoding and stripping support built-in defaults (#3666).
+- **Breaking:** Dominator forests retain isolated roots, allowing PolyMerge to associate
+  nonempty file structures with tainted functions that have no callers or callees (#3729).
 - **Breaking:** PolyMerge returns an empty association map for an empty PolyFile structure,
   including when the program trace contains tainted bytes (#3682).
 - **Breaking:** Aborting PDB while stepping through parser matches stops that debugging run
@@ -195,6 +202,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
   output.
 - **Breaking:** The CLI restores terminal, logging, and signal state after scanning. The new
   `Analyzer.close()` method releases unfinished scan iterators.
+- **Breaking:** Profiler pauses return after pausing each parent once, restoring pause/resume
+  and unprofiled debugger operations (#3727).
 - **Breaking:** Brainfuck matching returns successful results after optional arithmetic noop
   validation, while retaining cancelling-pair rejection and existing thresholds (#3668).
 - **Breaking:** JPEG2000 image previews encode PNG bytes into the data URL without raising
@@ -205,6 +214,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
   cannot populate or overwrite trailer metadata (#3674).
 - Bounded file regions now limit reads before allocating data, including `read()` and
   `read(-1)`, so archive members cannot expose neighboring bytes or copy the remaining archive.
+
+### Security
+
+- Pin build and runtime setuptools to 84.2.1, excluding releases affected by the Windows
+  legacy wheel path escape in GHSA-xmj3-9gf7-h52w (#3752).
 
 ## [0.6.0] - 2026-09-12
 

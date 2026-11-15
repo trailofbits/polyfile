@@ -1,9 +1,8 @@
 [build-system]
-# setuptools 83.0.0 is the first release that normalizes Unicode when matching MANIFEST.in
-# `exclude` directives (PYSEC-2026-3447). PolyFile relies on those directives to keep
-# specifications it may not redistribute out of the source distribution, so this is a
-# build-time requirement, not only a runtime one.
-requires = ["setuptools>=83.0.0"]
+# This release fixes Unicode MANIFEST.in exclusions (PYSEC-2026-3447) and Windows
+# legacy wheel path escapes (GHSA-xmj3-9gf7-h52w). The exclusions keep restricted
+# specifications out of source distributions, so isolated builds need the fix too.
+requires = ["setuptools==84.2.1"]
 build-backend = "build_backend"
 backend-path = ["."]
 
@@ -44,9 +43,9 @@ dependencies = [
     "pyreadline3; platform_system == 'Windows'",
     "pyyaml>=3.13",
     "rich==15.0.0",
-    # Also the floor that keeps CI's pip-audit of the installed environment clean
-    # (PYSEC-2026-3447). Bump this together with [build-system] requires.
-    "setuptools>=83.0.0",
+    # Keep CI's audited runtime environment and isolated builds on the same patched backend.
+    # Update this pin together with [build-system] requires.
+    "setuptools==84.2.1",
 ]
 
 [project.optional-dependencies]

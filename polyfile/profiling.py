@@ -40,11 +40,13 @@ class Profiler:
         return self._paused_ms + current_time_ms() - self._paused_start_time_ms[0]
 
     def pause(self):
+        """Pause this profiler and each active parent."""
         profiler: Profiler | None = self
         while profiler is not None:
             if profiler.complete:
                 raise ValueError("You cannot pause a completed profiler")
             profiler._paused_start_time_ms.append(current_time_ms())
+            profiler = profiler.parent
 
     def unpause(self):
         profiler: Profiler | None = self

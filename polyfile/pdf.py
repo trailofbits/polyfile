@@ -1681,10 +1681,11 @@ def _parse_pdf_bytes(
 ) -> Iterator[Match]:
     if isinstance(obj, PNGPredictor):
         node = _pdf_submatch("PNGPredictor", bytes(obj.original_bytes), obj, parent, source_base)
-        yield from parse_object(obj.params, matcher, node, source_base, sources=sources)
-        yield from parse_object(obj.original_bytes, matcher, node, source_base, sources=sources)
     else:
         node = _pdf_submatch(type(obj).__name__, bytes(obj), obj, parent, source_base)
+    yield node
+    if isinstance(obj, PNGPredictor):
+        yield from parse_object(obj.params, matcher, node, source_base, sources=sources)
     if hasattr(obj, "original_bytes"):
         yield from parse_object(obj.original_bytes, matcher, node, source_base, sources=sources)
     if (
