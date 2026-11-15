@@ -55,6 +55,10 @@ def _path(key: object) -> Iterable[Hashable]:
     return (key,)
 
 
+def _same_symbol(left: Hashable | None, right: Hashable | None) -> bool:
+    return left is right or left == right
+
+
 def _symbol_label(value: Hashable | None) -> str:
     if isinstance(value, int) and 0 <= value < 256:
         return chr(value) if 32 <= value <= 126 else f"\\x{value:02x}"
@@ -113,7 +117,7 @@ class TrieNode:
         return self._children[key]
 
     def __contains__(self, value: object) -> bool:
-        """Check a child key, a single-symbol prefix, or a complete longer path."""
+        """Interpret sequences as paths and other operands as child keys."""
         if isinstance(value, Sequence):
             if len(value) == 1:
                 return value[0] in self._children
@@ -281,7 +285,7 @@ class ACNode(TrieNode):
         for symbol, child in self._children.items():
             if not isinstance(child, ACNode):
                 raise ValueError("Search trie children must be ACNode instances")
-            if child.value != symbol:
+            if not _same_symbol(child.value, symbol):
                 raise ValueError("Search trie child values must match their dictionary keys")
             if id(child) in visited:
                 raise ValueError("Search trie contains a cycle or a node with multiple parents")
@@ -360,6 +364,9 @@ class MultiSequenceSearch:
     Args:
         *sequences_to_find: Patterns such as bytes, text, or tuples of hashable
             symbols. Duplicate patterns are reported once per occurrence.
+
+    Raises:
+        TypeError: If a pattern is not a hashable sequence.
     """
 
     def __init__(self, *sequences_to_find: _Pattern) -> None:
@@ -417,7 +424,7 @@ class MultiSequenceSearch:
     @staticmethod
     def _pattern_matches(node: ACNode, pattern: _Pattern, root: ACNode) -> bool:
         for symbol in reversed(pattern):
-            if node is root or node.value != symbol:
+            if node is root or not _same_symbol(node.value, symbol):
                 return False
             if node.parent is None:
                 return False
@@ -446,6 +453,10 @@ class MultiSequenceSearch:
         Yields:
             Matches in input-consumption order; ties have unspecified order.
             Empty patterns match every boundary, including zero and the end.
+
+        Raises:
+            TypeError: If input symbols are unhashable or a reader is not binary/text.
+            ValueError: If read(1) returns multiple symbols or the trie needs finalization.
         """
         state = self.trie
         yield from self._matches(state, 0)
@@ -463,6 +474,9 @@ class StartsWithMatcher:
 
     Args:
         *sequences_to_find: Patterns such as bytes, text, or tuples of symbols.
+
+    Raises:
+        TypeError: If a pattern is not a hashable sequence.
     """
 
     def __init__(self, *sequences_to_find: _Pattern) -> None:
@@ -481,6 +495,10 @@ class StartsWithMatcher:
         Yields:
             Prefixes as they are completed, including empty patterns at zero.
             Ties have unspecified order.
+
+        Raises:
+            TypeError: If input symbols are unhashable or a reader is not binary/text.
+            ValueError: If read(1) returns multiple symbols.
         """
         state = self.trie
         yield from ((0, cast(_Pattern, source)) for source in state._sources)

@@ -334,3 +334,44 @@ def test_prefix_matcher_handles_multiword_symbols() -> None:
     assert Counter(StartsWithMatcher(*patterns).search(iter(("word", "token")))) == Counter(
         (0, pattern) for pattern in patterns
     )
+
+
+def test_nonreflexive_symbols_follow_dictionary_identity_semantics() -> None:
+    symbol = float("nan")
+    pattern = (symbol,)
+    search = MultiSequenceSearch(pattern)
+    result = list(search.search(pattern))
+    assert len(result) == 1
+    assert result[0][0] == 0
+    assert result[0][1] is pattern
+    assert list(StartsWithMatcher(pattern).search(pattern)) == [(0, pattern)]
+
+
+def test_registered_nonreflexive_symbols_survive_round_trips() -> None:
+    _run_python("""
+from io import BytesIO
+from polyfile import serialization
+from polyfile.search import MultiSequenceSearch
+
+@serialization.serializable
+class Symbol:
+    def __init__(self, value):
+        self.value = value
+    def __hash__(self):
+        return hash(self.value)
+    def __eq__(self, other):
+        return False
+    def serialize(self):
+        return (self.value,)
+
+search = MultiSequenceSearch((Symbol('word'),))
+stream = BytesIO()
+search.save(stream)
+stream.seek(0)
+restored = MultiSequenceSearch.load(stream)
+terminal = next(iter(restored.trie))
+pattern = next(iter(terminal.sources))
+result = list(restored.search(pattern))
+assert len(result) == 1 and result[0][0] == 0
+assert result[0][1] is pattern
+""")
