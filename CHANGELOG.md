@@ -122,6 +122,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
   restoring PDF matches in binary polyglots and files with long preambles (#3763).
 - **Breaking:** DER high-tag-number decoding follows libmagic's 32-bit wraparound, avoiding
   quadratic tag arithmetic when recursively analyzing long continuation-byte runs (#3761).
+- **Breaking:** PDF byte parsing yields byte and PNG predictor containers before their contents.
+  Predictor parameters and original-byte structure are traversed once (#3754).
 - **Breaking:** Decrypted PDF arrays retain their original container spans, including empty
   and nested arrays. Decrypted strings remain in separate decoded sources (#3744).
 - **Breaking:** Indirect objects in PDF object streams now appear under their decoded buffer,
