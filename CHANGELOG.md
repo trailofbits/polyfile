@@ -192,6 +192,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
   output.
 - **Breaking:** The CLI restores terminal, logging, and signal state after scanning. The new
   `Analyzer.close()` method releases unfinished scan iterators.
+- **Breaking:** Profiler pauses return after pausing each parent once, restoring pause/resume
+  and unprofiled debugger operations (#3727).
 - **Breaking:** Brainfuck matching returns successful results after optional arithmetic noop
   validation, while retaining cancelling-pair rejection and existing thresholds (#3668).
 - **Breaking:** JPEG2000 image previews encode PNG bytes into the data URL without raising
