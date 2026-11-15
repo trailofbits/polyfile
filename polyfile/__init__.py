@@ -21,6 +21,7 @@ from polyfile import (
 
 from polyfile import bzip2matcher, freezematcher, lrzipmatcher, lzmamatcher, tarmatcher, xzmatcher
 from polyfile import pdfmatcher
+from polyfile import hwpmatcher
 from polyfile.analysis import AnalysisLimits
 from polyfile.provenance import SourceSpan
 from polyfile.__main__ import main

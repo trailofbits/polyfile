@@ -118,6 +118,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 
 ### Fixed
 
+- **Breaking:** Identify HWP 5.0 from its compound-document `FileHeader` stream with the
+  standalone libmagic description and `application/x-hwp`. Validate sector chains and stream
+  bounds before replacing the definitions' OLE-prefixed `application/hwp+zip` result (#3535).
 - **Breaking:** Register relaxed PDF identification independently of lazy PDF parser imports,
   restoring PDF matches in binary polyglots and files with long preambles (#3763).
 - **Breaking:** DER high-tag-number decoding follows libmagic's 32-bit wraparound, avoiding
