@@ -369,7 +369,7 @@ class MultiSequenceSearch:
             self.trie.add(sequence)
         self.trie.finalize()
 
-    def save(self, output_stream: BinaryIO) -> None:
+    def save(self, output_stream: serialization.BinaryWriter) -> None:
         """Write a reusable trie cache without changing the live search.
 
         Args:
@@ -381,7 +381,7 @@ class MultiSequenceSearch:
         serialization.dump(self.trie, output_stream)
 
     @staticmethod
-    def load(input_stream: BinaryIO) -> MultiSequenceSearch:
+    def load(input_stream: serialization.BinaryReader) -> MultiSequenceSearch:
         """Load a cache and rebuild derived links, including old acyclic records.
 
         Args:
@@ -402,11 +402,27 @@ class MultiSequenceSearch:
             for node in root.bfs():
                 for pattern in node.sources:
                     _validate_pattern(pattern)
+                    if not MultiSequenceSearch._pattern_matches(
+                        cast(ACNode, node),
+                        cast(_Pattern, pattern),
+                        root,
+                    ):
+                        raise ValueError("Search trie source pattern does not match its node path")
         except TypeError as error:
             raise ValueError(f"Invalid search trie source pattern: {error}") from error
         search = MultiSequenceSearch()
         search.trie = root
         return search
+
+    @staticmethod
+    def _pattern_matches(node: ACNode, pattern: _Pattern, root: ACNode) -> bool:
+        for symbol in reversed(pattern):
+            if node is root or node.value != symbol:
+                return False
+            if node.parent is None:
+                return False
+            node = node.parent
+        return node is root
 
     def _matches(self, state: ACNode, end: int) -> Iterator[tuple[int, _Pattern]]:
         node = state
