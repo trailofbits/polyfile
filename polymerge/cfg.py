@@ -53,10 +53,12 @@ class DiGraph(nx.DiGraph):
 
     @property
     def dominator_forest(self) -> "DAG":
+        """Return a dominator forest that retains roots without children."""
         if self._dominator_forest is not None:
             return self._dominator_forest
         self._dominator_forest = DAG()
         for root in self.roots:
+            self._dominator_forest.add_node(root)
             dominators = cast(dict[Hashable, Hashable], nx.immediate_dominators(self, root))
             for node, dominated_by in dominators.items():
                 if node != dominated_by:
