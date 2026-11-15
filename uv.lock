@@ -1011,7 +1011,7 @@ requires-dist = [
     { name = "pyyaml", specifier = ">=3.13" },
     { name = "rich", specifier = "==15.0.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = "==0.17.5" },
-    { name = "setuptools", specifier = ">=83.0.0" },
+    { name = "setuptools", specifier = "==84.2.1" },
     { name = "ty", marker = "extra == 'dev'", specifier = "==0.0.98" },
 ]
 provides-extras = ["demangle", "dev", "viewer-test"]
