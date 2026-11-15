@@ -118,6 +118,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 
 ### Fixed
 
+- **Breaking:** Profiler pauses return after pausing each parent once, restoring pause/resume
+  and unprofiled debugger operations (#3727).
 - **Breaking:** Register relaxed PDF identification independently of lazy PDF parser imports,
   restoring PDF matches in binary polyglots and files with long preambles (#3763).
 - **Breaking:** DER high-tag-number decoding follows libmagic's 32-bit wraparound, avoiding
