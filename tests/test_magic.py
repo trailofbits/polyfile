@@ -119,9 +119,8 @@ def corpus_result_matches(expected: str, matches: set[str]) -> bool:
     """Reports whether PolyFile's matches include libmagic's expected description.
 
     Only trailing whitespace is ignored. Case is significant: libmagic's spelling of a
-    description is part of what the corpus pins, and every stem now reproduces it exactly. Two
-    stems need an allowance beyond an exact comparison, and each one is narrowed to the single
-    result it applies to.
+    description is part of what the corpus pins. The UF2 result retains an allowance for
+    formatting a zero hexadecimal value.
 
     Args:
         expected: The contents of the test's `.result` file.
@@ -137,14 +136,6 @@ def corpus_result_matches(expected: str, matches: set[str]) -> bool:
     if "00000000" in expected:
         # Technically correct, but PolyFile formats a `%#8.8x` zero as "0x000000".
         return expected.replace("00000000", "0x000000") in reported
-    if expected == "Hancom HWP (Hangul Word Processor) file, version 5.0":
-        # libmagic prints this from its built-in compound-document reader, which runs ahead of
-        # soft magic and short-circuits it (`file/src/readcdf.c:633-646`). PolyFile has only the
-        # definitions' entry at `magic_defs/ole2compounddocs:269`, which nests the description
-        # under the OLE 2 header match, so the expected result is the tail of what PolyFile
-        # reports. Delete this once PolyFile can read compound documents: see
-        # https://github.com/trailofbits/polyfile/issues/3535.
-        return any(match.endswith(expected) for match in reported)
     return False
 
 
@@ -864,21 +855,15 @@ class MagicTest(TestCase):
         self.assertEqual({"marker"}, {str(match) for match in matcher.match(b"ABCD")})
         self.assertEqual({"marker"}, {str(match) for match in matcher.match(b"ABCDEF")})
 
-    def test_corpus_comparison_is_exact_outside_two_allowances(self):
-        """Tests that the corpus comparison is exact apart from its two documented allowances.
-
-        `corpus_result_matches` used to lower-case both sides and to accept a suffix match for
-        any result starting with `Hancom HWP`. The fold hid the class of divergence #3488 fixed,
-        where PolyFile reported `ascii text` for libmagic's `ASCII text`, and the broad suffix
-        rule weakened the two Hancom stems that do match exactly. Each allowance now applies to
-        one result, and only when the exact comparison has already failed.
-        """
+    def test_corpus_comparison_is_exact_except_for_uf2_zero_formatting(self):
+        """Require exact case and standalone Hancom descriptions in the corpus comparison."""
         hwp5 = "Hancom HWP (Hangul Word Processor) file, version 5.0"
         ole2 = "OLE 2 Compound Document, v3.62, SecID 0x2, Mini FAT start sector 0x6"
         uf2 = "UF2 firmware image, family ESP32-S2, base address 00000000, 4829 total blocks"
         self.assertTrue(corpus_result_matches("ASCII text\n", {"data", "ASCII text"}))
         self.assertFalse(corpus_result_matches("ASCII text", {"ascii text"}))
-        self.assertTrue(corpus_result_matches(hwp5, {f"{ole2} : {hwp5}"}))
+        self.assertTrue(corpus_result_matches(hwp5, {hwp5}))
+        self.assertFalse(corpus_result_matches(hwp5, {f"{ole2} : {hwp5}"}))
         self.assertFalse(corpus_result_matches(hwp5, {f"{ole2} : {hwp5.lower()}"}))
         for hancom in ("Hancom HWP (Hangul Word Processor) file, version 3.0",
                        "Hancom HWP (Hangul Word Processor) file, HWPX"):

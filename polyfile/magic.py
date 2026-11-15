@@ -5587,6 +5587,17 @@ class MagicMatcher:
         )
         return native and not set(match.mimetypes) - {"application/octet-stream"}
 
+    def _superseded_hwp_alias(self, test: MagicTest, match: Match) -> bool:
+        if (test.source_info is None or test.source_info.path.name != "ole2compounddocs"
+                or set(match.mimetypes) != {"application/hwp+zip"}):
+            return False
+        from polyfile.hwpmatcher import HWP5Matcher
+
+        return any(
+            isinstance(candidate, HWP5Matcher) and any(candidate.match(match.context))
+            for candidate in self.tests_by_mime.get("application/x-hwp", ())
+        )
+
     def _run_tests(
             self,
             tests: Collection[MagicTest],
@@ -5634,7 +5645,8 @@ class MagicMatcher:
             # look like a match
             if m and (not test_context.only_match_mime or any(t is not None for t in m.mimetypes)):
                 if (self._superseded_tar_alias(test, m, test_context.data)
-                        or self._superseded_compression_alias(test, m, test_context.data)):
+                        or self._superseded_compression_alias(test, m, test_context.data)
+                        or self._superseded_hwp_alias(test, m)):
                     continue
                 if test.appends_text_encoding:
                     m.text_encoding = text_encoding
