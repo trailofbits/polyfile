@@ -175,6 +175,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
   or terminating the process, and rejects serialized values that are not search roots.
 - **Breaking:** Saved multi-sequence searches serialize trie structure and rebuild derived links
   when loaded, so ordinary search tries round-trip without a serialization loop (#3728).
+- **Breaking:** Retained search utilities handle empty patterns, generic sequence symbols, and
+  deep tries without recursive lookup limits. Preserve the original `ACNode` constructor and
+  five-field cache layout, and document library usage and cache compatibility. Binary encoding
+  rejects cycles, negative integers, and malformed records with contextual errors instead of
+  looping, silently corrupting values, or accepting incomplete input (#3728).
 - **Breaking:** FileStream seeks use bounded view-relative positions and return the new
   position. Negative view origins and lengths are rejected, and past-EOF origins consistently
   produce empty views at EOF, including when views are nested (#3664).

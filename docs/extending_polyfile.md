@@ -4,6 +4,10 @@ PolyFile has two primary components:
 1. **Matchers**: classify the MIME types of input byte sequences; and
 2. **Parsers**: produce a best-effort syntax tree for input byte sequences that have been classified.
 
+The retained [standalone search and serialization utilities](search_serialization.md) support
+direct library use. That guide documents their maintenance status, APIs, cache compatibility,
+and regression checks. They currently have no callers in the analyzer or command-line workflows.
+
 ## Matchers
 
 ### Libmagic Pattern Matching DSL
