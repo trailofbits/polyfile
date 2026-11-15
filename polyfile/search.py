@@ -138,13 +138,13 @@ class TrieNode:
 @serialization.serializable
 class ACNode(TrieNode):
     """A data structure for implementing the Aho-Corasick multi-string matching algorithm"""
-    def __init__(self, value=None, sources=None, _children=None, parent=None, _fall=None):
+    def __init__(self, value=None, sources=None, _children=None, parent=None):
         super().__init__(value=value, sources=sources, _children=_children)
         self.parent = parent
-        self.fall = _fall
-
-    def serialize(self):
-        return super().serialize() + (self.parent, self.fall)
+        self.fall: ACNode | None = None
+        for child in self:
+            assert isinstance(child, ACNode)
+            child.parent = self
 
     def __getitem__(self, key: object) -> "ACNode":
         child = super().__getitem__(key)
@@ -226,6 +226,7 @@ class MultiSequenceSearch:
         self.trie.finalize()
 
     def save(self, output_stream: BinaryIO):
+        """Save trie structure without its derived parent and failure links."""
         serialization.dump(self.trie, output_stream)
 
     @staticmethod
@@ -236,7 +237,7 @@ class MultiSequenceSearch:
             input_stream: A binary stream containing a serialized ACNode root.
 
         Returns:
-            A search using the loaded root.
+            A search using the loaded root with reconstructed parent and failure links.
 
         Raises:
             ValueError: If the serialized value is not an ACNode root.
@@ -244,6 +245,7 @@ class MultiSequenceSearch:
         root = serialization.load(input_stream)
         if not isinstance(root, ACNode):
             raise ValueError(f"Cannot load search root: expected ACNode, got {type(root).__name__}")
+        root.finalize()
         search = MultiSequenceSearch()
         search.trie = root
         return search

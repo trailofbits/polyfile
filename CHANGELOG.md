@@ -118,6 +118,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 
 ### Fixed
 
+- **Breaking:** Saved multi-sequence searches serialize trie structure and rebuild derived links
+  when loaded, so ordinary search tries round-trip without a serialization loop (#3728).
 - **Breaking:** Register relaxed PDF identification independently of lazy PDF parser imports,
   restoring PDF matches in binary polyglots and files with long preambles (#3763).
 - **Breaking:** DER high-tag-number decoding follows libmagic's 32-bit wraparound, avoiding
