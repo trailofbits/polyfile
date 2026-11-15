@@ -162,6 +162,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 - **Breaking:** PDF numeric protocols return native values without conversion errors or
   deprecation warnings. Use `as_int()` and `as_float()` to retain byte provenance on converted
   tokens. Text encoding and stripping support built-in defaults (#3666).
+- **Breaking:** Dominator forests retain isolated roots, allowing PolyMerge to associate
+  nonempty file structures with tainted functions that have no callers or callees (#3729).
 - **Breaking:** PolyMerge returns an empty association map for an empty PolyFile structure,
   including when the program trace contains tainted bytes (#3682).
 - **Breaking:** Aborting PDB while stepping through parser matches stops that debugging run
