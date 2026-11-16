@@ -10,6 +10,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 
 ### Added
 
+- **Breaking:** Analyze 7z archive structure and validated members with `py7zr==1.1.4` in
+  isolated helpers. Solid/non-solid archives, compressed headers, checksums, decoded source
+  coordinates, and optional recursive/helper resource limits have regression coverage.
+
 - **Breaking:** HTML reports show embedded image previews beside the ASCII column as you scroll
   their byte ranges. Nearby previews share browsing controls, decoded images identify their encoded
   containers, and narrow layouts use a strip below the bytes. Activate a preview to enlarge it

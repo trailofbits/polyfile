@@ -335,6 +335,10 @@ because the standard-library ZIP backend cannot bound their incremental decoder 
 Without configured limits, those backends retain their normal decoding behavior. ZIP entry
 counts exclude structural field probes and count each archive member once.
 
+7z archives use the pinned `py7zr==1.1.4` backend in isolated Python helpers. Member metadata,
+solid/non-solid streams, compressed headers, integrity checks, recursive coordinates, and all
+analysis controls are described in [7z archive analysis](sevenzip.md).
+
 The original input has depth zero and does not consume the recursive member or byte budgets.
 Depth counts transitions into content, including archive members and decoded streams, rather
 than structural nodes. Byte counts are cumulative across an analysis, including siblings. Member
