@@ -1,0 +1,126 @@
+{
+  "encoder": "7-Zip 26.02 arm64 (2026-06-25)",
+  "files": [
+    {
+      "file": "copy.7z",
+      "sha256": "f4eaaab199de3a9b595df238becbbf7b8f76f607d794f423ddc4400549512c0a",
+      "command": [
+        "7zz",
+        "a",
+        "-t7z",
+        "-mtc=off",
+        "-mta=off",
+        "-mtm=off",
+        "copy.7z",
+        "-m0=Copy",
+        "-mhc=off",
+        "first.json"
+      ]
+    },
+    {
+      "file": "solid.7z",
+      "sha256": "f84ecac75f6289da2239636be80fd9624927715e785a9ca85f86fa18a07f638a",
+      "command": [
+        "7zz",
+        "a",
+        "-t7z",
+        "-mtc=off",
+        "-mta=off",
+        "-mtm=off",
+        "solid.7z",
+        "-m0=LZMA2",
+        "-ms=on",
+        "-mhc=on",
+        "first.json",
+        "other.json",
+        "empty",
+        "directory",
+        "nested.zip"
+      ]
+    },
+    {
+      "file": "nonsolid.7z",
+      "sha256": "030c3f6afa2d982df19ce5280c2ad7c6a1c6859611a80d1e6d209483e413675b",
+      "command": [
+        "7zz",
+        "a",
+        "-t7z",
+        "-mtc=off",
+        "-mta=off",
+        "-mtm=off",
+        "nonsolid.7z",
+        "-m0=LZMA2",
+        "-ms=off",
+        "-mhc=off",
+        "first.json",
+        "other.json"
+      ]
+    },
+    {
+      "file": "encrypted.7z",
+      "sha256": "ee950cfd698707155d460b33aa17fb0b6070d8fc79b5296c7d657465c58735be",
+      "command": [
+        "7zz",
+        "a",
+        "-t7z",
+        "-mtc=off",
+        "-mta=off",
+        "-mtm=off",
+        "encrypted.7z",
+        "-m0=LZMA2",
+        "-pfixture-password",
+        "-mhe=off",
+        "first.json"
+      ]
+    },
+    {
+      "file": "header-encrypted.7z",
+      "sha256": "35ff4685d5c00bbe0c80ce43c8b15a2c2caa4a31ab2d9a4071d1edaa2ac24efc",
+      "command": [
+        "7zz",
+        "a",
+        "-t7z",
+        "-mtc=off",
+        "-mta=off",
+        "-mtm=off",
+        "header-encrypted.7z",
+        "-m0=LZMA2",
+        "-pfixture-password",
+        "-mhe=on",
+        "first.json"
+      ]
+    },
+    {
+      "file": "empty.7z",
+      "sha256": "fba80ba41104a089ae973814fea41ca9cd9538beb5fce5b8bb32fd11294d0cdc",
+      "command": [
+        "7zz",
+        "a",
+        "-t7z",
+        "-mtc=off",
+        "-mta=off",
+        "-mtm=off",
+        "empty.7z",
+        "-m0=Copy",
+        "-mhc=off",
+        "empty",
+        "directory"
+      ]
+    },
+    {
+      "file": "many-empty.7z",
+      "sha256": "1a53e0eb48f1436283748fbb32ed19a9e86de19848fe89cde2dc74771d35d774",
+      "command": [
+        "7zz",
+        "a",
+        "-t7z",
+        "-mtc=off",
+        "-mta=off",
+        "-mtm=off",
+        "-mhc=on",
+        "many-empty.7z",
+        "."
+      ]
+    }
+  ]
+}

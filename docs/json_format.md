@@ -119,6 +119,11 @@ member keeps its raw bzip2 classification while the validated decoded tree appea
 the ZIP member's decoded-content region. Other raw polyglot interpretations remain eligible
 for their own parsers.
 
+7z analysis preserves signature/next headers and packed member/header streams in physical
+coordinates. Member metadata uses zero-size anchors under `next_header`; each decoded member
+has an independent source. Solid members share packed streams rather than receiving invented
+compressed offsets. See [7z archive analysis](sevenzip.md) for integrity and backend limits.
+
 Lzip analysis supports version 1 members using the standard-library raw-LZMA1 decoder. Each
 member preserves its six-byte header, compressed stream, and 20-byte trailer. The decoder checks
 the end marker, CRC32, decoded size, and complete member size before publishing concatenated
