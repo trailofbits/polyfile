@@ -62,25 +62,41 @@ class Hashable:
 
 
 class IDHashable:
-    def __init__(self, value: PolyfileElement):
+    """Key output elements by identity while preserving their mutable contents."""
+
+    def __init__(self, value: PolyfileElement) -> None:
         self.value = value
 
-    def __hash__(self):
+    def __hash__(self) -> int:
         return id(self.value)
 
-    def __repr__(self):
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, IDHashable):
+            return NotImplemented
+        return self.value is other.value
+
+    def __repr__(self) -> str:
         return f"{self.__class__.__name__}(value={self.value!r})"
 
 
 def build_intervals(
     elem: PolyfileElement, tree: IntervalTree | None = None
 ) -> IntervalTree:
+    """Index each positive-size element with an identity-preserving payload.
+
+    Args:
+        elem: The element whose byte interval and descendants are indexed.
+        tree: An existing index to extend, or None to create an index.
+
+    Returns:
+        An interval tree whose payloads wrap elements in IDHashable keys.
+    """
     if tree is None:
         tree = IntervalTree()
     if 'size' in elem:
         elem_size = elem['size']
         if elem_size > 0:
-            tree[elem['offset']:elem['offset']+elem_size] = elem
+            tree[elem['offset']:elem['offset'] + elem_size] = IDHashable(elem)
     if 'subEls' in elem:
         for child in elem['subEls']:
             build_intervals(child, tree)
@@ -189,7 +205,7 @@ def merge(
                     if function_percent > last_percent:
                         log.status(f"{(progress / total_bytes) * 100.0:.2f}% processing function {function_name}... ({function_percent}%)")
                 for interval in intervals[offset]:
-                    elem = IDHashable(cast(PolyfileElement, interval.data))
+                    elem = cast(IDHashable, interval.data)
                     elems_by_function[function_name].add(elem)
                     elem_type = elem.value['type']
                     functions_by_type[elem_type].add(function_name)
