@@ -155,3 +155,181 @@ def test_paused_profiler_cannot_stop(clock: _Clock) -> None:
 def test_elapsed_time_requires_a_started_profiler() -> None:
     with pytest.raises(ValueError, match="has not been started"):
         _ = Profiler().elapsed_ms
+
+
+def test_nested_unprofiled_context_counts_only_the_outer_interval(clock: _Clock) -> None:
+    with Profiler() as profiler:
+        clock.now = 10
+        with Unprofiled():
+            clock.now = 20
+            with Unprofiled():
+                clock.now = 30
+                assert profiler.paused_ms == 20
+                assert profiler.elapsed_ms == 10
+            assert profiler.is_paused
+            assert profiler.paused_ms == 20
+            assert profiler.elapsed_ms == 10
+            clock.now = 40
+        assert not profiler.is_paused
+        assert profiler.paused_ms == 30
+        clock.now = 50
+    assert profiler.paused_ms == 30
+    assert profiler.elapsed_ms == 20
+
+
+def test_explicit_nested_and_disjoint_pauses_count_their_union(clock: _Clock) -> None:
+    profiler = Profiler()
+    profiler.start()
+    for timestamp in (10, 20, 25):
+        clock.now = timestamp
+        profiler.pause()
+    for timestamp in (30, 40):
+        clock.now = timestamp
+        profiler.unpause()
+        assert profiler.is_paused
+        assert profiler.paused_ms == timestamp - 10
+        assert profiler.elapsed_ms == 10
+    clock.now = 50
+    profiler.unpause()
+    assert not profiler.is_paused
+    assert profiler.paused_ms == 40
+    clock.now = 70
+    profiler.pause()
+    clock.now = 75
+    assert profiler.paused_ms == 45
+    assert profiler.elapsed_ms == 30
+    clock.now = 80
+    profiler.unpause()
+    clock.now = 90
+    profiler.stop()
+    assert profiler.paused_ms == 50
+    assert profiler.elapsed_ms == 40
+
+
+@pytest.mark.parametrize("pause_parent_first", [False, True])
+@pytest.mark.parametrize("unpause_parent_first", [False, True])
+def test_overlapping_parent_and_child_pauses_count_once(
+    clock: _Clock,
+    pause_parent_first: bool,
+    unpause_parent_first: bool,
+) -> None:
+    parent = Profiler()
+    child = Profiler(parent)
+    parent.start()
+    clock.now = 5
+    child.start()
+    clock.now = 10
+    (parent if pause_parent_first else child).pause()
+    clock.now = 20
+    (child if pause_parent_first else parent).pause()
+    clock.now = 30
+    (parent if unpause_parent_first else child).unpause()
+    assert parent.is_paused
+    assert parent.paused_ms == 20
+    assert parent.elapsed_ms == 10
+    clock.now = 40
+    (child if unpause_parent_first else parent).unpause()
+    assert not parent.is_paused
+    assert not child.is_paused
+    assert parent.paused_ms == 30
+    child_start = 20 if pause_parent_first else 10
+    child_end = 40 if unpause_parent_first else 30
+    assert child.paused_ms == child_end - child_start
+    clock.now = 50
+    child.stop()
+    parent.stop()
+    assert parent.elapsed_ms == 20
+    assert child.elapsed_ms == 45 - child.paused_ms
+
+
+def test_nested_decorator_exception_leaves_outer_pause_active(clock: _Clock) -> None:
+    @unprofiled
+    def work() -> None:
+        clock.now = 30
+        raise ValueError("work failed")
+
+    with Profiler() as profiler:
+        clock.now = 10
+        with Unprofiled():
+            clock.now = 20
+            with pytest.raises(ValueError, match="work failed"):
+                work()
+            assert profiler.is_paused
+            assert profiler.paused_ms == 20
+            assert profiler.elapsed_ms == 10
+            clock.now = 40
+        clock.now = 50
+    assert profiler.paused_ms == 30
+    assert profiler.elapsed_ms == 20
+
+
+@pytest.mark.parametrize("explicit", [False, True])
+def test_unprofiled_instance_supports_nested_and_sequential_use(
+    clock: _Clock,
+    explicit: bool,
+) -> None:
+    profiler = Profiler()
+    pause = Unprofiled(profiler if explicit else None)
+    with profiler:
+        clock.now = 10
+        with pause:
+            clock.now = 20
+            with pause:
+                clock.now = 30
+            assert profiler.is_paused
+            assert profiler.paused_ms == 20
+            clock.now = 40
+        assert not profiler.is_paused
+        assert pause.profiler is (profiler if explicit else None)
+        clock.now = 50
+        with pause:
+            clock.now = 60
+        clock.now = 70
+    assert profiler.paused_ms == 40
+    assert profiler.elapsed_ms == 30
+
+
+@pytest.mark.parametrize("explicit", [False, True])
+def test_reentrant_unprofiled_instance_unwinds_after_exception(
+    clock: _Clock,
+    explicit: bool,
+) -> None:
+    profiler = Profiler()
+    pause = Unprofiled(profiler if explicit else None)
+    with profiler:
+        clock.now = 10
+        with pytest.raises(ValueError, match="work failed"):
+            with pause:
+                clock.now = 20
+                with pause:
+                    clock.now = 30
+                    raise ValueError("work failed")
+        assert not profiler.is_paused
+        assert pause.profiler is (profiler if explicit else None)
+        clock.now = 40
+    assert profiler.paused_ms == 20
+    assert profiler.elapsed_ms == 20
+
+
+def test_reentrant_unprofiled_restores_the_enclosing_profiler(clock: _Clock) -> None:
+    pause = Unprofiled()
+    with Profiler() as parent:
+        clock.now = 10
+        with pause:
+            clock.now = 20
+            with Profiler() as child:
+                clock.now = 30
+                with pause:
+                    clock.now = 40
+                assert pause.profiler is parent
+                assert parent.is_paused
+                assert parent.paused_ms == 30
+                assert not child.is_paused
+                assert child.paused_ms == 10
+                clock.now = 50
+            clock.now = 60
+        clock.now = 70
+    assert pause.profiler is None
+    assert parent.paused_ms == 50
+    assert parent.elapsed_ms == 20
+    assert child.elapsed_ms == 20

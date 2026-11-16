@@ -1,7 +1,7 @@
 from functools import wraps
 import time
 from collections.abc import Callable
-from typing import Optional, ParamSpec, Self, TypeVar
+from typing import ParamSpec, Self, TypeVar
 from polyfile import logger
 
 log = logger.getStatusLogger(__file__)
@@ -48,15 +48,17 @@ class Profiler:
             profiler._paused_start_time_ms.append(current_time_ms())
             profiler = profiler.parent
 
-    def unpause(self):
+    def unpause(self) -> None:
+        """End one pause on this profiler and each parent, counting overlapping time once."""
         profiler: Profiler | None = self
         while profiler is not None:
             if profiler.complete:
                 raise ValueError("You cannot unpause a completed profiler")
             elif not profiler.is_paused:
                 raise ValueError("The profiler is not currently paused")
-            profiler._paused_ms += current_time_ms() - profiler._paused_start_time_ms[-1]
-            profiler._paused_start_time_ms.pop()
+            paused_start_time_ms = profiler._paused_start_time_ms.pop()
+            if not profiler.is_paused:
+                profiler._paused_ms += current_time_ms() - paused_start_time_ms
             profiler = profiler.parent
 
     @property
@@ -95,21 +97,26 @@ class Profiler:
 
 
 class Unprofiled:
+    """Exclude work from explicit or active profilers, including reentrant contexts."""
+
     def __init__(self, profiler: Profiler | None = None):
         self.profiler: Profiler | None = profiler
         self._had_profiler = profiler is not None
+        self._previous_profilers: list[Profiler | None] = []
 
-    def __enter__(self):
+    def __enter__(self) -> None:
+        profiler = self.profiler
         if not self._had_profiler and _PROFILER_STACK:
-            self.profiler = _PROFILER_STACK[-1]
-        if self.profiler is not None:
-            self.profiler.pause()
+            profiler = _PROFILER_STACK[-1]
+        if profiler is not None:
+            profiler.pause()
+        self._previous_profilers.append(self.profiler)
+        self.profiler = profiler
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         if self.profiler is not None:
             self.profiler.unpause()
-            if not self._had_profiler:
-                self.profiler = None
+        self.profiler = self._previous_profilers.pop()
 
 
 def unprofiled(func: Callable[P, ResultT]) -> Callable[P, ResultT]:
