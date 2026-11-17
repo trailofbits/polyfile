@@ -207,7 +207,8 @@ class SearchPanel(Vertical):
 
     def on_input_changed(self, event: Input.Changed) -> None:
         event.stop()
-        self.start_search()
+        if event.value == event.input.value:
+            self.start_search()
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         event.stop()
@@ -220,7 +221,8 @@ class SearchPanel(Vertical):
 
     def on_checkbox_changed(self, event: Checkbox.Changed) -> None:
         event.stop()
-        self.start_search()
+        if event.value == event.checkbox.value:
+            self.start_search()
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         event.stop()

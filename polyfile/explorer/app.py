@@ -272,6 +272,7 @@ class ExplorerApp(App[int]):
     def on_search_panel_result_selected(self, event: SearchPanel.ResultSelected) -> None:
         if event.generation != self.query_one(SearchPanel).generation:
             return
+        focused = self.focused
         self._selecting_search = True
         try:
             if event.hit.nodes:
@@ -280,6 +281,11 @@ class ExplorerApp(App[int]):
                 self.select_range(event.hit.range)
         finally:
             self._selecting_search = False
+        if self.size.width < 110:
+            self._show_tree = False
+            self._update_layout(self.size.width)
+        if focused is not None and self.query_one(SearchPanel) in focused.ancestors:
+            focused.focus()
 
     def action_export_selection(self) -> None:
         self._request_export(self.selection)

@@ -15,6 +15,7 @@ from polyfile.explorer.model import ByteRange, ByteSource, ExplorerModel
 from polyfile.explorer.search import SearchHit
 from polyfile.explorer.searchpanel import SearchFinished, SearchPanel
 from polyfile.explorer.tools_dialogs import CopyScreen, ExportScreen, ReplaceScreen
+from polyfile.explorer.tree import StructureTree
 from polyfile.polyfile import Match, Matcher
 from tests.unit.explorer.test_search import model_for
 
@@ -210,6 +211,45 @@ def test_missing_decoded_bytes_report_errors_without_opening_dialogs(tmp_path: P
     asyncio.run(check())
 
 
+def test_cancel_export_preserves_destination_in_ui(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    entered = Event()
+    release = Event()
+    chunks = ByteSource._file_chunks
+
+    def slow_chunks(
+        source: ByteSource,
+        start: int,
+        length: int,
+        chunk_size: int,
+    ) -> Iterator[tuple[int, bytes]]:
+        entered.set()
+        assert release.wait(5)
+        yield from chunks(source, start, length, chunk_size)
+
+    async def check() -> None:
+        app = ExplorerApp(model_for(tmp_path / "input", b"a" * 200000))
+        output = tmp_path / "out"
+        output.write_bytes(b"keep")
+        async with app.run_test(size=(80, 32)) as pilot:
+            monkeypatch.setattr(ByteSource, "_file_chunks", slow_chunks)
+            app._start_export(ByteRange("file", 0, 200000), output, overwrite=True)
+            await pilot.pause()
+            assert await asyncio.to_thread(entered.wait, 5)
+            await pilot.press("ctrl+g")
+            release.set()
+            await settle(app, pilot)
+            assert output.read_bytes() == b"keep"
+            assert list(tmp_path.glob(".polyfile-*")) == []
+
+    try:
+        asyncio.run(check())
+    finally:
+        release.set()
+
+
 @pytest.mark.parametrize("size", [(60, 24), (80, 24), (130, 32)])
 def test_search_controls_leave_visible_byte_rows(tmp_path: Path, size: tuple[int, int]) -> None:
     async def check() -> None:
@@ -222,5 +262,23 @@ def test_search_controls_leave_visible_byte_rows(tmp_path: Path, size: tuple[int
             app.action_cancel_work()
             await pilot.pause()
             assert app.query_one(SearchPanel).results == []
+
+    asyncio.run(check())
+
+
+@pytest.mark.parametrize("query", ["root", "x"])
+def test_narrow_search_shows_bytes_without_taking_input_focus(tmp_path: Path, query: str) -> None:
+    async def check() -> None:
+        app = ExplorerApp(model_for(tmp_path / "input", b"x"))
+        async with app.run_test(size=(80, 24)) as pilot:
+            app.action_switch_pane()
+            assert app.query_one(StructureTree).display
+            await pilot.press("slash")
+            field = app.query_one(SearchPanel).query_one(Input)
+            field.value = query
+            await settle(app, pilot)
+            assert app.focused is field
+            assert not app.query_one(StructureTree).display
+            assert app.query_one(ByteView).display
 
     asyncio.run(check())
