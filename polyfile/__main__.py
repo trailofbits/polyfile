@@ -339,6 +339,8 @@ viewer is built from the contents."""))
         sys.stderr.write(f"polyfile: error: {e!s}\n")
         exit(1)
 
+    if args.explore and hasattr(parser, "color"):
+        setattr(parser, "color", False)
     validate_explorer(parser, args)
 
     if args.dumpversion:

@@ -138,6 +138,27 @@ def test_redirected_explorer_does_not_write_terminal_controls(tmp_path: Path) ->
     assert b"requires terminal input and output" in result.stderr
 
 
+@pytest.mark.parametrize("option", ("--explore", "--explo"))
+def test_forced_color_explorer_abbreviation_diagnostics_are_plain(
+    tmp_path: Path,
+    option: str,
+) -> None:
+    if not hasattr(argparse.ArgumentParser(), "color"):
+        pytest.skip("argparse color output requires Python 3.14 or newer")
+    path = tmp_path / "sample.bin"
+    path.write_bytes(b"sample")
+    result = subprocess.run(
+        [sys.executable, "-m", "polyfile", option, str(path)],
+        capture_output=True,
+        timeout=10,
+        env={**os.environ, "FORCE_COLOR": "1", "PYTHON_COLORS": "1"},
+    )
+    assert result.returncode == 2
+    assert result.stdout == b""
+    assert b"\x1b" not in result.stderr
+    assert b"requires terminal input and output" in result.stderr
+
+
 def test_ordinary_cli_does_not_import_textual(tmp_path: Path) -> None:
     path = tmp_path / "empty"
     path.write_bytes(b"")
