@@ -11,7 +11,7 @@ from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.message import Message
-from textual.widgets import Button, Footer, Label, Select, Static, Tree
+from textual.widgets import Button, Footer, Input, Label, Select, Static, TextArea, Tree
 from textual.worker import get_current_worker
 
 from polyfile.explorer.byteview import ByteView
@@ -74,7 +74,7 @@ class ExplorerApp(App[int]):
         Binding("s", "sources", "Sources"),
         Binding("f2", "switch_pane", "Pane"),
         Binding("f1", "show_help", "Help"),
-        Binding("slash", "search", "Search"),
+        Binding("slash", "search", "Search", priority=True),
         Binding("n", "next_result", "Next hit", show=False),
         Binding("N,shift+n", "previous_result", "Previous hit", show=False),
         Binding("e", "export_selection", "Extract"),
@@ -254,8 +254,14 @@ class ExplorerApp(App[int]):
     def action_show_help(self) -> None:
         self.push_screen(HelpDialog())
 
+    def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
+        """Keep the priority search shortcut from consuming typed or modal input."""
+        if action == "search":
+            return len(self.screen_stack) == 1 and not isinstance(self.focused, (Input, TextArea))
+        return super().check_action(action, parameters)
+
     def action_search(self) -> None:
-        self.query_one(SearchPanel).query_one("#search-query").focus()
+        self.set_focus(self.query_one(SearchPanel).query_one("#search-query"))
 
     def action_next_result(self) -> None:
         self.query_one(SearchPanel).next_result()

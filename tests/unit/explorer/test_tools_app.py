@@ -6,6 +6,7 @@ from pathlib import Path
 from threading import Event
 
 import pytest
+from textual import events
 from textual.pilot import Pilot
 from textual.widgets import Input, Select, Static, TextArea
 
@@ -337,5 +338,26 @@ def test_export_symlink_loop_reports_error_and_keeps_explorer_running(tmp_path: 
             app.query_one(ByteView).focus()
             await pilot.press("q")
         assert app.return_value == 0
+
+    asyncio.run(check())
+
+
+def test_batched_search_keys_focus_input_before_routing_the_query(tmp_path: Path) -> None:
+    async def check() -> None:
+        app = ExplorerApp(model_for(tmp_path / "input", b"needle"))
+        async with app.run_test(size=(120, 32)) as pilot:
+            app.set_focus(app.query_one(ByteView))
+            for character in "/needle":
+                app.post_message(events.Key("slash" if character == "/" else character, character))
+            await settle(app, pilot)
+            field = app.query_one(SearchPanel).query_one(Input)
+            assert field.value == "needle"
+            assert app.focused is field
+            assert not isinstance(app.screen, ExportScreen)
+            for character in "/N/E":
+                app.post_message(events.Key("slash" if character == "/" else character, character))
+            await settle(app, pilot)
+            assert field.value == "needle/N/E"
+            assert not isinstance(app.screen, ExportScreen)
 
     asyncio.run(check())

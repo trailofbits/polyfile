@@ -99,6 +99,35 @@ PreviewApp(ExplorerModel(sys.argv[1], [])).run()
         assert process.wait(timeout=10) == 0
 
 
+def test_batched_search_shortcut_routes_raw_query_to_input(tmp_path: Path) -> None:
+    path = tmp_path / "contents.bin"
+    path.write_bytes(b"needle")
+    program = """
+import sys
+from textual.widgets import Input, Static
+from polyfile.explorer.app import ExplorerApp
+from polyfile.explorer.model import ExplorerModel
+from polyfile.explorer.searchpanel import SearchPanel
+class PreviewApp(ExplorerApp):
+    def on_search_panel_results_changed(self, event):
+        self.search_input = self.query_one(SearchPanel).query_one(Input)
+        if self.search_input.value == "needle":
+            self.query_one("#title", Static).update("BATCHED_QUERY_READY")
+app = PreviewApp(ExplorerModel(sys.argv[1], []))
+app.run()
+print(f"QUERY={app.search_input.value}")
+"""
+    with terminal_process([sys.executable, "-c", program, str(path)]) as (master, process):
+        output = bytearray()
+        read_until(master, process, output, b"F1 for controls")
+        os.write(master, b"/needle")
+        read_until(master, process, output, b"BATCHED_QUERY_READY")
+        os.write(master, b"\x11")
+        read_until(master, process, output, b"QUERY=needle")
+        assert process.wait(timeout=10) == 0
+        assert b"Destination path" not in output
+
+
 @pytest.mark.parametrize(
     ("action", "expected"),
     ((b"q", 0), (b"\x11", 0), (b"\x03", 130), (signal.SIGINT, 130), (signal.SIGTERM, 143)),
