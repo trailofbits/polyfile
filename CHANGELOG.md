@@ -125,7 +125,6 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 - **Breaking:** Apply PDF member and decoded-byte limits before stream expansion, including
   filter chains and structural xref/object streams. Preserve known physical structure when
   decoding is refused, and reuse stream budgets across repeated lookups (#3779).
-
 - **Breaking:** Identify HWP 5.0 from its compound-document `FileHeader` stream with the
   standalone libmagic description and `application/x-hwp`. Validate sector chains and stream
   bounds before replacing the definitions' OLE-prefixed `application/hwp+zip` result (#3535).
