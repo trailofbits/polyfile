@@ -69,7 +69,50 @@ def test_shared_terminal_keeps_requested_output(sample, format):
     terminal = Terminal()
     with redirect_stdout(terminal), redirect_stderr(terminal):
         main(["polyfile", "--format", format, sample])
-    assert ANSI.sub("", expected).strip() in screen_text(terminal.getvalue())
+    visible = screen_text(terminal.getvalue()).rstrip()
+    assert "Complete |" in visible
+    assert visible.endswith(ANSI.sub("", expected).rstrip())
+
+
+def test_shared_terminal_keeps_mixed_stdout_after_summary(sample):
+    args = ("-r", "mime", "-r", "json", "--no-contents", "-r", "file")
+    expected, _ = invoke(sample, *args, stdout_tty=True)
+    terminal = Terminal()
+    with redirect_stdout(terminal), redirect_stderr(terminal):
+        main(["polyfile", *args, sample])
+    visible = screen_text(terminal.getvalue()).rstrip()
+    assert visible.count("Complete |") == 1
+    assert visible.endswith(expected.rstrip())
+
+
+def test_redirected_stdout_follows_terminal_summary(sample):
+    errors = Terminal()
+
+    class Results(io.StringIO):
+        def write(self, text: str) -> int:
+            assert "Complete |" in screen_text(errors.getvalue())
+            return super().write(text)
+
+    output = Results()
+    with redirect_stdout(output), redirect_stderr(errors):
+        main(["polyfile", "--format", "sbud", sample])
+    assert json.loads(output.getvalue())["struc"]
+
+
+def test_large_tree_precedes_sbud_output(tmp_path, monkeypatch):
+    monkeypatch.setenv("TERM", "xterm-256color")
+    monkeypatch.delenv("CI", raising=False)
+    path = tmp_path / "many_members.zip"
+    members = {f"member_{index:02}.txt": b"hello\n" for index in range(30)}
+    path.write_bytes(build_zip(members=members))
+    terminal = Terminal()
+    with redirect_stdout(terminal), redirect_stderr(terminal):
+        main(["polyfile", "--format", "sbud", "--no-contents", str(path)])
+    tree, result = screen_text(terminal.getvalue()).split("Complete |", 1)
+    assert len(tree.splitlines()) > 30
+    assert "member_00.txt" in tree
+    assert "member_29.txt" in tree
+    assert json.loads(result.split("\n", 1)[1])["struc"]
 
 
 @pytest.mark.parametrize("refresh", [False, True])
@@ -231,6 +274,8 @@ def test_interruption_preserves_partial_tree_and_restores_signal_handler(
     assert "Complete |" not in tree
     assert signal.getsignal(signal.SIGTERM) is previous
     assert "\x1b[?25h" in errors.getvalue()
+    if interrupt == signal.SIGTERM:
+        assert json.loads(output.getvalue())["struc"]
 
 
 def test_dumb_terminal_prints_static_summary_without_cursor_codes(sample, monkeypatch):

@@ -1,6 +1,7 @@
 import argparse
-from collections.abc import Sequence
-from contextlib import AbstractContextManager, ExitStack
+from collections.abc import Generator, Sequence
+from contextlib import AbstractContextManager, ExitStack, contextmanager, redirect_stdout
+from io import TextIOWrapper
 import json
 import logging
 import math
@@ -8,9 +9,11 @@ import os
 from pathlib import Path
 import re
 import signal
+from shutil import copyfileobj
 import sys
+from tempfile import TemporaryFile
 from textwrap import dedent
-from typing import Any, Self, TextIO, cast
+from typing import Any, BinaryIO, Self, TextIO, cast
 
 from polyfile.analysis import AnalysisLimits
 from polyfile import html, logger
@@ -73,6 +76,37 @@ class KeyboardInterruptHandler:
                     sys.exit(0)
         except KeyboardInterrupt:
             sys.exit(128 + signal.SIGINT)
+
+
+class _OutputBuffer(TextIOWrapper):
+    def __init__(self, buffer: BinaryIO, output: TextIO):
+        super().__init__(
+            buffer,
+            encoding=output.encoding or "utf-8",
+            errors=output.errors or "strict",
+            newline="",
+        )
+        self._terminal = output.isatty()
+
+    def isatty(self) -> bool:
+        return self._terminal
+
+
+@contextmanager
+def _defer_stdout(*, enabled: bool) -> Generator[None, None, None]:
+    """Write results after terminal status closes, retaining partial output on failure."""
+    if not enabled:
+        yield
+        return
+    output = sys.stdout
+    with TemporaryFile() as buffer, _OutputBuffer(buffer, output) as pending:
+        try:
+            with redirect_stdout(pending):
+                yield
+        finally:
+            pending.seek(0)
+            copyfileobj(pending, output)
+            output.flush()
 
 
 class FormatOutput:
@@ -391,8 +425,10 @@ viewer is built from the contents."""))
     else:
         level = logger.STATUS
 
-    with logger.logging_context(level, quiet=args.quiet, interactive=not args.debugger):
-        run_analysis(args)
+    defer_output = sys.stderr.isatty() and not (args.quiet or args.debugger or args.explore)
+    with _defer_stdout(enabled=defer_output):
+        with logger.logging_context(level, quiet=args.quiet, interactive=not args.debugger):
+            run_analysis(args)
 
 
 def selected_matcher(filetypes: list[str] | None) -> MagicMatcher | None:
