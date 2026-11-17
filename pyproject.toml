@@ -47,6 +47,7 @@ dependencies = [
     # Keep CI's audited runtime environment and isolated builds on the same patched backend.
     # Update this pin together with [build-system] requires.
     "setuptools==84.2.1",
+    "textual==8.2.8",
 ]
 
 [project.optional-dependencies]

@@ -72,6 +72,24 @@ $ polyfile --html output.html png-polyglot.png
 The viewer renders any byte that no match describes in gray on a diagonal hatch, and reports how many
 such bytes the file has above the hex dump.
 
+To inspect the same structure directly in your terminal, use `--explore`:
+
+```console
+$ polyfile --explore png-polyglot.png
+```
+
+PolyFile finishes its scan before opening an interactive tree and hex/UTF-8 viewer. Select a
+structure node to reveal its byte range, switch between the original file and decoded sources,
+search bytes or structure, or extract a selected range. Press **F1** for controls and **q** to exit.
+Narrow terminals show one pane at a time; **F2** switches between structure and bytes.
+
+Explorer mode requires a named file and an interactive terminal for stdin, stdout, and stderr.
+Use it separately from `--format`, `--html`, `--output`, and debugger options. Textual is installed
+with PolyFile. See the [terminal explorer guide][explorer] for controls,
+search behavior, extraction, and development checks.
+
+[explorer]: https://github.com/trailofbits/polyfile/blob/master/docs/testing_terminal_explorer.md
+
 Run `polyfile --help` for full usage instructions.
 
 ### Large files and recursive analysis
@@ -81,7 +99,7 @@ Identification continues after finding a format so that secondary formats and po
 visible. Some matching rules search the entire input, so identification time can still grow with
 the file size.
 
-JSON, SBuD, and HTML output also parse recognized formats and recursively analyze supported
+JSON, SBuD, HTML, and `--explore` also parse recognized formats and recursively analyze supported
 embedded or decoded content. Use `--max-depth 0` to prevent recursive content analysis while
 retaining the input's identification and top-level structure:
 

@@ -4,18 +4,20 @@ from contextlib import AbstractContextManager, ExitStack
 import json
 import logging
 import math
+import os
+from pathlib import Path
 import re
 import signal
 import sys
 from textwrap import dedent
-from typing import Any, TextIO, cast
+from typing import Any, Self, TextIO, cast
 
 from polyfile.analysis import AnalysisLimits
 from polyfile import html, logger
 from polyfile.fileutils import PathOrStdin, PathOrStdout
 from polyfile.magic import MagicMatcher
 from polyfile.debugger import Debugger
-from polyfile.polyfile import __version__, Analyzer
+from polyfile.polyfile import __version__, Analyzer, Match
 from polyfile.repl import ExitREPL
 
 
@@ -23,7 +25,7 @@ log = logger.getStatusLogger("polyfile")
 
 
 class SIGTERMHandler:
-    def __init__(self):
+    def __init__(self) -> None:
         self.terminated = False
 
     def __enter__(self):
@@ -39,11 +41,15 @@ class SIGTERMHandler:
 
 
 class KeyboardInterruptHandler:
-    def __enter__(self):
-        pass
+    def __init__(self) -> None:
+        self.interrupted = False
+
+    def __enter__(self) -> Self:
+        return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         if isinstance(exc_val, KeyboardInterrupt):
+            self.interrupted = True
             logger.partial("Interrupted")
             with logger.suspend_status():
                 return self.handle_interrupt()
@@ -185,11 +191,44 @@ def add_analysis_limits(parser: argparse.ArgumentParser) -> None:
                              "(default: unlimited)")
 
 
+def validate_explorer(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
+    """Reject unsupported explorer combinations before opening the input or terminal."""
+    if not args.explore:
+        return
+    conflicts = {
+        "--format/--output": args.format,
+        "--html": args.html,
+        "--list": args.list,
+        "--only-match-mime": args.only_match_mime,
+        "--explain": args.explain,
+        "--debugger": args.debugger,
+        "--eval-command": args.eval_command,
+        "--no-debug-python": args.no_debug_python,
+        "--no-contents": args.no_contents,
+        "--version": args.version,
+        "-dumpversion": args.dumpversion,
+    }
+    selected = [option for option, value in conflicts.items() if value]
+    if selected:
+        parser.error("--explore cannot be combined with " + ", ".join(selected))
+    if args.FILE == "-":
+        parser.error("--explore requires a named regular file; standard input is unsupported")
+    if not Path(args.FILE).is_file():
+        parser.error(f"--explore requires a regular file: {args.FILE!r}")
+    if not all(stream.isatty() for stream in (sys.stdin, sys.stdout, sys.stderr)):
+        parser.error("--explore requires terminal input and output; run it in an interactive terminal")
+    term = os.environ.get("TERM", "")
+    if term.lower() in {"dumb", "unknown"} or (not term and os.name != "nt"):
+        parser.error("--explore requires a capable terminal; set TERM to your terminal type")
+
+
 def main(argv: Sequence[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description='A utility to recursively map the structure of a file.',
                                      formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument('FILE', nargs='?', default='-',
                         help='the file to analyze; pass \'-\' or omit to read from STDIN')
+    parser.add_argument('--explore', action='store_true',
+                        help='explore the file structure and bytes in an interactive terminal')
 
     parser.add_argument('--format', '-r', type=FormatOutput, action="append", choices=[
         FormatOutput(f) for f in FormatOutput.valid_formats
@@ -287,12 +326,22 @@ viewer is built from the contents."""))
     if argv is None:
         argv = sys.argv
 
+    options = argv[1:]
+    if "--" in options:
+        options = options[:options.index("--")]
+    if "--explore" in options and hasattr(parser, "color"):
+        setattr(parser, "color", False)
+
     try:
         args = parser.parse_args(argv[1:])
     except ValueError as e:
         parser.print_usage()
         sys.stderr.write(f"polyfile: error: {e!s}\n")
         exit(1)
+
+    if args.explore and hasattr(parser, "color"):
+        setattr(parser, "color", False)
+    validate_explorer(parser, args)
 
     if args.dumpversion:
         print(__version__)
@@ -330,7 +379,7 @@ viewer is built from the contents."""))
     if args.only_match_mime:
         args.format.append(FormatOutput(output_format="mime"))
 
-    if not args.format:
+    if not args.format and not args.explore:
         args.format.append(FormatOutput())
 
     reject_html_without_contents(parser, args)
@@ -400,11 +449,16 @@ def run_analysis(args: argparse.Namespace) -> None:
         )
         analyzer = Analyzer(file_path, parse=not args.only_match, magic_matcher=magic_matcher,
                             limits=limits)
-        structured = any(fmt.output_format in {"html", "json", "sbud"} for fmt in args.format)
+        structured = args.explore or any(
+            fmt.output_format in {"html", "json", "sbud"} for fmt in args.format
+        )
         logger.start_scan("stdin" if args.FILE == "-" else args.FILE, recursive=structured)
         try:
-            sbud = analyze_structure(args, analyzer, signals) if structured else None
-            write_outputs(args, analyzer, sbud, signals)
+            if args.explore:
+                explore_analysis(args, analyzer, signals)
+            else:
+                sbud = analyze_structure(args, analyzer, signals) if structured else None
+                write_outputs(args, analyzer, sbud, signals)
         finally:
             logger.report_analysis_status(analyzer.matches_so_far or [])
             analyzer.close()
@@ -413,26 +467,54 @@ def run_analysis(args: argparse.Namespace) -> None:
             sys.exit(128 + signal.SIGTERM)
 
 
-def analyze_structure(args: argparse.Namespace, analyzer: Analyzer,
-                      signals: SIGTERMHandler) -> dict[str, Any]:
+def collect_matches(args: argparse.Namespace, analyzer: Analyzer,
+                    signals: SIGTERMHandler) -> tuple[list[Match], bool]:
     """Collect recursive results, retaining discoveries if scanning stops early."""
-    with KeyboardInterruptHandler():
+    partial = False
+    with KeyboardInterruptHandler() as interruption:
         if args.max_matches is None or args.max_matches > 0:
-            for match in analyzer.matches():
+            for _ in analyzer.matches():
                 if signals.terminated:
                     break
                 if args.max_matches is not None and len(analyzer.matches_so_far or ()) >= args.max_matches:
+                    partial = True
                     logger.partial("Match limit reached")
                     log.info("Found %s matches; stopping early", args.max_matches)
                     break
         else:
+            partial = True
             logger.partial("Match limit reached")
     matches = analyzer.matches_so_far or []
-    if args.require_match and not matches:
+    if args.require_match and not matches and not signals.terminated:
         log.info("No matches found, exiting")
         sys.exit(127)
+    return matches, partial or interruption.interrupted or signals.terminated
+
+
+def analyze_structure(args: argparse.Namespace, analyzer: Analyzer,
+                      signals: SIGTERMHandler) -> dict[str, Any]:
+    """Serialize completed or retained recursive results for structured output."""
+    matches, _ = collect_matches(args, analyzer, signals)
     log.status("Preparing structured output")
     return analyzer.sbud(matches=matches, include_contents=not args.no_contents)
+
+
+def explore_analysis(args: argparse.Namespace, analyzer: Analyzer, signals: SIGTERMHandler) -> None:
+    """Hand source-aware scan results to the explorer without serializing their bytes."""
+    from polyfile.explorer.runner import run_explorer
+
+    matches, partial = collect_matches(args, analyzer, signals)
+    if signals.terminated:
+        return
+    logger.report_analysis_status(matches)
+    analyzer.close()
+    with logger.suspend_status():
+        code = run_explorer(
+            analyzer.path, matches, partial=partial, terminated=lambda: signals.terminated,
+        )
+    if code:
+        logger.partial("Interrupted" if code in {130, 143} else "Failed")
+        sys.exit(code)
 
 
 def write_text(output: TextIO, text: str) -> None:
