@@ -8,7 +8,7 @@ from dataclasses import dataclass, field, fields
 class AnalysisLimits:
     """Configure recursive analysis; each omitted limit is unlimited.
 
-    Byte limits count content handed to recursive matching, excluding the original input.
+    Byte limits count recursive content and decoded PDF structure, excluding the original input.
     Depth counts content transitions rather than structural nodes; the input has depth zero.
     """
 

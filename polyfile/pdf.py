@@ -1,8 +1,9 @@
 import codecs
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from encodings.utf_8 import decode as decode_utf8
 from typing import (
     TYPE_CHECKING,
+    Any,
     BinaryIO,
     Generic,
     Protocol,
@@ -66,6 +67,7 @@ from polyfile._pdfminer_adapter import (
 )
 
 from polyfile.compression import match_decoded
+from polyfile._pdf_filters import PDFDecodeLimit, decode_bounded_filter
 from polyfile.analysis import AnalysisContext, AnalysisLimits
 
 from polyfile.fileutils import FileStream
@@ -724,6 +726,9 @@ class PSStr(PSSequence[str, str], str):
 
 
 class PSBytes(PSSequence[int, bytes], bytes):
+    _pdf_stream_member_context: AnalysisContext | None = None
+    _pdf_stream_bytes_context: AnalysisContext | None = None
+
     def __new__(cls, *args, **kwargs) -> Self:
         kwargs = dict(kwargs)
         if "pdf_bytes" not in kwargs:
@@ -1153,6 +1158,27 @@ class PNGPredictor(PSBytes):
         return ret
 
 
+@dataclass
+class _PDFStreamPolicy:
+    context: AnalysisContext
+    depth: int = 0
+    structural: bool = False
+    streams: dict[int, "PDFObjectStream"] = field(default_factory=dict)
+
+    def bind(self, stream: "PDFObjectStream") -> "PDFObjectStream":
+        stream._normalize_encoded_span()
+        previous = self.streams.get(stream.pdf_offset)
+        if previous is None or not previous._entry_counted:
+            stream._policy = self
+            self.streams[stream.pdf_offset] = stream
+            return stream
+        if previous.decipher is None and stream.decipher is not None:
+            if previous.get("Type") is not LITERAL_XREF:
+                previous._refresh_encoded_stream(stream)
+        previous.decipher = stream.decipher
+        return previous
+
+
 class PDFObjectStream(_PDFValue, PDFStream):
     def __init__(self, parent: PDFStream, pdf_offset: int, pdf_bytes: int):
         super().__init__(
@@ -1166,6 +1192,32 @@ class PDFObjectStream(_PDFValue, PDFStream):
         self.data = parent.data
         self.objid = parent.objid
         self.genno = parent.genno
+        self._policy: _PDFStreamPolicy | None = None
+        self._entry_counted = False
+        self._structural_required = False
+        self._decode_error: PDFDecodeLimit | None = None
+
+    def _normalize_encoded_span(self) -> None:
+        length = self.get("Length")
+        data = self.rawdata
+        if not isinstance(length, int) or not isinstance(data, PSBytes):
+            return
+        if (
+            0 <= length and len(data) - length in (1, 2)
+            and data[length:] in (b"\n", b"\r", b"\r\n")
+        ):
+            self.pdf_bytes = int(length)
+            self.rawdata = PSBytes(
+                bytes.__getitem__(data, slice(None, length)),
+                pdf_offset=self.pdf_offset, pdf_bytes=self.pdf_bytes,
+            )
+
+    def _refresh_encoded_stream(self, stream: "PDFObjectStream") -> None:
+        self.attrs, self.parent = stream.attrs, stream.parent
+        self.pdf_bytes, self.rawdata = stream.pdf_bytes, stream.rawdata
+        self.data, self._decode_error = None, None
+        if isinstance(self.rawdata, PSBytes) and self._entry_counted and self._policy is not None:
+            self.rawdata._pdf_stream_member_context = self._policy.context
 
     @property
     def data(self) -> PSBytes | None:
@@ -1188,93 +1240,148 @@ class PDFObjectStream(_PDFValue, PDFStream):
         else:
             raise ValueError(f"PDFObjectStream {self!r} does not have any data")
 
-    def decode(self):
-        assert self.data is None \
-               and self.rawdata is not None, str((self.data, self.rawdata))
-        assert isinstance(self.rawdata, PSBytes)
+    def decode(self) -> None:
+        """Decode the stream after enforcing its document-local analysis policy.
+
+        Raises:
+            PDFDecodeLimit: If decoding is invalid, unsupported, or exceeds an allowance.
+        """
+        if self._decode_error is not None:
+            raise self._decode_error
+        try:
+            self._decode_payload()
+        except PDFDecodeLimit as error:
+            self._decode_error = error
+            raise
+        except PDFNotImplementedError as error:
+            self._decode_error = PDFDecodeLimit(str(error), status="unsupported")
+            raise self._decode_error from error
+        except (ValueError, IndexError, StopIteration) as error:
+            self._decode_error = PDFDecodeLimit(
+                f"Invalid PDF stream {self.objid}: {error}", status="invalid",
+            )
+            raise self._decode_error from error
+
+    def _decode_payload(self) -> None:
+        assert self.data is None and isinstance(self.rawdata, PSBytes)
+        self._admit_decode()
         data = self.rawdata
         if self.decipher:
-            # Handle encryption
-            assert self.objid is not None
-            assert self.genno is not None
+            if self._output_limit is not None:
+                raise PDFDecodeLimit(
+                    "PDF stream decryption cannot honor a decoded-byte allowance",
+                    status="unsupported",
+                )
+            assert self.objid is not None and self.genno is not None
             deciphered = self.decipher(self.objid, self.genno, data, self.attrs)
             assert isinstance(deciphered, PSBytes)
-            data = deciphered
-        filters = self.get_filters()
-        if not filters:
-            self.data = data
-            self.rawdata = None
-            return
-        for (f, params) in filters:
-            decoded: bytes | None = None
-            if f in LITERALS_FLATE_DECODE:
-                # will get errors if the document is encrypted.
-                try:
-                    decoded = zlib.decompress(data)
-                except zlib.error as e:
-                    decoded = DecodingError(str(e))
-            elif f in LITERALS_LZW_DECODE:
-                decoded = lzwdecode(data)
-            elif f in LITERALS_ASCII85_DECODE:
-                decoded = ascii85decode(data)
-            elif f in LITERALS_ASCIIHEX_DECODE:
-                decoded = asciihexdecode(data)
-            elif f in LITERALS_RUNLENGTH_DECODE:
-                decoded = rldecode(data)
-            elif f in LITERALS_CCITTFAX_DECODE:
-                decoded = ccittfaxdecode(data, params)
-            elif f in LITERALS_DCT_DECODE or f == LIT("JPXDecode"):
-                # This is probably a JPG stream
-                # it does not need to be decoded twice.
-                # Just return the stream to the user.
-                pass
-            elif f in LITERALS_JBIG2_DECODE:
-                pass
-            elif f == LITERAL_CRYPT:
-                # not yet..
-                raise PDFNotImplementedError('/Crypt filter is unsupported')
-            else:
-                raise PDFNotImplementedError(f"Unsupported filter: {f!r}")
-            if decoded is not None:
-                if isinstance(f, PDFLiteral):
-                    name = f.name
-                else:
-                    name = f
-                data = PDFStreamFilter(
-                    decoded,
-                    pdf_offset=data.pdf_offset,
-                    pdf_bytes=data.pdf_bytes,
-                    original_bytes=data,
-                    name=name
-                )
-                _opaque_pdf_provenance(data, data.original_bytes, f, params)
-            # apply predictors
-            if params and 'Predictor' in params:
-                pred = int_value(params['Predictor'])
-                if pred == 1:
-                    # no predictor
-                    pass
-                elif 10 <= pred:
-                    # PNG predictor
-                    colors = int_value(params.get('Colors', 1))
-                    columns = int_value(params.get('Columns', 1))
-                    raw_bits_per_component = params.get('BitsPerComponent', 8)
-                    bitspercomponent = int_value(raw_bits_per_component)
-                    predicted = apply_png_predictor(pred, colors, columns,
-                                               bitspercomponent, data)
-                    data = PNGPredictor(
-                        predicted,
-                        pdf_offset=data.pdf_offset,
-                        pdf_bytes=data.pdf_bytes,
-                        original_bytes=data,
-                        params=params
-                    )
-                else:
-                    error_msg = f"Unsupported predictor: {pred!r}"
-                    raise PDFNotImplementedError(error_msg)
-        self.data = data
+            data = self._charge_output(deciphered)
+        for name, params in self.get_filters():
+            data = self._decode_filter(data, name, params)
+            data = self._decode_predictor(data, params)
+        self.data = self._charge_output(data)
         self.rawdata = None
-        return
+
+    @property
+    def _output_limit(self) -> int | None:
+        return self._policy.context.member_limit if self._policy is not None else None
+
+    def _admit_decode(self) -> None:
+        if self._policy is None or self._entry_counted:
+            return
+        context = self._policy.context
+        structural = self._structural_required or (
+            self._policy.structural and self.get("Type") in (LITERAL_XREF, LITERAL_OBJSTM)
+        )
+        limit = context.limits.max_depth
+        if not structural and limit is not None and self._policy.depth >= limit:
+            raise PDFDecodeLimit(f"PDF payload exceeds --max-depth={limit}")
+        reason = context.claim_entry()
+        if reason is not None:
+            raise PDFDecodeLimit(reason)
+        self._entry_counted = True
+        self._structural_required = structural
+        assert isinstance(self.rawdata, PSBytes)
+        self.rawdata._pdf_stream_member_context = context
+
+    def _charge_output(self, data: PSBytes) -> PSBytes:
+        if self._policy is not None and data._pdf_stream_bytes_context is not self._policy.context:
+            reason = self._policy.context.claim_member(
+                len(data), self._policy.depth, count=False,
+            )
+            if reason is not None:
+                raise PDFDecodeLimit(reason)
+            data._pdf_stream_member_context = self._policy.context
+            data._pdf_stream_bytes_context = self._policy.context
+        return data
+
+    def _decode_filter(self, data: PSBytes, name: object, params: Any) -> PSBytes:
+        try:
+            if self._output_limit is None:
+                decoded = _decode_pdf_filter(name, data, params)
+            else:
+                decoded = decode_bounded_filter(name, data, self._output_limit)
+        except zlib.error as error:
+            decoded = DecodingError(str(error))
+        if decoded is None:
+            return data
+        value = PDFStreamFilter(
+            decoded, pdf_offset=data.pdf_offset, pdf_bytes=data.pdf_bytes,
+            original_bytes=data, name=name.name if isinstance(name, PDFLiteral) else name,
+        )
+        _opaque_pdf_provenance(value, data, name, params)
+        return self._charge_output(value)
+
+    def _decode_predictor(self, data: PSBytes, params: Any) -> PSBytes:
+        if not params or "Predictor" not in params:
+            return data
+        predictor = int_value(params["Predictor"])
+        if predictor == 1:
+            return data
+        if predictor < 10:
+            raise PDFNotImplementedError(f"Unsupported predictor: {predictor!r}")
+        colors = int_value(params.get("Colors", 1))
+        columns = int_value(params.get("Columns", 1))
+        bits = int_value(params.get("BitsPerComponent", 8))
+        if self._output_limit is not None:
+            _check_pdf_predictor(data, colors, columns, bits, self._output_limit)
+        predicted = apply_png_predictor(predictor, colors, columns, bits, data) if data else b""
+        value = PNGPredictor(
+            predicted, pdf_offset=data.pdf_offset, pdf_bytes=data.pdf_bytes,
+            original_bytes=data, params=params,
+        )
+        return self._charge_output(value)
+
+
+def _decode_pdf_filter(name: object, data: bytes, params: Any) -> bytes | None:
+    decoders = (
+        (LITERALS_FLATE_DECODE, zlib.decompress),
+        (LITERALS_LZW_DECODE, lzwdecode),
+        (LITERALS_ASCII85_DECODE, ascii85decode),
+        (LITERALS_ASCIIHEX_DECODE, asciihexdecode),
+        (LITERALS_RUNLENGTH_DECODE, rldecode),
+    )
+    for names, decoder in decoders:
+        if name in names:
+            return decoder(data)
+    if name in LITERALS_CCITTFAX_DECODE:
+        return ccittfaxdecode(data, params)
+    if name in LITERALS_DCT_DECODE or name in LITERALS_JBIG2_DECODE or name == LIT("JPXDecode"):
+        return None
+    if name == LITERAL_CRYPT:
+        raise PDFNotImplementedError("/Crypt filter is unsupported")
+    raise PDFNotImplementedError(f"Unsupported filter: {name!r}")
+
+
+def _check_pdf_predictor(data: bytes, colors: int, columns: int, bits: int, limit: int) -> None:
+    if colors < 1 or columns < 1 or bits not in (1, 8):
+        raise PDFDecodeLimit("Invalid PDF PNG predictor dimensions", status="invalid")
+    row_bytes = colors * columns * bits // 8
+    if row_bytes < 1 or data and row_bytes > len(data):
+        raise PDFDecodeLimit("PDF PNG predictor row exceeds its input", status="invalid")
+    size = len(data) - (len(data) + row_bytes) // (row_bytes + 1)
+    if size > limit:
+        raise PDFDecodeLimit(f"PDF predictor output exceeds the {limit}-byte analysis allowance")
 
 
 class PDFParser(PDFMinerParser):
@@ -1389,7 +1496,10 @@ class PDFParser(PDFMinerParser):
                 stream: PDFStream = obj[1]
                 assert stream.rawdata is not None
                 pos = obj[0]
-                transformed.append((pos, PDFObjectStream(stream, pdf_offset=pos, pdf_bytes=len(stream.rawdata))))
+                wrapped = PDFObjectStream(stream, pdf_offset=pos, pdf_bytes=len(stream.rawdata))
+                if isinstance(self.doc, InstrumentedPDFDocument):
+                    wrapped = self.doc._stream_policy.bind(wrapped)
+                transformed.append((pos, wrapped))
             elif len(obj) == 2 and isinstance(obj[1], PSObject) \
                     and not isinstance(obj[1], (PDFLiteral, PSKeyword)):
                 pos = obj[0]
@@ -1537,7 +1647,11 @@ def _match_pdf_decoded(
     record = sources.get(id(data)) if sources is not None else None
     if record is not None and record.match is not None:
         return
-    matches = match_decoded(parent, data, source=record.source if record is not None else None)
+    matches = match_decoded(
+        parent, data, source=record.source if record is not None else None,
+        member_counted=getattr(data, "_pdf_stream_member_context", None) is parent.analysis_context,
+        bytes_counted=getattr(data, "_pdf_stream_bytes_context", None) is parent.analysis_context,
+    )
     decoded = next(matches)
     if record is not None:
         record.match = decoded
@@ -1683,6 +1797,8 @@ def _parse_pdf_bytes(
         node = _pdf_submatch("PNGPredictor", bytes(obj.original_bytes), obj, parent, source_base)
     else:
         node = _pdf_submatch(type(obj).__name__, bytes(obj), obj, parent, source_base)
+    node.analysis_member_counted = obj._pdf_stream_member_context is node.analysis_context
+    node.analysis_bytes_counted = obj._pdf_stream_bytes_context is node.analysis_context
     yield node
     if isinstance(obj, PNGPredictor):
         yield from parse_object(obj.params, matcher, node, source_base, sources=sources)
@@ -1749,17 +1865,28 @@ class InstrumentedPDFDocument(AdapterPDFDocument):
     xref_class = InstrumentedPDFXRef
     fallback_xref_class = InstrumentedPDFXRefFallback
 
-    def __init__(self, *args, analysis_context: AnalysisContext | None = None, **kwargs):
+    def __init__(
+        self, *args, analysis_context: AnalysisContext | None = None,
+        analysis_depth: int = 0, **kwargs,
+    ):
         self._decipher: DecipherCallable | None = None
         self._analysis_context = analysis_context or AnalysisContext(AnalysisLimits())
+        self._stream_policy = _PDFStreamPolicy(
+            self._analysis_context, analysis_depth, structural=True,
+        )
+        self._initialization_error: PDFDecodeLimit | None = None
         self._decoded_sources: _PDFSources = {}
         self._decoded_streams: dict[tuple[int, int | None], _DecodedPDFSource] = {}
         try:
             super().__init__(*args, **kwargs)
+        except PDFDecodeLimit as error:
+            self._initialization_error = error
         except PDFSyntaxError as error:
             if "No /Root object" not in str(error):
                 raise
             log.debug("Mapping a malformed PDF without a /Root object")
+        finally:
+            self._stream_policy.structural = False
 
     def _object_stream_source(self, stream: PDFStream, data: bytes) -> _DecodedPDFSource:
         if not hasattr(self, "_decoded_sources"):
@@ -1789,6 +1916,8 @@ class InstrumentedPDFDocument(AdapterPDFDocument):
             if settings.STRICT:
                 raise PDFSyntaxError(f"Missing /N in object stream {stream.objid}") from None
             count = 0
+        if isinstance(stream, PDFObjectStream):
+            stream._structural_required = True
         data = stream.get_data()
         source = self._object_stream_source(stream, data)
         data = source.data
@@ -1941,28 +2070,38 @@ def pdf_obj_parser(
     assert parent.matcher is not None
     assert has_provenance(obj)
     log.status(f"Parsing PDF obj {objid}")
-    values = [obj]
+    values, error = _pdf_stream_values(obj)
     display_name, value = f"PDFObject{objid}", objid
     if isinstance(obj, PDFObjectStream):
         display_name, value = f"PDFObject{obj.objid}.{obj.genno}", (obj.objid, obj.genno)
-        values = [obj.attrs]
-        try:
-            values.append(obj.get_data())
-        except PDFNotImplementedError as error:
-            log.error(f"Unsupported PDF stream filter in object {obj.objid}: {error}")
     position, size = _pdf_object_extent(file_stream, obj)
     node = Submatch(
         "PDFObject", value, display_name=display_name, relative_offset=position,
         length=size, parent=parent,
     )
+    if error is not None:
+        node.analysis_status, node.analysis_message = error.status, str(error)
     yield node
     try:
         for item in values:
             yield from parse_object(
                 item, parent.matcher, node, pdf_header_offset, sources=sources,
             )
+        if error is not None and isinstance(obj, PDFObjectStream):
+            raw = _pdf_submatch("PSBytes", obj.rawdata, obj.data_value, node, pdf_header_offset)
+            raw.analysis_status, raw.analysis_message = error.status, str(error)
+            yield raw
     finally:
         log.clear_status()
+
+
+def _pdf_stream_values(obj: object) -> tuple[list[object], PDFDecodeLimit | None]:
+    if not isinstance(obj, PDFObjectStream):
+        return [obj], None
+    try:
+        return [obj.attrs, obj.get_data()], None
+    except PDFDecodeLimit as error:
+        return [obj.attrs], error
 
 
 def parse_trailer(
@@ -2145,6 +2284,10 @@ def _document_objects(document: InstrumentedPDFDocument, parent: Match) -> dict[
                 obj = document.getobj(number)
             except PDFObjectNotFound:
                 continue
+            except PDFDecodeLimit as error:
+                parent.analysis_status = error.status
+                parent.analysis_message = f"PDF object {number}: {error}"
+                continue
             except PDFNotImplementedError as error:
                 parent.analysis_status = "unsupported"
                 parent.analysis_message = f"PDF object {number}: {error}"
@@ -2184,6 +2327,14 @@ def _map_pdf_document(
     stream: FileStream, document: InstrumentedPDFDocument, parent: Match,
 ) -> Iterator[Match]:
     objects = _document_objects(document, parent)
+    if document._initialization_error is not None:
+        error = document._initialization_error
+        parent.analysis_status, parent.analysis_message = error.status, str(error)
+    known = {id(obj) for obj in objects.values()}
+    for index, obj in enumerate(document._stream_policy.streams.values(), 1):
+        if id(obj) not in known:
+            _set_pdf_source(obj, parent.source, parent.offset)
+            objects[-index] = obj
     sources = document._decoded_sources
     assert parent.matcher is not None
     for number, obj in objects.items():
@@ -2238,5 +2389,7 @@ def pdf_parser(file_stream: FileStream, parent: Match) -> Iterator[Match]:
     pdf_header_offset = source_base
     assert parent.matcher is not None
     parser = PDFParser(cast(BinaryIO, RawPDFStream(file_stream)))
-    doc = InstrumentedPDFDocument(parser, analysis_context=parent.analysis_context)
+    doc = InstrumentedPDFDocument(
+        parser, analysis_context=parent.analysis_context, analysis_depth=parent.analysis_depth,
+    )
     yield from _map_pdf_document(file_stream, doc, parent)
