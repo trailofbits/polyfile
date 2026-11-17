@@ -250,13 +250,14 @@ def test_cancel_export_preserves_destination_in_ui(
         release.set()
 
 
-@pytest.mark.parametrize("size", [(60, 24), (80, 24), (130, 32)])
+@pytest.mark.parametrize("size", [(80, 20), (60, 24), (80, 24), (130, 32)])
 def test_search_controls_leave_visible_byte_rows(tmp_path: Path, size: tuple[int, int]) -> None:
     async def check() -> None:
         app = ExplorerApp(model_for(tmp_path / "input", b"file"))
         async with app.run_test(size=size) as pilot:
             await pilot.pause()
-            assert app.query_one(ByteView).scrollable_content_region.height >= 2
+            minimum_rows = 1 if size[1] < 24 else 2
+            assert app.query_one(ByteView).scrollable_content_region.height >= minimum_rows
             app.query_one(SearchPanel).query_one(Input).value = "file"
             await settle(app, pilot)
             app.action_cancel_work()

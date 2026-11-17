@@ -60,6 +60,7 @@ class ExplorerApp(App[int]):
     #interpretations { height: 3; }
     #status { height: 1; padding: 0 1; }
     .compact #details { height: 3; }
+    .short #details { height: 1; }
     .narrow #structure { display: none; width: 1fr; }
     .narrow.show-tree #structure { display: block; }
     .narrow.show-tree #byte-pane { display: none; }
@@ -132,6 +133,7 @@ class ExplorerApp(App[int]):
         screen = self.screen_stack[0]
         screen.set_class(width < 110, "narrow")
         screen.set_class(self.size.height < 30, "compact")
+        screen.set_class(self.size.height < 24, "short")
         screen.set_class(self._show_tree, "show-tree")
 
     def select_node(self, uid: int) -> None:

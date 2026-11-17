@@ -34,7 +34,7 @@ class SearchPanel(Vertical):
     SearchPanel Input { width: 1fr; }
     SearchPanel Button { min-width: 5; width: 5; }
     SearchPanel Select { width: 1fr; }
-    SearchPanel Checkbox { width: 18; }
+    SearchPanel Checkbox { width: 22; }
     SearchPanel #search-status { height: 1; padding: 0 1; }
     """
     BINDINGS = [("shift+enter", "previous", "Previous result")]
