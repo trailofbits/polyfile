@@ -117,6 +117,7 @@ class OutputBuffer:
 
 def match_decoded(
     parent: Match, data: bytes, *, member_counted: bool = False, source: str | None = None,
+    bytes_counted: bool = False,
 ) -> Iterator[Match]:
     """Creates a decoded source and recursively analyzes its complete bytes.
 
@@ -125,6 +126,7 @@ def match_decoded(
         data: Complete, validated decoded bytes.
         member_counted: Whether the containing format already counted this member.
         source: A source identifier reserved before parsing this decoded buffer.
+        bytes_counted: Whether decoding already charged these bytes to the analysis budget.
 
     Yields:
         A decoded-content region and its recursively recognized file structure.
@@ -139,6 +141,7 @@ def match_decoded(
         decoded=data,
     )
     decoded.analysis_member_counted = member_counted
+    decoded.analysis_bytes_counted = bytes_counted
     yield decoded
     if parent.matcher is not None:
         yield from parent.matcher.match(data, parent=decoded)
