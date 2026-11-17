@@ -5,7 +5,7 @@ from typing import Any
 from pdfminer import settings
 from pdfminer.ascii85 import ascii85decode, asciihexdecode
 from pdfminer.ccitt import ccittfaxdecode
-from pdfminer.lzw import lzwdecode
+from pdfminer.lzw import LZWDecoder, lzwdecode
 from pdfminer.pdfparser import PDFSyntaxError
 from pdfminer.pdftypes import PDFNotImplementedError
 from pdfminer.runlength import rldecode
@@ -85,8 +85,8 @@ class AdapterPDFDocument(PDFDocument):
             if fallback:
                 parser.fallback = True
                 xref = self.fallback_xref_class()
-                xref.load(parser)
                 self.xrefs.append(xref)
+                xref.load(parser)
 
     def _load_trailers(self, password: str) -> None:
         for xref in self.xrefs:
@@ -182,6 +182,7 @@ __all__ = [
     "asciihexdecode",
     "ccittfaxdecode",
     "lzwdecode",
+    "LZWDecoder",
     "PDFSyntaxError",
     "PDFNotImplementedError",
     "rldecode",

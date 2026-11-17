@@ -36,6 +36,39 @@ include tagged object IDs, generations, identifiers, and encryption dictionary d
 the adapter boundary. These are conservative input sets, not per-output-byte mappings or a
 cryptographic execution trace. Passwords and other untagged inputs have no file span.
 
+## Stream resource controls
+
+Optional stream decoding checks the remaining member allowance and content depth before running
+filters. A refused payload retains its dictionary and physical encoded-byte region with
+`analysis_status: limited`; the report does not retain its decoded output. Each stream admitted
+for decoding consumes one member entry, including when a later decoding stage reports a
+limitation or unsupported feature.
+
+`max_member_bytes` bounds each filter or predictor output. `max_total_bytes` bounds the combined
+decoded outputs across the analysis, including intermediate filter stages. Completed stages are
+charged once before another stage runs; a later failure does not refund bytes already expanded.
+Mapping and recursively classifying a prepaid stage do not charge those same bytes again.
+Further embedded content consumes its own member and byte allowances. Encoded-byte regions that
+are independently passed to recursive matching remain subject to the existing matching budgets.
+
+Flate, LZW, ASCII85, ASCIIHex, and RunLength decoding bound output during expansion. PNG predictor
+dimensions and output sizes are checked before their buffers are constructed. CCITT decoding and
+stream decryption report `unsupported` when a decoded-byte bound is requested because their
+current backends cannot honor it. Without byte bounds, their existing backend behavior applies.
+JPEG, JPEG 2000, and JBIG2 stream filters continue to pass their encoded image bytes through.
+
+Cross-reference and object streams are structural inputs, including when a compressed catalog
+requires an object stream during document initialization. A type label alone does not make an
+unused stream a required structural input. Structural reads respect member and byte budgets,
+and repeated lookups reuse the stream's admission and decoded bytes even with document caching
+disabled. Reading structural objects does not add an optional-content depth transition. Recursive
+classification and emission of those decoded objects still respect content depth. If required
+structural decoding is refused, the report retains the physical objects and stream framing that
+the parser has already located, with an explicit limitation status.
+
+These controls bound decoded content, rather than the PDF parser's input storage or total Python
+heap. Source coordinates and dependency tracking remain unchanged for admitted content.
+
 ## Arithmetic and report dependencies
 
 Numeric `+`, `-`, `*`, `/`, `//`, and `%`, reflected forms, and unary `+`, `-`, and `abs()` retain

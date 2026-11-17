@@ -122,6 +122,7 @@ class Match:
             analysis_depth = parent.analysis_depth if parent is not None else 0
         self.analysis_depth = analysis_depth
         self.analysis_member_counted = False
+        self.analysis_bytes_counted = False
         self.analysis_skip_parsers: set[str] = set()
         self.analysis_status: str | None = None
         self.analysis_message: str | None = None
@@ -334,7 +335,8 @@ class Matcher:
         with FileStream(file_stream) as f, logger.scanning_region(parent):
             if parent is not None:
                 reason = analysis_context.claim_member(
-                    len(f), depth, count=not parent.analysis_member_counted,
+                    0 if parent.analysis_bytes_counted else len(f), depth,
+                    count=not parent.analysis_member_counted,
                 )
                 if reason is not None:
                     parent.analysis_status = "limited"
