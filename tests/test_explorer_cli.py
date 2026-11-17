@@ -1,7 +1,7 @@
 """Validate terminal explorer options before a scan or terminal write starts."""
 
-from collections.abc import Iterator, Sequence
-from contextlib import redirect_stderr, redirect_stdout
+from collections.abc import Callable, Generator, Iterator, Sequence
+from contextlib import contextmanager, redirect_stderr, redirect_stdout
 import io
 import os
 from pathlib import Path
@@ -164,7 +164,13 @@ def explored(monkeypatch: pytest.MonkeyPatch) -> list[tuple[Sequence[Match], boo
 
     calls: list[tuple[Sequence[Match], bool]] = []
 
-    def launch(path: str | Path, matches: Sequence[Match], *, partial: bool = False) -> int:
+    def launch(
+        path: str | Path,
+        matches: Sequence[Match],
+        *,
+        partial: bool = False,
+        terminated: Callable[[], bool] | None = None,
+    ) -> int:
         calls.append((matches, partial))
         return 0
 
@@ -290,7 +296,9 @@ def test_explorer_retains_partial_scan_after_interrupt(
         raise KeyboardInterrupt
 
     monkeypatch.setattr(Analyzer, "matches", interrupt_scan)
-    monkeypatch.setattr(cli.KeyboardInterruptHandler, "handle_interrupt", staticmethod(lambda: True))
+    monkeypatch.setattr(
+        cli.KeyboardInterruptHandler, "handle_interrupt", staticmethod(lambda: True)
+    )
     run_in_terminal(["polyfile", "--quiet", "--explore", str(terminal_cli)])
     assert explored[0][0]
     assert explored[0][1]
@@ -318,3 +326,57 @@ def test_scan_sigterm_takes_precedence_over_require_match(
         )
     assert exiting.value.code == 143
     assert explored == []
+
+
+def test_sigterm_during_explorer_preparation_does_not_open_ui(
+    terminal_cli: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from polyfile.explorer import runner
+    from polyfile.explorer.model import ExplorerModel
+
+    model = runner.ExplorerModel
+
+    def prepare(
+        path: str | Path, matches: Sequence[Match], *, partial: bool = False
+    ) -> ExplorerModel:
+        os.kill(os.getpid(), signal.SIGTERM)
+        return model(path, matches, partial=partial)
+
+    def unexpected_ui(app: object) -> None:
+        pytest.fail("explorer opened after receiving SIGTERM during preparation")
+
+    monkeypatch.setattr(runner, "ExplorerModel", prepare)
+    monkeypatch.setattr(runner.ExplorerApp, "run", unexpected_ui)
+    previous = signal.getsignal(signal.SIGTERM)
+    with pytest.raises(SystemExit) as exiting:
+        run_in_terminal(["polyfile", "--quiet", "--explore", str(terminal_cli)])
+    assert exiting.value.code == 143
+    assert signal.getsignal(signal.SIGTERM) == previous
+
+
+def test_sigterm_after_handler_installation_exits_before_pending_ui_work(
+    terminal_cli: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from polyfile.explorer import runner
+    from polyfile.explorer.app import ExplorerApp
+
+    signals, run = runner.explorer_signals, ExplorerApp.run
+
+    @contextmanager
+    def signal_before_run(app: ExplorerApp) -> Generator[None, None, None]:
+        with signals(app):
+            os.kill(os.getpid(), signal.SIGTERM)
+            yield
+
+    def headless(app: ExplorerApp) -> int | None:
+        return run(app, headless=True)
+
+    monkeypatch.setattr(runner, "explorer_signals", signal_before_run)
+    monkeypatch.setattr(ExplorerApp, "run", headless)
+    previous = signal.getsignal(signal.SIGTERM)
+    with pytest.raises(SystemExit) as exiting:
+        run_in_terminal(["polyfile", "--quiet", "--explore", str(terminal_cli)])
+    assert exiting.value.code == 143
+    assert signal.getsignal(signal.SIGTERM) == previous

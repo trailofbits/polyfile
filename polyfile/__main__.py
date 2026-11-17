@@ -501,7 +501,9 @@ def explore_analysis(args: argparse.Namespace, analyzer: Analyzer, signals: SIGT
     logger.report_analysis_status(matches)
     analyzer.close()
     with logger.suspend_status():
-        code = run_explorer(analyzer.path, matches, partial=partial)
+        code = run_explorer(
+            analyzer.path, matches, partial=partial, terminated=lambda: signals.terminated,
+        )
     if code:
         logger.partial("Interrupted" if code in {130, 143} else "Failed")
         sys.exit(code)
