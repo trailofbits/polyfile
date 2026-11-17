@@ -10,6 +10,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 
 ### Added
 
+- **Breaking:** Recursively classify and parse PNG images in ICO files and architecture members
+  in supported universal Mach-O binaries. Preserve source coordinates, directory fields, PNG
+  previews, and shared analysis limits; report invalid and overlapping member ranges explicitly.
 - **Breaking:** Analyze 7z archive structure and validated members with `py7zr==1.1.4` in
   isolated helpers. Solid/non-solid archives, compressed headers, checksums, decoded source
   coordinates, and optional recursive/helper resource limits have regression coverage.
