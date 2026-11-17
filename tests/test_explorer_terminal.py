@@ -70,6 +70,35 @@ def read_until(
             pytest.fail(f"terminal exited before {marker!r}: {bytes(output[-1500:])!r}")
 
 
+def test_uppercase_shortcuts_accept_raw_terminal_bytes(tmp_path: Path) -> None:
+    path = tmp_path / "contents.bin"
+    path.write_bytes(b"needle needle")
+    program = """
+import sys
+from textual.widgets import Input
+from polyfile.explorer.app import ExplorerApp
+from polyfile.explorer.model import ExplorerModel
+from polyfile.explorer.searchpanel import SearchPanel
+
+class PreviewApp(ExplorerApp):
+    def on_mount(self):
+        super().on_mount()
+        self.query_one(SearchPanel).query_one(Input).value = "needle"
+
+PreviewApp(ExplorerModel(sys.argv[1], [])).run()
+"""
+    with terminal_process([sys.executable, "-c", program, str(path)]) as (master, process):
+        output = bytearray()
+        read_until(master, process, output, b"1 of 2")
+        os.write(master, b"N")
+        read_until(master, process, output, b"2 of 2")
+        os.write(master, b"E")
+        read_until(master, process, output, b"Destination path")
+        os.write(master, b"\x11")
+        read_until(master, process, output, b"\x1b[?1049l")
+        assert process.wait(timeout=10) == 0
+
+
 @pytest.mark.parametrize(
     ("action", "expected"),
     ((b"q", 0), (b"\x11", 0), (b"\x03", 130), (signal.SIGINT, 130), (signal.SIGTERM, 143)),

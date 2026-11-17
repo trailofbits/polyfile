@@ -283,3 +283,35 @@ def test_narrow_search_shows_bytes_without_taking_input_focus(tmp_path: Path, qu
             assert app.query_one(ByteView).display
 
     asyncio.run(check())
+
+
+@pytest.mark.parametrize("keys", [("N", "E"), ("shift+n", "shift+e")])
+def test_source_shortcuts_handle_native_and_extended_keys(
+    tmp_path: Path,
+    keys: tuple[str, str],
+) -> None:
+    async def check() -> None:
+        contents = b"needle needle"
+        app = ExplorerApp(model_for(tmp_path / "input", contents))
+        output = tmp_path / "source.bin"
+        async with app.run_test(size=(100, 32)) as pilot:
+            panel = app.query_one(SearchPanel)
+            panel.query_one(Input).value = "needle"
+            await settle(app, pilot)
+            app.query_one(ByteView).focus()
+            await pilot.press(keys[0])
+            assert panel.current == 1
+            assert app.selection == ByteRange("file", 7, 6)
+            await pilot.press(keys[1])
+            assert isinstance(app.screen, ExportScreen)
+            app.screen.query_one(Input).value = str(output)
+            await pilot.press("enter")
+            await settle(app, pilot)
+            assert output.read_bytes() == contents
+            field = panel.query_one(Input)
+            field.value = ""
+            field.focus()
+            await pilot.press("N", "E")
+            assert field.value == "NE"
+
+    asyncio.run(check())
