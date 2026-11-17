@@ -86,9 +86,16 @@ class HelpDialog(ModalScreen[None]):
                 "g                 Go to a decimal or 0x byte offset\n"
                 "t                 Toggle hexadecimal / UTF-8 text\n"
                 "s                 Choose a physical or decoded source\n"
+                "/                 Search bytes or structure\n"
+                "n / Shift+N       Next / previous search result\n"
+                "Enter / Shift+Enter  Next / previous while searching\n"
+                "e / Shift+E       Extract selection / complete source\n"
+                "y / o             Copy selection as hex / copy offset\n"
+                "Ctrl+G            Cancel background search, extraction, or copy\n"
                 "F2                Switch structure / bytes on narrow screens\n"
                 "q / Ctrl+Q        Quit    Ctrl+C interrupts\n\n"
                 "Underlined dim bytes have no describing leaf node.\n"
+                "Yellow bytes and tree nodes match the current search.\n"
                 "Every displayed offset belongs to its named source.\n"
                 "Escape returns to the explorer.",
                 markup=False,

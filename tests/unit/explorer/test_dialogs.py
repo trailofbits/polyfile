@@ -4,7 +4,7 @@ import asyncio
 from pathlib import Path
 
 from textual.app import App
-from textual.widgets import Input, TextArea
+from textual.widgets import Input, Static, TextArea
 
 from polyfile.explorer.tools_dialogs import CopyScreen, ExportScreen, ReplaceScreen
 
@@ -63,5 +63,20 @@ def test_copy_keeps_literal_read_only_text_and_clipboard_action() -> None:
             await pilot.press("escape")
             await pilot.pause()
             assert not isinstance(app.screen, CopyScreen)
+
+    asyncio.run(check())
+
+
+def test_empty_destination_stays_in_dialog_with_validation() -> None:
+    async def check() -> None:
+        app = App[None]()
+        async with app.run_test() as pilot:
+            app.push_screen(ExportScreen("selection"))
+            await pilot.pause()
+            await pilot.press("enter")
+            assert isinstance(app.screen, ExportScreen)
+            assert "Enter a destination" in str(
+                app.screen.query_one("#export-error", Static).render()
+            )
 
     asyncio.run(check())

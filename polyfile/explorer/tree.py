@@ -16,6 +16,7 @@ class StructureTree(Tree[int]):
         self.model = model
         self.entries: dict[int, TreeNode[int]] = {}
         self.loaded: set[int] = set()
+        self.search_nodes: set[int] = set()
         self.auto_expand = False
 
     def on_mount(self) -> None:
@@ -27,11 +28,23 @@ class StructureTree(Tree[int]):
 
     def _append_entry(self, parent: TreeNode[int], uid: int) -> None:
         node = self.model.nodes[uid]
+        self.entries[uid] = parent.add(self._label(uid), data=uid, allow_expand=bool(node.children))
+
+    def _label(self, uid: int) -> Text:
+        node = self.model.nodes[uid]
         label = Text(literal(node.name))
         label.append(f"  @{node.offset:x} +{node.size}", style="dim")
         if node.analysis_status:
             label.append(f" [{literal(node.analysis_status)}]", style="yellow")
-        self.entries[uid] = parent.add(label, data=uid, allow_expand=bool(node.children))
+        if uid in self.search_nodes:
+            label.stylize("bold yellow")
+        return label
+
+    def set_search_nodes(self, nodes: set[int]) -> None:
+        """Mark matching nodes, retaining lazy population of their descendants."""
+        self.search_nodes = nodes
+        for uid, entry in self.entries.items():
+            entry.set_label(self._label(uid))
 
     def _populate(self, uid: int) -> None:
         if uid not in self.loaded:

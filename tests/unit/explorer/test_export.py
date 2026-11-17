@@ -25,11 +25,9 @@ def test_exact_binary_range_full_source_and_hex(tmp_path: Path) -> None:
     export_range(source, selected, output, input_path=source.path)
     assert output.read_bytes() == bytes(range(100, 120))
     assert selection_hex(source, selected) == bytes(range(100, 120)).hex(" ")
-    export_range(source, ByteRange("file", 0, 256), output,
-                 input_path=source.path, overwrite=True)
+    export_range(source, ByteRange("file", 0, 256), output, input_path=source.path, overwrite=True)
     assert output.read_bytes() == bytes(range(256))
-    export_range(source, ByteRange("file", 256, 0), output,
-                 input_path=source.path, overwrite=True)
+    export_range(source, ByteRange("file", 256, 0), output, input_path=source.path, overwrite=True)
     assert output.read_bytes() == b""
     assert list(tmp_path.glob(".polyfile-*")) == []
 
@@ -59,8 +57,9 @@ def test_input_symlink_and_hardlink_are_protected(tmp_path: Path) -> None:
     hardlink.hardlink_to(source.path)
     for output in (source.path, symlink, hardlink):
         with pytest.raises(ValueError, match="input file"):
-            export_range(source, ByteRange("file", 0, 1), output,
-                         input_path=source.path, overwrite=True)
+            export_range(
+                source, ByteRange("file", 0, 1), output, input_path=source.path, overwrite=True
+            )
     assert source.path.read_bytes() == bytes(range(256))
 
 
@@ -91,8 +90,14 @@ def test_cancel_preserves_destination_and_cleans_partial_export(tmp_path: Path) 
         return calls >= 3
 
     with pytest.raises(CancelledError):
-        export_range(source, ByteRange("file", 0, source.length), output,
-                     input_path=source.path, overwrite=True, cancelled=cancelled)
+        export_range(
+            source,
+            ByteRange("file", 0, source.length),
+            output,
+            input_path=source.path,
+            overwrite=True,
+            cancelled=cancelled,
+        )
     assert output.read_bytes() == b"keep"
     assert list(tmp_path.glob(".polyfile-*")) == []
     with pytest.raises(CancelledError):
@@ -106,16 +111,26 @@ def test_read_failure_preserves_existing_destination(tmp_path: Path) -> None:
     output.write_bytes(b"keep")
     source.path.write_bytes(b"short")
     with pytest.raises(OSError, match="changed"):
-        export_range(source, ByteRange("file", 0, source.length), output,
-                     input_path=source.path, overwrite=True)
+        export_range(
+            source,
+            ByteRange("file", 0, source.length),
+            output,
+            input_path=source.path,
+            overwrite=True,
+        )
     assert output.read_bytes() == b"keep"
     assert list(tmp_path.glob(".polyfile-*")) == []
 
 
-@pytest.mark.parametrize("selected", [
-    ByteRange("other", 0, 1), ByteRange("file", -1, 1),
-    ByteRange("file", 0, -1), ByteRange("file", 255, 2),
-])
+@pytest.mark.parametrize(
+    "selected",
+    [
+        ByteRange("other", 0, 1),
+        ByteRange("file", -1, 1),
+        ByteRange("file", 0, -1),
+        ByteRange("file", 255, 2),
+    ],
+)
 def test_invalid_ranges_do_not_create_outputs(tmp_path: Path, selected: ByteRange) -> None:
     source = source_at(tmp_path)
     assert source.path is not None
@@ -130,6 +145,7 @@ def test_unavailable_source_and_unwritable_destination(tmp_path: Path) -> None:
     with pytest.raises(OSError, match="unavailable"):
         selection_hex(ByteSource("missing", 1), ByteRange("missing", 0, 1))
     with pytest.raises(OSError):
-        export_range(source, ByteRange("file", 0, 1), tmp_path / "absent" / "out",
-                     input_path=source.path)
+        export_range(
+            source, ByteRange("file", 0, 1), tmp_path / "absent" / "out", input_path=source.path
+        )
     assert list(tmp_path.glob(".polyfile-*")) == []

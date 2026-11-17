@@ -1,6 +1,7 @@
 """A viewport-sized hex and UTF-8 display with source-aware selections."""
 
 from bisect import bisect_right
+from collections.abc import Iterable
 
 from rich.cells import cell_len
 from rich.segment import Segment
@@ -62,6 +63,33 @@ class ByteView(ScrollView, can_focus=True):
         self._gaps: tuple[ByteRange, ...] = ()
         self._gap_starts: tuple[int, ...] = ()
         self._dragging = False
+        self._search_ranges: dict[str, tuple[ByteRange, ...]] = {}
+        self._search_starts: dict[str, tuple[int, ...]] = {}
+
+    def set_search_ranges(self, ranges: Iterable[ByteRange]) -> None:
+        """Highlight merged search intervals without scanning every hit for every byte."""
+        grouped: dict[str, list[ByteRange]] = {}
+        for selected in ranges:
+            selected = self.model.clamp_range(selected)
+            if selected.length:
+                grouped.setdefault(selected.source, []).append(selected)
+        self._search_ranges = {}
+        for source, selections in grouped.items():
+            merged: list[ByteRange] = []
+            for selected in sorted(selections, key=lambda value: value.start):
+                if merged and selected.start <= merged[-1].end:
+                    previous = merged[-1]
+                    merged[-1] = ByteRange(
+                        source, previous.start, max(previous.end, selected.end) - previous.start
+                    )
+                else:
+                    merged.append(selected)
+            self._search_ranges[source] = tuple(merged)
+        self._search_starts = {
+            source: tuple(selected.start for selected in selections)
+            for source, selections in self._search_ranges.items()
+        }
+        self.refresh()
 
     def on_resize(self) -> None:
         self._update_size()
@@ -105,12 +133,24 @@ class ByteView(ScrollView, can_focus=True):
     def _style(self, selected: ByteRange) -> str:
         if selected.start < self.selection.end and selected.end > self.selection.start:
             return "reverse bold"
-        index = bisect_right(self._gap_starts, selected.start) - 1
-        if index >= 0 and self._gaps[index].end > selected.start:
-            return "dim underline"
-        if index + 1 < len(self._gaps) and self._gaps[index + 1].start < selected.end:
+        ranges = self._search_ranges.get(self.source_id, ())
+        starts = self._search_starts.get(self.source_id, ())
+        if self._overlaps(ranges, starts, selected):
+            return "bold yellow"
+        if self._overlaps(self._gaps, self._gap_starts, selected):
             return "dim underline"
         return ""
+
+    @staticmethod
+    def _overlaps(
+        ranges: tuple[ByteRange, ...],
+        starts: tuple[int, ...],
+        selected: ByteRange,
+    ) -> bool:
+        index = bisect_right(starts, selected.start) - 1
+        return (index >= 0 and ranges[index].end > selected.start) or (
+            index + 1 < len(ranges) and ranges[index + 1].start < selected.end
+        )
 
     def render_line(self, y: int) -> Strip:
         row = y + self.scroll_offset.y

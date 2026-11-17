@@ -1,17 +1,45 @@
 """Source-aware terminal inspection of a completed file analysis."""
 
+from concurrent.futures import CancelledError
+from functools import partial
+from pathlib import Path
+from typing import Literal
+
 from rich.text import Text
-from textual import events
+from textual import events, work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
+from textual.message import Message
 from textual.widgets import Button, Footer, Label, Select, Static, Tree
+from textual.worker import get_current_worker
 
 from polyfile.explorer.byteview import ByteView
 from polyfile.explorer.dialogs import HelpDialog, OffsetDialog
+from polyfile.explorer.export import export_range, selection_hex
 from polyfile.explorer.model import ByteRange, ExplorerModel
+from polyfile.explorer.searchpanel import SearchPanel
+from polyfile.explorer.tools_dialogs import CopyScreen, ExportScreen, ReplaceScreen
 from polyfile.explorer.tree import StructureTree
 from polyfile.matchtree import literal
+
+
+class OperationFinished(Message):
+    """Deliver completed extraction or clipboard work to the UI thread."""
+
+    def __init__(
+        self,
+        generation: int,
+        text: str,
+        *,
+        kind: Literal["export", "copy"],
+        error: bool = False,
+    ) -> None:
+        super().__init__()
+        self.generation = generation
+        self.text = text
+        self.kind = kind
+        self.error = error
 
 
 class ExplorerApp(App[int]):
@@ -31,6 +59,7 @@ class ExplorerApp(App[int]):
     #details { height: 6; padding: 0 1; overflow-y: auto; }
     #interpretations { height: 3; }
     #status { height: 1; padding: 0 1; }
+    .compact #details { height: 3; }
     .narrow #structure { display: none; width: 1fr; }
     .narrow.show-tree #structure { display: block; }
     .narrow.show-tree #byte-pane { display: none; }
@@ -44,6 +73,14 @@ class ExplorerApp(App[int]):
         Binding("s", "sources", "Sources"),
         Binding("f2", "switch_pane", "Pane"),
         Binding("f1", "show_help", "Help"),
+        Binding("slash", "search", "Search"),
+        Binding("n", "next_result", "Next hit", show=False),
+        Binding("shift+n", "previous_result", "Previous hit", show=False),
+        Binding("e", "export_selection", "Extract"),
+        Binding("shift+e", "export_source", "Extract source", show=False),
+        Binding("y", "copy_hex", "Copy hex", show=False),
+        Binding("o", "copy_offset", "Copy offset", show=False),
+        Binding("ctrl+g", "cancel_work", "Cancel work", show=False, priority=True),
     ]
 
     def __init__(self, model: ExplorerModel) -> None:
@@ -53,6 +90,8 @@ class ExplorerApp(App[int]):
         self.selection = ByteRange("file", 0, min(1, model.sources["file"].length))
         self.selected_node: int | None = None
         self._show_tree = False
+        self._selecting_search = False
+        self._operation_generation = 0
 
     def compose(self) -> ComposeResult:
         outcome = "Partial analysis" if self.model.partial else "Analysis complete"
@@ -64,6 +103,7 @@ class ExplorerApp(App[int]):
             yield Select(options, value="file", allow_blank=False, id="source")
             yield Button("Text", id="mode")
             yield Button("Go to", id="goto")
+        yield SearchPanel(self.model, id="search-panel")
         with Horizontal(id="workspace"):
             yield StructureTree(self.model)
             with Vertical(id="byte-pane"):
@@ -91,6 +131,7 @@ class ExplorerApp(App[int]):
     def _update_layout(self, width: int) -> None:
         screen = self.screen_stack[0]
         screen.set_class(width < 110, "narrow")
+        screen.set_class(self.size.height < 30, "compact")
         screen.set_class(self._show_tree, "show-tree")
 
     def select_node(self, uid: int) -> None:
@@ -111,6 +152,9 @@ class ExplorerApp(App[int]):
         self.selected_node = node
         self.query_one("#source", Select).value = self.active_source
         self.query_one(ByteView).show_range(self.selection)
+        self.query_one(SearchPanel).set_source(
+            self.active_source, preserve_search=self._selecting_search
+        )
         self._update_details()
 
     def _update_details(self) -> None:
@@ -207,6 +251,157 @@ class ExplorerApp(App[int]):
 
     def action_show_help(self) -> None:
         self.push_screen(HelpDialog())
+
+    def action_search(self) -> None:
+        self.query_one(SearchPanel).query_one("#search-query").focus()
+
+    def action_next_result(self) -> None:
+        self.query_one(SearchPanel).next_result()
+
+    def action_previous_result(self) -> None:
+        self.query_one(SearchPanel).next_result(-1)
+
+    def on_search_panel_results_changed(self, event: SearchPanel.ResultsChanged) -> None:
+        if event.generation != self.query_one(SearchPanel).generation:
+            return
+        self.query_one(ByteView).set_search_ranges(hit.range for hit in event.hits)
+        self.query_one(StructureTree).set_search_nodes(
+            {uid for hit in event.hits for uid in hit.nodes}
+        )
+
+    def on_search_panel_result_selected(self, event: SearchPanel.ResultSelected) -> None:
+        if event.generation != self.query_one(SearchPanel).generation:
+            return
+        self._selecting_search = True
+        try:
+            if event.hit.nodes:
+                self.select_node(event.hit.nodes[0])
+            else:
+                self.select_range(event.hit.range)
+        finally:
+            self._selecting_search = False
+
+    def action_export_selection(self) -> None:
+        self._request_export(self.selection)
+
+    def action_export_source(self) -> None:
+        self._request_export(
+            ByteRange(self.active_source, 0, self.model.sources[self.active_source].length)
+        )
+
+    def _request_export(self, selection: ByteRange) -> None:
+        if not self.model.sources[selection.source].available:
+            self._tools_status("The selected source's bytes are unavailable.")
+            return
+        label = f"{selection.source} @ 0x{selection.start:x} · {selection.length:,} bytes"
+        self.push_screen(ExportScreen(label), partial(self._export_destination, selection))
+
+    def _export_destination(self, selection: ByteRange, destination: Path | None) -> None:
+        if destination is None:
+            return
+        try:
+            exists = destination.exists() or destination.is_symlink()
+        except (OSError, ValueError) as error:
+            self._tools_status(f"Cannot inspect destination: {error}")
+            return
+        if exists:
+            self.push_screen(
+                ReplaceScreen(destination), partial(self._confirm_export, selection, destination)
+            )
+        else:
+            self._start_export(selection, destination)
+
+    def _confirm_export(
+        self,
+        selection: ByteRange,
+        destination: Path,
+        approved: bool | None,
+    ) -> None:
+        if approved:
+            self._start_export(selection, destination, overwrite=True)
+
+    def _start_export(
+        self,
+        selection: ByteRange,
+        destination: Path,
+        *,
+        overwrite: bool = False,
+    ) -> None:
+        self._operation_generation += 1
+        self._tools_status("Exporting… · Ctrl+G cancels background work")
+        self._export(
+            selection, destination, overwrite=overwrite, generation=self._operation_generation
+        )
+
+    @work(thread=True, exclusive=True, group="operation")
+    def _export(
+        self,
+        selection: ByteRange,
+        destination: Path,
+        *,
+        overwrite: bool,
+        generation: int,
+    ) -> None:
+        worker = get_current_worker()
+        try:
+            export_range(
+                self.model.sources[selection.source],
+                selection,
+                destination,
+                input_path=self.model.path,
+                overwrite=overwrite,
+                cancelled=lambda: worker.is_cancelled,
+            )
+        except CancelledError:
+            return
+        except (OSError, ValueError) as error:
+            self.post_message(OperationFinished(generation, str(error), kind="export", error=True))
+        else:
+            self.post_message(OperationFinished(generation, str(destination), kind="export"))
+
+    def action_copy_offset(self) -> None:
+        self.push_screen(CopyScreen("Copy offset", f"0x{self.selection.start:x}"))
+
+    def action_copy_hex(self) -> None:
+        self._operation_generation += 1
+        self._tools_status("Preparing hexadecimal bytes… · Ctrl+G cancels background work")
+        self._copy_hex(self.selection, generation=self._operation_generation)
+
+    @work(thread=True, exclusive=True, group="operation")
+    def _copy_hex(self, selection: ByteRange, *, generation: int) -> None:
+        worker = get_current_worker()
+        try:
+            text = selection_hex(
+                self.model.sources[selection.source],
+                selection,
+                cancelled=lambda: worker.is_cancelled,
+            )
+        except CancelledError:
+            return
+        except (OSError, ValueError) as error:
+            self.post_message(OperationFinished(generation, str(error), kind="copy", error=True))
+        else:
+            self.post_message(OperationFinished(generation, text, kind="copy"))
+
+    def on_operation_finished(self, message: OperationFinished) -> None:
+        if message.generation != self._operation_generation:
+            return
+        if message.error:
+            self._tools_status(message.text)
+        elif message.kind == "copy":
+            self._tools_status("Hexadecimal bytes are ready to copy.")
+            self.push_screen(CopyScreen("Copy bytes as hex", message.text))
+        else:
+            self._tools_status(f"Saved exact bytes to {message.text}")
+
+    def _tools_status(self, text: str) -> None:
+        self.query_one("#status", Static).update(literal(text))
+
+    def action_cancel_work(self) -> None:
+        self._operation_generation += 1
+        self.workers.cancel_group(self, "operation")
+        self.query_one(SearchPanel).cancel_search()
+        self._tools_status("Background work cancelled.")
 
     def action_leave(self) -> None:
         self.exit(0)

@@ -35,8 +35,13 @@ def _publish(temporary: Path, destination: Path, *, overwrite: bool) -> None:
 
 
 def export_range(
-    source: ByteSource, selection: ByteRange, destination: Path, *, input_path: Path,
-    overwrite: bool = False, cancelled: Callable[[], bool] | None = None,
+    source: ByteSource,
+    selection: ByteRange,
+    destination: Path,
+    *,
+    input_path: Path,
+    overwrite: bool = False,
+    cancelled: Callable[[], bool] | None = None,
 ) -> None:
     """Atomically export exact bytes, preserving existing files on failure or cancellation.
 
@@ -81,7 +86,10 @@ def export_range(
 
 
 def selection_hex(
-    source: ByteSource, selection: ByteRange, *, cancelled: Callable[[], bool] | None = None,
+    source: ByteSource,
+    selection: ByteRange,
+    *,
+    cancelled: Callable[[], bool] | None = None,
 ) -> str:
     """Prepare exact space-separated hex bytes with cooperative cancellation."""
     _validate_range(source, selection)

@@ -14,8 +14,9 @@ def model_for(path: Path, data: bytes, *, decoded: bytes | None = None) -> Explo
     path.write_bytes(data)
     root = Match("root", None, length=len(data), matcher=Matcher(False))
     if decoded is not None:
-        Submatch("decoded", None, source="decoded:0", length=len(decoded),
-                 decoded=decoded, parent=root)
+        Submatch(
+            "decoded", None, source="decoded:0", length=len(decoded), decoded=decoded, parent=root
+        )
     return ExplorerModel(path, [root])
 
 
@@ -44,7 +45,9 @@ def test_source_scope_order_case_and_utf8_byte_offsets(tmp_path: Path) -> None:
     model = model_for(tmp_path / "input", "éNEEDLE needle".encode(), decoded=b"_Needle")
     hits = search(model, "needle", mode="text", chunk_size=3)
     assert [hit.range for hit in hits] == [
-        ByteRange("file", 2, 6), ByteRange("file", 9, 6), ByteRange("decoded:0", 1, 6),
+        ByteRange("file", 2, 6),
+        ByteRange("file", 9, 6),
+        ByteRange("decoded:0", 1, 6),
     ]
     assert [hit.range for hit in search(model, "needle", mode="text", match_case=True)] == [
         ByteRange("file", 9, 6),

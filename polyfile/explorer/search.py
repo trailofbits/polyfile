@@ -52,8 +52,12 @@ def _needles(query: str, mode: SearchMode, match_case: bool) -> list[tuple[bytes
 
 
 def _byte_offsets(
-    source: ByteSource, needle: bytes, *, fold: bool,
-    cancelled: Cancellation | None, chunk_size: int,
+    source: ByteSource,
+    needle: bytes,
+    *,
+    fold: bool,
+    cancelled: Cancellation | None,
+    chunk_size: int,
 ) -> Iterator[int]:
     tail = b""
     needle = needle.lower() if fold else needle
@@ -66,7 +70,7 @@ def _byte_offsets(
             check_cancelled(cancelled)
             yield offset - len(tail) + position
             position = haystack.find(needle, position + 1)
-        tail = block[-(len(needle) - 1):] if len(needle) > 1 else b""
+        tail = block[-(len(needle) - 1) :] if len(needle) > 1 else b""
 
 
 def _add_hit(hits: dict[ByteRange, SearchHit], hit: SearchHit) -> None:
@@ -82,26 +86,35 @@ def _add_hit(hits: dict[ByteRange, SearchHit], hit: SearchHit) -> None:
 
 
 def _node_matches(node: ExplorerNode, query: str, match_case: bool) -> bool:
-    text = " ".join((node.name, node.type, node.analysis_status or "",
-                     node.analysis_message or ""))
+    text = " ".join((node.name, node.type, node.analysis_status or "", node.analysis_message or ""))
     if match_case:
         return query in text
     return query.translate(_ASCII_FOLD) in text.translate(_ASCII_FOLD)
 
 
 def _scan_source(
-    source: ByteSource, needles: list[tuple[bytes, str, bool]],
-    hits: dict[ByteRange, SearchHit], *, cancelled: Cancellation | None, chunk_size: int,
+    source: ByteSource,
+    needles: list[tuple[bytes, str, bool]],
+    hits: dict[ByteRange, SearchHit],
+    *,
+    cancelled: Cancellation | None,
+    chunk_size: int,
 ) -> None:
     for needle, kind, fold in needles:
-        for offset in _byte_offsets(source, needle, fold=fold,
-                                    cancelled=cancelled, chunk_size=chunk_size):
+        for offset in _byte_offsets(
+            source, needle, fold=fold, cancelled=cancelled, chunk_size=chunk_size
+        ):
             _add_hit(hits, SearchHit(ByteRange(source.identifier, offset, len(needle)), (kind,)))
 
 
 def _scan_nodes(
-    model: ExplorerModel, query: str, hits: dict[ByteRange, SearchHit], *,
-    sources: set[str], match_case: bool, cancelled: Cancellation | None,
+    model: ExplorerModel,
+    query: str,
+    hits: dict[ByteRange, SearchHit],
+    *,
+    sources: set[str],
+    match_case: bool,
+    cancelled: Cancellation | None,
 ) -> None:
     for node in model.nodes.values():
         check_cancelled(cancelled)
@@ -110,9 +123,14 @@ def _scan_nodes(
 
 
 def search(
-    model: ExplorerModel, query: str, *, mode: SearchMode = "combined",
-    source: str | None = None, match_case: bool = False,
-    cancelled: Cancellation | None = None, chunk_size: int = 65536,
+    model: ExplorerModel,
+    query: str,
+    *,
+    mode: SearchMode = "combined",
+    source: str | None = None,
+    match_case: bool = False,
+    cancelled: Cancellation | None = None,
+    chunk_size: int = 65536,
 ) -> list[SearchHit]:
     """Find ordered, overlapping byte and structure matches without whole-file reads.
 
@@ -149,10 +167,16 @@ def search(
         if buffer.available:
             _scan_source(buffer, needles, hits, cancelled=cancelled, chunk_size=chunk_size)
     if mode in ("combined", "structure"):
-        _scan_nodes(model, query, hits, sources=set(sources),
-                    match_case=match_case, cancelled=cancelled)
+        _scan_nodes(
+            model, query, hits, sources=set(sources), match_case=match_case, cancelled=cancelled
+        )
     check_cancelled(cancelled)
     order = {identifier: index for index, identifier in enumerate(sources)}
-    return sorted(hits.values(), key=lambda hit: (
-        order[hit.range.source], hit.range.start, hit.range.length,
-    ))
+    return sorted(
+        hits.values(),
+        key=lambda hit: (
+            order[hit.range.source],
+            hit.range.start,
+            hit.range.length,
+        ),
+    )

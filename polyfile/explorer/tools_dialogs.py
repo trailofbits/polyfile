@@ -18,6 +18,7 @@ class ExportScreen(ModalScreen[Path | None]):
     ExportScreen > Vertical { width: 76; max-width: 95%; height: auto;
         padding: 1 2; background: $panel; border: round $accent; }
     ExportScreen Input { margin: 1 0; }
+    ExportScreen #export-error { height: auto; color: $error; }
     ExportScreen Horizontal { height: auto; }
     """
     BINDINGS = [("escape", "cancel", "Cancel")]
@@ -30,6 +31,7 @@ class ExportScreen(ModalScreen[Path | None]):
         with Vertical():
             yield Static(f"Export {literal(self.label)}", markup=False)
             yield Input(placeholder="Destination path", id="export-path")
+            yield Static("", id="export-error", markup=False)
             with Horizontal():
                 yield Button("Export", variant="primary", id="export-confirm")
                 yield Button("Cancel", id="export-cancel")
@@ -39,10 +41,15 @@ class ExportScreen(ModalScreen[Path | None]):
 
     def _submit(self) -> None:
         value = self.query_one(Input).value.strip()
-        if value:
-            self.dismiss(Path(value).expanduser())
+        if not value:
+            self.query_one("#export-error", Static).update("Enter a destination path.")
+            return
+        try:
+            destination = Path(value).expanduser()
+        except (OSError, ValueError, RuntimeError) as error:
+            self.query_one("#export-error", Static).update(literal(error))
         else:
-            self.notify("Enter a destination path.", severity="error")
+            self.dismiss(destination)
 
     def on_input_submitted(self) -> None:
         self._submit()
@@ -109,8 +116,9 @@ class CopyScreen(ModalScreen[None]):
     def compose(self) -> ComposeResult:
         with Vertical():
             yield Static(self.heading, markup=False)
-            yield Static("Select the text and use your terminal's copy command if needed.",
-                         markup=False)
+            yield Static(
+                "Select the text and use your terminal's copy command if needed.", markup=False
+            )
             yield TextArea(self.text, read_only=True, id="copy-text")
             with Horizontal():
                 yield Button("Copy to clipboard", variant="primary", id="copy-confirm")
