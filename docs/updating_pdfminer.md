@@ -29,6 +29,8 @@ For a manual update, change the exact `pdfminer.six` requirement and `SUPPORTED_
 1. Review the upstream release notes and source changes affecting `psparser.py`, `pdfparser.py`,
    `pdfdocument.py`, and `pdftypes.py`. Inspect lexer cursor/state handling, composite construction,
    xref loading, object lookup/caching, compressed-object parsing, and recursive decryption.
+   Check filter iterator behavior and structural `get_data()` calls during xref loading,
+   fallback, and compressed-catalog initialization against the bounded-decoding tests.
 2. Update `polyfile/_pdfminer_adapter.py` and its parser hooks in `polyfile/pdf.py` for the new
    interfaces. Replace the old implementation; maintain one qualified adapter.
 3. Run `uv run pytest -q tests/test_pdf.py tests/unit/test_pdf*.py` and the full Python CI suite on
