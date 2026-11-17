@@ -1,11 +1,12 @@
 import base64
+from dataclasses import dataclass
 from pathlib import Path
 from collections.abc import Iterator
 
 from kaitaistruct import KaitaiStructError
 
-from polyfile.fileutils import ExactNamedTempfile
-from polyfile.kaitai.parser import ASTNode, KaitaiParser, RootNode
+from polyfile.fileutils import ExactNamedTempfile, FileStream
+from polyfile.kaitai.parser import ASTNode, CompoundNode, KaitaiParser, RootNode
 from polyfile.logger import getStatusLogger
 from polyfile.magic import MagicMatcher, TestType
 from polyfile.polyfile import register_parser, InvalidMatch, Match, Submatch
@@ -144,6 +145,29 @@ IMAGE_MIMETYPES = {
 }
 
 
+def _mapped_nodes(
+    ast: RootNode,
+    parent: Match,
+    mimetype: str,
+) -> Iterator[tuple[Submatch, ASTNode]]:
+    source_base = parent.offset
+    stack: list[tuple[Match, ASTNode]] = [(parent, ast)]
+    while stack:
+        parent, node = stack.pop()
+        new_node = Submatch(
+            name=node.name,
+            match_obj=node.raw_value,
+            relative_offset=source_base + node.start - parent.offset,
+            length=len(node.segment),
+            parent=parent,
+        )
+        if node is ast and mimetype in IMAGE_MIMETYPES:
+            encoded = base64.b64encode(ast.raw_value).decode("utf-8")
+            new_node.img_data = f"data:{mimetype};base64,{encoded}"
+        yield new_node, node
+        stack.extend(reversed([(new_node, child) for child in node.children]))
+
+
 def ast_to_matches(ast: RootNode, parent: Match, mimetype: str) -> Iterator[Submatch]:
     """Map view-local AST positions into the parser parent's analysis source.
 
@@ -155,24 +179,159 @@ def ast_to_matches(ast: RootNode, parent: Match, mimetype: str) -> Iterator[Subm
     Yields:
         Each AST node positioned in the same source as the parser parent.
     """
+    for match, _ in _mapped_nodes(ast, parent, mimetype):
+        yield match
+
+
+@dataclass(frozen=True, kw_only=True)
+class _ContainerFormat:
+    array: str
+    offset: str
+    length: str
+    payload: str
+    magic: bytes
+    header_size: int
+    entry_size: int
+
+
+_CONTAINERS = {
+    "image/ico.ksy": _ContainerFormat(
+        array="images",
+        offset="ofs_img",
+        length="len_img",
+        payload="img",
+        magic=b"\0\0\1\0",
+        header_size=6,
+        entry_size=16,
+    ),
+    "executable/mach_o_fat.ksy": _ContainerFormat(
+        array="fat_archs",
+        offset="ofs_object",
+        length="len_object",
+        payload="object",
+        magic=b"\xca\xfe\xba\xbe",
+        header_size=8,
+        entry_size=20,
+    ),
+}
+
+
+def _container_ranges(
+    ast: RootNode,
+    container: _ContainerFormat,
+) -> dict[ASTNode, tuple[int, int, tuple[str, str] | None]]:
+    table = next(child for child in ast.children if child.name == container.array)
+    ranges = []
+    for entry in table.children:
+        assert isinstance(entry, CompoundNode)
+        offset = int(getattr(entry.obj, container.offset))
+        length = int(getattr(entry.obj, container.length))
+        ranges.append((offset, length, entry))
+    result = {}
+    previous_end = table.end
+    for offset, length, entry in sorted(ranges, key=lambda item: item[0]):
+        failure: tuple[str, str] | None = None
+        if length == 0 or offset < table.end or offset + length > ast.size:
+            failure = (
+                "invalid",
+                "Content range is empty, overlaps the directory, or exceeds the input",
+            )
+        elif offset < previous_end:
+            failure = "unsupported", "Duplicate or overlapping content range is not analyzed again"
+        else:
+            previous_end = offset + length
+        result[entry] = offset, length, failure
+    return result
+
+
+def _match_region(
+    stream: FileStream,
+    region: Match,
+    offset: int,
+    *,
+    png: bool,
+) -> Iterator[Match]:
+    assert region.matcher is not None
+    with FileStream(stream, start=offset, length=region.length) as view:
+        if png and view.read(8) != b"\x89PNG\r\n\x1a\n":
+            region.analysis_status = "unsupported"
+            region.analysis_message = "ICO payload is not PNG; DIB decoding is not supported"
+            return
+        yield from region.matcher.match(view, parent=region)
+
+
+def _container_matches(
+    ast: RootNode,
+    stream: FileStream,
+    parent: Match,
+    mimetype: str,
+    container: _ContainerFormat,
+) -> Iterator[Match]:
+    ranges = _container_ranges(ast, container)
     source_base = parent.offset
-    stack: list[tuple[Match, ASTNode]] = [(parent, ast)]
-    while stack:
-        parent, node = stack.pop()
-
-        new_node = Submatch(
-            name=node.name,
-            match_obj=node.raw_value,
-            relative_offset=source_base + node.start - parent.offset,
-            length=len(node.segment),
-            parent=parent
+    for match, node in _mapped_nodes(ast, parent, mimetype):
+        yield match
+        if node not in ranges:
+            continue
+        offset, length, failure = ranges[node]
+        if failure is not None:
+            match.analysis_status, match.analysis_message = failure
+            continue
+        region = Submatch(
+            container.payload,
+            None,
+            relative_offset=source_base + offset - match.offset,
+            length=length,
+            parent=match,
         )
+        yield region
+        yield from _match_region(stream, region, offset, png=container.payload == "img")
 
-        if node is ast and mimetype in IMAGE_MIMETYPES:
-            new_node.img_data = f"data:{mimetype};base64,{base64.b64encode(ast.raw_value).decode('utf-8')}"
 
-        yield new_node
-        stack.extend(reversed([(new_node, c) for c in node.children]))
+def _truncated_table(stream: FileStream, container: _ContainerFormat) -> bool:
+    header = stream[: container.header_size].content
+    if not header.startswith(container.magic):
+        return False
+    if len(header) < container.header_size:
+        return True
+    byteorder = "little" if container.payload == "img" else "big"
+    magic_size = len(container.magic)
+    count = int.from_bytes(header[magic_size:], byteorder)
+    return container.header_size + count * container.entry_size > len(stream)
+
+
+def _map_truncated_table(
+    stream: FileStream,
+    parent: Match,
+    container: _ContainerFormat,
+) -> Iterator[Match]:
+    parent.analysis_status = "invalid"
+    parent.analysis_message = "Container directory is truncated"
+    header_size = min(container.header_size, len(stream))
+    yield Submatch(
+        "header",
+        stream[:header_size].content,
+        length=header_size,
+        parent=parent,
+    )
+    table = Submatch(
+        container.array,
+        None,
+        relative_offset=header_size,
+        length=len(stream) - header_size,
+        parent=parent,
+    )
+    yield table
+    for index, offset in enumerate(range(header_size, len(stream), container.entry_size)):
+        length = min(container.entry_size, len(stream) - offset)
+        end = offset + length
+        yield Submatch(
+            f"{container.array}[{index}]",
+            stream[offset:end].content,
+            relative_offset=offset - header_size,
+            length=length,
+            parent=table,
+        )
 
 
 class LazyKaitaiParser:
@@ -193,6 +352,10 @@ class LazyKaitaiParser:
         return self._kaitai_parser
 
     def __call__(self, stream, match):
+        container = _CONTAINERS.get(self.kaitai_path)
+        if container is not None and _truncated_table(stream, container):
+            yield from _map_truncated_table(stream, match, container)
+            return
         try:
             ast = self.kaitai_parser.parse(stream).ast
         except KaitaiStructError as e:
@@ -201,9 +364,14 @@ class LazyKaitaiParser:
             log.debug(f"Error parsing {stream.name} using {self.kaitai_parser}: {e!s}")
             raise InvalidMatch()
         except Exception as e:
-            log.error(f"Unexpected exception parsing {stream.name} using {self.kaitai_parser}: {e!s}")
+            log.error(
+                f"Unexpected exception parsing {stream.name} using {self.kaitai_parser}: {e!s}"
+            )
             raise InvalidMatch()
-        yield from ast_to_matches(ast, parent=match, mimetype=self.mimetype)
+        if container is None:
+            yield from ast_to_matches(ast, parent=match, mimetype=self.mimetype)
+        else:
+            yield from _container_matches(ast, stream, match, self.mimetype, container)
 
 
 def _register(mimetype: str, kaitai_path: str) -> None:

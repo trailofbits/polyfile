@@ -10,6 +10,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 
 ### Added
 
+- **Breaking:** Recursively classify and parse PNG images in ICO files and architecture members
+  in supported universal Mach-O binaries. Preserve source coordinates, directory fields, PNG
+  previews, and shared analysis limits; report invalid and overlapping member ranges explicitly.
 - **Breaking:** Analyze 7z archive structure and validated members with `py7zr==1.1.4` in
   isolated helpers. Solid/non-solid archives, compressed headers, checksums, decoded source
   coordinates, and optional recursive/helper resource limits have regression coverage.
@@ -122,6 +125,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 
 ### Fixed
 
+- **Breaking:** Apply PDF member and decoded-byte limits before stream expansion, including
+  filter chains and structural xref/object streams. Preserve known physical structure when
+  decoding is refused, and reuse stream budgets across repeated lookups (#3779).
 - **Breaking:** Identify HWP 5.0 from its compound-document `FileHeader` stream with the
   standalone libmagic description and `application/x-hwp`. Validate sector chains and stream
   bounds before replacing the definitions' OLE-prefixed `application/hwp+zip` result (#3535).
