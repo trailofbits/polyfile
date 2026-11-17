@@ -273,3 +273,24 @@ def test_narrow_tree_selection_transfers_keyboard_focus_to_bytes(tmp_path: Path)
             assert app.selection == ByteRange("file", 1, 1)
 
     asyncio.run(check())
+
+
+@pytest.mark.parametrize("uid", [1, 3])
+def test_queued_byte_selection_does_not_override_newer_node_selection(
+    tmp_path: Path,
+    uid: int,
+) -> None:
+    async def check() -> None:
+        app = ExplorerApp(model(tmp_path / "sample"))
+        async with app.run_test() as pilot:
+            view = app.query_one(ByteView)
+            view.action_move("right")
+            app.select_node(uid)
+            await pilot.pause()
+            expected = app.model.nodes[uid].range
+            assert app.selection == expected
+            assert view.selection == expected
+            assert app.active_source == expected.source
+            assert app.selected_node == uid
+
+    asyncio.run(check())
