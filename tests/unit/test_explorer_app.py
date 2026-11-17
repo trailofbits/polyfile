@@ -294,3 +294,21 @@ def test_queued_byte_selection_does_not_override_newer_node_selection(
             assert app.selected_node == uid
 
     asyncio.run(check())
+
+
+def test_queued_equal_byte_range_keeps_newer_node_details(tmp_path: Path) -> None:
+    async def check() -> None:
+        path = tmp_path / "sample"
+        path.write_bytes(b"file")
+        root = Match("root", None, length=4, matcher=Matcher(False))
+        Submatch("specific byte", None, relative_offset=1, length=1, parent=root)
+        app = ExplorerApp(ExplorerModel(path, [root]))
+        async with app.run_test() as pilot:
+            app.query_one(ByteView).action_move("right")
+            app.select_node(1)
+            await pilot.pause()
+            assert app.selection == ByteRange("file", 1, 1)
+            assert app.selected_node == 1
+            assert "specific byte" in str(app.query_one("#details", Static).render())
+
+    asyncio.run(check())

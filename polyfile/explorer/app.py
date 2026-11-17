@@ -156,7 +156,7 @@ class ExplorerApp(App[int]):
             self.select_node(event.node.data)
 
     def on_byte_view_range_selected(self, event: ByteView.RangeSelected) -> None:
-        if event.selected != self.query_one(ByteView).selection:
+        if event.selected is not self.query_one(ByteView).selection:
             return
         if event.selected.source != self.active_source:
             return
