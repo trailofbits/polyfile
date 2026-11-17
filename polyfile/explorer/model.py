@@ -7,6 +7,7 @@ from typing import cast
 
 from intervaltree import IntervalTree
 
+from polyfile.explorer.preview import value_preview
 from polyfile.polyfile import Match
 
 
@@ -171,9 +172,8 @@ class ExplorerModel:
             match, parent = pending.pop()
             uid = len(self.nodes)
             children.setdefault(parent, []).append(uid)
-            value = match.description
-            if value is None and match.match is not None:
-                value = str(match.match)
+            semantic_value = match.description if match.description is not None else match.match
+            value = None if semantic_value is None else value_preview(semantic_value)
             self.nodes[uid] = ExplorerNode(
                 uid=uid,
                 parent=parent,
