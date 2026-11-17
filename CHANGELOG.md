@@ -10,6 +10,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 
 ### Added
 
+- **Breaking:** Add `--explore FILE`, a Textual terminal inspector with source-aware structure,
+  virtualized hex and UTF-8 views, byte selection, coverage, navigation, cancellable search, and
+  exact byte extraction. Textual is installed by default. Explorer mode opens after analysis and
+  requires a named file with stdin, stdout, and stderr connected to an interactive terminal.
+
 - **Breaking:** Analyze 7z archive structure and validated members with `py7zr==1.1.4` in
   isolated helpers. Solid/non-solid archives, compressed headers, checksums, decoded source
   coordinates, and optional recursive/helper resource limits have regression coverage.
