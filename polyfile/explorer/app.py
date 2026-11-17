@@ -89,8 +89,9 @@ class ExplorerApp(App[int]):
         self._update_layout(event.size.width)
 
     def _update_layout(self, width: int) -> None:
-        self.screen.set_class(width < 110, "narrow")
-        self.screen.set_class(self._show_tree, "show-tree")
+        screen = self.screen_stack[0]
+        screen.set_class(width < 110, "narrow")
+        screen.set_class(self._show_tree, "show-tree")
 
     def select_node(self, uid: int) -> None:
         """Reveal a structure node and select its exact source-qualified range."""

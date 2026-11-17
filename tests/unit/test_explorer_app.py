@@ -199,3 +199,29 @@ def test_byte_view_reads_only_a_viewport_of_a_large_file(
         assert sizes
 
     asyncio.run(check())
+
+
+@pytest.mark.parametrize("modal_key", ["f1", "g"])
+def test_resize_while_modal_is_open_updates_explorer_layout(
+    tmp_path: Path,
+    modal_key: str,
+) -> None:
+    async def check() -> None:
+        app = ExplorerApp(model(tmp_path / "sample"))
+        async with app.run_test(size=(130, 32)) as pilot:
+            await pilot.press(modal_key)
+            assert isinstance(app.screen, (HelpDialog, OffsetDialog))
+            await pilot.resize_terminal(60, 24)
+            assert app.screen_stack[0].has_class("narrow")
+            assert not app.screen.has_class("narrow")
+            await pilot.press("escape")
+            assert not app.query_one(StructureTree).display
+            assert app.query_one(ByteView).display
+            await pilot.press(modal_key)
+            await pilot.resize_terminal(130, 32)
+            assert not app.screen_stack[0].has_class("narrow")
+            await pilot.press("escape")
+            assert app.query_one(StructureTree).display
+            assert app.query_one(ByteView).display
+
+    asyncio.run(check())
