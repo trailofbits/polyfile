@@ -40,6 +40,55 @@ def final_tree(errors):
     return errors.rsplit("PolyFile  ", 1)[-1]
 
 
+def screen_text(transcript: str) -> str:
+    """Apply Rich's line erasure and cursor movement to a shared terminal transcript."""
+    lines: list[str] = [""]
+    row, column = 0, 0
+    tokens: list[str] = re.findall(r"\x1b\[[0-?]*[ -/]*[@-~]|\r|\n|[^\x1b\r\n]+", transcript)
+    for token in tokens:
+        if token == "\r":
+            column = 0
+        elif token == "\n":
+            row += 1
+            lines.extend([""] * (row + 1 - len(lines)))
+            column = 0
+        elif token == "\x1b[2K":
+            lines[row] = ""
+        elif token.startswith("\x1b[") and token.endswith("A"):
+            row = max(0, row - int(token[2:-1] or "1"))
+        elif not token.startswith("\x1b["):
+            line = lines[row].ljust(column)
+            lines[row] = line[:column] + token + line[column + len(token) :]
+            column += len(token)
+    return "\n".join(lines)
+
+
+@pytest.mark.parametrize("format", ["file", "mime", "explain", "json", "sbud", "html"])
+def test_shared_terminal_keeps_requested_output(sample, format):
+    expected, _ = invoke(sample, "--format", format, stdout_tty=True)
+    terminal = Terminal()
+    with redirect_stdout(terminal), redirect_stderr(terminal):
+        main(["polyfile", "--format", format, sample])
+    assert ANSI.sub("", expected).strip() in screen_text(terminal.getvalue())
+
+
+@pytest.mark.parametrize("refresh", [False, True])
+def test_repeated_nested_suspension_keeps_terminal_results(sample, refresh):
+    terminal = Terminal()
+    with redirect_stdout(terminal), logger.logging_context(stream=terminal) as session:
+        session.start_scan("input", recursive=False)
+        for index in range(3):
+            with session.suspend():
+                print(f"result {index}")
+                with session.suspend():
+                    print(f"nested result {index}")
+            if refresh:
+                session.live.refresh()
+    visible = screen_text(terminal.getvalue())
+    for index in range(3):
+        assert f"result {index}\nnested result {index}\n" in visible
+
+
 @pytest.mark.parametrize("format", ["file", "mime", "explain", "json", "sbud", "html"])
 def test_stderr_terminal_does_not_change_stdout(sample, format):
     plain, errors = invoke(sample, "--format", format)

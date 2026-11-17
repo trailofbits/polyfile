@@ -573,6 +573,8 @@ def write_outputs(args: argparse.Namespace, analyzer: Analyzer, sbud: dict[str, 
                         output.write(html.generate(str(analyzer.path), sbud))
                     else:
                         json.dump(sbud, output)
+                    if output.isatty():
+                        output.write("\n")
                     output.flush()
         if not fmt.output_to_stdout:
             log.info("Saved %s output to %s", fmt.output_format.upper(), fmt.output_path)

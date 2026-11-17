@@ -70,8 +70,11 @@ class TerminalSession:
         self._suspended = 0
         self._closed = False
         self.spinner = Spinner("dots" if console.encoding.startswith("utf") else "line")
-        self.live = Live(
-            console=console,
+        self.live = self._new_live()
+
+    def _new_live(self) -> Live:
+        return Live(
+            console=self.console,
             get_renderable=self.render,
             refresh_per_second=4,
             transient=True,
@@ -166,7 +169,9 @@ class TerminalSession:
 
     def _start_live(self) -> None:
         if self.interactive and not self._suspended and not self._closed:
-            self.live.start()
+            if not self.live.is_started:
+                self.live = self._new_live()
+                self.live.start()
 
     def advance(self, task: _Task) -> None:
         """Count an item only after its consumer has processed it."""
