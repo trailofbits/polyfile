@@ -159,6 +159,8 @@ class ExplorerApp(App[int]):
         self._update_details()
 
     def on_select_changed(self, event: Select.Changed) -> None:
+        if event.value != event.select.value:
+            return
         if event.select.id == "source" and isinstance(event.value, str):
             if event.value != self.active_source:
                 length = self.model.sources[event.value].length

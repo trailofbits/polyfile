@@ -40,7 +40,10 @@ class OffsetDialog(ModalScreen[int | None]):
         elif not self.length:
             message = "This source has no bytes to navigate."
         else:
-            offset = int(value, 16 if value.lower().startswith("0x") else 10)
+            base = 16 if value.lower().startswith("0x") else 10
+            digits = (value[2:] if base == 16 else value).lstrip("0") or "0"
+            maximum = f"{self.length - 1:x}" if base == 16 else str(self.length - 1)
+            offset = self.length if len(digits) > len(maximum) else int(digits, base)
             if offset < self.length:
                 self.dismiss(offset)
                 return

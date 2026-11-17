@@ -72,9 +72,10 @@ def text_units(source: ByteSource, start: int, length: int) -> tuple[TextUnit, .
         size = _utf8_length(data, index)
         offset = before + index
         if offset >= start:
+            end_index = index + size
             result.append(
                 TextUnit(
-                    _visible_text(data[index : index + size]),
+                    _visible_text(data[index:end_index]),
                     ByteRange(source.identifier, offset, size),
                 )
             )

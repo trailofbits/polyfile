@@ -52,7 +52,8 @@ class ByteSource:
         """
         self._check_range(start, length)
         if self.data is not None:
-            return self.data[start : start + length]
+            end = start + length
+            return self.data[start:end]
         if self.path is None:
             raise OSError(f"Source {self.identifier!r} has no decoded byte buffer")
         try:

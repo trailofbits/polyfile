@@ -3,12 +3,13 @@
 import asyncio
 from pathlib import Path
 
+import pytest
 from textual.widgets import Input, Select, Static
 
 from polyfile.explorer.app import ExplorerApp
 from polyfile.explorer.byteview import ByteView
 from polyfile.explorer.dialogs import HelpDialog, OffsetDialog
-from polyfile.explorer.model import ByteRange, ExplorerModel
+from polyfile.explorer.model import ByteRange, ByteSource, ExplorerModel
 from polyfile.explorer.tree import StructureTree
 from polyfile.polyfile import Match, Matcher, Submatch
 
@@ -103,5 +104,98 @@ def test_empty_and_unavailable_sources_remain_navigable(tmp_path: Path) -> None:
             assert "unavailable" in app.query_one(ByteView).render_line(0).text
             await pilot.press("ctrl+c")
         assert app.return_value == 130
+
+    asyncio.run(check())
+
+
+def test_rapid_source_changes_ignore_queued_stale_events(tmp_path: Path) -> None:
+    async def check() -> None:
+        app = ExplorerApp(model(tmp_path / "sample"))
+        async with app.run_test() as pilot:
+            app.select_node(3)
+            app.select_node(1)
+            app.select_node(3)
+            app.select_node(2)
+            await pilot.pause()
+            assert app.active_source == "file"
+            assert app.selection == ByteRange("file", 2, 2)
+            assert app.query_one("#source", Select).value == "file"
+
+    asyncio.run(check())
+
+
+def test_unbounded_offset_input_displays_error_instead_of_crashing(tmp_path: Path) -> None:
+    async def check() -> None:
+        app = ExplorerApp(model(tmp_path / "sample"))
+        async with app.run_test() as pilot:
+            await pilot.press("g")
+            app.screen.query_one(Input).value = "9" * 5000
+            await pilot.press("enter")
+            assert "0 to 127" in str(app.screen.query_one("#offset-error", Static).render())
+            app.screen.query_one(Input).value = "0" * 5000 + "12"
+            await pilot.press("enter")
+            assert app.selection == ByteRange("file", 12, 1)
+
+    asyncio.run(check())
+
+
+def test_scrolled_mouse_selection_uses_source_offsets(tmp_path: Path) -> None:
+    async def check() -> None:
+        app = ExplorerApp(model(tmp_path / "sample"))
+        async with app.run_test(size=(80, 20)) as pilot:
+            view = app.query_one(ByteView)
+            view.scroll_to(y=3, animate=False, immediate=True)
+            await pilot.pause()
+            assert view.scroll_offset.y == 3
+            await pilot.click("#bytes", offset=(7, 1))
+            assert app.selection == ByteRange("file", 3 * view.bytes_per_row, 1)
+            await pilot.click("#bytes", offset=(13, 1), shift=True)
+            assert app.selection == ByteRange("file", 3 * view.bytes_per_row, 3)
+
+    asyncio.run(check())
+
+
+def test_text_coverage_marks_gap_inside_multibyte_character(tmp_path: Path) -> None:
+    async def check() -> None:
+        path = tmp_path / "utf8"
+        path.write_bytes("éX".encode())
+        root = Match("first byte", None, length=1, matcher=Matcher(False))
+        app = ExplorerApp(ExplorerModel(path, [root]))
+        async with app.run_test() as pilot:
+            app.select_range(ByteRange("file", 2, 1))
+            await pilot.press("t")
+            view = app.query_one(ByteView)
+            segments = list(view.render_line(0))
+            accented = [segment for segment in segments if "é" in segment.text]
+            assert accented and accented[0].style is not None
+            assert accented[0].style.underline
+
+    asyncio.run(check())
+
+
+def test_byte_view_reads_only_a_viewport_of_a_large_file(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def check() -> None:
+        path = tmp_path / "large"
+        with path.open("wb") as stream:
+            stream.seek(1024**3)
+            stream.write(b"end")
+        sizes = []
+        read = ByteSource.read
+
+        def bounded_read(source: ByteSource, start: int, length: int) -> bytes:
+            sizes.append(length)
+            assert length <= 128
+            return read(source, start, length)
+
+        monkeypatch.setattr(ByteSource, "read", bounded_read)
+        app = ExplorerApp(ExplorerModel(path, []))
+        async with app.run_test() as pilot:
+            await pilot.press("ctrl+end", "t")
+            assert app.selection.start == 1024**3 + 2
+            assert app.query_one(ByteView).virtual_size.height > 1000000
+        assert sizes
 
     asyncio.run(check())

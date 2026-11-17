@@ -6,6 +6,8 @@ import pytest
 
 from polyfile.explorer.model import ByteRange, ByteSource, ExplorerModel
 from polyfile.polyfile import Match, Matcher, Submatch
+from tests.test_zipmatcher import MEMBERS, PNG, build_zip
+from pdf_fixtures import object_stream_pdf
 
 
 def structure() -> Match:
@@ -95,3 +97,32 @@ def test_sparse_file_stays_file_backed(tmp_path: Path) -> None:
     source = ExplorerModel(path, []).sources["file"]
     assert source.data is None
     assert source.read(1024**3, 3) == b"end"
+
+
+def test_real_zip_polyglot_keeps_embedded_sources_distinct(tmp_path: Path) -> None:
+    path = tmp_path / "png-zip.bin"
+    data = build_zip(prefix=PNG)
+    path.write_bytes(data)
+    matches = list(Matcher().match(data))
+    roots = [match for match in matches if match.parent is None]
+    model = ExplorerModel(path, roots)
+    assert {node.type for node in model.nodes.values()} >= {"image/png", "application/zip"}
+    decoded = [source.data for source in model.sources.values() if source.data is not None]
+    assert set(MEMBERS.values()) <= set(decoded)
+    assert model.sources["file"].read(0, len(PNG)) == PNG
+    assert all(source.identifier != "file" for source in model.sources.values() if source.data)
+
+
+def test_compressed_pdf_object_sources_keep_their_own_coordinates(tmp_path: Path) -> None:
+    data, decoded = object_stream_pdf([b"[1 (hello)]"])
+    path = tmp_path / "compressed.pdf"
+    path.write_bytes(data)
+    matches = list(Matcher().match(data))
+    model = ExplorerModel(path, [match for match in matches if match.parent is None])
+    buffers = [source for source in model.sources.values() if source.data == decoded]
+    assert buffers
+    assert buffers[0].read(0, len(decoded)) == decoded
+    assert any(
+        node.type == "PDFList" and node.source == buffers[0].identifier
+        for node in model.nodes.values()
+    )
