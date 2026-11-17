@@ -102,6 +102,7 @@ class ExplorerApp(App[int]):
         if self.size.width < 110:
             self._show_tree = False
             self._update_layout(self.size.width)
+            self.query_one(ByteView).focus()
 
     def select_range(self, selected: ByteRange, *, node: int | None = None) -> None:
         """Select bytes from one source, clamping malformed display extents."""

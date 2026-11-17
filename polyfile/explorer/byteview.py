@@ -57,6 +57,7 @@ class ByteView(ScrollView, can_focus=True):
         self.bytes_per_row = 16
         self.cursor = 0
         self.selection_anchor = 0
+        self.selection_anchor_end = 0
         self._cells: dict[int, list[tuple[int, int, ByteRange]]] = {}
         self._gaps: tuple[ByteRange, ...] = ()
         self._gap_starts: tuple[int, ...] = ()
@@ -84,6 +85,7 @@ class ByteView(ScrollView, can_focus=True):
         self.source_id = selected.source
         self.selection = selected
         self.selection_anchor = selected.start
+        self.selection_anchor_end = selected.end
         self.cursor = selected.start
         self._gaps = self.model.undescribed(self.source_id)
         self._gap_starts = tuple(gap.start for gap in self._gaps)
@@ -195,9 +197,10 @@ class ByteView(ScrollView, can_focus=True):
     def _choose(self, offset: int, extend: bool, length: int = 1) -> None:
         if not extend:
             self.selection_anchor = offset
+            self.selection_anchor_end = offset + length
         self.cursor = offset
         start = min(self.selection_anchor, offset)
-        end = max(self.selection_anchor + 1, offset + length)
+        end = max(self.selection_anchor_end, offset + length)
         self.selection = ByteRange(self.source_id, start, end - start)
         self._reveal_cursor()
         self.refresh()

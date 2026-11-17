@@ -111,7 +111,7 @@ class ByteSource:
             raise OSError(f"Cannot read source {self.identifier!r}: {error}") from error
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class ExplorerNode:
     """A structure node without encoded copies of any byte source."""
 
@@ -175,18 +175,18 @@ class ExplorerModel:
             if value is None and match.match is not None:
                 value = str(match.match)
             self.nodes[uid] = ExplorerNode(
-                uid,
-                parent,
-                match.source,
-                match.offset,
-                match.length,
-                match.display_name,
-                match.name,
-                value,
-                match.analysis_status,
-                match.analysis_message,
-                match.extension,
-                (),
+                uid=uid,
+                parent=parent,
+                source=match.source,
+                offset=match.offset,
+                size=match.length,
+                name=match.display_name,
+                type=match.name,
+                value=value,
+                analysis_status=match.analysis_status,
+                analysis_message=match.analysis_message,
+                extension=match.extension,
+                children=(),
             )
             if match.source != "file" and match.decoded is not None:
                 self.sources[match.source] = ByteSource(

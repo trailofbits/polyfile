@@ -225,3 +225,51 @@ def test_resize_while_modal_is_open_updates_explorer_layout(
             assert app.query_one(ByteView).display
 
     asyncio.run(check())
+
+
+@pytest.mark.parametrize("method", ["drag", "shift_click"])
+def test_backward_text_selection_keeps_entire_anchor_glyph(
+    tmp_path: Path,
+    method: str,
+) -> None:
+    async def check() -> None:
+        path = tmp_path / "utf8"
+        path.write_bytes("A😀B".encode())
+        app = ExplorerApp(ExplorerModel(path, []))
+        async with app.run_test() as pilot:
+            await pilot.press("t")
+            if method == "drag":
+                await pilot.mouse_down("#bytes", offset=(8, 1))
+                assert app.selection == ByteRange("file", 1, 4)
+                await pilot.hover("#bytes", offset=(7, 1))
+                await pilot.mouse_up("#bytes", offset=(7, 1))
+            else:
+                await pilot.click("#bytes", offset=(8, 1))
+                assert app.selection == ByteRange("file", 1, 4)
+                await pilot.click("#bytes", offset=(7, 1), shift=True)
+            assert app.selection == ByteRange("file", 0, 5)
+            assert (
+                app.model.sources["file"].read(
+                    app.selection.start,
+                    app.selection.length,
+                )
+                == "A😀".encode()
+            )
+            await pilot.press("right", "shift+right", "shift+right")
+            assert app.selection == ByteRange("file", 1, 3)
+
+    asyncio.run(check())
+
+
+def test_narrow_tree_selection_transfers_keyboard_focus_to_bytes(tmp_path: Path) -> None:
+    async def check() -> None:
+        app = ExplorerApp(model(tmp_path / "sample"))
+        async with app.run_test(size=(80, 24)) as pilot:
+            await pilot.press("f2", "down", "enter")
+            assert not app.query_one(StructureTree).display
+            assert app.focused is app.query_one(ByteView)
+            assert app.selection == ByteRange("file", 0, 128)
+            await pilot.press("right")
+            assert app.selection == ByteRange("file", 1, 1)
+
+    asyncio.run(check())
