@@ -9,7 +9,7 @@
 [![Slack Status](https://slack.empirehacking.nyc/badge.svg)](https://slack.empirehacking.nyc)
 
 A utility to identify and map the semantic and syntactic structure of files,
-including polyglots, chimeras, and schizophrenic files. It has [a Python implementation of libmagic](#file-support) and can act as a drop-in replacement for the [`file` command](https://github.com/file/file). However, unlike `file`, PolyFile recurses into the files it identifies: the ZIP parser matches every decompressed member, the PDF parser matches every decoded stream, and every non-constant byte field of a parsed structure is matched again on its own. A few matchers also search for their magic anywhere in the input, so a ZIP archive that does not start at byte offset zero is still found. PolyFile does not scan every offset the way [binwalk](https://github.com/ReFirmLabs/binwalk) does; [issue #3532](https://github.com/trailofbits/polyfile/issues/3532) tracks that.
+including polyglots, chimeras, and schizophrenic files. It has [a Python implementation of libmagic](#file-support) and can act as a drop-in replacement for the [`file` command](https://github.com/file/file). However, unlike `file`, PolyFile recurses into the files it identifies: the ZIP parser matches every decompressed member, the PDF parser matches every decoded stream, and every non-constant byte field of a parsed structure is matched again on its own. A few matchers also search for their magic anywhere in the input, so a ZIP archive that does not start at byte offset zero is still found. PolyFile does not scan every offset the way [binwalk](https://github.com/ReFirmLabs/binwalk) does; [issue #3532](https://github.com/trailofbits/polyfile/issues/3532) proposed that and was closed as not planned, so future recursive coverage stays parser-directed.
 
 PolyFile can be used in conjunction with its sister tool
 [PolyTracker](https://github.com/trailofbits/polytracker) for
@@ -91,9 +91,7 @@ $ polyfile archive.zip --format json --no-contents --max-depth 0
 
 The input has depth zero; higher limits allow more levels of content analysis. Depth limits do
 not bound the input's identification work or speed up the default `file` and MIME output paths.
-They help with formats that have recursive parsers. PolyFile currently identifies 7z archives
-but does not parse their members; [issue #3685](https://github.com/trailofbits/polyfile/issues/3685)
-tracks that capability.
+They help with formats that have recursive parsers. PolyFile parses 7z archives into structured members and recursively analyses supported members; [the 7z analysis guide](https://github.com/trailofbits/polyfile/blob/master/docs/sevenzip.md) documents the limits and resource semantics.
 
 Use `--only-match` with structured output to disable format parsing entirely. It does not reduce
 the matching work for the default `file` or MIME outputs. For JSON and SBuD output,

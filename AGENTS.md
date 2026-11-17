@@ -9,7 +9,7 @@ PolyFile is a file analysis utility that identifies and maps the semantic and sy
 - Recursive embedded file detection: ZIP members, PDF streams, non-`Constant` `bytes` fields
   re-matched by `structmatcher.py`, and matchers that `search` for their magic at any offset, such
   as the relaxed ZIP matcher in `zipmatcher.py`. There is no binwalk-style scan of every offset;
-  #3532 tracks that.
+  #3532 was closed as not planned, so future recursive coverage stays parser-directed.
 - Parsers for PDF, ZIP, JPEG, iNES, and 183 compiled Kaitai Struct formats (45 of the specifications
   are dispatched, covering 67 MIME types)
 - Interactive HTML hex viewer with structure mapping
