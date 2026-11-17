@@ -123,22 +123,34 @@ main(["polyfile", "--quiet", "--explore", sys.argv[1]])
         assert b"\x1b[?25h" in output
 
 
-def test_redirected_stderr_is_rejected_before_terminal_mode(tmp_path: Path) -> None:
+@pytest.mark.parametrize("color", ({}, {"FORCE_COLOR": "1"}, {"PYTHON_COLORS": "1"}))
+@pytest.mark.parametrize("extra", ((), ("--unknown-option",)))
+def test_redirected_stderr_is_rejected_before_terminal_mode(
+    tmp_path: Path,
+    color: dict[str, str],
+    extra: tuple[str, ...],
+) -> None:
     path = tmp_path / "empty.bin"
     path.write_bytes(b"")
     master, slave = pty.openpty()
     original = termios.tcgetattr(slave)
+    environment = {
+        name: value
+        for name, value in os.environ.items()
+        if name not in {"NO_COLOR", "FORCE_COLOR", "PYTHON_COLORS"}
+    }
     try:
         result = subprocess.run(
-            [sys.executable, "-m", "polyfile", "--explore", str(path)],
+            [sys.executable, "-m", "polyfile", "--explore", str(path), *extra],
             stdin=slave,
             stdout=slave,
             stderr=subprocess.PIPE,
             timeout=10,
-            env={**os.environ, "TERM": "xterm-256color"},
+            env={**environment, "TERM": "xterm-256color", **color},
         )
         assert result.returncode == 2
-        assert b"requires terminal input and output" in result.stderr
+        expected = b"unrecognized arguments" if extra else b"requires terminal input and output"
+        assert expected in result.stderr
         assert b"\x1b" not in result.stderr
         assert termios.tcgetattr(slave) == original
     finally:

@@ -1,3 +1,5 @@
+from collections.abc import Sequence
+
 from polyfile import (
     nes,
     jpeg,
@@ -25,8 +27,18 @@ from polyfile import sevenzipmatcher
 from polyfile import hwpmatcher
 from polyfile.analysis import AnalysisLimits
 from polyfile.provenance import SourceSpan
-from polyfile.__main__ import main
 from polyfile.polyfile import __version__, InvalidMatch, Match, Matcher, Parser, PARSERS, register_parser, Submatch
+
+
+def main(argv: Sequence[str] | None = None) -> None:
+    """Run PolyFile's command-line interface.
+
+    Args:
+        argv: Command arguments including the executable name. Defaults to this process's arguments.
+    """
+    from polyfile.__main__ import main as run_cli
+
+    run_cli(argv)
 
 
 # Lazy PDF parser registration

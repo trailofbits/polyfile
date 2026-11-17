@@ -326,6 +326,12 @@ viewer is built from the contents."""))
     if argv is None:
         argv = sys.argv
 
+    options = argv[1:]
+    if "--" in options:
+        options = options[:options.index("--")]
+    if "--explore" in options and hasattr(parser, "color"):
+        setattr(parser, "color", False)
+
     try:
         args = parser.parse_args(argv[1:])
     except ValueError as e:

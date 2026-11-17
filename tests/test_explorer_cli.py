@@ -2,6 +2,8 @@
 
 from collections.abc import Callable, Generator, Iterator, Sequence
 from contextlib import contextmanager, redirect_stderr, redirect_stdout
+import argparse
+import inspect
 import io
 import os
 from pathlib import Path
@@ -13,6 +15,7 @@ from zipfile import ZIP_DEFLATED, ZipFile
 import pytest
 
 from polyfile import __main__ as cli
+import polyfile
 from polyfile.polyfile import Analyzer, Match
 
 
@@ -155,6 +158,50 @@ def test_ordinary_cli_does_not_import_textual(tmp_path: Path) -> None:
     assert result.returncode == 0, result.stderr.decode()
     assert b"empty" in result.stdout
     assert result.stderr == b""
+
+
+def test_module_entrypoint_does_not_import_itself_before_execution() -> None:
+    result = subprocess.run(
+        [sys.executable, "-Werror::RuntimeWarning", "-m", "polyfile", "--help"],
+        capture_output=True,
+        timeout=10,
+    )
+    assert result.returncode == 0, result.stderr.decode()
+    assert result.stderr == b""
+    assert b"--explore" in result.stdout
+
+
+@pytest.mark.parametrize("arguments", (None, ("polyfile", "-dumpversion")))
+def test_public_entrypoint_delegates_the_original_arguments(
+    arguments: Sequence[str] | None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[Sequence[str] | None] = []
+    signature = inspect.signature(cli.main)
+
+    def delegate(argv: Sequence[str] | None = None) -> None:
+        calls.append(argv)
+
+    monkeypatch.setattr(cli, "main", delegate)
+    assert inspect.signature(polyfile.main) == signature
+    polyfile.main(arguments)
+    assert len(calls) == 1
+    assert calls[0] is arguments
+
+
+def test_ordinary_help_preserves_argparse_color(monkeypatch: pytest.MonkeyPatch) -> None:
+    if not hasattr(argparse.ArgumentParser(), "color"):
+        pytest.skip("argparse color output requires Python 3.14 or newer")
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    result = subprocess.run(
+        [sys.executable, "-m", "polyfile", "--help"],
+        capture_output=True,
+        timeout=10,
+        env={**os.environ, "FORCE_COLOR": "1", "PYTHON_COLORS": "1"},
+    )
+    assert result.returncode == 0
+    assert result.stderr == b""
+    assert b"\x1b" in result.stdout
 
 
 @pytest.fixture
