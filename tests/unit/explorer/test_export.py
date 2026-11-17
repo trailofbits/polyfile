@@ -240,3 +240,31 @@ def test_destination_created_during_export_is_not_overwritten(
         export_range(source, ByteRange("file", 0, 1), output, input_path=source.path)
     assert output.read_bytes() == b"another writer"
     assert list(tmp_path.glob(".polyfile-*")) == []
+
+
+def test_symlink_loop_is_an_actionable_error_and_preserves_input(tmp_path: Path) -> None:
+    source = source_at(tmp_path, b"abc")
+    assert source.path is not None
+    output = tmp_path / "loop"
+    output.symlink_to(output.name)
+    with pytest.raises(ValueError, match="Cannot resolve export path.*loop"):
+        export_range(
+            source, ByteRange("file", 0, 1), output, input_path=source.path, overwrite=True
+        )
+    assert source.path.read_bytes() == b"abc"
+    assert output.is_symlink()
+    assert output.readlink() == Path("loop")
+    assert list(tmp_path.glob(".polyfile-*")) == []
+
+
+def test_approved_dangling_symlink_replacement_remains_supported(tmp_path: Path) -> None:
+    source = source_at(tmp_path, b"abc")
+    assert source.path is not None
+    output = tmp_path / "output"
+    missing_target = tmp_path / "missing"
+    output.symlink_to(missing_target)
+    export_range(source, ByteRange("file", 0, 1), output, input_path=source.path, overwrite=True)
+    assert not output.is_symlink()
+    assert output.read_bytes() == b"a"
+    assert source.path.read_bytes() == b"abc"
+    assert not missing_target.exists()

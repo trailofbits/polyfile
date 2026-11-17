@@ -2,6 +2,7 @@
 
 from collections.abc import Callable
 from contextlib import suppress
+import errno
 import os
 from pathlib import Path
 from tempfile import NamedTemporaryFile
@@ -19,8 +20,23 @@ def _validate_range(source: ByteSource, selection: ByteRange) -> None:
         raise OSError(f"The bytes for analysis source {source.identifier!r} are unavailable.")
 
 
+def _resolve_export_path(path: Path) -> Path:
+    try:
+        try:
+            return path.resolve(strict=True)
+        except FileNotFoundError:
+            return path.resolve()
+    except (RuntimeError, OSError) as error:
+        if isinstance(error, OSError) and error.errno != errno.ELOOP:
+            raise
+        raise ValueError(
+            f"Cannot resolve export path {str(path)!r}. "
+            "Check for symlink loops or choose another destination."
+        ) from error
+
+
 def _protect_input(destination: Path, input_path: Path) -> None:
-    if destination.resolve() == input_path.resolve():
+    if _resolve_export_path(destination) == _resolve_export_path(input_path):
         raise ValueError("Choose a destination other than the analyzed input file.")
     if destination.exists() and input_path.exists() and destination.samefile(input_path):
         raise ValueError("The destination refers to the analyzed input file.")
@@ -54,7 +70,8 @@ def export_range(
         cancelled: Optional cooperative cancellation predicate.
 
     Raises:
-        ValueError: If the range is invalid or the destination refers to the input.
+        ValueError: If the range is invalid, a path has a symlink loop, or the
+            destination refers to the input.
         FileExistsError: If replacement was not approved and the destination exists.
         CancelledError: If cancellation occurs before the export is committed.
         OSError: If reading, writing, or publishing the destination fails.

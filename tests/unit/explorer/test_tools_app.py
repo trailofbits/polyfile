@@ -315,3 +315,27 @@ def test_source_shortcuts_handle_native_and_extended_keys(
             assert field.value == "NE"
 
     asyncio.run(check())
+
+
+def test_export_symlink_loop_reports_error_and_keeps_explorer_running(tmp_path: Path) -> None:
+    async def check() -> None:
+        app = ExplorerApp(model_for(tmp_path / "input", b"abc"))
+        output = tmp_path / "loop"
+        output.symlink_to(output.name)
+        async with app.run_test(size=(100, 32)) as pilot:
+            app.action_export_selection()
+            await pilot.pause()
+            app.screen.query_one(Input).value = str(output)
+            await pilot.press("enter")
+            await pilot.pause()
+            assert isinstance(app.screen, ReplaceScreen)
+            await pilot.click("#replace-confirm")
+            await settle(app, pilot)
+            assert "Cannot resolve export path" in str(app.query_one("#status", Static).render())
+            assert app.model.path.read_bytes() == b"abc"
+            assert output.is_symlink()
+            app.query_one(ByteView).focus()
+            await pilot.press("q")
+        assert app.return_value == 0
+
+    asyncio.run(check())
