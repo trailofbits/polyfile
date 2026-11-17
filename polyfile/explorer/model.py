@@ -1,8 +1,11 @@
 """Byte sources and structure metadata shared by the terminal explorer."""
 
 from collections.abc import Iterable, Iterator
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
+from typing import cast
+
+from intervaltree import IntervalTree
 
 from polyfile.polyfile import Match
 
@@ -81,11 +84,30 @@ class ByteSource:
         self._check_range(start, length)
         if chunk_size <= 0:
             raise ValueError("Chunk size must be positive")
+        if self.path is not None:
+            yield from self._file_chunks(start, length, chunk_size)
+            return
         end = start + length
         while start < end:
             chunk = self.read(start, min(chunk_size, end - start))
             yield start, chunk
             start += len(chunk)
+
+    def _file_chunks(self, start: int, length: int, chunk_size: int) -> Iterator[tuple[int, bytes]]:
+        assert self.path is not None
+        try:
+            with self.path.open("rb") as stream:
+                stream.seek(start)
+                end = start + length
+                while start < end:
+                    size = min(chunk_size, end - start)
+                    data = stream.read(size)
+                    if len(data) != size:
+                        raise OSError("source changed; analyze the file again")
+                    yield start, data
+                    start += size
+        except OSError as error:
+            raise OSError(f"Cannot read source {self.identifier!r}: {error}") from error
 
 
 @dataclass(frozen=True)
@@ -132,8 +154,13 @@ class ExplorerModel:
         self.nodes: dict[int, ExplorerNode] = {}
         self.roots: tuple[int, ...] = ()
         self._coverage: dict[str, tuple[ByteRange, ...]] = {}
+        self._indexes: dict[str, IntervalTree] = {}
         self._load_nodes(matches)
         self._register_missing_sources()
+        self._index_nodes()
+        self.partial = partial or any(
+            node.analysis_status == "limited" for node in self.nodes.values()
+        )
 
     def _load_nodes(self, matches: Iterable[Match]) -> None:
         roots = list(matches)
@@ -169,24 +196,13 @@ class ExplorerModel:
             pending.extend((child, uid) for child in reversed(match.children))
         self.roots = tuple(children[None])
         for uid, node in tuple(self.nodes.items()):
-            self.nodes[uid] = self._with_children(node, tuple(children.get(uid, ())))
+            self.nodes[uid] = replace(node, children=tuple(children.get(uid, ())))
 
-    @staticmethod
-    def _with_children(node: ExplorerNode, children: tuple[int, ...]) -> ExplorerNode:
-        return ExplorerNode(
-            node.uid,
-            node.parent,
-            node.source,
-            node.offset,
-            node.size,
-            node.name,
-            node.type,
-            node.value,
-            node.analysis_status,
-            node.analysis_message,
-            node.extension,
-            children,
-        )
+    def _index_nodes(self) -> None:
+        for node in self.nodes.values():
+            if node.size > 0:
+                index = self._indexes.setdefault(node.source, IntervalTree())
+                index.addi(node.offset, node.offset + node.size, node.uid)
 
     def _register_missing_sources(self) -> None:
         for node in self.nodes.values():
@@ -206,12 +222,13 @@ class ExplorerModel:
 
     def nodes_at(self, source: str, offset: int, length: int = 1) -> tuple[ExplorerNode, ...]:
         """Return every overlapping interpretation in stable structure order."""
-        end = offset + length
-        return tuple(
-            node
-            for node in self.nodes.values()
-            if node.source == source and node.offset < end and node.offset + node.size > offset
+        index = self._indexes.get(source)
+        if index is None or length <= 0:
+            return ()
+        uids = sorted(
+            cast(int, interval.data) for interval in index.overlap(offset, offset + length)
         )
+        return tuple(self.nodes[uid] for uid in uids)
 
     def undescribed(self, source: str) -> tuple[ByteRange, ...]:
         """Find gaps using the HTML explorer's same-source leaf coverage rule."""
