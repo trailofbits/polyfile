@@ -9,6 +9,12 @@ ICO DIB image decoding is unsupported. A DIB payload is not a complete BMP file.
 Mach-O support follows the existing Kaitai specification: the big-endian, 32-bit fat header.
 This feature does not add other universal-header variants.
 
+ICO identification also accepts directory references that differ from the images' physical
+order. When the first image offset fails the bundled libmagic heuristic, PolyFile validates
+the complete directory, each image range, and matching PNG or Windows DIB dimensions. This
+additional identification supports complete PNG IHDR headers and Windows DIB headers of
+40, 52, 56, 108, or 124 bytes; it does not decode DIB images.
+
 ## Ranges and incomplete analysis
 
 Each payload uses a bounded view of the same analysis source as its container. Its offset and
