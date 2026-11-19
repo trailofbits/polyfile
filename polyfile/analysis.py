@@ -45,6 +45,7 @@ class AnalysisContext:
     limits: AnalysisLimits
     total_bytes: int = 0
     members: int = 0
+    mapped_zip_archives: set[tuple[str, int]] = field(default_factory=set, init=False, repr=False)
     _source_count: int = field(default=0, init=False, repr=False)
     _sources: set[str] = field(default_factory=set, init=False, repr=False)
 

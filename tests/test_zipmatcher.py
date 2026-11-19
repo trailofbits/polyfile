@@ -112,6 +112,29 @@ class TestZipMatcher(TestCase):
         self.assertEqual("limited", wrapper.analysis_status)
         self.assertFalse(any(match.name == "application/json" for match in matches))
 
+    def test_jar_entries_count_once_across_identifications(self):
+        for contents in (MANIFEST, {**MANIFEST, "extra.txt": b"extra"}):
+            with self.subTest(count=len(contents)):
+                matcher = Matcher(limits=AnalysisLimits(max_members=len(contents)))
+                matches = list(matcher.match(build_zip(members=contents)))
+                roots = {m.name: m for m in matches if m.parent is None}
+                zip_root = roots["application/zip"]
+                jar_root = roots["application/java-archive"]
+                self.assertIsNone(zip_root.analysis_status)
+                self.assertIsNone(jar_root.analysis_status)
+                self.assertEqual(len(contents), zip_root.analysis_context.members)
+                self.assertEqual(len(contents), sum(m.name == "LocalFileHeader" for m in matches))
+                self.assertEqual(len(contents), sum(m.name == "decoded_content" for m in matches))
+
+    def test_equal_jar_offsets_in_distinct_sources(self):
+        jar = build_zip(members=MANIFEST)
+        data = build_zip(members={"one.jar": jar, "two.jar": jar})
+        matches = list(Matcher(limits=AnalysisLimits(max_members=4)).match(data))
+        nested_headers = [m for m in matches if m.name == "LocalFileHeader" and m.source != "file"]
+        self.assertEqual(2, len(nested_headers))
+        self.assertEqual(2, len({m.source for m in nested_headers}))
+        self.assertEqual({0}, {m.offset for m in nested_headers})
+
     def member_names(self, data: bytes) -> list[bytes]:
         with temporary_file(data) as path, FileStream(str(path)) as stream:
             eocd = EndOfCentralDirectory.load(stream)
