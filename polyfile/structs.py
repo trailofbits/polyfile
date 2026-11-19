@@ -310,20 +310,22 @@ class Struct(metaclass=StructMeta):
 
     @classmethod
     def read(cls, stream: BinaryReader) -> Self:
-        ret = cls()
-        setattr(ret, "start_offset", stream.tell())
-        for field_name, field in cls.fields.items():
+        return cls()._read_fields(stream)
+
+    def _read_fields(self, stream: BinaryReader) -> Self:
+        self.start_offset = stream.tell()
+        for field_name, field in self.fields.items():
             if field.__class__.endianness is not None:
                 endianness = field.__class__.endianness
             else:
-                endianness = cls.endianness
+                endianness = self.endianness
             offset_before = stream.tell()
-            value = field.read(ret, field_name, stream, endianness)
-            setattr(ret, field_name, value)
+            value = field.read(self, field_name, stream, endianness)
+            setattr(self, field_name, value)
             setattr(value, "start_offset", offset_before)
             setattr(value, "num_bytes", stream.tell() - offset_before)
-        setattr(ret, "num_bytes", stream.tell() - ret.start_offset)
-        return ret
+        self.num_bytes = stream.tell() - self.start_offset
+        return self
 
 
 if __name__ == "__main__":
