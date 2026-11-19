@@ -130,6 +130,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 
 ### Fixed
 
+- Correct the README and development guide to describe implemented 7z parsing and recursive
+  analysis of supported members. Clarify that future recursive coverage uses format parsers and
+  exhaustive scanning is not planned (#3780). Thanks to @bfs2021 for submitting an earlier proposed
+  documentation update in PR #3781.
 - **Breaking:** Apply PDF member and decoded-byte limits before stream expansion, including
   filter chains and structural xref/object streams. Preserve known physical structure when
   decoding is refused, and reuse stream budgets across repeated lookups (#3779).
