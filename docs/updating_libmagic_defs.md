@@ -10,7 +10,7 @@ when a definition goes missing, when one upstream has deleted stays behind, when
 byte-identical, and when a local patch gets reverted, so run it after each step below:
 
 ```bash
-pytest tests/test_magic_defs_drift.py
+uv run --extra dev python -m pytest tests/test_magic_defs_drift.py
 ```
 
 ## What lives in `polyfile/magic_defs`
@@ -38,8 +38,7 @@ too.
 
 ## Local patches
 
-There are currently no local patches. The `c-lang` and `gentoo` definitions match the pinned
-upstream files again because RE2 evaluates their original expressions without backtracking.
+The `c-lang` and `gentoo` patches were retired when RE2 could evaluate the original expressions.
 For reference comparisons, exclude PolyFile's `csv` and `json` definitions: their test types are
 implemented by PolyFile and cannot be loaded by libmagic. `gentoo` needs no exclusion.
 
@@ -47,105 +46,105 @@ A definition file copied from `Magdir` may still carry a PolyFile-specific patch
 [`tests/test_magic_defs_drift.py`](../tests/test_magic_defs_drift.py) is the list of them, and it is
 the one place that list lives. Each name maps to the issue that justifies the patch, and the test
 enforces the mapping in both directions: a definition that differs without an entry fails, and an
-entry whose file has gone back to matching upstream fails as a reverted patch.
+entry whose file has gone back to matching upstream fails as a reverted patch. Entries also listed in
+`PENDING_PATCHES` represent proposed patches that have not landed.
 
-The sync overwrites these patches, so read the list before you copy. To confirm it is complete
-against the submodule commit you are moving away from:
+Run the drift checks at the old pin to verify that the patch list is complete. Before mirroring,
+create a temporary directory with `patch_dir=$(mktemp -d)`. For each applied patch, set `name` to
+its filename and save both committed versions for comparison.
 
 ```bash
-# Compare each definition against the Magdir of the *currently pinned* submodule commit.
-# Anything that differs carries a local patch you must re-apply after the sync.
-old_magdir=$(mktemp -d)
-git -C file archive HEAD magic/Magdir | tar -x -C "$old_magdir" --strip-components=2
-for f in "$old_magdir"/*; do
-  cmp -s "$f" "polyfile/magic_defs/$(basename "$f")" || echo "LOCAL PATCH: $(basename "$f")"
-done
+old_commit=$(git rev-parse HEAD:file)
+git -C file show "$old_commit:magic/Magdir/$name" > "$patch_dir/$name.upstream"
+git show "HEAD:polyfile/magic_defs/$name" > "$patch_dir/$name.polyfile"
+git diff --no-index -- "$patch_dir/$name.upstream" "$patch_dir/$name.polyfile"
 ```
 
-Run this **before** moving the submodule, while `file` still points at the old commit. It should
-print exactly the names in `LOCAL_PATCHES`.
+`git diff --no-index` exits with status 1 when the files differ. Keep the saved bytes until you
+have tested the fix against the candidate release, including any renamed or replacement rule.
 
 ### Adding an allowlist entry
 
 Patch a definition only when PolyFile cannot match upstream's text as written. Then:
 
-1. File an issue, or use the one that sent you here, explaining what the patch changes and why
-   upstream's text does not work. Fix engine incompatibilities before changing a vendored definition.
+1. Fix engine incompatibilities before changing a vendored definition. When a patch is necessary,
+   identify the issue explaining what it changes and why the upstream text fails.
 2. Add one line to `LOCAL_PATCHES`, mapping the definition's file name to that issue's URL.
-3. Run `pytest tests/test_magic_defs_drift.py`. The entry fails until the patch is actually in the
-   file, which is the point: the allowlist records patches that exist, not intentions.
+3. Run the drift tests. An applied patch entry must correspond to a definition that differs.
 
 Dropping a patch is the same in reverse. Restore the definition from `Magdir` and delete its line,
 in the same commit.
 
 ## Procedure
 
-1. Find the release to move to. Use a tagged release, such as `FILE5_48`, rather than upstream's
-   `master`. The `file/tests` corpus is part of PolyFile's test suite, so tracking an untagged
-   commit makes the expected results a moving target.
+1. Work in a clean update checkout with both submodules initialized. Verify that `git -C file
+   rev-parse HEAD` matches `git rev-parse HEAD:file`. Record that commit and select the latest
+   stable numeric release tag from [upstream file](https://github.com/file/file/tags), or the
+   release the maintainer requested. Inspect remote tags in version order, excluding prereleases.
+   Set `release_tag` to the selected name.
 
    ```bash
-   git -C file fetch --tags origin
-   git -C file tag --sort=-creatordate | head
+   old_commit=$(git rev-parse HEAD:file)
+   git -C file ls-remote --refs --tags --sort=-version:refname origin 'FILE*'
    ```
 
-2. Record the local patches, using the loop above.
+2. Fetch the selected tag with `git -C file fetch origin tag "$release_tag"`. Run the drift tests
+   at the old pin and confirm they execute. If `git -C file rev-parse "$release_tag^{commit}"`
+   matches `old_commit` and the checks pass, the mirror is current. Otherwise, resolve any
+   unexpected drift, record local patches, and take the [baseline coverage snapshot](#fixing-what-breaks).
 
 3. Move the submodule:
 
    ```bash
-   git -C file checkout FILE5_48
+   git -C file checkout --detach "$release_tag"
    ```
 
-4. Mirror `Magdir` into `magic_defs`, and refresh the license text:
+4. Review upstream changes to `file/COPYING` and notices in changed definitions before shipping
+   them. Check added filenames against `POLYFILE_OWNED` for collisions and reconcile any overlap.
+   Mirror `Magdir` in the clean update checkout, adjusting the exclusions below to the current
+   owned entries. Inspect the itemized dry run, then repeat it without `--dry-run` and refresh
+   the license text.
 
    ```bash
-   rsync -a --delete \
+   rsync -a --checksum --dry-run --itemize-changes --delete \
      --exclude='__init__.py' --exclude='__pycache__' --exclude='COPYING' \
      --exclude='csv' --exclude='json' --exclude='polyfile_zip' \
      file/magic/Magdir/ polyfile/magic_defs/
-
-   cp file/COPYING polyfile/magic_defs/COPYING
    ```
 
-   Use `rsync -a --delete`, not `cp`. A plain copy adds and updates files but never removes the ones
-   upstream deleted. Six such files accumulated between 2021 and 2024 and kept matching until the
+   After the mirror, run `cp file/COPYING polyfile/magic_defs/COPYING`.
+
+   Keep `--checksum` so files with the same size and modification time are compared by content.
+   Keep `--delete` to remove retired definitions. Six such files continued matching until the
    5.48 update removed them.
 
-5. Re-apply each local patch from step 2. Reusing the original commit is the least error-prone
-   way, and a three-way apply tells you when upstream has changed the same lines:
-
-   ```bash
-   git log --oneline -- polyfile/magic_defs/c-lang        # find the patch commit
-
-   # Stage the synced definitions first; `git apply -3` compares against the index.
-   git add polyfile/magic_defs
-   git apply -3 <(git show 938779e -- polyfile/magic_defs/c-lang)
-   ```
-
-   If the apply conflicts, upstream has rewritten the code the patch touches. Re-derive the patch
-   against the new text rather than forcing it, and check whether upstream has since fixed the
-   problem the patch worked around, in which case drop it.
+5. Run the regression for each applied local patch against the unpatched candidate. If it still
+   fails, use the saved diff and patch history to reapply the fix to the new definition and rerun
+   the test. If upstream now passes the regression for the intended reason, drop the patch and its
+   allowlist entry together. If the filename disappeared, trace renames and moved rules in the
+   upstream diff. Move a still-needed fix and its allowlist key to the surviving rule. If the rule
+   was deleted, remove the obsolete filename from the mirror and allowlist. If its behavior is
+   still needed, preserve that behavior in a tested PolyFile matcher. Check pending entries for
+   renamed or deleted targets as well.
 
    Then verify the result:
 
    ```bash
-   pytest tests/test_magic_defs_drift.py
+   uv run --extra dev python -m pytest tests/test_magic_defs_drift.py
    ```
 
    This is the check to run after both step 4 and step 5. It reports a definition that the mirror
    dropped, an entry upstream no longer ships, a copy that is not byte-identical, and a patch from
    `LOCAL_PATCHES` that the mirror reverted. A failure names the file and what to do about it.
 
-6. Confirm your diff matches upstream's, which catches a botched exclude list:
+6. Compare your diff with upstream's additions, changes, renames, and deletions. Include new files
+   in the staged diff. Account for local patches and `COPYING` when comparing the two lists.
 
    ```bash
    git add file polyfile/magic_defs
-   git diff --cached --stat -- polyfile/magic_defs | tail -1
-   git -C file diff --stat <old commit> FILE5_48 -- magic/Magdir | tail -1
+   git diff --cached --name-status -- polyfile/magic_defs
+   git -C file diff --name-status "$old_commit" HEAD -- magic/Magdir COPYING
    ```
-
-   The two totals agree, except for lines inside a locally patched file.
 
 7. Test, and fix what breaks. See the next two sections.
 
@@ -153,13 +152,16 @@ in the same commit.
 
 ```bash
 # The copy itself: nothing missing, nothing stale, nothing silently modified
-pytest tests/test_magic_defs_drift.py
+uv run --extra dev python -m pytest tests/test_magic_defs_drift.py
 
 # Definition parsing, the text test partition, and the upstream corpus
-pytest tests/test_magic.py
+uv run --extra dev python -m pytest tests/test_magic.py
 
-# Everything, including the differential test against a locally built `file`
-pytest tests
+# Corkami differential against the locally built candidate
+uv run --extra dev python -m pytest tests/test_corkami.py
+
+# Full integration
+uv run --extra dev python -m pytest tests
 ```
 
 `tests/test_magic_defs_drift.py` covers the copy, and three tests in `tests/test_magic.py` cover
@@ -206,17 +208,7 @@ what the copy says:
   description is among the matches. Bumping the submodule also updates this corpus, so new upstream
   test cases start being enforced.
 
-### What the tests cannot see
-
-Two paths in `_parse_file` discard input without raising or logging, so no test reports them:
-
-- A line that is not valid UTF-8 is skipped entirely.
-- A `!:strength` factor that does not parse as an integer is ignored, leaving the factor at 0. This
-  already happens: `ctf` line 23 reads `!:strength + 5` followed by a trailing comment, so the test
-  above it scores 20 rather than 25.
-
-If a definition you are updating uses `!:strength`, check that the factor is a bare number. Grep
-for the second case across the tree with `grep -rn '^!:strength' polyfile/magic_defs/ | grep '#'`.
+### Differential testing
 
 `tests/test_corkami.py` then compares PolyFile against a `file` binary built from the submodule. It
 runs `autoreconf`, `./configure`, and `make`, so it needs a C toolchain and autotools. Note that it
@@ -227,8 +219,8 @@ before you trust a corkami run.
 
 The build tree it leaves behind in `file/` is ignored by git, so `git status` reports the submodule
 clean even when `configure` and the binary predate the release you just checked out. `make` normally
-regenerates them, but if the build fails or the oracle looks wrong, confirm the version with
-`file/src/file --version` and force a clean rebuild with `git -C file clean -xfd`.
+regenerates them. Confirm the version with `file/src/file --version`. If it is stale, rebuild the
+oracle in a fresh checkout of the candidate.
 
 ## Fixing what breaks
 
@@ -236,43 +228,33 @@ Work in this order:
 
 1. **Parse errors.** Implement the construct in `polyfile/magic.py`. New data types go in
    `DataType.parse`; new type modifiers usually mean widening the relevant `*_TYPE_FORMAT` regex.
-2. **`test_file_corpus` failures.** Fix `polyfile/magic.py`. The skip list in that test names stems
-   that fail because of known PolyFile bugs; add to it only when the cause is a pre-existing bug this
-   update exposed, and record which bug in a comment.
+2. **`test_file_corpus` failures.** Fix the matcher and add a regression. `KNOWN_FAILURES` maps
+   existing exceptions to issue numbers, and the test checks each still fails.
 3. **corkami differences.** `KNOWN_BAD_FILES` holds the same kind of exception, keyed by MD5, and
    deserves the same standard of justification.
 
-Also check whether any MIME type or file extension disappeared, which the tests do not catch:
+Compare both MIME types and file extensions before and after the update. Run the following
+snapshot at the old pin, and run it again after the update with `phase=after` and the same
+`snapshot_dir`. The CLI lists MIME types. The matcher exposes the extension set separately.
 
 ```bash
-# Before you touch anything, on a clean tree:
-python -m polyfile --list > /tmp/mimes-before.txt
-
-# After the sync and any code fixes:
-python -m polyfile --list > /tmp/mimes-after.txt
-diff /tmp/mimes-before.txt /tmp/mimes-after.txt
+snapshot_dir=$(mktemp -d)
+phase=before
+uv run python -m polyfile --list > "$snapshot_dir/mimes-$phase.txt"
+uv run python -c '
+from polyfile.magic import MagicMatcher
+print(*sorted(MagicMatcher.DEFAULT_INSTANCE.extensions), sep="\n")
+' > "$snapshot_dir/extensions-$phase.txt"
 ```
 
-If you forgot to capture the "before" list, take it from a worktree at the base commit rather than
-stashing, which cannot cleanly undo a submodule move:
-
-```bash
-git worktree add --detach /tmp/polyfile-base origin/master
-git -C /tmp/polyfile-base submodule update --init file
-(cd /tmp/polyfile-base && python -m polyfile --list) > /tmp/mimes-before.txt
-git worktree remove --force /tmp/polyfile-base
-```
-
-A removal is usually deliberate on upstream's part, such as a rename, or a `use` of a named test
-being commented out, which makes everything under that test unreachable. Confirm the cause of each
-one rather than assuming.
+Diff each pair of snapshots. Check the cause of each removal, such as an upstream rename or a
+removed `use` of a named test. Run the Kaitai MIME mapping tests to catch unreachable parsers.
 
 ## Committing
 
 Definition files contain trailing whitespace that carries meaning: the message of a test is
-everything after the last tab, and it is sometimes only spaces. The example hook in
-[`hooks/pre-commit`](../hooks/pre-commit) runs `git diff-index --check`, which rejects those lines.
-If you have installed it, commit the definitions with `git commit --no-verify`.
+everything after the last tab, and it is sometimes only spaces. Keep that whitespace byte-for-byte
+when reviewing the vendored diff. Run the repository's configured checks before committing.
 
-Keep the submodule bump and the definition copy in one commit, since the copy tracks the submodule,
-and put code fixes, deletions, and test updates in their own commits.
+Keep the submodule bump, copied definitions, and upstream deletions in one commit. Group related
+engine and test changes together.
