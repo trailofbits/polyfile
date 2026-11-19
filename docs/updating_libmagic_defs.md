@@ -223,6 +223,17 @@ drifted, the differential compares PolyFile against a different rule set than th
 and says nothing about it. `tests/test_magic_defs_drift.py` is what tells you, so read its result
 before you trust a corkami run.
 
+On macOS, a sandbox can block Libtool's `sysctl -n kern.argmax` probe. If the build logs show that
+failure followed by integer-expression errors or unresolved symbols, rerun the generated
+`configure` with a limit derived from `getconf ARG_MAX`.
+
+```bash
+arg_max=$(getconf ARG_MAX)
+(cd file && lt_cv_sys_max_cmd_len=$((arg_max / 4 * 3)) ./configure --disable-silent-rules)
+```
+
+Then rerun the differential tests. They reuse the configuration and rebuild the oracle.
+
 The Corkami tests download and verify the revision and SHA-256 in `tests/corkami_corpus.py`.
 To update the corpus, select an upstream commit, download its ZIP archive from the commit-specific
 `CORKAMI_URL`, and verify the archive's contents against that revision. Update `CORKAMI_COMMIT`
