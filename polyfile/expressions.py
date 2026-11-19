@@ -1,34 +1,44 @@
-from collections import deque
-from collections.abc import Mapping
+"""Parse and evaluate standalone expressions over caller-supplied field values."""
+
+from __future__ import annotations
+
+import re
+from collections.abc import Iterable, Iterator, Mapping
+from dataclasses import dataclass
 from enum import Enum
 from io import StringIO
-import itertools
+from typing import Literal, TextIO
 
 
-OPERATORS_BY_NAME = {}
+OPERATORS_BY_NAME: dict[str, Operator] = {}
 
 
-def function_call(obj, function_name):
-    raise RuntimeError("TODO: Implement")
-
-
-def to_int(v, byteorder='big') -> int:
+def to_int(v: object, byteorder: Literal["big", "little"] = "big") -> int:
+    """Convert decimal text, unsigned bytes, or an integer for numeric operators."""
     if isinstance(v, int):
         return v
-    elif isinstance(v, bytes) or isinstance(v, str) or isinstance(v, bytearray):
-        if len(v) == 0:
-            return 0
-        elif len(v) == 1:
-            return int(v[0])
-        else:
-            # Assume big endian
-            return int.from_bytes(v, byteorder=byteorder)
+    if isinstance(v, str):
+        return int(v) if v else 0
+    if isinstance(v, (bytes, bytearray)):
+        return int.from_bytes(v, byteorder=byteorder)
     raise ValueError(f"Cannot convert {v!r} to an integer")
 
 
+def _named_value(record: Mapping[str, object] | type[Enum], field: IdentifierToken) -> object:
+    if isinstance(record, Mapping) and field.name not in record:
+        raise KeyError(field.name)
+    return record[field.name]
+
+
+def _member_access(record: object, field: IdentifierToken) -> object:
+    if not isinstance(record, Mapping):
+        raise TypeError(f"Cannot read field {field.name!r} from {type(record).__name__}")
+    return _named_value(record, field)
+
+
 class Operator(Enum):
-    ENUM_ACCESSOR = ('::', 0, lambda a, b: a[b.name], True, 2, False, (True, False))
-    MEMBER_ACCESS = ('.', 1, lambda a, b: None, True, 2, False, (True, False))
+    ENUM_ACCESSOR = ('::', 0, _named_value, True, 2, False, (True, False))
+    MEMBER_ACCESS = ('.', 1, _member_access, True, 2, False, (True, False))
     UNARY_PLUS = ('+', 2, lambda a: a, False, 1, True)
     UNARY_MINUS = ('-', 2, lambda a: -to_int(a), False, 1, True)
     LOGICAL_NOT = ('not', 2, lambda a: not a, False, 1)
@@ -52,7 +62,7 @@ class Operator(Enum):
     LOGICAL_AND = ('and', 11, lambda a, b: a and b)
     LOGICAL_OR = ('or', 12, lambda a, b: a or b)
     TERNARY_ELSE = (':', 13, lambda a, b: (a, b), False)
-    TERNARY_CONDITIONAL = ('?', 14, lambda a, b: b[bool(a)], False)
+    TERNARY_CONDITIONAL = ('?', 14, lambda a, b: b[0] if a else b[1], False)
 
     def __init__(self,
                  token,
@@ -76,23 +86,12 @@ class Operator(Enum):
             OPERATORS_BY_NAME[self.token] = self
 
 
-IDENTIFIER_BYTES = {
-    chr(i) for i in range(ord('A'), ord('Z') + 1)
-} | {
-    chr(i) for i in range(ord('a'), ord('z') + 1)
-} | {
-    chr(i) for i in range(ord('0'), ord('9') + 1)
-} | {
-    '-', '_'
-}
-
-
 class Token:
-    def __init__(self, raw_text):
+    def __init__(self, raw_text: str):
         self._raw = raw_text
 
     @property
-    def raw_token(self):
+    def raw_token(self) -> str:
         return self._raw
 
     def __len__(self):
@@ -103,9 +102,6 @@ class Token:
 
 
 class Parenthesis(Token):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
     def __repr__(self):
         return f"{self.__class__.__name__}()"
 
@@ -121,7 +117,7 @@ class CloseParen(Parenthesis):
 
 
 class OperatorToken(Token):
-    def __init__(self, op):
+    def __init__(self, op: Operator | str):
         if isinstance(op, str):
             op = OPERATORS_BY_NAME[op]
         super().__init__(op.token)
@@ -132,13 +128,13 @@ class OperatorToken(Token):
 
 
 class IdentifierToken(Token):
-    def __init__(self, name):
+    def __init__(self, name: str):
         super().__init__(name)
         self.name = name
 
 
 class IntegerToken(Token):
-    def __init__(self, raw_str, value):
+    def __init__(self, raw_str: str, value: int):
         super().__init__(raw_str)
         self.value = value
 
@@ -149,182 +145,268 @@ class IntegerToken(Token):
         return f"{self.__class__.__name__}(raw_str={self.raw_token!r}, value={self.value!r})"
 
 
+# Match complete words before looking up keyword operators, and longest symbols first.
+_SYMBOLS = sorted((op for op in OPERATORS_BY_NAME if not op.isalpha()), key=len, reverse=True)
+_LEXEME = re.compile(r"[A-Za-z_0-9]+|" + "|".join(map(re.escape, _SYMBOLS)) + r"|\S")
+_ACCESSORS = (Operator.MEMBER_ACCESS, Operator.ENUM_ACCESSOR)
+
+
+def _read_word(raw: str) -> Token:
+    if raw[0].isdigit() and raw.isascii():
+        base = 0 if raw.lower().startswith(("0x", "0o", "0b")) else 10
+        try:
+            return IntegerToken(raw, int(raw, base))
+        except ValueError as error:
+            raise ValueError(f"Invalid integer literal {raw!r}") from error
+    if raw.isascii() and raw.isidentifier():
+        return IdentifierToken(raw)
+    raise ValueError(f"Unexpected character {raw!r}")
+
+
+def _read_token(raw: str, previous: Token | None) -> Token:
+    if raw == "(":
+        return OpenParen()
+    if raw == ")":
+        return CloseParen()
+    if raw not in OPERATORS_BY_NAME:
+        return _read_word(raw)
+    if raw in ("+", "-") and (previous is None or isinstance(previous, (OperatorToken, OpenParen))):
+        return OperatorToken(Operator.UNARY_PLUS if raw == "+" else Operator.UNARY_MINUS)
+    return OperatorToken(raw)
+
+
 class Tokenizer:
-    def __init__(self, stream):
-        if isinstance(stream, str):
-            stream = StringIO(stream)
-        self._stream = stream
-        self._buffer = deque()
-        self._next_token = None
-        self.prev_token = None
+    def __init__(self, stream: str | TextIO):
+        lines = StringIO(stream) if isinstance(stream, str) else stream
+        self._words = (m.group() for line in lines for m in _LEXEME.finditer(line))
+        self._next_token: Token | None = None
+        self.prev_token: Token | None = None
 
-    def _peek_byte(self, n=1):
-        bytes_needed = n - len(self._buffer)
-        if bytes_needed > 0:
-            b = self._stream.read(bytes_needed)
-            self._buffer.extend(b)
-        return ''.join(itertools.islice(self._buffer, n))
-
-    def _pop_byte(self, n=1):
-        if len(self._buffer) < n:
-            return ''.join(self._buffer) + self._stream.read(1)
-        else:
-            return ''.join(self._buffer.popleft() for _ in range(n))
-
-    def peek(self):
-        if self._next_token is not None:
-            return self._next_token
-        ret = None
-        operand = None
-        # ignore leading whitespace
-        while self._peek_byte() == ' ' or self._peek_byte() == '\t':
-            self._pop_byte()
-        while ret is None:
-            c = self._peek_byte(3)
-            if len(c) == 0:
-                break
-            elif operand is not None:
-                if c[0] in IDENTIFIER_BYTES:
-                    operand += self._pop_byte()
-                else:
-                    break
-            elif c in OPERATORS_BY_NAME:
-                ret = OperatorToken(c)
-            elif c[:2] in OPERATORS_BY_NAME:
-                ret = OperatorToken(c[:2])
-            elif c[0] in OPERATORS_BY_NAME:
-                if c[0] == '+':
-                    if self.prev_token is None or isinstance(self.prev_token, OperatorToken):
-                        ret = OperatorToken(Operator.UNARY_PLUS)
-                    else:
-                        ret = OperatorToken(Operator.ADDITION)
-                elif c[0] == '-':
-                    if self.prev_token is None or isinstance(self.prev_token, OperatorToken):
-                        ret = OperatorToken(Operator.UNARY_MINUS)
-                    else:
-                        ret = OperatorToken(Operator.SUBTRACTION)
-                else:
-                    ret = OperatorToken(c[0])
-            elif c[0] == '(':
-                ret = OpenParen()
-            elif c[0] == ')':
-                ret = CloseParen()
-            elif c[0] == ' ' or c[0] == '\t':
-                break
-            else:
-                operand = self._pop_byte()
-        if operand is not None:
-            if operand.startswith('0x'):
-                ret = IntegerToken(operand, int(operand, 16))
-            elif operand.startswith('0o'):
-                ret = IntegerToken(operand, int(operand, 8))
-            elif operand.startswith('0b'):
-                ret = IntegerToken(operand, int(operand, 2))
-            else:
-                # Is this an integer?
-                try:
-                    ret = IntegerToken(operand, int(operand))
-                except ValueError:
-                    ret = IdentifierToken(operand)
-        elif ret is not None:
-            self._pop_byte(len(ret))
-        return ret
+    def peek(self) -> Token | None:
+        """Return the next token without advancing past it."""
+        if self._next_token is None and (raw := next(self._words, None)) is not None:
+            self._next_token = _read_token(raw, self.prev_token)
+        return self._next_token
 
     def has_next(self) -> bool:
         return self.peek() is not None
 
-    def next(self):
-        ret = self.peek()
-        self.prev_token = ret
+    def next(self) -> Token | None:
+        self.prev_token = self.peek()
         self._next_token = None
-        return ret
+        return self.prev_token
 
-    def __iter__(self):
-        while True:
-            ret = self.next()
-            if ret is None:
-                break
-            yield ret
+    def __iter__(self) -> Iterator[Token]:
+        while (token := self.next()) is not None:
+            yield token
 
 
-def tokenize(stream_or_str):
+def tokenize(stream_or_str: str | TextIO) -> Iterator[Token]:
+    """Yield expression tokens from text or a text stream."""
     yield from Tokenizer(stream_or_str)
 
 
-def infix_to_rpn(tokens):
-    """Converts an infix expression to reverse Polish notation using the Shunting Yard algorithm"""
-    operators = []
+def _emit(operator: OpenParen | OperatorToken) -> Iterator[OperatorToken]:
+    if isinstance(operator, OpenParen):
+        raise ValueError("Unmatched '('")
+    if operator.op is Operator.TERNARY_CONDITIONAL:
+        raise ValueError("Unmatched '?' (expected ':')")
+    yield operator
+    if operator.op is Operator.TERNARY_ELSE:
+        yield OperatorToken(Operator.TERNARY_CONDITIONAL)
 
-    for token in tokens:
-        if isinstance(token, OpenParen):
-            operators.append(token)
-        elif isinstance(token, CloseParen):
-            while not isinstance(operators[-1], OpenParen):
-                yield operators.pop()
-            # TODO: Throw a nice mismatched parenthesis exception here instead of relying on operators[-1]
-            # to throw an index out of bounds exception
-            if operators and isinstance(operators[-1], OpenParen):
-                operators.pop()
-        elif isinstance(token, OperatorToken):
-            while operators and not isinstance(operators[-1], OpenParen) and \
-                    (operators[-1].op.priority < token.op.priority \
-                        or \
-                    (operators[-1].op.priority == token.op.priority and operators[-1].op.left_associative)):
-                yield operators.pop()
-            operators.append(token)
+
+def _drain_to(stack: list[OpenParen | OperatorToken], closing: Token) -> Iterator[OperatorToken]:
+    while stack:
+        top = stack.pop()
+        if isinstance(top, OpenParen):
+            if isinstance(closing, CloseParen):
+                return
+            break
+        if isinstance(closing, OperatorToken) and top.op is Operator.TERNARY_CONDITIONAL:
+            return
+        yield from _emit(top)
+    raise ValueError(f"Unmatched {closing.raw_token!r}")
+
+
+def _push_operator(
+    stack: list[OpenParen | OperatorToken], token: OperatorToken,
+) -> Iterator[OperatorToken]:
+    if token.op is Operator.TERNARY_ELSE:
+        yield from _drain_to(stack, token)
+    else:
+        while stack and isinstance(top := stack[-1], OperatorToken):
+            if top.op in (Operator.TERNARY_CONDITIONAL, Operator.TERNARY_ELSE):
+                break
+            if top.op.priority > token.op.priority:
+                break
+            if top.op.priority == token.op.priority and not token.op.left_associative:
+                break
+            yield from _emit(stack.pop())
+    stack.append(token)
+
+
+def _operand(source: Iterator[Token], stack: list[OpenParen | OperatorToken]) -> Token:
+    for token in source:
+        if isinstance(token, (IdentifierToken, IntegerToken)):
+            return token
+        if isinstance(token, OpenParen) or (
+            isinstance(token, OperatorToken) and token.op.arity == 1
+        ):
+            stack.append(token)
         else:
-            yield token
+            raise ValueError(f"Expected operand at {token.raw_token!r}")
+    raise ValueError("Expected operand at end of input")
 
-    while operators:
-        top = operators.pop()
-        if isinstance(top, Parenthesis):
-            raise RuntimeError("Mismatched parenthesis")
-        yield top
+
+def infix_to_rpn(tokens: Iterable[Token]) -> Iterator[Token]:
+    """Validate infix tokens and yield reverse Polish notation in one pass."""
+    source = iter(tokens)
+    stack: list[OpenParen | OperatorToken] = []
+    yield _operand(source, stack)
+    for token in source:
+        if isinstance(token, CloseParen):
+            yield from _drain_to(stack, token)
+        elif isinstance(token, OperatorToken) and token.op in _ACCESSORS:
+            field = next(source, None)
+            if not isinstance(field, IdentifierToken):
+                at = "end of input" if field is None else repr(field.raw_token)
+                raise ValueError(f"Expected field name after {token.raw_token!r} at {at}")
+            yield field
+            yield token
+        elif isinstance(token, OperatorToken) and token.op.arity == 2:
+            yield from _push_operator(stack, token)
+            yield _operand(source, stack)
+        else:
+            raise ValueError(f"Expected binary operator at {token.raw_token!r}")
+    while stack:
+        yield from _emit(stack.pop())
+
+
+@dataclass(frozen=True, slots=True)
+class _Literal:
+    value: object
+
+
+@dataclass(frozen=True, slots=True)
+class _Call:
+    op: Operator
+    args: tuple[_Node, ...]
+
+
+_Node = _Literal | IdentifierToken | _Call
+_RpnItem = Token | int | str | bytes
+
+
+def _compile_call(op: Operator, tokens: Iterator[_RpnItem], stack: list[_Node]) -> _Call:
+    arity = op.arity
+    if op is Operator.TERNARY_ELSE:
+        question = next(tokens, None)
+        if not isinstance(question, OperatorToken) or (
+            question.op is not Operator.TERNARY_CONDITIONAL
+        ):
+            raise ValueError("Expected '?' after ':' in RPN")
+        op, arity = question.op, 3
+    elif op is Operator.TERNARY_CONDITIONAL:
+        raise ValueError("Expected ':' before '?' in RPN")
+    if len(stack) < arity:
+        raise ValueError(f"Missing operand for {op.token!r} in RPN")
+    args = stack[-arity:]
+    del stack[-arity:]
+    if op in _ACCESSORS:
+        if not isinstance(args[1], IdentifierToken):
+            raise ValueError(f"Expected a field name for {op.token!r}")
+        args[1] = _Literal(args[1])
+    return _Call(op, tuple(args))
+
+
+def _compile(rpn: tuple[_RpnItem, ...]) -> _Node:
+    stack: list[_Node] = []
+    tokens = iter(rpn)
+    for token in tokens:
+        if isinstance(token, IntegerToken):
+            stack.append(_Literal(token.value))
+        elif isinstance(token, (int, str, bytes)):
+            stack.append(_Literal(token))
+        elif isinstance(token, IdentifierToken):
+            stack.append(token)
+        elif isinstance(token, OperatorToken):
+            stack.append(_compile_call(token.op, tokens, stack))
+        else:
+            raise ValueError(f"Unexpected RPN token {token!r}")
+    if len(stack) != 1:
+        raise ValueError("Expected one expression at end of RPN")
+    return stack[0]
+
+
+@dataclass(frozen=True, slots=True)
+class _Branch:
+    # A missing arm keeps the condition's value, as required by 'and' and 'or'.
+    when_true: _Node | None
+    when_false: _Node | None
+
+
+def _schedule(call: _Call, pending: list[_Node | _Branch | Operator]) -> None:
+    op, args = call.op, call.args
+    if op is Operator.TERNARY_CONDITIONAL:
+        pending.extend((_Branch(args[1], args[2]), args[0]))
+    elif op is Operator.LOGICAL_AND:
+        pending.extend((_Branch(args[1], None), args[0]))
+    elif op is Operator.LOGICAL_OR:
+        pending.extend((_Branch(None, args[1]), args[0]))
+    else:
+        pending.append(op)
+        pending.extend(reversed(args))
 
 
 class Expression:
-    def __init__(self, rpn):
+    def __init__(self, rpn: Iterable[_RpnItem]):
         self.tokens = tuple(rpn)
+        self._root = _compile(self.tokens)
 
     @staticmethod
-    def get_value(token: Token, assignments: Mapping[str, object]):
+    def get_value(token: object, assignments: Mapping[str, object]) -> object:
         if isinstance(token, IntegerToken):
             return token.value
-        elif isinstance(token, IdentifierToken):
+        if isinstance(token, IdentifierToken):
             if token.name not in assignments:
-                raise KeyError(f'Unknown identifier {token.name}')
+                raise KeyError(f"Unknown identifier {token.name}")
             return assignments[token.name]
-        elif isinstance(token, int) or isinstance(token, str) or isinstance(token, bytes):
+        if isinstance(token, (int, str, bytes)):
             return token
-        else:
-            raise ValueError(f"Unexpected token {token!r}")
+        raise ValueError(f"Unexpected token {token!r}")
 
-    def interpret(self, assignments=None):
+    def interpret(self, assignments: Mapping[str, object] | None = None) -> object:
+        """Evaluate the expression using the supplied identifier bindings."""
         if assignments is None:
             assignments = {}
-        values = []
-        for t in self.tokens:
-            if isinstance(t, OperatorToken):
-                args = []
-                for expand, v in zip(t.op.expand, values[-t.op.arity:]):
-                    if expand:
-                        args.append(self.get_value(v, assignments))
-                    else:
-                        args.append(v)
-                values = values[:-t.op.arity] + [t.op.execute(*args)]
+        values: list[object] = []
+        pending: list[_Node | _Branch | Operator] = [self._root]
+        while pending:
+            task = pending.pop()
+            if isinstance(task, _Call):
+                _schedule(task, pending)
+            elif isinstance(task, _Branch):
+                selected = task.when_true if values[-1] else task.when_false
+                if selected is not None:
+                    values.pop()
+                    pending.append(selected)
+            elif isinstance(task, Operator):
+                args = values[-task.arity:]
+                del values[-task.arity:]
+                values.append(task.execute(*args))
+            elif isinstance(task, _Literal):
+                values.append(task.value)
             else:
-                values.append(t)
-        if len(values) != 1:
-            raise RuntimeError(f"Unexpected extra tokens: {values[:-1]}")
-        if isinstance(values[0], IdentifierToken):
-            return self.get_value(values[0], assignments)
-        return values[0]
+                values.append(self.get_value(task, assignments))
+        return values.pop()
 
     def __repr__(self):
         return f"{self.__class__.__name__}(rpn={self.tokens!r})"
 
 
 def parse(expression_str: str) -> Expression:
+    """Compile expression text for repeated evaluation with Expression.interpret()."""
     return Expression(infix_to_rpn(tokenize(expression_str)))
 
 

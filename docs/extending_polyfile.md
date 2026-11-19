@@ -8,6 +8,50 @@ The retained [standalone search and serialization utilities](search_serializatio
 direct library use. That guide documents their maintenance status, APIs, cache compatibility,
 and regression checks. They currently have no callers in the analyzer or command-line workflows.
 
+## Standalone expression evaluator
+
+Use `polyfile.expressions.parse` in Python to evaluate an expression over field values you supply.
+Parse the text once, then pass a mapping of names to values each time you call `interpret`.
+This example calculates the payload size of an optional record.
+
+```python
+from polyfile.expressions import parse
+
+size = parse("record.present ? record.count * record.width : 0")
+assert size.interpret({"record": {"present": True, "count": 3, "width": 4}}) == 12
+assert size.interpret({"record": {"present": False}}) == 0
+```
+
+Write integer literals in decimal or with a `0x`, `0o`, or `0b` prefix. Identifiers start with an
+ASCII letter or underscore and can also contain digits. Whitespace is optional around symbolic
+operators. Parentheses group expressions. The following rows list operators from highest to lowest
+precedence.
+
+| Operators | Behavior |
+| --- | --- |
+| `.`, `::` | Read a literal name. Use `record.field` for a mapping key, or `enum::name` for a named enum member or mapping entry. Access chains run left to right. |
+| Unary `+`, `-`, `not`, `~` | Identity, numeric negation, logical negation, and bitwise complement. |
+| `*`, `/`, `%` | Multiplication, floor division, and remainder. |
+| Binary `+`, `-` | Addition and subtraction. |
+| `<<`, `>>` | Bit shifts. |
+| `<`, `<=`, `>`, `>=` | Ordering. |
+| `==`, `!=` | Equality. |
+| `&` | Bitwise AND. |
+| `^` | Bitwise XOR. |
+| `\|` | Bitwise OR. |
+| `and` | Return the first falsy operand or the last operand. |
+| `or` | Return the first truthy operand or the last operand. |
+| `condition ? yes : no` | Evaluate the selected branch. Nested conditionals associate to the right. |
+
+Addition and comparisons use the operands' Python behavior. For example, adding two strings
+concatenates them. Operators that require integers accept integers, decimal text, and unsigned
+big-endian `bytes` or `bytearray` values. Empty text and byte sequences convert to zero.
+
+`parse` raises `ValueError` for invalid syntax. During evaluation, an unknown identifier or
+missing mapping key raises `KeyError`. Applying `.` to a non-mapping raises `TypeError`.
+Conversion and arithmetic errors propagate from the selected operands. The `and`, `or`, and
+conditional operators skip lookups and calculations in branches they do not take.
+
 ## Matchers
 
 ### Libmagic Pattern Matching DSL
