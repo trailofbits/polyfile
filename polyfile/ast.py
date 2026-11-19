@@ -36,7 +36,9 @@ class Node:
             elif self.older_sibling is not None:
                 self._offset = self.older_sibling.offset + self.older_sibling.length
             else:
-                raise ValueError(f"{self!r} must either have an explicit offset, an older sibling, or a child!")
+                raise ValueError(
+                    f"Node {self.name!r} has no offset, older sibling, or child to locate it"
+                )
         return self._offset
 
     @property
