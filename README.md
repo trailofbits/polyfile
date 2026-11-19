@@ -49,13 +49,19 @@ git submodule update --init --recursive
 uv pip install .
 ```
 
-Installing from source builds in an isolated environment, so it needs network access to fetch
-the build backend. To build offline, install `setuptools>=83.0.0` yourself and run
-`uv pip install --no-build-isolation .`.
+For an offline installation, first cache the dependencies on a connected machine or make them
+available in a local package index. With your virtual environment active, install the exact
+setuptools version from `[build-system].requires` in `pyproject.toml`, then install PolyFile.
+For this release, the commands using the uv cache are
+
+```sh
+uv pip install --offline 'setuptools==84.2.1'
+uv pip install --offline --no-build-isolation .
+```
 
 Installing from PyPI reuses the parsers that the published distribution already carries.
-Installing from a source checkout regenerates them, and only that path needs Java, which runs
-the Kaitai Struct compiler that compiles the file format definitions.
+Installing from a source checkout also reuses current generated parsers. If the format
+specifications require regeneration, have Java and the Kaitai Struct compiler available offline.
 
 This installs the `polyfile` executable in your path. The companion merge tool runs as
 `python -m polymerge`.
@@ -180,9 +186,15 @@ It currently has support for parsing and semantically mapping the following form
 * ZIP, including recursive identification of all ZIP contents
 * JPEG/JFIF, using its [Kaitai Struct grammar](https://formats.kaitai.io/jpeg/index.html)
 * [iNES](https://wiki.nesdev.com/w/index.php/INES)
-* [Any other format](https://formats.kaitai.io/index.html) specified in a [KSY grammar](https://doc.kaitai.io/user_guide.html)
+* Formats with registered Kaitai Struct parsers, including PNG, ELF, and SQLite
 
-For an example that exercises all of these file formats, run:
+PolyFile ships parsers compiled from 183 Kaitai Struct specifications. Automatic parsing uses
+explicit mappings from 66 MIME types to 44 of those specifications. The remaining compiled
+parsers are available through the Kaitai loader. To enable automatic parsing for another format,
+register its specification for a MIME type that PolyFile can identify.
+[Guide to adding a mapping](https://github.com/trailofbits/polyfile/blob/master/docs/extending_polyfile.md#adding-a-mapping)
+
+To inspect a polyglot file containing several supported formats, run:
 ```bash
 curl -v --silent https://www.sultanik.com/files/ESultanikResume.pdf | polyfile --html ESultanikResume.html -
 ```
