@@ -53,7 +53,7 @@ def parse_dataflow_ranges(dataflow):
     for dataflow_range in dataflow:
         parts = dataflow_range.split(':')
         if len(parts) > 2:
-            raise ValueError(f"Error: Invalid dataflow range {dataflow_range!r}")
+            raise ValueError(f"Invalid dataflow range {dataflow_range!r}")
         elif len(parts) == 1:
             start = parts[0]
             end = None
@@ -63,7 +63,7 @@ def parse_dataflow_ranges(dataflow):
             try:
                 start = int(start)
             except ValueError:
-                raise ValueError(f"Error: Invalid dataflow range start {dataflow_range!r}")
+                raise ValueError(f"Invalid dataflow range start {dataflow_range!r}")
         else:
             start = None
         had_end = False
@@ -72,14 +72,14 @@ def parse_dataflow_ranges(dataflow):
                 try:
                     end = int(end)
                 except ValueError:
-                    raise ValueError(f"Error: Invalid dataflow range end {dataflow_range!r}")
+                    raise ValueError(f"Invalid dataflow range end {dataflow_range!r}")
             else:
                 had_end = True
                 end = None
         if start is not None and end is not None:
             # "start:end"
             if start >= end:
-                raise ValueError(f"Error: Dataflow range start must be less than end in {dataflow_range}")
+                raise ValueError(f"Dataflow range start must be less than end in {dataflow_range}")
             if dataflow_ranges is None:
                 dataflow_ranges = IntervalTree()
             dataflow_ranges[start:end] = True
@@ -201,10 +201,10 @@ def run_merge(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int 
 
     if len(args.FILES) == 1:
         if build_cfg and built_type_hierarchy:
-            parser.print_help()
-            sys.stderr.write('\n')
-            log.critical("Error: Two input files (PolyFile, PolyTracker) are required when both `--cfg` and `--type-hierarchy` options are enabled.")
-            parser.exit()
+            parser.error(
+                "Two input files (PolyFile and PolyTracker) are required to generate both "
+                "a control flow graph and a type hierarchy"
+            )
         elif build_cfg:
             polyfile_json_path = None
             polytracker_json_path = args.FILES[0]
@@ -221,10 +221,7 @@ def run_merge(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int 
                     parser.error(f"can't open {str(path)!r}: {error}")
             return 0
     elif len(args.FILES) != 2:
-        parser.print_help()
-        sys.stderr.write('\n')
-        log.critical("Error: Expected at most two input files")
-        parser.exit()
+        parser.error("Expected at most two input files")
     else:
         polyfile_json_path = args.FILES[0]
         polytracker_json_path = args.FILES[1]
@@ -232,10 +229,7 @@ def run_merge(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int 
     try:
         dataflow_from_start, dataflow_to_end, dataflow_ranges = parse_dataflow_ranges(args.dataflow)
     except ValueError as e:
-        parser.print_help()
-        sys.stderr.write('\n')
-        log.critical(f"Error: {e!s}")
-        parser.exit()
+        parser.error(str(e))
 
     if polyfile_json_path is not None:
         polyfile_json = cast(PolyfileDocument, _read_json(polyfile_json_path, parser))
