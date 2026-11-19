@@ -280,11 +280,9 @@ class Matcher:
     ) -> Iterator[Match]:
         if length is None:
             length = len(data) - offset
-        extension: str | None = None
-        try:
-            extension = next(iter(match_obj.test.all_extensions))
-        except StopIteration:
-            pass
+        extensions = match_obj.test.extensions or match_obj.test.all_extensions
+        preferred = (guess_extension(mimetype) or "").removeprefix(".")
+        extension = preferred if preferred in extensions else min(extensions, default=None)
         m = Match(
             mimetype,
             match_obj,
@@ -357,9 +355,12 @@ class Matcher:
                     if mimetype in matched_mimetypes:
                         continue
                     matched_mimetypes.add(mimetype)
+                    value = description
+                    if value is None and "%" in result.test.message.resolve(magic_match.context):
+                        value = magic_match.description()
                     yield from self.handle_mimetype(
                         mimetype, result, magic_context.data, f, parent,
-                        description=description,
+                        description=value,
                         analysis_context=analysis_context, analysis_depth=depth,
                     )
 
