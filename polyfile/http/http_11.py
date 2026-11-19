@@ -103,6 +103,7 @@ request_rulelist: list[tuple[str, Rule]] = [
     ("defacto-header", defacto.Rule("defacto-header")),
     ("deprecated-header", deprecated.Rule("deprecated-header")),
     ("experimental-header", experimental.Rule("experimental-header")),
+    ("field-value", rfc9110.Rule("field-value")),
     ("port", rfc3986.Rule("port")),
     ("protocol", rfc9110.Rule("protocol")),
     ("protocol-name", rfc9110.Rule("protocol-name")),
@@ -141,8 +142,7 @@ class Http11RequestGrammar(Rule):
         'end-to-end-header = "Accept:" OWS Accept OWS / "Accept-Encoding:" OWS Accept-Encoding OWS / "Accept-Language:" OWS Accept-Language OWS / "Access-Control-Request-Headers:" OWS Access-Control-Request-Headers OWS / "Access-Control-Request-Method:" OWS Access-Control-Request-Method OWS / "Authorization:" OWS Authorization OWS / "Content-Encoding:" OWS Content-Encoding OWS / "Content-Language:" OWS Content-Language OWS / "Content-Length:" OWS Content-Length OWS / "Content-Range:" OWS Content-Range OWS / "Content-Type:" OWS Content-Type OWS / "Cookie:" OWS cookie-string OWS / "Date:" OWS Date OWS / "Expect:" OWS Expect OWS / "From:" OWS From OWS / "Host:" OWS Host OWS / "If-Match:" OWS If-Match OWS / "If-Modified-Since:" OWS If-Modified-Since OWS / "If-None-Match:" OWS If-None-Match OWS / "If-Range:" OWS If-Range OWS / "If-Unmodified-Since:" OWS If-Unmodified-Since OWS / "Location:" OWS Location OWS / "Max-Forwards:" OWS Max-Forwards OWS / "Range:" OWS Range OWS / "Referer:" OWS Referer OWS / "Retry-After:" OWS Retry-After OWS / "Sec-CH-UA:" OWS Sec-CH-UA OWS / "Sec-Fetch-Dest:" OWS Sec-Fetch-Dest OWS / "Sec-Fetch-Mode:" OWS Sec-Fetch-Mode OWS / "Sec-Fetch-Site:" OWS Sec-Fetch-Site OWS / "Sec-Fetch-User:" OWS Sec-Fetch-User OWS / "Service-Worker-Navigation-Preload:" OWS Service-Worker-Navigation-Preload OWS / "Upgrade-Insecure-Requests:" OWS Upgrade-Insecure-Requests OWS / "User-Agent:" OWS User-Agent OWS / "Want-Digest:" OWS Want-Digest OWS / "WWW-Authenticate:" OWS WWW-Authenticate OWS',
         # rfc 9111 (caching) request headers follow
         'caching-header = "Age:" OWS Age OWS / "Cache-Control:" OWS Cache-Control OWS',
-        # TODO kaoudis this is a placeholder for all the other headers... should be a better way to do this
-        'unknown-or-bespoke-header = token ":" OWS token OWS',
+        'unknown-or-bespoke-header = token ":" OWS field-value OWS',
         # https://developer.mozilla.org/en-US/docs/Web/HTTP/Methods
         "Access-Control-Request-Method = method",
         # method is defined as 'token' in rfc9110 but better to be explicit...

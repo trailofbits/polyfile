@@ -80,7 +80,7 @@ class Node:
                 stack.append((child, match))
 
     @classmethod
-    def load(cls, obj: Any) -> Self:
+    def load(cls, obj: Any, *, encoding: str = "utf-8") -> Self:
         ancestors: list[tuple[Any, tuple[Node, ...] | None]] = [
             (obj, None)
         ]
@@ -101,7 +101,7 @@ class Node:
             else:
                 value = None
             if isinstance(value, str):
-                value = value.encode("utf-8")
+                value = value.encode(encoding)
             if hasattr(obj, "offset"):
                 offset: int | None = obj.offset
             else:
