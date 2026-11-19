@@ -17,8 +17,11 @@ description: >-
 
 ## Select the compiler and gallery revision
 
-From the PolyFile repository root, check the latest stable compiler release **before changing the
-gallery**. Record the release URL, tag, current compiler pin, and old and proposed gallery SHAs.
+Start in a clean update worktree from the target branch. Initialize both submodules at their
+recorded gitlinks with `git submodule update --init --recursive`. Keep the compiler download and
+virtual environment in the update worktree. Check the latest stable compiler release **before
+changing the gallery**. Record the release URL, tag, current compiler pin, and old and proposed
+gallery SHAs.
 
 ```sh
 gh api repos/kaitai-io/kaitai_struct_compiler/releases/latest --jq '{tag_name,html_url}'
@@ -35,14 +38,18 @@ generation. The wrapper's `--locate` and `--install` options print the selected 
 can select a compiler from `PATH`. Resolve a mismatch before regenerating. If the latest release
 cannot build or run with the supported runtime, report the failing version and check.
 
+If both pins are current, run the license audit and the focused tests in
+[Verify the distributions](#verify-the-distributions). Confirm the manifest matches the eligible
+specs and the worktree has no unexpected changes. Report the checked pins and finish.
+
 ## Preserve local parser fixes
 
 1. Before switching pins, inspect staged, unstaged, and committed changes in the gallery, compiler
-   wrapper, and generated modules. Save any local deltas before invoking a build or editable install.
-   Reproduce the old generation in a separate clean checkout using the old gitlink, scripts, and
-   compiler. Compare its output with the shipped modules and the captured edits. Sibling imports
-   can change order under the same pins. Inspect the diff before dismissing it as ordering noise.
-   Inspect the wrapper for fixes already reproduced by the old build.
+   wrapper, and generated modules. Save any local deltas before invoking a build or installing
+   PolyFile. Run `uv run --no-project python compile_kaitai_parsers.py --rebuild-all` in the clean
+   update worktree with the old gitlink, scripts, and compiler. Compare its output with `HEAD` and
+   the captured edits. Inspect the wrapper for fixes reproduced by the old build. Once you record
+   the baseline and explain its diff, you can switch pins in the update worktree.
 2. For each fix, run its original regression on **raw candidate output**. From the candidate
    gallery root, set `compiler` to the verified executable, `scratch` to an empty output
    directory, and `spec` to the affected spec path. Invoke the compiler directly.
@@ -53,14 +60,18 @@ cannot build or run with the supported runtime, report the failing version and c
    ```
 
    Use fresh Python processes and isolated module paths for old, raw candidate, and patched runs.
-   PolyFile caches the manifest and parser imports.
-   For example, the keyword workaround covers enum members, attributes, sequence field names, and
-   debug offsets. The docstring workaround covers invalid escapes and syntax warnings.
-3. If the raw candidate still fails, retain or port the fix in the checked-in generation path and
-   add a focused regression that fails without it and passes after a fresh rebuild. Keep build
-   scripts standard-library-only. If upstream passes the original case unaided, retire the
-   redundant workaround and keep the test. Account for each manual edit before replacing generated
-   files. Record which upstream spec or compiler change resolved each retired fix.
+   PolyFile caches the manifest and parser imports. Find the affected specs in the manifest and run
+   `python -W error::SyntaxWarning -m py_compile "$scratch/<module>.py"` with Python 3.12 or later
+   when the original regression is invalid Python. Check the corresponding patched output with
+   `TestGeneratedParsers` in [tests/test_kaitai.py](../../../tests/test_kaitai.py). The keyword
+   workaround covers enum members, attributes, sequence field names, and debug offsets. The
+   docstring workaround covers invalid escapes and syntax warnings.
+3. If the raw candidate still fails, retain or port the fix in the checked-in generation path.
+   Verify that the focused regression fails on raw output and passes after a fresh rebuild. Add
+   a test if the existing suite misses the case. Keep build scripts standard-library-only. If
+   upstream passes the original case unaided, retire the redundant workaround and keep the test.
+   Account for each manual edit before replacing generated files. Record which upstream spec or
+   compiler change resolved each retired fix.
 
 ## Audit licenses and regenerate
 
@@ -85,8 +96,11 @@ Run `uv run --no-project python compile_kaitai_parsers.py --rebuild-all`. The ge
 each spec, rejects compile errors, duplicate module names, and dependencies without eligible
 modules, then removes obsolete generated modules. In `polyfile/kaitai/parsers/manifest.json`,
 verify that `generator.compiler_version` matches the selected release and `specs` covers the
-eligible gallery paths. Review the diff for lost coverage, renamed paths, and unexplained changes. A
-second forced rebuild with the same inputs must reproduce the verified behavior and parser set.
+eligible gallery paths. Save the manifest and generated modules outside the package before forcing
+a second rebuild. Compare the results for lost coverage, renamed paths, and unexplained changes.
+The same inputs must reproduce the manifest, parser set, and behavior. Sibling imports can change
+order. Inspect these diffs and retain the tracked bytes for otherwise identical modules to keep
+the PR focused. Wait for regeneration to finish before running linters or building distributions.
 
 ## Add parser coverage
 
@@ -108,15 +122,22 @@ usable matcher, a root-only AST, or an excluded license.
 ## Verify the distributions
 
 ```sh
-uv run --extra dev python -m pytest -q tests/test_kaitai.py tests/test_licensing.py \
+uv sync --locked --extra dev --extra viewer-test
+uv run --no-sync python -m pytest -q -rs tests/test_kaitai.py tests/test_licensing.py \
     tests/test_kaitai_build.py tests/test_kaitai_containers.py tests/unit/test_kaitai_loading.py \
     tests/test_parser_coordinates.py
-uv build
+dist_dir=$(mktemp -d)
+uv build --out-dir "$dist_dir"
 ```
 
-Confirm the licensing and sample tests actually ran. Inspect the newly built sdist and its wheel
+For an update, sync the environment after recording the old generation. The `viewer-test` extra
+provides imports needed by the repository-wide type check. If sample tests report a download
+failure, verify the pinned Corkami archive as described in the
+[sync guide](../../../docs/updating_libmagic_defs.md#differential-testing). Confirm the licensing
+and sample tests actually ran. Inspect the newly built sdist and its wheel in `dist_dir`
 using `tarfile` and `zipfile`. Compare their generated module names with the verified manifest
 (plus `__init__.py`), compare their manifests with the checkout, and verify the sdist's gallery
 specs match the eligible set. Check both archives for excluded specs, stale modules, and the
-downloaded compiler's bundled gallery. Summarize pin changes, patch evidence, license decisions,
-new dispatch coverage, skipped candidates, tests, and artifact checks for review.
+downloaded compiler's bundled gallery. Update the published parser counts from the manifest and
+the MIME registrations. Summarize pin changes, patch evidence, license decisions, new dispatch
+coverage, skipped candidates, tests, and artifact checks for review.
