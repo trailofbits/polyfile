@@ -1,16 +1,17 @@
 import zlib
+from contextlib import contextmanager
 from io import BytesIO
 from itertools import chain
 from lzma import LZMAError
 from pathlib import Path
-from typing import Optional
-from collections.abc import Iterator
-from zipfile import BadZipFile
+from struct import unpack_from
+from collections.abc import Generator, Iterator
+from zipfile import BadZipFile, ZipInfo
 from zipfile import ZipFile as PythonZip
 
 from polyfile.compression import CHUNK_SIZE, DecodeError, OutputBuffer, match_decoded
 
-from polyfile.fileutils import ExactNamedTempfile, FileStream, Tempfile
+from polyfile.fileutils import ExactNamedTempfile, FileStream
 from polyfile.logger import StatusLogger
 from polyfile.magic import (
     AbsoluteOffset,
@@ -23,7 +24,9 @@ from polyfile.magic import (
 )
 from polyfile.polyfile import InvalidMatch, Match, register_parser
 from polyfile.structmatcher import PolyFileStruct
-from polyfile.structs import ByteField, Constant, Endianness, StructError, UInt16, UInt32
+from polyfile.structs import (
+    ByteField, Constant, Endianness, StructError, StructReadError, UInt16, UInt32,
+)
 
 log = StatusLogger("polyfile")
 
@@ -74,6 +77,25 @@ class RelaxedJarMatcher(MagicTest):
 MagicMatcher.DEFAULT_INSTANCE.add(RelaxedJarMatcher())
 
 
+def _compressed_size(size: int, extra: bytes, *, has_zip64_uncompressed: bool) -> int:
+    if size != 0xFFFFFFFF:
+        return size
+    pos = 0
+    while pos + 4 <= len(extra):
+        tag, length = unpack_from("<HH", extra, pos)
+        pos += 4
+        end = pos + length
+        if end > len(extra):
+            break
+        if tag == 1:
+            offset = pos + (8 if has_zip64_uncompressed else 0)
+            if offset + 8 <= end:
+                return int.from_bytes(extra[offset:offset + 8], "little")
+            break
+        pos = end
+    raise StructReadError("The ZIP64 extra field is missing its compressed size")
+
+
 class LocalFileHeader(PolyFileStruct):
     endianness = Endianness.LITTLE
 
@@ -90,7 +112,27 @@ class LocalFileHeader(PolyFileStruct):
     extra_field_length: UInt16
     file_name: ByteField["file_name_length"]  # ty: ignore[invalid-type-form]  # Runtime DSL.
     extra_field: ByteField["extra_field_length"]  # ty: ignore[invalid-type-form]  # Runtime DSL.
-    compressed_data: ByteField["compressed_size"]  # ty: ignore[invalid-type-form]  # Runtime DSL.
+    compressed_data: ByteField["payload_size"]  # ty: ignore[invalid-type-form]  # Runtime DSL.
+
+    _directory: "CentralDirectory | None" = None
+
+    @property
+    def payload_size(self) -> int:
+        """Return the physical compressed size, including deferred and ZIP64 sizes."""
+        if self.general_purpose_bit_flag & 8 and self._directory is not None:
+            record = self._directory
+            return _compressed_size(
+                record.compressed_size, record.extra_field,
+                has_zip64_uncompressed=record.uncompressed_size == 0xFFFFFFFF,
+            )
+        return _compressed_size(self.compressed_size, self.extra_field, has_zip64_uncompressed=True)
+
+    @classmethod
+    def read_member(cls, stream: FileStream, directory: "CentralDirectory") -> "LocalFileHeader":
+        """Read the member with the sizes supplied by its directory entry."""
+        header = cls()
+        header._directory = directory
+        return header._read_fields(stream)
 
 
 class CentralDirectory(PolyFileStruct):
@@ -134,7 +176,7 @@ class CentralDirectory(PolyFileStruct):
         """
         with stream.save_pos():
             stream.seek(self.archive_offset + self.file_header_offset)
-            return LocalFileHeader.read(stream)
+            return LocalFileHeader.read_member(stream, self)
 
 
 class EndOfCentralDirectory(PolyFileStruct):
@@ -341,29 +383,32 @@ class EndOfCentralDirectory(PolyFileStruct):
         return None
 
 
+@contextmanager
 def open_archive(
-        file_stream: FileStream, eocd: EndOfCentralDirectory, start: int
-) -> PythonZip | None:
+    file_stream: FileStream, eocd: EndOfCentralDirectory,
+) -> Generator[PythonZip | None, None, None]:
     """Opens an archive with Python's zipfile module, so that its members can be decompressed.
 
     Args:
         file_stream: The stream containing the whole file, not only the archive.
         eocd: The end of central directory record of the archive.
-        start: The byte offset of the first local file header of the archive.
 
-    Returns:
+    Yields:
         The open archive, or None if zipfile refuses to read it.
     """
+    start = eocd.archive_offset
     with file_stream.save_pos():
         file_stream.seek(start)
         zip_data = file_stream.read(eocd.start_offset + eocd.num_bytes - start)
-    with Tempfile(zip_data) as tmp:
+    with BytesIO(zip_data) as buffer:
         try:
-            return PythonZip(tmp)
+            archive = PythonZip(buffer)
         except BadZipFile as e:
             log.warning(f"Could not read the members of the archive at byte offset {start}: {e!s}")
-            return None
-
+            yield None
+            return
+        with archive:
+            yield archive
 
 
 def _zip_decode_policy(fh: LocalFileHeader, parent: Match) -> tuple[str, str] | None:
@@ -383,12 +428,13 @@ def _zip_decode_policy(fh: LocalFileHeader, parent: Match) -> tuple[str, str] | 
 
 
 def member_data(
-        zf: PythonZip | None, fh: LocalFileHeader, match: Match, parent: Match
+        zf: PythonZip | None, info: ZipInfo | None, fh: LocalFileHeader, match: Match, parent: Match
 ) -> bytes | None:
     """Decompresses the member of an archive whose compressed data a match covers.
 
     Args:
         zf: The archive as zipfile reads it, or None if zipfile refused to read it.
+        info: The corresponding directory entry from that reader.
         fh: The local file header of the member.
         match: A match for one of the fields of `fh`.
         parent: The match that contains the archive.
@@ -397,7 +443,7 @@ def member_data(
         The decompressed contents of the member, or None if `match` covers another field or
         the member cannot be decompressed.
     """
-    if zf is None or match.name != "compressed_data":
+    if zf is None or info is None or match.name != "compressed_data":
         return None
     assert match.parent is not None
     if match.parent.parent != parent:
@@ -408,8 +454,7 @@ def member_data(
         return None
     try:
         output = OutputBuffer(parent.analysis_context.member_limit)
-        encoding = "utf-8" if fh.general_purpose_bit_flag & 0x800 else "cp437"
-        with zf.open(fh.file_name.decode(encoding)) as member:
+        with zf.open(info) as member:
             while True:
                 data = member.read(min(CHUNK_SIZE, output.next_size))
                 if not data:
@@ -431,8 +476,6 @@ def member_data(
         return None
 
 
-
-
 def _decoded_zip_parsers(header: LocalFileHeader, match: Match) -> set[str]:
     """Identify raw interpretations whose decoded contents were already analyzed."""
     if header.compression_method == 12:
@@ -447,13 +490,13 @@ def _decoded_zip_parsers(header: LocalFileHeader, match: Match) -> set[str]:
 
 
 def _member_matches(
-    header: LocalFileHeader, archive: PythonZip | None, parent: Match
+    header: LocalFileHeader, archive: PythonZip | None, info: ZipInfo | None, parent: Match
 ) -> Iterator[Match]:
     """Map one member header and its admitted decoded payload."""
     assert parent.matcher is not None
     for match in header.match(matcher=parent.matcher, parent=parent):
         match.analysis_member_counted = True
-        decoded = member_data(archive, header, match, parent)
+        decoded = member_data(archive, info, header, match, parent)
         yield match
         if decoded is not None:
             yield from match_decoded(match, decoded, member_counted=True)
@@ -479,22 +522,19 @@ def parse_archive(
         parent.analysis_message = "ZIP member count exceeds its analysis allowance"
         return
     cds = list(eocd.central_directories(file_stream))
-    fhs = list(cd.local_file_header(file_stream) for cd in cds)
-    zf = open_archive(file_stream, eocd, fhs[0].start_offset) if fhs else None
-    try:
-        for fh in fhs:
+    with open_archive(file_stream, eocd) as zf:
+        entries = {info.header_offset: info for info in zf.infolist()} if zf else {}
+        for cd in cds:
             reason = parent.analysis_context.claim_entry()
             if reason is not None:
                 parent.analysis_status, parent.analysis_message = "limited", reason
                 return
-            yield from _member_matches(fh, zf, parent)
-        for record in [*cds, eocd]:
-            for match in record.match(matcher=parent.matcher, parent=parent):
-                match.analysis_member_counted = True
-                yield match
-    finally:
-        if zf is not None:
-            zf.close()
+            header = cd.local_file_header(file_stream)
+            yield from _member_matches(header, zf, entries.get(cd.file_header_offset), parent)
+    for record in [*cds, eocd]:
+        for match in record.match(matcher=parent.matcher, parent=parent):
+            match.analysis_member_counted = True
+            yield match
 
 
 @register_parser("application/zip")
