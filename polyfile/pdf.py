@@ -1968,6 +1968,9 @@ class InstrumentedPDFDocument(AdapterPDFDocument):
         return deciphered
 
 
+_PDF_WHITESPACE = (b"\x00", b"\t", b"\n", b"\f", b"\r", b" ")
+
+
 def reverse_skip_whitespace(file_stream) -> bool:
     found_whitespace = False
     while True:
@@ -1976,7 +1979,7 @@ def reverse_skip_whitespace(file_stream) -> bool:
         except IndexError:
             break
         b = file_stream.read(1)
-        if b not in (b' ', b'\t', b'\n'):
+        if b not in _PDF_WHITESPACE:
             break
         found_whitespace = True
         file_stream.seek(-1, from_what=1)
@@ -1987,11 +1990,9 @@ def skip_whitespace(file_stream) -> bool:
     found_whitespace = False
     while True:
         b = file_stream.read(1)
-        if b not in (b' ', b'\t', b'\n'):
-            try:
+        if b not in _PDF_WHITESPACE:
+            if b:
                 file_stream.seek(-1, from_what=1)
-            except IndexError:
-                pass
             break
         found_whitespace = True
     return found_whitespace

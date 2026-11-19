@@ -8,19 +8,23 @@ from pdfminer.arcfour import Arcfour
 from pdfminer.pdfdocument import PDFStandardSecurityHandler
 
 
-def pdf_fixture(objects: list[bytes], trailer: bytes = b"/Root 1 0 R") -> bytes:
+def pdf_fixture(
+    objects: list[bytes], trailer: bytes = b"/Root 1 0 R", *, eol: bytes = b"\n",
+) -> bytes:
     """Build a PDF from numbered object bodies and trailer entries."""
-    data = b"%PDF-1.7\n"
+    data = b"%PDF-1.7" + eol
     positions = []
     for number, body in enumerate(objects, 1):
         positions.append(len(data))
-        data += f"{number} 0 obj\n".encode() + body + b"\nendobj\n"
+        data += eol.join([f"{number} 0 obj".encode(), body, b"endobj", b""])
     start = len(data)
-    data += f"xref\n0 {len(objects) + 1}\n0000000000 65535 f \n".encode()
+    record_eol = eol.rjust(2, b" ")
+    data += eol.join([b"xref", f"0 {len(objects) + 1}".encode(), b"0000000000 65535 f"])
+    data += record_eol
     for position in positions:
-        data += f"{position:010} 00000 n \n".encode()
-    data += b"trailer\n<< " + trailer + b" >>\nstartxref\n"
-    return data + str(start).encode() + b"\n%%EOF\n"
+        data += f"{position:010} 00000 n".encode() + record_eol
+    return data + eol.join([b"trailer", b"<< " + trailer + b" >>", b"startxref",
+                            str(start).encode(), b"%%EOF", b""])
 
 
 CATALOG = [b"<< /Type /Catalog /Pages 2 0 R >>", b"<< /Type /Pages /Kids [] /Count 0 >>"]
