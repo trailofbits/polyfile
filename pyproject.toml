@@ -66,6 +66,9 @@ Issues = "https://github.com/trailofbits/polyfile/issues"
 [tool.setuptools]
 include-package-data = true
 
+[tool.setuptools.cmdclass]
+build_py = "build_backend.BuildPy"
+
 # An explicit `include` is required. This is a flat layout with several non-package top-level
 # directories, and `packages.find` defaults to namespaces = true, which would otherwise
 # discover the format library, the `file` submodule, docs, logo, testdata and hooks as

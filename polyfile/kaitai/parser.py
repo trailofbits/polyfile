@@ -47,7 +47,7 @@ Scalar = int | float | str | bytes | Enum
 with resources.as_file(resources.files(parsers) / "manifest.json") as manifest_path:
     PARSER_DIR: Path = manifest_path.parent
 with (resources.files(parsers) / "manifest.json").open("r") as f:
-    MANIFEST: dict[str, ManifestEntry] = json.load(f)
+    MANIFEST: dict[str, ManifestEntry] = json.load(f)["specs"]
 
 COMPILED_INFO_BY_KSY: dict[str, CompiledKSY] = {
     ksy_path: CompiledKSY(

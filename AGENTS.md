@@ -351,9 +351,9 @@ from an excluded spec reaches the package, or if `MANIFEST.in` drifts from the a
   or wheel reuses the generated ones
 - `build_backend.py` and `compile_kaitai_parsers.py` run at build time and must stay
   standard-library only—builds are isolated and contain nothing but `[build-system] requires`
-- `uv build` builds the wheel from the sdist. `build_backend.py` deliberately skips regeneration
-  there, because outside a git checkout `compile_kaitai_parsers.is_stale()` falls back to tarball
-  modification times and would recompile everything
+- `uv build` builds the wheel from the sdist. Checkout builds compare the eligible specifications,
+  generation script hashes, and installed compiler version with the parser manifest. An up-to-date
+  checkout can reuse its parsers without a compiler. An sdist ships its generated parsers.
 - The downloaded `polyfile/kaitai/kaitai-struct-compiler-*/` is gitignored; it bundles its own
   copy of the format gallery, copyleft specs included
 - libmagic DSL has quirks—see [blog post](https://blog.trailofbits.com/2022/07/01/libmagic-the-blathering/)
