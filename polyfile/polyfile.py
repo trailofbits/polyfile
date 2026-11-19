@@ -14,7 +14,7 @@ from polyfile.analysis import AnalysisContext, AnalysisLimits
 from polyfile.fileutils import FileStream, Streamable
 from polyfile.provenance import SourceSpan, normalize_spans
 from polyfile import logger
-from polyfile.magic import MagicMatcher, MatchedTest, Match as MagicMatch, MatchContext, TestResult
+from polyfile.magic import MagicMatcher, Match as MagicMatch, MatchContext, TestResult
 
 __version__: str = version("polyfile")
 del version
@@ -355,13 +355,9 @@ class Matcher:
                     if mimetype in matched_mimetypes:
                         continue
                     matched_mimetypes.add(mimetype)
-                    value = description
-                    if value is None and isinstance(result, MatchedTest):
-                        message = result.test.message.resolve(magic_match.context)
-                        value = result.format_value(message.removeprefix("\b"))
                     yield from self.handle_mimetype(
                         mimetype, result, magic_context.data, f, parent,
-                        description=value,
+                        description=description,
                         analysis_context=analysis_context, analysis_depth=depth,
                     )
 

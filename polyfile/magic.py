@@ -231,6 +231,7 @@ class MatchedTest(TestResult):
         super().__init__(test=test, offset=offset, parent=parent)
         self.value: Any = value
         self.length: int = length
+        self._resolved_message: str | None = None
         self._relative_base: int | None = None
 
     def format_value(self, message: str) -> str:
@@ -288,15 +289,11 @@ class MatchedTest(TestResult):
                f"parent={self.parent!r})"
 
     def __str__(self):
+        if self._resolved_message is not None:
+            return self.format_value(self._resolved_message.removeprefix("\b"))
         if self.test.message is not None:
-            # TODO: Fix pasting our value in
             return str(self.test.message)
-            #if self.value is not None and "%" in self.test.message:
-            #    return self.test.message % (self.value,)
-            #else:
-            #    return self.test.message
-        else:
-            return f"Match[{self.offset}:{self.offset + self.length}]"
+        return f"Match[{self.offset}:{self.offset + self.length}]"
 
 
 class FailedTest(TestResult):
@@ -5221,6 +5218,8 @@ class Match:
             # we have not yet finished collecting the results
             try:
                 result = next(self._result_iter)
+                if isinstance(result, MatchedTest):
+                    result._resolved_message = result.test.message.resolve(self.context)
                 self._results.append(result)
                 if isinstance(result, IndirectResult):
                     indirect = self.context[result.offset:]
