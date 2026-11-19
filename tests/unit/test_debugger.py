@@ -44,6 +44,14 @@ def test_boolean_variable_preserves_value_and_parsing_contract() -> None:
     assert variable.value is True
 
 
+@pytest.mark.parametrize("separator", [" ", " = "])
+def test_set_accepts_both_assignment_forms(separator: str) -> None:
+    debugger = Debugger()
+    for value in (False, True):
+        debugger.run_command(f"set break_on_parsing{separator}{str(value).lower()}")
+        assert debugger.break_on_submatching.value is value
+
+
 def test_magic_test_instrumentation_preserves_and_restores_results() -> None:
     debugger = Debugger(break_on_parsing=False)
     original = BFMatcher.test
