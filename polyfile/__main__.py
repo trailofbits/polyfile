@@ -1,5 +1,5 @@
 import argparse
-from collections.abc import Generator, Sequence
+from collections.abc import Generator, Iterator, Sequence
 from contextlib import AbstractContextManager, ExitStack, contextmanager, redirect_stdout
 from io import TextIOWrapper
 import json
@@ -13,7 +13,7 @@ from shutil import copyfileobj
 import sys
 from tempfile import TemporaryFile
 from textwrap import dedent
-from typing import Any, BinaryIO, Self, TextIO, cast
+from typing import Any, BinaryIO, Self, TextIO, TypeVar, cast
 
 from polyfile.analysis import AnalysisLimits
 from polyfile import html, logger
@@ -572,11 +572,28 @@ def write_text(output: TextIO, text: str) -> None:
         output.flush()
 
 
-def write_file_output(analyzer: Analyzer, output: TextIO, signals: SIGTERMHandler) -> None:
+_MatchType = TypeVar("_MatchType")
+
+
+def _limited_matches(matches: Iterator[_MatchType], maximum: int | None) -> Iterator[_MatchType]:
+    if maximum is None:
+        yield from matches
+        return
+    for _ in range(maximum):
+        try:
+            match = next(matches)
+        except StopIteration:
+            return
+        yield match
+    logger.partial("Match limit reached")
+
+
+def write_file_output(analyzer: Analyzer, output: TextIO, signals: SIGTERMHandler,
+                      maximum: int | None) -> bool:
     """Stream distinct identification descriptions without adding display markup."""
     lines: set[str] = set()
     with KeyboardInterruptHandler():
-        for match in analyzer.magic_matches():
+        for match in _limited_matches(analyzer.magic_matches(), maximum):
             if signals.terminated:
                 break
             line = str(match)
@@ -584,14 +601,15 @@ def write_file_output(analyzer: Analyzer, output: TextIO, signals: SIGTERMHandle
                 lines.add(line)
                 logger.report_file_identification(match, line)
                 write_text(output, f"{line}\n")
+    return bool(lines)
 
 
 def write_mime_output(analyzer: Analyzer, output: TextIO, signals: SIGTERMHandler,
-                      *, explain: bool) -> bool:
+                      *, explain: bool, maximum: int | None) -> bool:
     """Stream MIME results and optional explanations without stderr fragments."""
     found = False
     with KeyboardInterruptHandler():
-        for mimetype, match in analyzer.mime_types():
+        for mimetype, match in _limited_matches(analyzer.mime_types(), maximum):
             if signals.terminated:
                 break
             found = True
@@ -604,16 +622,15 @@ def write_mime_output(analyzer: Analyzer, output: TextIO, signals: SIGTERMHandle
 def write_outputs(args: argparse.Namespace, analyzer: Analyzer, sbud: dict[str, Any] | None,
                   signals: SIGTERMHandler) -> None:
     """Render each requested output while keeping all terminal status on stderr."""
+    found = sbud is not None and bool(sbud["struc"])
     for fmt in args.format:
         with fmt.output_stream as output:
             if fmt.output_format == "file":
-                write_file_output(analyzer, output, signals)
+                found |= write_file_output(analyzer, output, signals, args.max_matches)
             elif fmt.output_format in ("mime", "explain"):
-                found = write_mime_output(analyzer, output, signals,
-                                          explain=fmt.output_format == "explain")
-                if args.require_match and not found and sbud is None:
-                    log.info("No matches found, exiting")
-                    sys.exit(127)
+                found |= write_mime_output(analyzer, output, signals,
+                                           explain=fmt.output_format == "explain",
+                                           maximum=args.max_matches)
             else:
                 assert sbud is not None
                 with logger.suspend_status():
@@ -626,6 +643,9 @@ def write_outputs(args: argparse.Namespace, analyzer: Analyzer, sbud: dict[str, 
                     output.flush()
         if not fmt.output_to_stdout:
             log.info("Saved %s output to %s", fmt.output_format.upper(), fmt.output_path)
+    if args.require_match and not found and not signals.terminated:
+        log.info("No matches found, exiting")
+        sys.exit(127)
 
 
 if __name__ == '__main__':

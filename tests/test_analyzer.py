@@ -3,7 +3,7 @@ from unittest import TestCase
 
 from polyfile.polyfile import Analyzer
 
-from tests.test_zipmatcher import MEMBERS, build_zip, temporary_file
+from tests.test_zipmatcher import MEMBERS, PNG, build_zip, temporary_file
 
 
 def node_count(element: dict[str, Any]) -> int:
@@ -32,6 +32,18 @@ class AnalyzerSbudTest(TestCase):
         analyzer = Analyzer("not-opened-before-iteration")
         self.assertIsNone(analyzer.matches_so_far)
         self.assertIsNone(analyzer.magic_matches_so_far)
+
+    def test_identifications_replay_for_interleaved_readers(self):
+        with temporary_file(build_zip(prefix=PNG)) as path:
+            analyzer = Analyzer(path)
+            reader = analyzer.magic_matches()
+            first = next(reader)
+            self.assertEqual(analyzer.magic_matches_so_far, [first])
+            complete = list(analyzer.magic_matches())
+            self.assertGreater(len(complete), 1)
+            self.assertEqual([first, *reader], complete)
+            self.assertEqual(analyzer.magic_matches_so_far, complete)
+            self.assertEqual(list(analyzer.magic_matches()), complete)
 
     def test_sbud_agrees_however_the_matches_are_supplied(self):
         with temporary_file(build_zip(members=MEMBERS)) as path:
