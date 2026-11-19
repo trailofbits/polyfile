@@ -560,7 +560,7 @@ def write_text(output: TextIO, text: str) -> None:
         output.flush()
 
 
-def write_file_output(analyzer: Analyzer, output: TextIO, signals: SIGTERMHandler) -> None:
+def write_file_output(analyzer: Analyzer, output: TextIO, signals: SIGTERMHandler) -> bool:
     """Stream distinct identification descriptions without adding display markup."""
     lines: set[str] = set()
     with KeyboardInterruptHandler():
@@ -572,6 +572,7 @@ def write_file_output(analyzer: Analyzer, output: TextIO, signals: SIGTERMHandle
                 lines.add(line)
                 logger.report_file_identification(match, line)
                 write_text(output, f"{line}\n")
+    return bool(lines)
 
 
 def write_mime_output(analyzer: Analyzer, output: TextIO, signals: SIGTERMHandler,
@@ -592,16 +593,14 @@ def write_mime_output(analyzer: Analyzer, output: TextIO, signals: SIGTERMHandle
 def write_outputs(args: argparse.Namespace, analyzer: Analyzer, sbud: dict[str, Any] | None,
                   signals: SIGTERMHandler) -> None:
     """Render each requested output while keeping all terminal status on stderr."""
+    found = sbud is not None and bool(sbud["struc"])
     for fmt in args.format:
         with fmt.output_stream as output:
             if fmt.output_format == "file":
-                write_file_output(analyzer, output, signals)
+                found |= write_file_output(analyzer, output, signals)
             elif fmt.output_format in ("mime", "explain"):
-                found = write_mime_output(analyzer, output, signals,
-                                          explain=fmt.output_format == "explain")
-                if args.require_match and not found and sbud is None:
-                    log.info("No matches found, exiting")
-                    sys.exit(127)
+                found |= write_mime_output(analyzer, output, signals,
+                                           explain=fmt.output_format == "explain")
             else:
                 assert sbud is not None
                 with logger.suspend_status():
@@ -614,6 +613,9 @@ def write_outputs(args: argparse.Namespace, analyzer: Analyzer, sbud: dict[str, 
                     output.flush()
         if not fmt.output_to_stdout:
             log.info("Saved %s output to %s", fmt.output_format.upper(), fmt.output_path)
+    if args.require_match and not found and not signals.terminated:
+        log.info("No matches found, exiting")
+        sys.exit(127)
 
 
 if __name__ == '__main__':
