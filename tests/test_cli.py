@@ -120,6 +120,68 @@ class FormatArgumentTests(TestCase):
         self.assertIn("\"b64contents\"", output)
 
 
+class FileArgumentTests(TestCase):
+    def test_input_aliases_are_rejected_before_writing(self):
+        with TemporaryDirectory() as directory:
+            source = Path(directory) / "input"
+            source.write_bytes(b"keep the input")
+            hardlink = Path(directory) / "hardlink"
+            hardlink.hardlink_to(source)
+            symlink = Path(directory) / "symlink"
+            symlink.symlink_to(source)
+            output = Path(directory) / "output"
+            aliases = (str(source), os.path.relpath(source), str(hardlink), str(symlink))
+            for alias in aliases:
+                with self.subTest(alias=alias):
+                    code, errors = run_cli_until_exit(str(source), "-o", str(output), "-o", alias)
+                    self.assertEqual(code, 2)
+                    self.assertIn(alias, errors)
+                    self.assertEqual(source.read_bytes(), b"keep the input")
+                    self.assertFalse(output.exists())
+
+    def test_output_aliases_include_shortcuts_and_new_files(self):
+        with TemporaryDirectory() as directory:
+            source = Path(directory) / "input"
+            source.write_bytes(b"input")
+            output = Path(directory) / "output"
+            alias = Path(directory) / "alias"
+            alias.symlink_to(output)
+            for args in (("-o", str(output), "-o", str(output)),
+                         ("-o", str(output), "--html", str(alias)),
+                         ("--html", str(output), "--html", os.path.relpath(output))):
+                with self.subTest(args=args):
+                    code, errors = run_cli_until_exit(str(source), *args)
+                    self.assertEqual(code, 2)
+                    self.assertIn(str(output), errors)
+                    self.assertFalse(output.exists())
+            output.write_bytes(b"keep the output")
+            hardlink = Path(directory) / "hardlink"
+            hardlink.hardlink_to(output)
+            code, errors = run_cli_until_exit(
+                str(source), "-o", str(output), "--html", str(hardlink)
+            )
+            self.assertEqual(code, 2)
+            self.assertIn(str(hardlink), errors)
+            self.assertEqual(output.read_bytes(), b"keep the output")
+
+    def test_open_errors_report_the_path_and_reason_even_in_quiet_mode(self):
+        with TemporaryDirectory() as directory:
+            source = Path(directory) / "input"
+            source.write_bytes(b"input")
+            missing = str(Path(directory) / "missing" / "file")
+            for args, path in (((directory,), directory), ((missing,), missing),
+                               ((str(source), "-o", missing), missing)):
+                with self.subTest(args=args):
+                    code, errors = run_cli_until_exit(*args)
+                    self.assertEqual(code, 1)
+                    self.assertIn(path, errors)
+                    with self.assertRaises(OSError) as failed:
+                        with open(path, "rb"):
+                            pass
+                    self.assertIn(str(failed.exception.strerror), errors)
+                    self.assertNotIn("Traceback", errors)
+
+
 class NoContentsTests(TestCase):
     """Tests for `--no-contents`, which drops the base64 encoding of the input from SBuD output.
 

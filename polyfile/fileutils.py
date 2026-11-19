@@ -80,9 +80,8 @@ class PathOrStdin:
             self._tempfile: ExactNamedTempfile | None = ExactNamedTempfile(
                 sys.stdin.buffer.read(), "STDIN"
             )
-        elif not Path(path).exists():
-            raise FileNotFoundError(path)
         else:
+            os.stat(path)
             self._tempfile = None
 
     def __enter__(self) -> str:

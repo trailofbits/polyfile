@@ -151,22 +151,38 @@ class ValidateOutput(argparse.Action):
             args.format.append(FormatOutput(output_path=path))
             return
         existing_format: FormatOutput = args.format[-1]
-        if path != "-":
-            # make sure this path isn't already used
-            for output_format in args.format[:-1]:
-                if output_format.output_path == path:
-                    raise ValueError(f"output path {path!r} cannot be used for both --format "
-                                     f"{output_format.output_format} and --format {existing_format.output_format}")
-        if existing_format.output_path is not None and existing_format.output_path != path:
-            args.format.append(FormatOutput(output_format=existing_format.output_format, output_path=path))
-        else:
+        if existing_format.output_path is None:
             existing_format.output_path = path
+        elif path != "-" or not existing_format.output_to_stdout:
+            args.format.append(FormatOutput(existing_format.output_format, path))
 
     def __call__(
         self, parser: argparse.ArgumentParser, namespace: argparse.Namespace, values: object,
         option_string: str | None = None
     ) -> None:
         ValidateOutput.add_output(namespace, cast(str, values))
+
+
+def _file_identity(path: str) -> tuple[int, int] | Path:
+    try:
+        info = os.stat(path)
+    except FileNotFoundError:
+        return Path(os.path.realpath(path))
+    return info.st_dev, info.st_ino
+
+
+def _validate_output_paths(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
+    named_paths = {}
+    if args.FILE != "-":
+        named_paths[_file_identity(args.FILE)] = f"input {args.FILE!r}"
+    for output in args.format:
+        if output.output_to_stdout:
+            continue
+        path = output.output_path
+        identity = _file_identity(path)
+        if identity in named_paths:
+            parser.error(f"output {path!r} refers to the same file as {named_paths[identity]}")
+        named_paths[identity] = f"output {path!r}"
 
 
 def reject_html_without_contents(parser: argparse.ArgumentParser, args: argparse.Namespace):
@@ -366,12 +382,7 @@ viewer is built from the contents."""))
     if "--explore" in options and hasattr(parser, "color"):
         setattr(parser, "color", False)
 
-    try:
-        args = parser.parse_args(argv[1:])
-    except ValueError as e:
-        parser.print_usage()
-        sys.stderr.write(f"polyfile: error: {e!s}\n")
-        exit(1)
+    args = parser.parse_args(argv[1:])
 
     if args.explore and hasattr(parser, "color"):
         setattr(parser, "color", False)
@@ -426,9 +437,13 @@ viewer is built from the contents."""))
         level = logger.STATUS
 
     defer_output = sys.stderr.isatty() and not (args.quiet or args.debugger or args.explore)
-    with _defer_stdout(enabled=defer_output):
-        with logger.logging_context(level, quiet=args.quiet, interactive=not args.debugger):
-            run_analysis(args)
+    try:
+        _validate_output_paths(parser, args)
+        with _defer_stdout(enabled=defer_output):
+            with logger.logging_context(level, quiet=args.quiet, interactive=not args.debugger):
+                run_analysis(args)
+    except OSError as error:
+        parser.exit(1, f"polyfile: {error}\n")
 
 
 def selected_matcher(filetypes: list[str] | None) -> MagicMatcher | None:
@@ -471,9 +486,6 @@ def run_analysis(args: argparse.Namespace) -> None:
     magic_matcher = selected_matcher(args.filetype)
     try:
         path_or_stdin = PathOrStdin(args.FILE)
-    except FileNotFoundError:
-        log.error("Cannot open %r (No such file or directory)", args.FILE)
-        sys.exit(1)
     except KeyboardInterrupt:
         sys.exit(1)
     with path_or_stdin as file_path, SIGTERMHandler() as signals, ExitStack() as stack:
