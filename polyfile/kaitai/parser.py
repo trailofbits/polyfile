@@ -7,6 +7,7 @@ import inspect
 from io import BufferedReader, BytesIO
 import json
 from pathlib import Path
+from threading import Lock
 from typing import Protocol, TypedDict, cast
 from collections.abc import Iterator, Sequence
 
@@ -62,14 +63,20 @@ COMPILED_INFO_BY_KSY: dict[str, CompiledKSY] = {
 }
 del MANIFEST
 
-_IMPORTED_SPECS: set[Path] = set()
-_PARSERS_BY_KSY: dict[str, type[KaitaiStruct]] = {}
+_PARSER_CLASSES: dict[tuple[Path, str], type[KaitaiStruct]] = {}
+_PARSER_LOCK = Lock()
 
 
-def import_spec(compiled: CompiledKSY) -> type[KaitaiStruct] | None:
-    if compiled.python_path in _IMPORTED_SPECS:
-        return None
-    _IMPORTED_SPECS.add(compiled.python_path)
+def import_spec(compiled: CompiledKSY) -> type[KaitaiStruct]:
+    """Return the initialized parser class for a compiled specification."""
+    key = compiled.python_path, compiled.class_name
+    with _PARSER_LOCK:
+        if key not in _PARSER_CLASSES:
+            _PARSER_CLASSES[key] = _load_class(compiled)
+        return _PARSER_CLASSES[key]
+
+
+def _load_class(compiled: CompiledKSY) -> type[KaitaiStruct]:
     module_name = compiled.python_path.name
     assert module_name.lower().endswith(".py")
     module_name = module_name[:-3]
@@ -317,15 +324,7 @@ class KaitaiParser:
              "network/pcap.ksy"
 
         """
-        if ksy_path not in _PARSERS_BY_KSY:
-            if ksy_path not in COMPILED_INFO_BY_KSY:
-                raise KeyError(ksy_path)
-            info = COMPILED_INFO_BY_KSY[ksy_path]
-            parser = import_spec(info)
-            if parser is None:
-                raise ImportError(f"Parser {info.class_name} from {info.python_path} is already imported")
-            _PARSERS_BY_KSY[ksy_path] = parser
-        return KaitaiParser(_PARSERS_BY_KSY[ksy_path])
+        return KaitaiParser(import_spec(COMPILED_INFO_BY_KSY[ksy_path]))
 
     def parse(self, input_file_path_or_content: str | Path | bytes | BytesIO | FileStream) -> KaitaiInspector:
         if isinstance(input_file_path_or_content, Path):
