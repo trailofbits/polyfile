@@ -119,13 +119,14 @@ def parse(polytracker_json_obj: dict[str, object]) -> ProgramTrace:
                     )
                 return parser(polytracker_json_obj)
         raise ValueError(f"Unsupported PolyTracker version {polytracker_json_obj['version']!r}")
-    for function_name, function_data in polytracker_json_obj.items():
-        if isinstance(function_data, dict) and 'called_from' in function_data:
-            # this is the second version of the output format
-            return parse_format_v2(polytracker_json_obj)
-        else:
-            return parse_format_v1(polytracker_json_obj)
-    return parse_format_v1(polytracker_json_obj)
+    records = polytracker_json_obj.values()
+    if all(isinstance(record, list) for record in records):
+        return parse_format_v1(polytracker_json_obj)
+    if all(isinstance(record, dict) for record in records):
+        return parse_format_v2(polytracker_json_obj)
+    raise ValueError(
+        "Unversioned PolyTracker traces must contain only offset lists or function records"
+    )
 
 
 @polytracker_version(0, 0, 1, '')

@@ -44,6 +44,30 @@ def test_second_legacy_format_preserves_named_sources_and_callers() -> None:
     assert function.called_from == frozenset({"main"})
 
 
+@pytest.mark.parametrize("root_first", [True, False])
+def test_unversioned_trace_with_root_calls_is_order_independent(root_first: bool) -> None:
+    records: dict[str, object] = {
+        "root": {"input_bytes": {"input.bin": [0]}},
+        "reader": {"input_bytes": {"input.bin": [1]}, "called_from": ["root"]},
+    }
+    trace = parse(records if root_first else dict(reversed(records.items())))
+    assert trace.polytracker_version == (0, 0, 1, "alpha2.1")
+    assert trace.functions["root"]["input.bin"] == [0]
+    assert trace.functions["reader"]["input.bin"] == [1]
+    assert trace.functions["reader"].called_from == {"root"}
+
+
+def test_unversioned_trace_with_only_roots_uses_named_sources() -> None:
+    trace = parse({"root": {"cmp_bytes": {"input.bin": [2]}}, "empty": {}})
+    assert trace.functions["root"]["input.bin"] == [2]
+    assert trace.functions["empty"].input_bytes == {}
+
+
+def test_unversioned_trace_rejects_mixed_record_formats() -> None:
+    with pytest.raises(ValueError, match="offset lists or function records"):
+        parse({"root": [1], "reader": {"input_bytes": {"input.bin": [2]}}})
+
+
 def test_versioned_trace_keeps_untainted_runtime_functions() -> None:
     trace = parse(
         {
