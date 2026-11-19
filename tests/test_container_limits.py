@@ -2,7 +2,8 @@
 
 import tarfile
 from io import BytesIO
-from zipfile import ZIP_BZIP2, ZIP_DEFLATED, ZIP_LZMA, ZipFile
+from unittest.mock import patch
+from zipfile import ZIP_BZIP2, ZIP_DEFLATED, ZIP_LZMA, ZIP_STORED, ZipFile
 
 import pytest
 
@@ -63,6 +64,22 @@ def test_admission_limits_precede_zip_backend_open(
     assert not any(node.decoded is not None for node in nodes)
 
 
+def test_codec_limit_uses_the_method_supplied_by_the_reader() -> None:
+    data = zip_bytes(method=ZIP_STORED)
+    with ZipFile(BytesIO(data)) as archive:
+        entry, = archive.infolist()
+    entry.compress_type = ZIP_DEFLATED
+    with (
+        patch.object(ZipFile, "infolist", return_value=[entry]),
+        patch.object(ZipFile, "open", side_effect=AssertionError("Unexpected decode")) as opened,
+    ):
+        nodes = list(Matcher(limits=AnalysisLimits(max_codec_memory=1)).match(data))
+    opened.assert_not_called()
+    payload, = (m for m in nodes if m.name == "compressed_data")
+    assert payload.analysis_status == "limited"
+    assert payload.children == ()
+
+
 @pytest.mark.parametrize("method", [ZIP_BZIP2, ZIP_LZMA])
 def test_unbounded_zip_backend_reports_requested_limit_as_unsupported(
     method: int,
@@ -85,7 +102,7 @@ def test_unbounded_zip_backend_reports_requested_limit_as_unsupported(
         and node.parent.name == "LocalFileHeader"
     )
     assert encoded.analysis_status == "unsupported"
-    assert not any(child.name == "decoded_content" for child in encoded)
+    assert encoded.children == ()
 
 
 def gpkg_archive(payload: bytes, *, nested: bool) -> bytes:
@@ -119,8 +136,6 @@ def test_filtered_generic_tar_still_parses_gpkg() -> None:
 
 
 def test_nested_stored_zip_retains_labels_without_duplicate_structure() -> None:
-    from zipfile import ZIP_STORED
-
     data = PAYLOAD
     for _ in range(6):
         data = zip_bytes(data, method=ZIP_STORED)

@@ -123,6 +123,7 @@ class Match:
         self.analysis_depth = analysis_depth
         self.analysis_member_counted = False
         self.analysis_bytes_counted = False
+        self.analysis_skip_raw_match = False
         self.analysis_skip_parsers: set[str] = set()
         self.analysis_status: str | None = None
         self.analysis_message: str | None = None

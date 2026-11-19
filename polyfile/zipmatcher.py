@@ -403,7 +403,7 @@ def open_archive(
     with BytesIO(zip_data) as buffer:
         try:
             archive = PythonZip(buffer)
-        except BadZipFile as e:
+        except (BadZipFile, NotImplementedError, UnicodeDecodeError) as e:
             log.warning(f"Could not read the members of the archive at byte offset {start}: {e!s}")
             yield None
             return
@@ -411,20 +411,45 @@ def open_archive(
             yield archive
 
 
-def _zip_decode_policy(fh: LocalFileHeader, parent: Match) -> tuple[str, str] | None:
+def _method_location(method: UInt16, parent: Match) -> str:
+    start = parent.offset + method.start_offset
+    return f"{method} at {parent.source}[{start}:{start + method.num_bytes}]"
+
+
+def _zip_decode_policy(
+    fh: LocalFileHeader, info: ZipInfo | None, parent: Match,
+) -> tuple[str, str] | None:
+    directory = fh._directory
+    if directory is not None and fh.compression_method != directory.compression_method:
+        local = _method_location(fh.compression_method, parent)
+        central = _method_location(directory.compression_method, parent)
+        return "invalid", (
+            f"ZIP compression methods disagree (local header {local}, "
+            f"central directory {central}). Member decoding skipped."
+        )
+    if info is None:
+        return None
     limits = parent.analysis_context.limits
     if limits.max_depth is not None and parent.analysis_depth >= limits.max_depth:
         return "limited", "ZIP member decoding exceeds the configured recursive depth"
     memory = limits.max_codec_memory
-    if memory is not None and fh.compression_method == 8 and memory < 64 * 1024:
+    if memory is not None and info.compress_type == 8 and memory < 64 * 1024:
         return "limited", "ZIP DEFLATE requires a 64 KiB codec-memory allowance"
     output_limited = parent.analysis_context.member_limit is not None
-    if fh.compression_method in (12, 14) and (output_limited or memory is not None):
+    if info.compress_type in (12, 14) and (output_limited or memory is not None):
         return (
             "unsupported",
             "The ZIP bzip2/LZMA backend cannot enforce configured decoder limits",
         )
     return None
+
+
+def _read_member(zf: PythonZip, info: ZipInfo, output_limit: int | None) -> bytes:
+    output = OutputBuffer(output_limit)
+    with zf.open(info) as member:
+        while data := member.read(min(CHUNK_SIZE, output.next_size)):
+            output.append(data)
+    return output.finish()
 
 
 def member_data(
@@ -443,37 +468,29 @@ def member_data(
         The decompressed contents of the member, or None if `match` covers another field or
         the member cannot be decompressed.
     """
-    if zf is None or info is None or match.name != "compressed_data":
+    if match.name != "compressed_data" or match.parent is None or match.parent.parent is not parent:
         return None
-    assert match.parent is not None
-    if match.parent.parent != parent:
-        return None
-    policy = _zip_decode_policy(fh, parent)
+    policy = _zip_decode_policy(fh, info, parent)
     if policy is not None:
         match.analysis_status, match.analysis_message = policy
+        match.analysis_skip_raw_match = True
+        return None
+    if zf is None or info is None:
         return None
     try:
-        output = OutputBuffer(parent.analysis_context.member_limit)
-        with zf.open(info) as member:
-            while True:
-                data = member.read(min(CHUNK_SIZE, output.next_size))
-                if not data:
-                    break
-                output.append(data)
-        return output.finish()
+        return _read_member(zf, info, parent.analysis_context.member_limit)
     except DecodeError as error:
         match.analysis_status = error.status
         match.analysis_message = str(error)
-        return None
+        match.analysis_skip_raw_match = error.status == "limited"
     except NotImplementedError as error:
         match.analysis_status = "unsupported"
         match.analysis_message = str(error)
-        return None
     except (BadZipFile, EOFError, KeyError, LZMAError, OSError, RuntimeError,
             UnicodeError, zlib.error) as error:
         match.analysis_status = "invalid"
         match.analysis_message = f"Cannot decode ZIP member {fh.file_name!r}: {error}"
-        return None
+    return None
 
 
 def _decoded_zip_parsers(header: LocalFileHeader, match: Match) -> set[str]:
@@ -526,17 +543,22 @@ def parse_archive(
         parent.analysis_status = "limited"
         parent.analysis_message = "ZIP member count exceeds its analysis allowance"
         return
-    cds = list(eocd.central_directories(file_stream))
+    mapped_directories = []
     with open_archive(file_stream, eocd) as zf:
-        entries = {info.header_offset: info for info in zf.infolist()} if zf else {}
-        for cd in cds:
+        # Both readers enumerate directory order, even when entries share a header offset.
+        entries = iter(zf.infolist() if zf else ())
+        for cd in eocd.central_directories(file_stream):
             reason = parent.analysis_context.claim_entry()
             if reason is not None:
                 parent.analysis_status, parent.analysis_message = "limited", reason
-                return
+                break
+            mapped_directories.append(cd)
             header = cd.local_file_header(file_stream)
-            yield from _member_matches(header, zf, entries.get(cd.file_header_offset), parent)
-    for record in [*cds, eocd]:
+            info = next(entries, None)
+            if info is not None and info.header_offset != cd.file_header_offset:
+                info = None
+            yield from _member_matches(header, zf, info, parent)
+    for record in [*mapped_directories, eocd]:
         for match in record.match(matcher=parent.matcher, parent=parent):
             match.analysis_member_counted = True
             yield match
