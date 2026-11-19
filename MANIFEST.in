@@ -5,6 +5,7 @@ exclude polyfile/CHANGELOG.md
 include compile_kaitai_parsers.py
 include build_backend.py
 include CODEOWNERS
+include scripts/check_release_versions.py
 graft kaitai_struct_formats
 # The format gallery's CI directory carries a nested submodule, including the .git pointer
 # file that `git submodule update --recursive` leaves behind. None of it builds PolyFile.
