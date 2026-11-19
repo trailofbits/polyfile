@@ -37,7 +37,7 @@ class TestKaitaiLicensing(TestCase):
 
     def test_manifest_lists_only_permissive_specs(self):
         with open(MANIFEST_PATH) as f:
-            manifest = json.load(f)
+            manifest = json.load(f)["specs"]
         for relative_path in manifest:
             with self.subTest(spec=relative_path):
                 self.assertIsNotNone(

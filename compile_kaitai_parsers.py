@@ -11,7 +11,7 @@ import subprocess
 import sys
 from tempfile import TemporaryDirectory
 from types import TracebackType
-from typing import Protocol, Self, TypedDict, cast
+from typing import NamedTuple, Protocol, Self, TypedDict, cast
 
 POLYFILE_DIR: Path = Path(__file__).absolute().parent
 COMPILE_SCRIPT: Path = POLYFILE_DIR / "polyfile" / "kaitai" / "compiler.py"
@@ -28,6 +28,21 @@ class _ParserReference(TypedDict):
 class _ParserManifestEntry(_ParserReference):
     dependencies: list[_ParserReference]
     source_sha256: str
+
+
+class _Compiler(NamedTuple):
+    path: Path
+    version: str
+
+
+class _Generator(TypedDict):
+    compiler_version: str | None
+    scripts_sha256: dict[str, str]
+
+
+class _Manifest(TypedDict):
+    generator: _Generator
+    specs: dict[str, _ParserManifestEntry]
 
 
 class _ProgressBar(Protocol):
@@ -116,9 +131,12 @@ def report_excluded(excluded: dict[Path, str | None]):
         print(f"  {license_name or 'no license':<24} {spec.relative_to(KAITAI_FORMAT_LIBRARY)}")
 
 
-def compile_ksy(path: Path, output_directory: Path) -> list[tuple[str, str]]:
+def compile_ksy(
+    path: Path, output_directory: Path, executable: Path | None = None,
+) -> list[tuple[str, str]]:
+    options = ["--compiler", str(executable)] if executable else []
     output = subprocess.check_output(
-        [sys.executable, str(COMPILE_SCRIPT), str(path), str(output_directory)],
+        [sys.executable, COMPILE_SCRIPT, *options, path, output_directory],
         cwd=str(KAITAI_FORMAT_LIBRARY)
     ).decode("utf-8")
     compiled = []
@@ -129,23 +147,63 @@ def compile_ksy(path: Path, output_directory: Path) -> list[tuple[str, str]]:
     return compiled
 
 
-def _source_hash(spec: Path) -> str:
+def _source_hash(path: Path) -> str:
     # Text mode normalizes Git checkout line endings on Windows.
-    return hashlib.sha256(spec.read_text(encoding="utf-8").encode("utf-8")).hexdigest()
+    return hashlib.sha256(path.read_text(encoding="utf-8").encode("utf-8")).hexdigest()
 
 
-def is_stale(specs: Iterable[Path]) -> bool:
-    """Check whether the generated modules describe the current eligible specifications."""
+def _probe_compiler(*, install: bool = False) -> _Compiler | None:
+    option = "--install" if install else "--locate"
+    location = subprocess.check_output([sys.executable, COMPILE_SCRIPT, option], text=True).strip()
+    if not location:
+        return None
+    path = Path(location).resolve()
+    try:
+        result = subprocess.run(
+            [path, "--version"], capture_output=True, text=True, check=True, timeout=15,
+        )
+        banner = result.stdout.strip()
+        match = re.fullmatch(r"kaitai-struct-compiler[ \t]+(\S[^\r\n]*)", banner)
+        if match is None:
+            raise ValueError(f"Unexpected compiler version output: {banner!r}")
+        return _Compiler(path, match[1])
+    except (OSError, ValueError, subprocess.SubprocessError) as error:
+        if install:
+            raise RuntimeError(f"Cannot verify {path} --version: {error}") from error
+        return None
+
+
+def _generator(compiler: _Compiler | None) -> _Generator:
+    return {
+        "compiler_version": compiler.version if compiler else None,
+        "scripts_sha256": {
+            "compile_kaitai_parsers.py": _source_hash(Path(__file__)),
+            "polyfile/kaitai/compiler.py": _source_hash(COMPILE_SCRIPT),
+        },
+    }
+
+
+def is_stale(specs: Iterable[Path], *, generator: _Generator | None = None) -> bool:
+    """Check the generator, eligible specifications, and installed module names."""
+    if generator is None:
+        generator = _generator(_probe_compiler())
     inputs = {spec.relative_to(KAITAI_FORMAT_LIBRARY).as_posix(): _source_hash(spec)
               for spec in specs}
     try:
         with MANIFEST_PATH.open(encoding="utf-8") as source:
-            manifest: dict[str, _ParserManifestEntry] = json.load(source)
-    except (FileNotFoundError, json.JSONDecodeError):
+            manifest: _Manifest = json.load(source)
+        previous = manifest["generator"]
+        version = previous["compiler_version"]
+        entries = manifest["specs"]
+        sources = {key: entry["source_sha256"] for key, entry in entries.items()}
+        expected = {entry["python_path"] for entry in entries.values()} | {"__init__.py"}
+        scripts_match = previous["scripts_sha256"] == generator["scripts_sha256"]
+    except (FileNotFoundError, json.JSONDecodeError, KeyError, TypeError, AttributeError):
         return True
-    if inputs != {key: entry.get("source_sha256") for key, entry in manifest.items()}:
+    if not isinstance(version, str) or not version or not scripts_match or sources != inputs:
         return True
-    expected = {entry["python_path"] for entry in manifest.values()} | {"__init__.py"}
+    if generator["compiler_version"] is not None and version != generator["compiler_version"]:
+        return True
     return expected != {module.name for module in KAITAI_PARSERS_DIR.glob("*.py")}
 
 
@@ -192,24 +250,28 @@ def manifest_entry(
     }
 
 
-def _compile_spec(spec: Path, staging: Path) -> tuple[str, _ParserManifestEntry, Path]:
+def _compile_spec(
+    spec: Path, staging: Path, executable: Path,
+) -> tuple[str, _ParserManifestEntry, Path]:
     key = spec.relative_to(KAITAI_FORMAT_LIBRARY).as_posix()
     directory = staging / "specs" / key
     source_hash = _source_hash(spec)
     try:
-        entry = manifest_entry(compile_ksy(spec, directory), directory, source_hash)
+        entry = manifest_entry(compile_ksy(spec, directory, executable), directory, source_hash)
     except (OSError, ValueError, subprocess.CalledProcessError) as error:
         raise RuntimeError(f"Failed to compile {key}: {error}") from error
     return key, entry, directory / entry["python_path"]
 
 
-def compile_all(specs: list[Path], staging: Path) -> dict[str, _ParserManifestEntry]:
+def compile_all(
+    specs: list[Path], staging: Path, executable: Path,
+) -> dict[str, _ParserManifestEntry]:
     """Compile eligible inputs separately so concurrent compilers cannot overwrite dependencies."""
     ksy_manifest: dict[str, _ParserManifestEntry] = {}
     with progress_bar(len(specs)) as progress, concurrent.futures.ThreadPoolExecutor(
         max_workers=cpu_count()
     ) as executor:
-        futures = [executor.submit(_compile_spec, spec, staging) for spec in specs]
+        futures = [executor.submit(_compile_spec, spec, staging, executable) for spec in specs]
         for future in concurrent.futures.as_completed(futures):
             key, entry, module = future.result()
             target = staging / module.name
@@ -231,22 +293,25 @@ def rebuild(force: bool = False):
     excluded = excluded_specs(KAITAI_FORMAT_LIBRARY)
     specs = [spec for spec in sorted(KAITAI_FORMAT_LIBRARY.glob("**/*.ksy")) if spec not in excluded]
 
-    if not force and not is_stale(specs):
+    compiler = _probe_compiler()
+    generator = _generator(compiler)
+    if not force and not is_stale(specs, generator=generator):
         return
 
-    # the definitions have been updated, so we need to recompile everything
     report_excluded(excluded)
-
-    if subprocess.call([sys.executable, str(COMPILE_SCRIPT), "--install"]) != 0:
-        sys.stderr.write("Error: You must have kaitai-struct-compiler installed\nSee https://kaitai.io/#download\n")
-        sys.exit(1)
+    if compiler is None:
+        compiler = _probe_compiler(install=True)
+        if compiler is None:
+            raise RuntimeError("Install the Kaitai compiler to regenerate the parsers")
+        generator["compiler_version"] = compiler.version
 
     with TemporaryDirectory(dir=KAITAI_PARSERS_DIR.parent) as directory:
         staging = Path(directory)
-        manifest = compile_all(specs, staging)
+        entries = compile_all(specs, staging, compiler.path)
+        manifest: _Manifest = {"generator": generator, "specs": dict(sorted(entries.items()))}
         staged_manifest = staging / "manifest.json"
-        staged_manifest.write_text(json.dumps(dict(sorted(manifest.items()))), encoding="utf-8")
-        modules = {entry["python_path"] for entry in manifest.values()}
+        staged_manifest.write_text(json.dumps(manifest), encoding="utf-8")
+        modules = {entry["python_path"] for entry in entries.values()}
         for name in modules:
             (staging / name).replace(KAITAI_PARSERS_DIR / name)
         for obsolete in KAITAI_PARSERS_DIR.glob("*.py"):

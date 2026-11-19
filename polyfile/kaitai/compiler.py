@@ -171,42 +171,48 @@ def compiler_path(auto_install: bool = True) -> Path | None:
     return compiler_path(auto_install=False)
 
 
-def compile(ksy_path: str | Path, output_directory: str | Path, auto_install: bool = True) -> CompiledKSY:
-    """Returns the list of compiled KSYs; the original spec being first, followed by its dependencies"""
-    compiler = compiler_path(auto_install=auto_install)
-    if compiler is None:
-        raise KaitaiError(f"{KAITAI_COMPILER_NAME} not found! Please make sure it is in your PATH. "
-                          f"See https://kaitai.io/#download")
-
-    # sys.stderr.write(f"Using Kaitai Struct Compiler: {compiler!s}\n")
-
-    if not isinstance(output_directory, Path):
-        output_directory = Path(output_directory)
-
+def _run_compiler(compiler: Path, ksy_path: str, output_directory: Path) -> bytes:
     output_directory.mkdir(parents=True, exist_ok=True)
-
     cmd = [
-        str(compiler), "--target", "python", "--outdir", str(output_directory), str(ksy_path),
-        "--debug", "--ksc-json-output", "-I", str(Path.cwd()), "--python-package", "polyfile.kaitai.parsers"
+        str(compiler), "--target", "python", "--outdir", str(output_directory), ksy_path,
+        "--debug", "--ksc-json-output", "-I", str(Path.cwd()),
+        "--python-package", "polyfile.kaitai.parsers",
     ]
-
-    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    out, err = proc.communicate()
-    if err:
-        raise KaitaiError(err.decode("utf-8"))
-    elif proc.returncode != 0:
+    proc = subprocess.run(cmd, capture_output=True)
+    if proc.stderr:
+        raise KaitaiError(proc.stderr.decode("utf-8"))
+    if proc.returncode != 0:
         raise KaitaiError(f"`{' '.join(cmd)}` returned with non-zero exit code {proc.returncode}")
+    return proc.stdout
 
-    result = json.loads(out)
 
-    if "errors" in result[ksy_path] and result[ksy_path]["errors"]:
-        raise KaitaiError(f"Error compiling {ksy_path}: {result[ksy_path]['errors'][0]['message']}")
+def compile(
+    ksy_path: str | Path, output_directory: str | Path, auto_install: bool = True,
+    *, compiler: Path | None = None,
+) -> CompiledKSY:
+    """Compile one specification and its imported specifications to Python.
 
-    first_spec_name = result[ksy_path]["firstSpecName"]
-    first_spec = result[ksy_path]["output"]["python"][first_spec_name]
-    if "errors" in first_spec:
-        for error in first_spec["errors"]:
-            raise CompilationError(ksy_file=error["file"], message=error["message"])
+    Args:
+        ksy_path: Path to the input specification.
+        output_directory: Directory for the generated modules.
+        auto_install: Download the default compiler if no executable is available.
+        compiler: Selected executable, when the caller has already resolved it.
+
+    Returns:
+        The generated module and its dependencies.
+    """
+    compiler = compiler or compiler_path(auto_install=auto_install)
+    if compiler is None:
+        raise KaitaiError(f"Install {KAITAI_COMPILER_NAME} or add it to PATH")
+    output_directory = Path(output_directory)
+    result = json.loads(_run_compiler(compiler, str(ksy_path), output_directory))[str(ksy_path)]
+    if errors := result.get("errors"):
+        raise KaitaiError(f"Error compiling {ksy_path}: {errors[0]['message']}")
+    first_spec_name = result["firstSpecName"]
+    modules = result["output"]["python"]
+    first_spec = modules[first_spec_name]
+    if errors := first_spec.get("errors"):
+        raise CompilationError(ksy_file=errors[0]["file"], message=errors[0]["message"])
 
     main_python_path = output_directory / first_spec["files"][0]["fileName"]
     dependencies = [
@@ -214,7 +220,7 @@ def compile(ksy_path: str | Path, output_directory: str | Path, auto_install: bo
             class_name=compiled["topLevelName"],
             python_path=output_directory / compiled["files"][0]["fileName"]
         )
-        for spec_name, compiled in result[ksy_path]["output"]["python"].items()
+        for spec_name, compiled in modules.items()
         if spec_name != first_spec_name
     ]
 
@@ -232,20 +238,22 @@ def compile(ksy_path: str | Path, output_directory: str | Path, auto_install: bo
 if __name__ == "__main__":
     import argparse
 
-    if len(sys.argv) == 2 and sys.argv[1] == "--install":
-        if compiler_path() is None:
-            sys.exit(1)
-        else:
-            sys.exit(0)
+    if sys.argv[1:] in (["--install"], ["--locate"]):
+        install = sys.argv[1] == "--install"
+        executable = compiler_path(auto_install=install)
+        if executable is not None:
+            print(executable.resolve())
+        sys.exit(1 if install and executable is None else 0)
 
     parser = argparse.ArgumentParser(description="A Kaitai Struct to Python compiler")
+    parser.add_argument("--compiler", type=Path, help="use this Kaitai compiler executable")
     parser.add_argument("KSY_PATH", type=str, help="path to the Kaitai Struct definition file")
     parser.add_argument("OUTPUT_DIRECTORY", type=str, help="path to which to save the resulting Python")
 
     args = parser.parse_args(sys.argv[1:])
 
     try:
-        compiled = compile(args.KSY_PATH, args.OUTPUT_DIRECTORY)
+        compiled = compile(args.KSY_PATH, args.OUTPUT_DIRECTORY, compiler=args.compiler)
         print(f"{compiled.class_name}\t{compiled.python_path}")
         for dep in compiled.dependencies:
             print(f"{dep.class_name}\t{dep.python_path}")

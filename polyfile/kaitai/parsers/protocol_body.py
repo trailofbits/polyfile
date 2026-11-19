@@ -3,9 +3,9 @@
 
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
-from polyfile.kaitai.parsers import ipv6_packet
 from polyfile.kaitai.parsers import tcp_segment
 from polyfile.kaitai.parsers import ipv4_packet
+from polyfile.kaitai.parsers import ipv6_packet
 from polyfile.kaitai.parsers import icmp_packet
 from polyfile.kaitai.parsers import udp_datagram
 from enum import IntEnum

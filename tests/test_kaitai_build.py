@@ -1,6 +1,7 @@
 """Exercise checkout rebuilds against an isolated format library and compiler."""
 
 import json
+import os
 from pathlib import Path
 import runpy
 import shutil
@@ -23,12 +24,27 @@ def library(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     output = tmp_path / "parsers"
     output.mkdir()
     (output / "__init__.py").touch()
+    executable = tmp_path / ("ksc.bat" if os.name == "nt" else "ksc")
+    version = tmp_path / "version.txt"
+    version.write_text("kaitai-struct-compiler 0.11\n", encoding="utf-8")
+    executable.write_text(
+        '@type "%~dp0version.txt"\n' if os.name == "nt"
+        else '#!/bin/sh\nexec cat "${0%/*}/version.txt"\n',
+        encoding="utf-8",
+    )
+    executable.chmod(0o755)
+    monkeypatch.setenv("TEST_KAITAI_EXECUTABLE", str(executable.resolve()))
     script = tmp_path / "compiler.py"
     script.write_text(
         "from pathlib import Path\n"
-        "import sys\n"
-        "if sys.argv[1] == '--install': sys.exit(0)\n"
-        "spec, output = map(Path, sys.argv[1:])\n"
+        "import os, sys\n"
+        "executable = Path(os.environ['TEST_KAITAI_EXECUTABLE'])\n"
+        "if sys.argv[1] in ('--install', '--locate'):\n"
+        "    if executable.is_file(): print(executable)\n"
+        "    sys.exit(0)\n"
+        "assert sys.argv[1:3] == ['--compiler', str(executable)]\n"
+        "with executable.with_suffix('.log').open('a') as log: print(sys.argv[3], file=log)\n"
+        "spec, output = map(Path, sys.argv[3:])\n"
         "if 'invalid' in spec.read_text(): sys.exit(1)\n"
         "output.mkdir(parents=True, exist_ok=True)\n"
         "module = output / (spec.stem + '.py')\n"
@@ -42,6 +58,39 @@ def library(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setattr(compiler, "MANIFEST_PATH", output / "manifest.json")
     monkeypatch.setattr(compiler, "COMPILE_SCRIPT", script)
     return formats
+
+
+@pytest.mark.parametrize("change", ["compiler version", "build script", "compiler wrapper"])
+def test_ordinary_build_regenerates_once_per_generator_change(
+    library: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, change: str
+) -> None:
+    spec = library / "image" / "example.ksy"
+    spec.write_text("license: MIT\n", encoding="utf-8")
+    build_script = tmp_path / "compile_kaitai_parsers.py"
+    shutil.copyfile(compiler.__file__, build_script)
+    monkeypatch.setattr(compiler, "__file__", str(build_script))
+    compiler.rebuild()
+    if change == "compiler version":
+        (tmp_path / "version.txt").write_text("kaitai-struct-compiler 0.12\n", encoding="utf-8")
+    else:
+        script = build_script if change == "build script" else compiler.COMPILE_SCRIPT
+        with script.open("a", encoding="utf-8") as target:
+            target.write("\n# Changed generation code\n")
+    compiler.rebuild()
+    compiler.rebuild()
+    assert (tmp_path / "ksc.log").read_text().splitlines() == [str(spec)] * 2
+    generator = json.loads(compiler.MANIFEST_PATH.read_bytes())["generator"]
+    assert generator["compiler_version"] == ("0.12" if change == "compiler version" else "0.11")
+
+
+def test_generator_hashes_ignore_checkout_line_endings(library: Path, tmp_path: Path) -> None:
+    (library / "example.ksy").write_text("license: MIT\n", encoding="utf-8")
+    compiler.rebuild()
+    script = compiler.COMPILE_SCRIPT
+    source = script.read_text(encoding="utf-8")
+    script.write_bytes(source.replace("\n", "\r\n").encode("utf-8"))
+    compiler.rebuild()
+    assert len((tmp_path / "ksc.log").read_text().splitlines()) == 1
 
 
 def test_rebuild_retains_previous_generation_on_failure_and_can_retry(library: Path) -> None:
@@ -60,7 +109,7 @@ def test_rebuild_retains_previous_generation_on_failure_and_can_retry(library: P
 
     broken.write_text("license: MIT\n", encoding="utf-8")
     compiler.rebuild()
-    assert set(json.loads(compiler.MANIFEST_PATH.read_bytes())) == {
+    assert set(json.loads(compiler.MANIFEST_PATH.read_bytes())["specs"]) == {
         "image/example.ksy", "broken.ksy",
     }
     assert b"changed" in (output / "example.py").read_bytes()
@@ -74,13 +123,36 @@ def test_runtime_loads_regenerated_nested_spec(library: Path) -> None:
     assert loader.load("image/example.ksy").struct_type.__name__ == "Example"
 
 
-def test_repair_a_truncated_manifest_and_reuse_the_result(library: Path) -> None:
+@pytest.mark.parametrize("old_manifest", ["{", '{"image/example.ksy": {}}'])
+def test_repair_manifest_and_reuse_without_a_compiler(library: Path, old_manifest: str) -> None:
     (library / "image" / "example.ksy").write_text("license: MIT\n", encoding="utf-8")
-    compiler.MANIFEST_PATH.write_text("{", encoding="utf-8")
+    compiler.MANIFEST_PATH.write_text(old_manifest, encoding="utf-8")
     compiler.rebuild()
-    compiler.COMPILE_SCRIPT.unlink()
+    Path(os.environ["TEST_KAITAI_EXECUTABLE"]).unlink()
     compiler.rebuild()
-    assert set(json.loads(compiler.MANIFEST_PATH.read_bytes())) == {"image/example.ksy"}
+    assert set(json.loads(compiler.MANIFEST_PATH.read_bytes())["specs"]) == {"image/example.ksy"}
+
+
+@pytest.mark.parametrize("unavailable", ["missing", "unrecognized version", "version command fails"])
+def test_rebuild_requires_a_verifiable_compiler_only_when_stale(
+    library: Path, tmp_path: Path, unavailable: str,
+) -> None:
+    spec = library / "example.ksy"
+    spec.write_text("license: MIT\n", encoding="utf-8")
+    compiler.rebuild()
+    before = compiler.MANIFEST_PATH.read_bytes()
+    if unavailable == "missing":
+        Path(os.environ["TEST_KAITAI_EXECUTABLE"]).unlink()
+    elif unavailable == "unrecognized version":
+        (tmp_path / "version.txt").write_text("unknown\n", encoding="utf-8")
+    else:
+        (tmp_path / "version.txt").unlink()
+    compiler.rebuild()
+    spec.write_text("license: MIT\n# changed\n", encoding="utf-8")
+    with pytest.raises(RuntimeError, match="Install the Kaitai compiler|Cannot verify"):
+        compiler.rebuild()
+    assert compiler.MANIFEST_PATH.read_bytes() == before
+    assert (tmp_path / "ksc.log").read_text().splitlines() == [str(spec)]
 
 
 def test_freshness_tracks_staged_and_untracked_inputs(library: Path) -> None:
@@ -119,7 +191,7 @@ def test_rebuild_drops_obsolete_parsers(library: Path, remove: bool) -> None:
     else:
         spec.write_text("license: unknown\n", encoding="utf-8")
     compiler.rebuild()
-    assert json.loads(compiler.MANIFEST_PATH.read_bytes()) == {}
+    assert json.loads(compiler.MANIFEST_PATH.read_bytes())["specs"] == {}
     assert {p.name for p in compiler.KAITAI_PARSERS_DIR.iterdir()} == {
         "__init__.py", "manifest.json",
     }
