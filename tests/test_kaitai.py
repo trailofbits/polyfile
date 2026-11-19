@@ -61,6 +61,27 @@ class TestKaitai(TestCase):
         self.assertRaises(ValueError, s.__getitem__, slice(0, 1, 5))
         self.assertFalse(s[20:30])
 
+    def test_segment_slice_coordinates_match_python_slices(self):
+        data = bytes(range(40))
+        for segment in (Segment(10, 20), Segment(7, 7)):
+            for start in (None, -99, -3, 0, 4, 10, 99):
+                for end in (None, -99, -3, 0, 4, 10, 99):
+                    with self.subTest(segment=segment, start=start, end=end):
+                        part = segment[start:end]
+                        self.assertIn(part, segment)
+                        expected = data[segment.start:segment.end][start:end]
+                        self.assertEqual(expected, data[part.start:part.end])
+
+    def test_repeated_dbf_record_fields(self):
+        header = struct.pack("<4BIHH20x", 3, 124, 3, 1, 2, 65, 2)
+        definition = struct.pack("<11sc4xB15x", b"NAME", b"C", 1)
+        data = header + definition + b"\r A*B\x1a"
+        ast = KaitaiParser.load("database/dbf.ksy").parse(data).ast
+        values = [(n.start, n.end, n.raw_value) for n in ast.dfs() if n.name == "deleted"]
+        self.assertEqual([(65, 66, b" "), (67, 68, b"*")], values)
+        name = next(n for n in ast.dfs() if n.name == "name")
+        self.assertEqual((32, 43, definition[:11]), (name.start, name.end, name.raw_value))
+
 
 class TestKaitaiMimeMapping(TestCase):
     """Guards the invariants that make an entry in ``KAITAI_MIME_MAPPING`` do anything at all."""

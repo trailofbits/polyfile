@@ -110,21 +110,8 @@ class Segment:
         if isinstance(index_or_slice, slice):
             if index_or_slice.step is not None and index_or_slice.step != 1:
                 raise ValueError(f"{self.__class__.__name__}.__getitem__ only supports slices with step=1")
-            if index_or_slice.start is None:
-                new_start = self.start
-            else:
-                new_start = self.start + index_or_slice.start
-            if index_or_slice.stop is None:
-                new_end = self.end
-            elif index_or_slice.stop < 0:
-                new_end = self.end + index_or_slice.stop
-            else:
-                new_end = self.start + index_or_slice.stop
-            if new_start > self.end:
-                new_start = self.end
-            if new_end < new_start or new_end > self.end:
-                new_end = new_start
-            return Segment(new_start, new_end)
+            start, stop, _ = index_or_slice.indices(len(self))
+            return Segment(self.start + start, self.start + max(start, stop))
         elif self.start + index_or_slice >= self.end or (index_or_slice < 0 and -index_or_slice > len(self)):
             raise IndexError(index_or_slice)
         elif index_or_slice < 0:
@@ -247,17 +234,15 @@ class StructNode(CompoundNode):
 
     def explore(self) -> Iterator[ASTNode]:
         obj = cast(GeneratedStruct, self.obj)
+        owner = self.parent.parent if isinstance(self.parent, ArrayNode) else self.parent
+        offset = self.offset
+        if isinstance(owner, StructNode) and obj._io is not cast(GeneratedStruct, owner.obj)._io:
+            offset = self.start
         for name in obj.SEQ_FIELDS:
-            markers = obj._debug[name].copy()
-            if "arr" in markers:
-                del markers["arr"]
+            markers = obj._debug[name]
             if "start" not in markers or "end" not in markers:
                 continue
             segment = Segment(markers["start"], markers["end"])
-            offset = self.offset
-            if isinstance(self.parent, StructNode):
-                if obj._io != cast(GeneratedStruct, self.parent.obj)._io:
-                    offset = self.start
             if hasattr(self.obj, name):
                 yield self.make_child(getattr(self.obj, name), name, segment, offset)
 
