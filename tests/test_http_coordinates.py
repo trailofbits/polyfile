@@ -105,13 +105,35 @@ def test_http_start_cursor_counts_bytes_after_a_utf8_prefix(prefix: bytes, sourc
 
 
 @pytest.mark.parametrize("invalid", [b"\xff", b"\xc3", b"\xc3("])
-@pytest.mark.parametrize("before_request", [False, True])
-def test_http_preserves_strict_utf8_decoding(invalid: bytes, before_request: bool) -> None:
-    data = invalid + REQUEST if before_request else REQUEST + invalid
+def test_http_preserves_strict_utf8_header_decoding(invalid: bytes) -> None:
+    data = b"GET / HTTP/1.1\r\nX-Name: " + invalid + b"\r\n\r\n"
     parent = Match(HTTP_11_MIME_TYPE, None, length=len(data), matcher=Matcher(parse=False))
     with FileStream(data) as stream:
         with pytest.raises(UnicodeDecodeError):
             list(parse_http_11(stream, parent))
+
+
+@pytest.mark.parametrize("body", [b"\xff", "😀".encode(), bytes(range(256))])
+def test_http_body_preserves_octets(body: bytes) -> None:
+    header = f"POST / HTTP/1.1\r\nContent-Length: {len(body)}\r\n\r\n".encode()
+    nodes = list(Matcher().match(header + body))
+    request = next(m for m in nodes if m.name == "request")
+    body_node = next(m for m in nodes if m.name == "body")
+    assert (request.offset, request.length) == (0, len(header + body))
+    assert (body_node.offset, body_node.length, body_node.match) == (len(header), len(body), body)
+
+
+def test_extension_field_values() -> None:
+    fields = [b"X-Title: First Last", b"X-Empty:", b"Host: example.com"]
+    request = b"GET / HTTP/1.1\r\n" + b"\r\n".join(fields) + b"\r\n\r\n"
+    nodes = list(Matcher().match(request))
+    assert [request[n.offset:n.offset + n.length] for n in nodes if n.name == "header"] == fields
+
+
+@pytest.mark.parametrize("version, expected", [(b"1.1", True), (b"1x1", False)])
+def test_http_version_identification(version: bytes, expected: bool) -> None:
+    names = {m.name for m in Matcher(parse=False).match(REQUEST.replace(b"1.1", version))}
+    assert (HTTP_11_MIME_TYPE in names) is expected
 
 
 def test_http_start_cursor_must_be_at_a_utf8_character_boundary() -> None:
