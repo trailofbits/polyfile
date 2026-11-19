@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import Any
 
 from setuptools import build_meta as _setuptools
+from setuptools.command.build_py import build_py
 
 get_requires_for_build_wheel = _setuptools.get_requires_for_build_wheel
 get_requires_for_build_sdist = _setuptools.get_requires_for_build_sdist
@@ -48,6 +49,19 @@ CHANGELOG: Path = PROJECT_ROOT / "CHANGELOG.md"
 PACKAGED_CHANGELOG: Path = PROJECT_ROOT / "polyfile" / "CHANGELOG.md"
 
 
+class BuildPy(build_py):
+    """Discard obsolete generated modules from setuptools' reusable wheel build tree."""
+
+    def run(self) -> None:
+        super().run()
+        package = "polyfile.kaitai.parsers"
+        sources = Path(self.get_package_dir(package))
+        destination = Path(self.build_lib).joinpath(*package.split("."))
+        for module in destination.glob("*.py"):
+            if not (sources / module.name).exists():
+                module.unlink()
+
+
 def _stage_changelog() -> None:
     """Copies the changelog into the ``polyfile`` package so that a wheel carries it."""
     if not CHANGELOG.is_file():
@@ -62,11 +76,7 @@ def _rebuild_parsers() -> None:
     """Generates the Kaitai Struct parsers that this build is about to package."""
     if SDIST_MARKER.is_file() and GENERATED_MANIFEST.is_file():
         # This is an unpacked source distribution, which already carries the parsers that were
-        # generated when it was built. Recompiling would need a Java runtime and a network
-        # download, and compile_kaitai_parsers.is_stale() cannot decide whether that is
-        # necessary here: with no repository to consult it falls back to file modification
-        # times, and the times in a tarball depend on the order in which git wrote the working
-        # tree and its submodules.
+        # generated when it was built. Installing it does not require Java or a compiler download.
         print("build_backend: reusing the parsers already generated in this source distribution")
         return
 

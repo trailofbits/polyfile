@@ -3,8 +3,8 @@
 
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
-from polyfile.kaitai.parsers import ipv4_packet
 from polyfile.kaitai.parsers import ipv6_packet
+from polyfile.kaitai.parsers import ipv4_packet
 from enum import IntEnum
 import collections
 

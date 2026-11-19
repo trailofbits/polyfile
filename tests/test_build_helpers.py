@@ -11,7 +11,7 @@ def test_compiler_output_retains_class_path_pairs() -> None:
     output = b"Root\troot.py\tadditional information\n\nDependency\tdependency.py\n"
 
     with patch("compile_kaitai_parsers.subprocess.check_output", return_value=output):
-        compiled = compiler.compile_ksy(Path("format.ksy"))
+        compiled = compiler.compile_ksy(Path("format.ksy"), compiler.KAITAI_PARSERS_DIR)
 
     assert compiled == [("Root", "root.py"), ("Dependency", "dependency.py")]
 
@@ -22,9 +22,10 @@ def test_manifest_entry_retains_relative_paths_and_dependencies() -> None:
         ("Dependency", str(compiler.KAITAI_PARSERS_DIR / "dependency.py")),
     ]
 
-    assert compiler.manifest_entry(compiled) == {
+    assert compiler.manifest_entry(compiled, compiler.KAITAI_PARSERS_DIR, "digest") == {
         "class_name": "Root",
         "python_path": "root.py",
+        "source_sha256": "digest",
         "dependencies": [{"class_name": "Dependency", "python_path": "dependency.py"}],
     }
 
