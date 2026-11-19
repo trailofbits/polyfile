@@ -179,7 +179,7 @@ class TestKaitaiParsing(TestCase):
             self.skipTest(f"could not download the Corkami corpus: {e}")
         for ksy_path, sample in self.CORKAMI_SAMPLES:
             with self.subTest(ksy_path=ksy_path, sample=sample):
-                data = CorkamiCorpus.read(f"pocs-master/{sample}")
+                data = CorkamiCorpus.read(sample)
                 self.assertGreater(self.node_count(ksy_path, data), 1)
 
     def test_synthesized_samples(self):
@@ -219,7 +219,7 @@ class TestKaitaiParsing(TestCase):
         except URLError as e:
             self.skipTest(f"could not download the Corkami corpus: {e}")
         for ksy_path, sample in self.CORKAMI_SAMPLES:
-            data = CorkamiCorpus.read(f"pocs-master/{sample}")
+            data = CorkamiCorpus.read(sample)
             for fraction in (10, 50, 90):
                 truncated = data[:max(1, len(data) * fraction // 100)]
                 with self.subTest(ksy_path=ksy_path, sample=sample, percent=fraction):
@@ -254,7 +254,7 @@ class TestKaitaiRegistration(TestCase):
             self.skipTest(f"could not download the Corkami corpus: {e}")
         with TemporaryDirectory() as tmpdir:
             webp = Path(tmpdir) / "sample.webp"
-            webp.write_bytes(CorkamiCorpus.read("pocs-master/mini/webp.webp"))
+            webp.write_bytes(CorkamiCorpus.read("mini/webp.webp"))
             matches = list(Matcher().match(webp))
         self.assertTrue(any(m.name == "image/webp" for m in matches))
         submatches = [m for m in matches if isinstance(m, Submatch)]
