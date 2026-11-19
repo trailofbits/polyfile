@@ -68,7 +68,7 @@ class ProgramTrace:
         self._cfg = CFG(self)
         self._cfg.add_nodes_from(self.functions.values())
         for f in list(self.functions.values()):
-            for caller in f.called_from:
+            for caller in sorted(f.called_from):
                 if caller not in self.functions:
                     info = FunctionInfo(caller, {})
                     self.functions[caller] = info
@@ -202,7 +202,7 @@ def parse_format_v3(polytracker_json_obj: dict[str, object]) -> ProgramTrace:
         ))
         tainted_functions.add(function_name)
     # Add any additional functions from the CFG that didn't operate on tainted bytes
-    for function_name in trace['runtime_cfg'].keys() - tainted_functions:
+    for function_name in sorted(trace['runtime_cfg'].keys() - tainted_functions):
         function_data.append(FunctionInfo(
             name=function_name,
             cmp_bytes={},

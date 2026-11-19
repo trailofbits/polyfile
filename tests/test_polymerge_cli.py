@@ -5,6 +5,7 @@ import errno
 import io
 import json
 import logging
+import re
 import sys
 from collections.abc import Iterator
 from pathlib import Path
@@ -113,6 +114,21 @@ def test_normal_merge_accepts_an_empty_legacy_trace(
         "versions": {"polymerge": __version__, "polytracker": "0.0.1"},
         "best_function_matches": {},
     }
+
+
+def test_filtered_cfg_includes_intermediate_function_on_path_to_leaf(tmp_path: Path) -> None:
+    source = tmp_path / "trace.json"
+    source.write_text(json.dumps({
+        "start": {"called_from": [], "input_bytes": {"input": [0]}},
+        "middle": {"called_from": ["start"], "input_bytes": {}},
+        "end": {"called_from": ["middle"], "input_bytes": {"input": [0]}},
+    }))
+    target = tmp_path / "graph.dot"
+    cli.main(["polymerge", str(source), "--cfg", str(target), "--dataflow", "0"])
+    dot = target.read_text()
+    labels = dict(re.findall(r"(\w+) \[label=(\w+)\]", dot))
+    edges = {(labels[a], labels[b]) for a, b in re.findall(r"(\w+) -> (\w+)", dot)}
+    assert edges == {("start", "middle"), ("middle", "end")}
 
 
 @pytest.mark.parametrize(
