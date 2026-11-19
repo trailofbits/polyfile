@@ -18,6 +18,7 @@ from importlib import resources
 from itertools import chain, groupby
 import json
 import logging
+import operator
 from pathlib import Path
 import re
 from re import Pattern
@@ -583,12 +584,12 @@ class RelativeOffset(Offset):
         if isinstance(self.relative_to, NegativeOffset):
             difference = -self.relative_to.magnitude
         else:
-            difference = self.relative_to.to_absolute(data, last_match)
+            difference = self.relative_to.to_absolute(data, last_match, allow_invalid)
         if not isinstance(last_match, MatchedTest):
             raise InvalidOffsetError(f"The last test was expected to be a match, but instead got {last_match!s}",
                                      offset=self)
         offset = last_match.relative_base + difference
-        if not allow_invalid and len(data) < offset < 0:
+        if not allow_invalid and not 0 <= offset <= len(data):
             raise InvalidOffsetError(offset=self)
         return offset
 
@@ -619,6 +620,11 @@ def decode_id3_synchsafe(value: int) -> int:
             | ((value >> 24 & 0x7F) << 21))
 
 
+class _IndirectOperand(NamedTuple):
+    displacement: int
+    operation: Callable[[int, int], int]
+
+
 class IndirectOffset(Offset):
     OctalIndirectOffset = -1
 
@@ -633,12 +639,13 @@ class IndirectOffset(Offset):
     }
 
     def __init__(self, offset: Offset, num_bytes: int, endianness: Endianness, signed: bool,
-                 post_process: Callable[[int], int] = lambda n: n, *, is_id3: bool = False):
+                 post_process: Callable[[int], int] | _IndirectOperand = lambda n: n, *,
+                 is_id3: bool = False):
         self.offset: Offset = offset
         self.num_bytes: int = num_bytes
         self.endianness: Endianness = endianness
         self.signed: bool = signed
-        self.post_process: Callable[[int], int] = post_process
+        self.post_process = post_process
         self.is_id3: bool = is_id3
         if self.endianness not in (Endianness.NATIVE, Endianness.LITTLE, Endianness.BIG):
             raise ValueError(f"Invalid endianness: {endianness!r}")
@@ -647,45 +654,52 @@ class IndirectOffset(Offset):
         elif is_id3 and num_bytes != 4:
             raise ValueError(f"An ID3 indirect offset must be four bytes, not {num_bytes}")
 
-    def _octal_to_absolute(self, data: bytes, last_match: TestResult | None,
-                           allow_invalid: bool) -> int:
-        # This is for the octal type used here:
-        # https://github.com/file/file/blob/7a4e60a8f56ed45f76f28d2812a88d82efdc4bb8/magic/Magdir/gentoo#L81
-        offset = self.offset.to_absolute(data, last_match)
-        octal_string_end = offset
-        while octal_string_end < len(data) and ord('0') <= data[octal_string_end] <= ord('7'):
-            octal_string_end += 1
-        value: int | None = None
-        if octal_string_end > offset:
-            try:
-                value = int(data[:octal_string_end], 8)
-            except ValueError:
-                pass
-        if value is None:
-            if not allow_invalid:
-                return len(data)
-            value = 0
-        return self.post_process(value)
-
     def _struct_format(self) -> str:
         fmt = IndirectOffset.STRUCT_FORMATS[self.num_bytes]
         if self.signed:
             fmt = fmt.lower()
         return f"{self.endianness.value}{fmt}"
 
-    def to_absolute(self, data: bytes, last_match: TestResult | None, allow_invalid: bool = False) -> int:
+    OCTAL = re.compile(rb"[0-7]+")
+
+    def _read_field(self, data: bytes, offset: int) -> int | None:
+        if not 0 <= offset < len(data):
+            return None
         if self.num_bytes == IndirectOffset.OctalIndirectOffset:
-            return self._octal_to_absolute(data, last_match, allow_invalid)
+            digits = self.OCTAL.match(data, offset)
+            return int(digits[0], 8) if digits else None
+        if offset + self.num_bytes > len(data):
+            return None
+        return cast(int, struct.unpack_from(self._struct_format(), data, offset)[0])
+
+    def _apply_operand(
+        self, data: bytes, offset: int, value: int, expression: _IndirectOperand
+    ) -> int:
+        position = offset + expression.displacement
+        if not 0 <= position <= len(data):
+            raise InvalidOffsetError(offset=self)
+        # For FILE_OCTAL, mget reads both operands from the original octal string.
+        operand = value if self.num_bytes == self.OctalIndirectOffset else self._read_field(
+            data, position
+        )
+        if operand is None:
+            raise InvalidOffsetError(offset=self)
+        return expression.operation(value, operand) if operand else value
+
+    def to_absolute(self, data: bytes, last_match: TestResult | None, allow_invalid: bool = False) -> int:
         offset = self.offset.to_absolute(data, last_match)
-        to_unpack = data[offset:offset + self.num_bytes]
-        if len(to_unpack) < self.num_bytes:
-            if allow_invalid:
+        value = self._read_field(data, offset)
+        if value is None:
+            if self.num_bytes == self.OctalIndirectOffset and allow_invalid:
+                value = 0
+            elif allow_invalid or self.num_bytes == self.OctalIndirectOffset:
                 return len(data)
             else:
                 raise InvalidOffsetError(offset=self)
-        value = struct.unpack(self._struct_format(), to_unpack)[0]
         if self.is_id3:
             value = decode_id3_synchsafe(value)
+        if isinstance(self.post_process, _IndirectOperand):
+            return self._apply_operand(data, offset, value, self.post_process)
         return self.post_process(value)
 
     NUMBER_PATTERN: str = r"(0[xX][\dA-Fa-f]+|\d+)L?"
@@ -698,30 +712,20 @@ class IndirectOffset(Offset):
     )
 
     @staticmethod
-    def _parse_post_process(pp: str | None) -> Callable[[int], int]:
+    def _parse_post_process(pp: str | None) -> Callable[[int], int] | _IndirectOperand:
         if pp is None:
             return lambda n: n
-        multiply = pp.startswith("*")
-        bitwise_and = pp.startswith("&")
-        divide = pp.startswith("/")
-        if multiply or bitwise_and or divide:
-            pp = pp[1:]
-        if pp.startswith("+"):
+        operations: dict[str, Callable[[int, int], int]] = {
+            "+": operator.add, "-": operator.sub, "*": operator.mul,
+            "&": operator.and_, "/": operator.floordiv,
+        }
+        operation = operations.get(pp[0], operator.add)
+        if pp[0] in operations:
             pp = pp[1:]
         if pp.startswith("(") and pp.endswith(")"):
-            # some definition files like `msdos` have indirect offsets of the form: >>>(&0x0f.l+(-4))
-            # Handle those nested parenthesis around the `(-4)` here. This is an undocumented part of the DSL,
-            # so, TODO: confirm we are handling it properly and it's not something more complex like a nested
-            #           indirect offset
-            pp = pp[1:-1]
+            return _IndirectOperand(parse_numeric(pp[1:-1]), operation)
         operand = parse_numeric(pp)
-        if multiply:
-            return lambda n: n * operand
-        elif bitwise_and:
-            return lambda n: n & operand
-        elif divide:
-            return lambda n: n // operand
-        return lambda n: n + operand
+        return lambda n: operation(n, operand) if operand else n
 
     @classmethod
     def parse(cls, offset: str) -> "IndirectOffset":
@@ -3532,7 +3536,7 @@ class NumericDataType(DataType["NumericValue[int] | NumericValue[float]"]):
             fmt = fmt[2:]
         else:
             endianness = Endianness.NATIVE
-        for symbol, operator in (
+        for symbol, operation in (
                 ("&", lambda a, b: a & b),
                 ("%", lambda a, b: a % b),
                 ("+", lambda a, b: a + b),
@@ -3545,7 +3549,7 @@ class NumericDataType(DataType["NumericValue[int] | NumericValue[float]"]):
             pos = fmt.find(symbol)
             if pos > 0:
                 operand = parse_numeric(fmt[pos+1:])
-                preprocess = lambda n: operator(n, operand)
+                preprocess = lambda n: operation(n, operand)
                 fmt = fmt[:pos]
                 break
         else:
@@ -3811,6 +3815,8 @@ class ConstantMatchTest(MagicTest, Generic[T]):
 
     def _input_region(self, data: bytes, absolute_offset: int) -> bytes:
         """Copies only the bytes an exact built-in type can inspect or report."""
+        if absolute_offset < 0 and isinstance(self.offset, RelativeOffset):
+            return b""
         if absolute_offset == 0:
             return data[absolute_offset:]
         length = _bounded_input_length(self.data_type, self.constant)
