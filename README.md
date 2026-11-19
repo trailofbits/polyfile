@@ -188,8 +188,8 @@ It currently has support for parsing and semantically mapping the following form
 * [iNES](https://wiki.nesdev.com/w/index.php/INES)
 * Formats with registered Kaitai Struct parsers, including PNG, ELF, and SQLite
 
-PolyFile ships parsers compiled from 183 Kaitai Struct specifications. Automatic parsing uses
-explicit mappings from 66 MIME types to 44 of those specifications. The remaining compiled
+PolyFile ships parsers compiled from 185 Kaitai Struct specifications. Automatic parsing uses
+explicit mappings from 67 MIME types to 45 of those specifications. The remaining compiled
 parsers are available through the Kaitai loader. To enable automatic parsing for another format,
 register its specification for a MIME type that PolyFile can identify.
 [Guide to adding a mapping](https://github.com/trailofbits/polyfile/blob/master/docs/extending_polyfile.md#adding-a-mapping)

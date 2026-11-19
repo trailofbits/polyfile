@@ -29,6 +29,10 @@ with ExactNamedTempfile(b"""# Doom WAD; see the description-only test in magic_d
 0\tstring\tCreative\\ Voice\\ File\tCreative Labs voice data
 !:mime audio/x-voc
 !:ext voc
+# GGUF; see the description-only test in magic_defs/gguf.
+0\tstring\t=GGUF\t\tGGUF file format
+!:mime model/x-gguf
+!:ext gguf
 """, name="KaitaiMimeMatchers") as t:
     MagicMatcher.DEFAULT_INSTANCE.add(Path(t), test_type=TestType.BINARY)
 
@@ -128,6 +132,7 @@ KAITAI_MIME_MAPPING: dict[str, str] = {
     "application/x-blender": "media/blender_blend.ksy",
     "application/x-doom": "game/doom_wad.ksy",
     "model/gltf-binary": "3d/gltf_binary.ksy",
+    "model/x-gguf": "ml/gguf.ksy",
 }
 
 # A universal Mach-O binary shares `application/x-mach-binary` with a thin one, so its parser is

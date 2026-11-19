@@ -206,6 +206,30 @@ class TestKaitaiParsing(TestCase):
             with self.subTest(ksy_path=ksy_path):
                 self.assertGreater(self.node_count(ksy_path, data), 1)
 
+    def test_gguf_dispatch(self):
+        key = b"general.name"
+        value = b"Demo"
+        for byte_order in ("<", ">"):
+            with self.subTest(byte_order=byte_order):
+                data = (
+                    b"GGUF" + struct.pack(f"{byte_order}IQQQ", 3, 0, 1, len(key))
+                    + key + struct.pack(f"{byte_order}IQ", 8, len(value)) + value
+                )
+                matches = list(Matcher().match(data))
+                model = next(match for match in matches if match.name == "model/x-gguf")
+                self.assertEqual("gguf", model.extension)
+                self.assertEqual(["Gguf"], [child.name for child in model.children])
+                fields = [(field.offset, field.length) for field in matches
+                          if field.name == "value" and field.match == value]
+                self.assertEqual([(56, 4)], fields)
+
+    @skipUnless(hasattr(signal, "SIGALRM"), "bounding a runaway parse needs SIGALRM")
+    def test_truncated_gguf_header(self):
+        spec = "ml/gguf.ksy"
+        data = b"GGUF" + struct.pack("<IQ", 3, 0)
+        with self.assertCompletesQuickly(spec), self.assertRaises(KaitaiStructError):
+            self.node_count(spec, data)
+
     @skipUnless(hasattr(signal, "SIGALRM"), "bounding a runaway parse needs SIGALRM")
     def test_truncated_input_does_not_hang(self):
         """A truncated file must fail fast rather than loop forever.
