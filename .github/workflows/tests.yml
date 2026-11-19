@@ -128,6 +128,20 @@ jobs:
         uv build 2>&1 | tee build.log
     - name: Check distribution metadata
       run: uvx twine check dist/*
+    - name: Collect tests from the unpacked source distribution
+      shell: bash
+      run: |
+        set -euo pipefail
+        unpacked="$RUNNER_TEMP/polyfile-sdist"
+        mkdir "$unpacked"
+        tar -xzf dist/*.tar.gz --strip-components=1 -C "$unpacked"
+        while IFS= read -r -d '' path; do
+          test -f "$unpacked/$path" || { echo "::error::sdist is missing $path"; exit 1; }
+        done < <(git ls-files -z ':(glob)tests/*.py' tests/fixtures tests/msjdbc.cer.gz uv.lock)
+        uv sync --locked --extra dev --no-install-project
+        uv pip install --python .venv/bin/python --no-deps dist/*.whl
+        cd "$unpacked"
+        "$GITHUB_WORKSPACE/.venv/bin/python" -m pytest --collect-only -q tests
     - name: Check the distributions ship what they should
       run: |
         set -euo pipefail
