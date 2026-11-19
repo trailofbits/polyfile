@@ -43,9 +43,9 @@ def pytest_runtest_makereport(item: pytest.Item, call: pytest.CallInfo[object]):
     return report
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 def viewer_browser(browser_name: str) -> Iterator["Browser"]:
-    """Launch one browser engine for the requested test session."""
+    """Launch a browser and release Playwright's event loop after each test."""
     playwright = pytest.importorskip("playwright.sync_api", reason="Install .[viewer-test] first")
     with playwright.sync_playwright() as driver:
         browser = getattr(driver, browser_name).launch()

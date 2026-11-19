@@ -33,8 +33,10 @@ jobs:
           uv run --no-project python -m playwright install --with-deps "${BROWSER_ENGINE}"
         env:
           BROWSER_ENGINE: ${{ matrix.browser }}
-      - name: Test standalone reports offline
-        run: uv run --no-project pytest -q tests/browser --browser "${BROWSER_ENGINE}"
+      - name: Test offline reports and event loop isolation
+        run: >-
+          uv run --no-project pytest -q --browser "${BROWSER_ENGINE}" tests/browser
+          tests/unit/explorer/test_dialogs.py::test_destination_submission_and_escape
         env:
           BROWSER_ENGINE: ${{ matrix.browser }}
           PYTHONPATH: .
