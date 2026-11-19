@@ -998,8 +998,8 @@ class Debugger(REPL):
     @command(help="modifies part of the debugger environment")
     def set(self, arguments: str):
         parsed = arguments.strip().split()
-        if len(parsed) == 3 and parsed[1].strip() == "=":
-            parsed = [parsed[0], parsed[1]]
+        if len(parsed) == 3 and parsed[1] == "=":
+            del parsed[1]
         if len(parsed) != 2:
             self.write("Usage: ", dim=True)
             self.write("set", bold=True, color=ANSIColor.BLUE)
