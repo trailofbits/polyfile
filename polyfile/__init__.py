@@ -26,9 +26,18 @@ from polyfile import pdfmatcher
 from polyfile import sevenzipmatcher
 from polyfile import hwpmatcher
 from polyfile import icomatcher
-from polyfile.analysis import AnalysisLimits
-from polyfile.provenance import SourceSpan
-from polyfile.polyfile import __version__, InvalidMatch, Match, Matcher, Parser, PARSERS, register_parser, Submatch
+from polyfile.analysis import AnalysisLimits as AnalysisLimits
+from polyfile.provenance import SourceSpan as SourceSpan
+from polyfile.polyfile import (
+    PARSERS as PARSERS,
+    InvalidMatch as InvalidMatch,
+    Match as Match,
+    Matcher as Matcher,
+    Parser as Parser,
+    Submatch as Submatch,
+    __version__ as __version__,
+    register_parser as register_parser,
+)
 
 
 def main(argv: Sequence[str] | None = None) -> None:
