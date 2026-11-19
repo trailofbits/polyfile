@@ -22,6 +22,7 @@ class PolyFileStruct(Struct):
         file and handed back to `matcher`. :class:`polyfile.structs.Constant` fields are
         exempt: their contents are the fixed signature that identified this struct, so
         matching them only rediscovers the struct's own file type at the offset of its magic.
+        A parser can set `analysis_skip_raw_match` on a yielded field to keep its bytes opaque.
 
         The struct's own match carries no match object, so its SBUD element has no `value`:
         the field matches below it describe every byte it spans, and a struct has no rendering
@@ -58,7 +59,10 @@ class PolyFileStruct(Struct):
             try:
                 if isinstance(value, PolyFileStruct):
                     yield from value.match(matcher, s)
-                elif isinstance(value, bytes) and not isinstance(value, Constant):
+                elif (
+                    isinstance(value, bytes) and not isinstance(value, Constant)
+                    and not s.analysis_skip_raw_match
+                ):
                     with Tempfile(value) as tmp:
                         yield from matcher.match(tmp, parent=s)
             except (InvalidMatch, StructError):
