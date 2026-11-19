@@ -4,6 +4,7 @@ The corpus is downloaded on demand rather than vendored (``tests/.gitignore`` ex
 importing this module is cheap and has no side effects.
 """
 
+import hashlib
 from pathlib import Path
 import shutil
 from tempfile import TemporaryDirectory
@@ -12,7 +13,14 @@ import urllib.request
 from zipfile import ZipFile, ZipInfo
 
 CORKAMI_CORPUS_ZIP = Path(__file__).absolute().parent / "corkami.zip"
-CORKAMI_URL = "https://github.com/corkami/pocs/archive/refs/heads/master.zip"
+CORKAMI_COMMIT = "6d277c83efdceb6916ee8c6efe6ff0639cc6193f"
+CORKAMI_URL = f"https://codeload.github.com/corkami/pocs/zip/{CORKAMI_COMMIT}"
+CORKAMI_SHA256 = "b76fbb4c371586fdec9e6850b9b266a41768a7ffa6ececd00aa6a96b6e18aa63"
+
+
+def _checksum(path: Path) -> str:
+    with path.open("rb") as stream:
+        return hashlib.file_digest(stream, "sha256").hexdigest()
 
 
 class CorkamiFile:
@@ -34,12 +42,21 @@ class CorkamiFile:
 class CorkamiCorpus:
     @classmethod
     def download(cls):
-        with urllib.request.urlopen(CORKAMI_URL) as response, open(CORKAMI_CORPUS_ZIP, "wb") as out_file:
-            shutil.copyfileobj(response, out_file)
+        with TemporaryDirectory(dir=CORKAMI_CORPUS_ZIP.parent) as directory:
+            archive = Path(directory) / "corpus.zip"
+            with urllib.request.urlopen(CORKAMI_URL) as response, archive.open("wb") as output:
+                shutil.copyfileobj(response, output)
+            actual = _checksum(archive)
+            if actual != CORKAMI_SHA256:
+                raise ValueError(
+                    f"Corkami archive {CORKAMI_COMMIT}: expected SHA-256 {CORKAMI_SHA256}, "
+                    f"received {actual}"
+                )
+            archive.replace(CORKAMI_CORPUS_ZIP)
 
     @classmethod
     def ensure_downloaded(cls):
-        if not CORKAMI_CORPUS_ZIP.exists():
+        if not CORKAMI_CORPUS_ZIP.exists() or _checksum(CORKAMI_CORPUS_ZIP) != CORKAMI_SHA256:
             cls.download()
 
     @classmethod
@@ -47,7 +64,7 @@ class CorkamiCorpus:
         """Returns the contents of one file in the corpus, downloading the corpus if necessary."""
         cls.ensure_downloaded()
         with ZipFile(CORKAMI_CORPUS_ZIP, "r") as z:
-            return z.read(path_in_zip)
+            return z.read(f"pocs-{CORKAMI_COMMIT}/{path_in_zip}")
 
     @classmethod
     def files(cls) -> Iterator[CorkamiFile]:

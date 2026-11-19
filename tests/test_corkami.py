@@ -3,7 +3,7 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
-from unittest import TestCase
+from unittest import TestCase, defaultTestLoader
 
 from polyfile.magic import MAGIC_DEFS, MagicMatcher, MatchContext
 
@@ -103,10 +103,16 @@ def _init_tests():
             else:
                 suffix += 1
 
-        setattr(CorkamiDifferentialTests, func_name, do_test)
+        setattr(CorkamiDifferentialTests, f"{func_name}{suffix}", do_test)
 
 
 _init_tests()
+
+
+def test_collects_each_eligible_corpus_member() -> None:
+    members = list(CorkamiCorpus.files())
+    assert len({f.path_in_zip.name for f in members}) < len(members)
+    assert len(defaultTestLoader.getTestCaseNames(CorkamiDifferentialTests)) == len(members)
 
 
 def build_local_file():

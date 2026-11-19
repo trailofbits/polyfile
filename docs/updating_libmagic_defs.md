@@ -225,6 +225,13 @@ drifted, the differential compares PolyFile against a different rule set than th
 and says nothing about it. `tests/test_magic_defs_drift.py` is what tells you, so read its result
 before you trust a corkami run.
 
+The Corkami tests download and verify the revision and SHA-256 in `tests/corkami_corpus.py`.
+To update the corpus, select an upstream commit, download its ZIP archive from the commit-specific
+`CORKAMI_URL`, and verify the archive's contents against that revision. Update `CORKAMI_COMMIT`
+and `CORKAMI_SHA256` together. Run `uv run pytest tests/test_corkami.py tests/test_kaitai.py`
+to check the updated inventory and sample paths. A stale cache is replaced after the new archive
+passes verification.
+
 The build tree it leaves behind in `file/` is ignored by git, so `git status` reports the submodule
 clean even when `configure` and the binary predate the release you just checked out. `make` normally
 regenerates them, but if the build fails or the oracle looks wrong, confirm the version with

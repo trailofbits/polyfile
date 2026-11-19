@@ -560,7 +560,7 @@ class MagicTest(TestCase):
 
         The first three buffers hold an EBCDIC double quote (0x7F) or tab (0x05), both of which
         belong to no text character class in their own right, which is what keeps them out of the
-        eight bit families. The last is the corkami corpus file `pocs-master/mocks/elf.bin`.
+        eight bit families. The last is the Corkami corpus file `mocks/elf.bin`.
         """
         ebcdic = (
             (b"\x7f\xc3\xe4\xe2\xe3\xd6\xd4\xc5\xd9\x7f\x6b\x7f\xc2\xc1\xd3\xc1\xd5"
