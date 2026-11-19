@@ -8,9 +8,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-11-19
+
+PolyFile 1.0 expands recursive analysis of archives and compressed streams, adds a terminal
+explorer, and updates the HTML byte viewer. Structured output identifies the original file or
+decoded buffer for each byte range. See the [JSON output format](https://github.com/trailofbits/polyfile/blob/master/docs/json_format.md#physical-and-decoded-sources).
+
+The tested Python range is 3.11–3.14. On Python 3.15, the pinned `google-re2` dependency lacks
+compatible wheels, and clean installations fail while building it from source.
+[Track Python 3.15 installation support](https://github.com/trailofbits/polyfile/issues/3884).
+
 ### Added
 
 - Ship `py.typed` for Python type checkers and document the public analysis and extension APIs.
+- **Breaking**. Identify GGUF models as `model/x-gguf` and map their structure automatically.
+  The refreshed Kaitai gallery also adds a TP-Link MiniFS parser and updates the RPM and U-Boot
+  uImage parsers. [Kaitai gallery update](https://github.com/trailofbits/polyfile/pull/3886).
 - **Breaking:** Add `--explore FILE`, a Textual terminal inspector with source-aware structure,
   virtualized hex and UTF-8 views, byte selection, coverage, navigation, cancellable search, and
   exact byte extraction. Textual is installed by default. Explorer mode opens after analysis and
@@ -102,6 +115,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 
 ### Changed
 
+- **Breaking**. Libmagic regex tests use the native `google-re2` dependency. Custom definitions
+  that use unsupported syntax such as lookaround assertions or backreferences produce an error
+  with the definition filename and line number.
+  [Custom magic compatibility](https://github.com/trailofbits/polyfile/blob/master/docs/libmagic_compatibility.md).
 - Pin PDFminer to the qualified 20260107 release, isolate document-local xref instrumentation,
   and qualify future updates through locked dependencies and PDF contract tests. Unqualified
   installations retain identification and report unsupported PDF instrumentation.
@@ -125,12 +142,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 - Remove compatibility imports and runtime bases for Python versions older than 3.11.
 - **Breaking:** JSON elements identify their physical or decoded `source`; offsets stop at
   decoded-buffer boundaries. ZIP and PDF decoded content uses explicit `decoded_content` nodes.
-  HTML highlighting, downloads, and coverage use the selected source, and decoded text is escaped
+  Use `(source, offset)` to locate a byte in JSON. HTML highlighting, downloads, and coverage use
+  the selected source, and the viewer renders decoded text as plain text.
 - **Breaking:** Require Python 3.11 or later and pin patched filelock 4.2.7 and Pillow 13.0.0.
   CI tests Python 3.11 through 3.14 independently so a failing job preserves other results.
 
 ### Fixed
 
+- **Breaking**. Reject output paths that alias the input or another output, and report file open
+  failures as CLI errors. MIME filters honor globs, and each text output honors `--max-matches`.
+  [Output path checks](https://github.com/trailofbits/polyfile/pull/3848)
+  · [MIME filters](https://github.com/trailofbits/polyfile/pull/3854)
+  · [Text output](https://github.com/trailofbits/polyfile/pull/3851).
+- **Breaking**. Map ZIP members with conflicting local and central directory compression methods
+  and report the conflict without decoding the member.
+  [ZIP method conflicts](https://github.com/trailofbits/polyfile/pull/3875).
 - **Breaking:** Label NES 2.0 header fields according to their format and report mapper,
   memory, timing, console, and expansion device values in structured output (#3860).
 - Correct the README and development guide to describe implemented 7z parsing and recursive
@@ -832,6 +858,7 @@ Major, partially breaking release.
 
 No release notes were recorded for this release.
 
+[1.0.0]: https://github.com/trailofbits/polyfile/compare/v0.6.0...v1.0.0
 [0.6.0]: https://github.com/trailofbits/polyfile/compare/v0.5.6...v0.6.0
 [0.5.6]: https://github.com/trailofbits/polyfile/compare/v0.5.5...v0.5.6
 [0.5.5]: https://github.com/trailofbits/polyfile/compare/v0.5.4...v0.5.5
@@ -856,4 +883,4 @@ No release notes were recorded for this release.
 [0.1.3]: https://github.com/trailofbits/polyfile/compare/v0.1.2-SafeDocs-Internal...v0.1.3
 [0.1.2-SafeDocs-Internal]: https://github.com/trailofbits/polyfile/releases/tag/v0.1.2-SafeDocs-Internal
 
-[Unreleased]: https://github.com/trailofbits/polyfile/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/trailofbits/polyfile/compare/v1.0.0...HEAD
