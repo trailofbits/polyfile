@@ -517,6 +517,11 @@ def parse_archive(
         A match for each record of the archive, and for the files its members contain.
     """
     assert parent.matcher is not None
+    archive_key = parent.source, parent.offset + eocd.start_offset
+    mapped = parent.analysis_context.mapped_zip_archives
+    if archive_key in mapped:
+        return
+    mapped.add(archive_key)
     if parent.analysis_context.remaining_members == 0:
         parent.analysis_status = "limited"
         parent.analysis_message = "ZIP member count exceeds its analysis allowance"
