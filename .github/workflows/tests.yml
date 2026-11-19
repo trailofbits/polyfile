@@ -235,7 +235,8 @@ jobs:
           --output-file "$smoke_dir/requirements.txt" >/dev/null
         cp dist/*.whl tests/test_wheel_smoke.py tests/test_zip_members.py "$smoke_dir"
         cd "$smoke_dir"
-        uv venv .venv --python "$(command -v python)"
+        interpreter=$(python -c 'import sys; print(sys.executable, end="")')
+        uv venv .venv --python "$interpreter"
         uv pip install --python "$smoke_python" --require-hashes -r requirements.txt
         uv pip install --python "$smoke_python" --no-deps ./*.whl
         "$smoke_python" -I test_wheel_smoke.py
