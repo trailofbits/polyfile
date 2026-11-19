@@ -235,7 +235,10 @@ with open("file_to_test", "rb") as f:
 
 ## Extending PolyFile
 
-Instructions on extending PolyFile to support more file formats with new matchers and parsers is described [in the documentation](https://github.com/trailofbits/polyfile/blob/master/docs/extending_polyfile.md).
+Use the [Python API](https://github.com/trailofbits/polyfile/blob/master/docs/extending_polyfile.md#public-python-api)
+to analyze files in your code. See the
+[extension guide](https://github.com/trailofbits/polyfile/blob/master/docs/extending_polyfile.md)
+to add matchers and parsers for more formats.
 
 ## License and Acknowledgements
 

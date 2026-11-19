@@ -1,12 +1,75 @@
 # Extending PolyFile
 
-PolyFile has two primary components:
-1. **Matchers**: classify the MIME types of input byte sequences; and
-2. **Parsers**: produce a best-effort syntax tree for input byte sequences that have been classified.
+Matchers classify byte sequences. Parsers map a classified sequence into a best-effort tree.
 
-The retained [standalone search and serialization utilities](search_serialization.md) support
-direct library use. That guide documents their maintenance status, APIs, cache compatibility,
-and regression checks. They currently have no callers in the analyzer or command-line workflows.
+## Public Python API
+
+Starting with PolyFile 1.0, the interfaces below and the documented import paths, call
+signatures, type annotations, and behavior of their operations form the public contract.
+Patch and minor releases preserve compatibility for callers of these APIs. PolyFile gives
+at least one minor release of notice before removing a deprecated API in a major release.
+The release notes identify the deprecated API and its replacement when one exists, and calls
+emit `DeprecationWarning` where practical. Type checkers can use the installed package's
+annotations because it includes the [`py.typed` marker](https://typing.python.org/en/latest/spec/distributing.html#packaging-type-information).
+
+| Import from | Supported interface |
+| --- | --- |
+| `polyfile` | `Matcher`, `Match`, `Submatch`, `AnalysisLimits`, and `SourceSpan` for analysis and its results. `Parser`, `PARSERS`, `register_parser`, and `InvalidMatch` for parser extensions. |
+| `polyfile` | `__version__` gives the installed version. `main(argv=None)` runs the CLI. Explicit arguments include the executable name. |
+| `polyfile.polyfile` | `Analyzer` for analyzing a named file and producing an SBuD report. |
+| `polyfile.magic` | `MagicMatcher` and `MatchContext` for classification. The [matcher extension hooks](#implement-a-python-matcher) describe `MagicTest`, `AbsoluteOffset`, `TestType`, `TestResult`, `MatchedTest`, and `FailedTest`. |
+| `polyfile.fileutils` | `FileStream` for [bounded binary reads](#read-from-a-parser-stream). |
+| `polyfile.expressions`, `polyfile.structs` | The [expression evaluator](#standalone-expression-evaluator) and [binary struct helpers](#struct-parsing) documented in this guide. |
+| `polyfile.search`, `polyfile.serialization` | The [standalone search and serialization APIs](search_serialization.md). |
+
+Treat other operations as implementation details. Built-in magic definitions and parser
+coverage can evolve as file-format support changes. Treat the ordering of separate matches
+and of parsers registered for the same MIME type as unspecified.
+
+### Analyze input
+
+- `Matcher(parse=True, matcher=None, *, limits=None)` uses the built-in `MagicMatcher` unless you
+  supply one. `match(file_stream, parent=None)` yields structural `Match` objects, including
+  descendants as parsers produce them. `parse=False` yields MIME match nodes and skips parser
+  dispatch. `identify(file_stream)` skips parsing and yields `polyfile.magic.Match`
+  classifications. Both methods accept bytes, a path as a string or `Path`, or a seekable binary
+  stream. Analysis starts at the beginning of the supplied input or bounded view. A stream you
+  supply stays open by default, and its position may change.
+- `Analyzer(path, parse=True, magic_matcher=None, *, limits=None)` accepts a string or `Path`.
+  `matches()` yields root structural matches and populates their children as you advance the
+  iterator. Exhaust it before inspecting a complete tree. `magic_matches()` yields
+  classifications, including those with no MIME type, and `mime_types()` yields
+  `(mime_type, classification)` pairs. `close()` ends active scans and releases their resources.
+- `Analyzer.sbud(matches=None, include_contents=True)` returns a JSON-serializable dictionary
+  following the [SBuD format](json_format.md). It consumes the analysis or the supplied iterable
+  before serializing the trees. Set `include_contents=False` to omit `b64contents`.
+
+```python
+from polyfile import Matcher
+
+matches = list(Matcher().match(b'{"example": true}'))
+assert any(match.name == "application/json" for match in matches)
+```
+
+Recursive matching is parser-directed. Parsers inspect meaningful regions such as archive
+members and decoded streams and can pass them to `Matcher.match()` with a parent node. Individual
+magic definitions can also search beyond offset zero. PolyFile does not run its classifier at
+every offset. See the [decision on exhaustive scanning](https://github.com/trailofbits/polyfile/issues/3532)
+and [recursive analysis limits](#limit-recursive-analysis).
+
+### Read a match tree
+
+`Match` and `Submatch` provide `name` (the MIME type or structural field type), `display_name`,
+`match` (the stored value), `parent`, `children`, `source`, `offset`, and `length`.
+Iterating or indexing a node accesses its immediate children. Offsets count bytes in the source
+identified by `source`. `relative_offset` counts from the parent when it uses the same source
+and from the start of the node's source otherwise. Use `to_obj()` or `json()` to serialize
+the node and its descendants.
+
+`SourceSpan(source, offset, size)` describes a byte interval contributing to a value. When you
+pass spans as a node's `dependencies`, supply the source identifier for each interval. A
+dependency describes contributing input, while `offset` and `length` locate the node itself.
+See [physical and decoded sources](json_format.md#physical-and-decoded-sources).
 
 ## Standalone expression evaluator
 
@@ -54,31 +117,43 @@ conditional operators skip lookups and calculations in branches they do not take
 
 ## Matchers
 
-### Libmagic Pattern Matching DSL
+### Use a magic definition
 
-The majority of PolyFile’s matchers are automatically generated from [`libmagic`’s pattern definition library](../polyfile/magic_defs).
-That library is a copy of the `file` submodule's definitions; [updating it](updating_libmagic_defs.md) is a separate, manual procedure.
+`MagicMatcher.DEFAULT_INSTANCE` contains the bundled definitions. Use
+`MagicMatcher.parse(*def_files)` for a separate classifier loaded from string or `Path` filenames.
+`MagicMatcher(tests=())` accepts an iterable of Python tests. Use
+`add(test, test_type=TestType.UNKNOWN)` to register a test instance or load definitions from a
+`Path`. It returns the registered tests.
 
-`libmagic` has an esoteric, poorly documented domain-specific language (DSL) for specifying its matching signatures.
-You can read the minimal and—as we have discovered in our cleanroom implementation—_incomplete_ documentation by running
-`man 5 magic`, or read [our blog post enumerating the DSL's idiosyncracies](https://blog.trailofbits.com/2022/07/01/libmagic-the-blathering/).
+`MagicMatcher.match(to_match)` yields `polyfile.magic.Match` classifications with iterable
+`mimetypes` and `extensions` and a human-readable description through `str(match)`. Pass bytes,
+a path, a binary stream, or a `MatchContext(data, path=None, only_match_mime=False,
+decoded_from=None)`. Use `only_match_mime=True` to filter out results with no MIME type.
+`MatchContext.load(stream_or_path, only_match_mime=False)` loads a path or reads a stream from
+its current cursor. The `data` attribute holds the matched bytes. When `decoded_from` names
+an encoding, classification offsets refer to that decoded buffer.
 
-PolyFile’s matcher for the [NITF image format](../polyfile/nitf.py) provides a good example of how to programmatically define a new matcher using the `libmagic` DSL:
+The bundled magic library mirrors the `file` submodule. See
+[how to update it](updating_libmagic_defs.md). For custom definitions, see `man 5 magic` and
+the [libmagic DSL overview](https://blog.trailofbits.com/2022/07/01/libmagic-the-blathering/).
+The example below loads a test for the NITF signature. The
+[NITF matcher](../polyfile/nitf.py) shows the project's full definition.
+
 ```python
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
-from polyfile.fileutils import ExactNamedTempfile
-from polyfile.magic import MagicMatcher, TestType
+from polyfile.magic import MagicMatcher
 
-with ExactNamedTempfile(b"""# The default libmagic test for NITF does not associate a MIME type,
-# and does not support NITF 02.10
-0       string  NITF       NITF
->4      string  02.10      \ version 2.10 (ISO/IEC IS 12087-5)
->25     string  >\0     dated %.14s
-!:mime application/vnd.nitf
-!:ext ntf
-""", name="NITFMatcher") as t:
-    nitf_matcher = MagicMatcher.DEFAULT_INSTANCE.add(Path(t), test_type=TestType.BINARY)[0]
+with TemporaryDirectory() as directory:
+    definition = Path(directory) / "nitf"
+    definition.write_bytes(b"0 string NITF02.10 NITF\n!:mime application/vnd.nitf\n")
+    nitf_matcher = MagicMatcher.parse(definition)
+
+assert any(
+    "application/vnd.nitf" in result.mimetypes
+    for result in nitf_matcher.match(b"NITF02.10\x00")
+)
 ```
 
 Regex tests use [RE2 syntax](https://github.com/google/re2/wiki/Syntax) and select the
@@ -91,9 +166,19 @@ engine.
 See [custom magic compatibility](libmagic_compatibility.md) for supported modifier spellings,
 value boundaries, and deliberate differences from libmagic.
 
-### Pure Python Matchers
+### Implement a Python matcher
 
-The `libmagic` DSL can be eschewed by programmatically defining a matcher using PolyFile’s `MagicTest` API.
+Subclass `MagicTest` and pass an offset such as `AbsoluteOffset(0)` to its constructor. Supply
+a MIME type through `mime`, a description through `message`, and any filename suffixes through
+`extensions`. Implement both methods below.
+
+- `subtest_type() -> TestType` selects the pass. Use `TestType.BINARY` to match against input
+  bytes or `TestType.TEXT` for recognized text.
+- `test(data, absolute_offset, parent_match) -> TestResult` receives the matching buffer, the
+  computed byte offset into that buffer, and the optional parent test result. Return
+  `MatchedTest` with the value, offset, and length when the signature matches. Return
+  `FailedTest` with the offset and failure message otherwise. Pass the supplied parent result
+  through to either result.
 
 ```python
 from polyfile.magic import (
@@ -101,106 +186,99 @@ from polyfile.magic import (
 )
 
 class ExampleMatcher(MagicTest):
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__(
-            offset=AbsoluteOffset(0),           # the file offset at which this test starts matching
-            mime="application-x/example-mime",  # the MIME type associated with this type
-            extensions=("example",),            # file extensions associated with this type, if any
-            message="A message that will be printed when this test matches an input"
+            offset=AbsoluteOffset(0),
+            mime="application/x-example",
+            extensions=("example",),
+            message="Example file",
         )
 
     def subtest_type(self) -> TestType:
-        return TestType.BINARY  # use TestType.TEXT if this test only works on non-binary input
+        return TestType.BINARY
 
     def test(
         self, data: bytes, absolute_offset: int, parent_match: TestResult | None,
     ) -> TestResult:
-        if data.startswith(b"example"):
-            return MatchedTest(self, value=data, offset=0, length=len(data))
-        else:
-            return FailedTest(self, offset=0, message="This is not an example file!")
+        signature = b"EXAMPLE\x00"
+        if data.startswith(signature, absolute_offset):
+            return MatchedTest(self, signature, absolute_offset, len(signature), parent_match)
+        return FailedTest(self, absolute_offset, "Missing example signature", parent_match)
 
-# Register the matcher so it always runs:
-MagicMatcher.DEFAULT_INSTANCE.add(ExampleMatcher())
+
+example_matcher = MagicMatcher([ExampleMatcher()])
+assert any(
+    "application/x-example" in result.mimetypes
+    for result in example_matcher.match(b"EXAMPLE\x00payload")
+)
 ```
+
+Pass `example_matcher` to `Matcher` to use that classifier in structural analysis. Use
+`MagicMatcher.DEFAULT_INSTANCE.add(ExampleMatcher())` to register it on the process-wide
+default instead.
 
 ## Parsing
 
-### Implementing a Parser
+### Implement and register a parser
 
-Once a Matcher detects a Match, PolyFile checks to see if a Parser exists for the matche’s MIME type. This MIME-to-parser mapping is stored in the `polyfile.PARSERS` dict:
-```python
-PARSERS: dict[str, set[polyfile.Parser]] = defaultdict(set)
-```
+`PARSERS` is a dictionary from exact MIME types to sets of parser instances. Each parser
+receives a bounded `FileStream` and the matched `Match`. If your parser rejects the
+classification or input, raise `InvalidMatch` before constructing any nodes. The MIME
+classification remains available to the caller.
 
-All PolyFile parsers extend off of the [`polyfile.Parser`](../polyfile/polyfile.py) abstract class.
-It contains one function that subclasses must implement:
+Create each structural node with `Submatch(name, match_obj, relative_offset=0, length=None,
+parent=match)` and yield ancestors before their descendants. Pass an explicit `length` for
+fields with a fixed size. A node with no explicit length derives its extent from its children
+in the same source. Set `display_name` for a human-readable label and `description` to
+control its displayed value. Use `source` and `dependencies` for source-qualified mapping.
 
-```python
-def parse(self, stream: polyfile.fileutils.FileStream, match: polyfile.Match) -> Iterator[
-    polyfile.Submatch]
-```
-This function is passed a readable byte stream and the `match` object returned by the Matcher and is expected to yield a sequence of `Submatch` objects. If the parse fails and/or if the parser determines that the Matcher’s `match` classification was incorrect, the parser may `raise` a `polyfile.InvalidMatch` exception.
-
-Each Submatch object is effectively an abstract syntax tree node. Therefore, each Submatch must be yielded subsequent to all of its ancestors.
-
-```python
-from polyfile import InvalidMatch, Submatch
-
-def parse(self, stream, match):
-    header_content = stream.read(len(b"example"))
-    if header_content == b"example":
-        yield Submatch(
-            name="Example Header",
-            match_obj=header_content,
-            relative_offset=0,
-            length=len(header),
-            parent=match
-        )
-        remaining_content = stream.read()
-        content_node = Submatch(
-            name="Content",
-            match_obj=remaining_content,
-            relative_offset=len(header),
-            length=len(remaining_content),
-            parent=match
-        )
-        yield content_node
-        pos = remaining_content.find(b"1234")
-        if pos >= 0:
-            yield Submatch(
-                name="1234 Position",
-                match_obj=[1, 2, 3, 4],
-                relative_offset=pos,  # the offset is relative to the start of the parent node
-                length=4,
-                parent=content_node
-            )
-    else:
-        raise InvalidMatch("The file does not start with b\"example\"!")
-```
-
-### Registering a Parser
-
-Subclasses of `Parser` can simply be added to the `polyfile.PARSERS` dict:
-```python
-import polyfile
-
-class ExampleParser(polyfile.Parser):
-    def parse(self, stream, match):
-        ...
-
-polyfile.PARSERS["application-x/example-mime"].add(ExampleParser)
-```
-
-In addition, parsers that are implemented as standalone functions can be registered using the `register_parser` annotation:
+Implement `Parser.parse(self, stream: FileStream, match: Match) -> Iterator[Match]` in a
+subclass and register an instance with `PARSERS[mime_type].add(parser)`. You can pass the
+instance to `register_parser(*filetypes)(parser)` to register it for several MIME types.
+To register a function instead, decorate a callable that takes `(stream, match)` and yields
+matches. The decorated name refers to the registered `Parser` instance, which you can call
+with the same two arguments. The example uses the classifier from the preceding section.
 
 ```python
-from polyfile import register_parser
+from collections.abc import Iterator
 
-@register_parser("application-x/example-mime")
-def parse_example(file_stream, match):
-    ...
+from polyfile import InvalidMatch, Match, Matcher, Submatch, register_parser
+from polyfile.fileutils import FileStream
+
+
+@register_parser("application/x-example")
+def parse_example(stream: FileStream, match: Match) -> Iterator[Match]:
+    signature = b"EXAMPLE\x00"
+    header = stream.read(len(signature))
+    if header != signature:
+        raise InvalidMatch("Missing example signature")
+
+    yield Submatch("Header", header, length=len(header), parent=match)
+    offset = stream.tell()
+    payload = stream.read()
+    yield Submatch("Payload", payload, relative_offset=offset, length=len(payload), parent=match)
+
+
+matches = list(Matcher(matcher=example_matcher).match(b"EXAMPLE\x00payload"))
+assert [(node.name, node.offset, node.length) for node in matches[0].children] == [
+    ("Header", 0, 8),
+    ("Payload", 8, 7),
+]
 ```
+
+### Read from a parser stream
+
+`FileStream(path_or_stream, start=0, length=None, mode="rb", close_on_exit=None)` creates a
+read-only view of bytes, a path, or a seekable binary stream. `start` is relative to the
+immediate input. `length` counts bytes from `start`, clamps at the end of the input, and
+defaults to all remaining bytes. `read(n=None)`, `tell()`, `seek(offset, from_what=0)`, and
+`len(stream)` use the view's bounds and coordinates. Related views share a cursor. A
+context-managed view closes a path it opened and leaves caller-supplied streams open by
+default. Use `close_on_exit` to override this.
+
+The parser's stream starts at its match's first byte. Use a view-relative position for a
+direct child's `relative_offset` in the same source. `stream.offset()` gives the view's start
+in the backing buffer. Use `match.offset` and `match.source` to locate bytes in the analysis.
 
 ### Kaitai Struct Parsers
 
@@ -213,7 +291,7 @@ KAITAI_MIME_MAPPING: dict[str, str] = {
     "image/png": "image/png.ksy",
     "image/jpeg": "image/jpeg.ksy",
     "image/vnd.microsoft.icon": "image/ico.ksy",
-    ⋮
+    # Other mappings.
 }
 ```
 
@@ -253,11 +331,18 @@ and the Doom WAD and Creative Voice File tests in
 [`polyfile/kaitaimatcher.py`](../polyfile/kaitaimatcher.py) do:
 
 ```python
-with ExactNamedTempfile(b"""0\tstring\t=IWAD\t\tDoom main IWAD data
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
+from polyfile.magic import MagicMatcher, TestType
+
+with TemporaryDirectory() as directory:
+    definition = Path(directory) / "doom"
+    definition.write_bytes(b"""0\tstring\t=IWAD\t\tDoom main IWAD data
 !:mime application/x-doom
 !:ext wad
-""", name="KaitaiMimeMatchers") as t:
-    MagicMatcher.DEFAULT_INSTANCE.add(Path(t), test_type=TestType.BINARY)
+""")
+    MagicMatcher.DEFAULT_INSTANCE.add(definition, test_type=TestType.BINARY)
 ```
 
 #### Licensing of generated parsers

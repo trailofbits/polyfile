@@ -10,6 +10,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 
 ### Added
 
+- Ship `py.typed` for Python type checkers and document the public analysis and extension APIs.
 - **Breaking:** Add `--explore FILE`, a Textual terminal inspector with source-aware structure,
   virtualized hex and UTF-8 views, byte selection, coverage, navigation, cancellable search, and
   exact byte extraction. Textual is installed by default. Explorer mode opens after analysis and
