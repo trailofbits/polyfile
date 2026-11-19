@@ -22,6 +22,15 @@ class MockASTNode:
 
 
 class ASTTest(TestCase):
+    def test_offset_reports_unlocated_leaf(self):
+        with self.assertRaisesRegex(ValueError, "unlocated.*offset"):
+            _ = Node("unlocated").offset
+
+    def test_offset_can_come_from_a_child_or_sibling(self):
+        leaf = Node("leaf", value=b"ab", offset=7)
+        self.assertEqual(7, Node("parent", children=[leaf]).offset)
+        self.assertEqual(9, Node("next", older_sibling=leaf).offset)
+
     example_obj = MockASTNode(name="root", children=[
         MockASTNode(name="child1", offset=0, length=10, children=[
            MockASTNode(name="grandchild1", offset=5, length=5)
