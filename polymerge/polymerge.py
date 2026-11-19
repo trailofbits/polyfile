@@ -80,26 +80,27 @@ class IDHashable:
 
 
 def build_intervals(
-    elem: PolyfileElement, tree: IntervalTree | None = None
+    elem: PolyfileElement, tree: IntervalTree | None = None, *, inherited_source: str = "file",
 ) -> IntervalTree:
-    """Index each positive-size element with an identity-preserving payload.
+    """Index physical input intervals for comparison with PolyTracker input-byte offsets.
 
     Args:
         elem: The element whose byte interval and descendants are indexed.
         tree: An existing index to extend, or None to create an index.
+        inherited_source: The parent element's source for children that omit it.
 
     Returns:
         An interval tree whose payloads wrap elements in IDHashable keys.
     """
     if tree is None:
         tree = IntervalTree()
-    if 'size' in elem:
-        elem_size = elem['size']
-        if elem_size > 0:
-            tree[elem['offset']:elem['offset'] + elem_size] = IDHashable(elem)
-    if 'subEls' in elem:
-        for child in elem['subEls']:
-            build_intervals(child, tree)
+    source = elem.get("source", inherited_source)
+    size = elem.get("size", 0)
+    if source == "file" and size > 0:
+        start = elem["offset"]
+        tree[start:start + size] = IDHashable(elem)
+    for child in elem.get("subEls", ()):
+        build_intervals(child, tree, inherited_source=source)
     return tree
 
 

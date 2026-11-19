@@ -84,3 +84,24 @@ def test_equal_distinct_elements_each_receive_function_associations() -> None:
         assert set(element["functions"]) == {"caller", "reader"}
     assert "functions" not in first
     assert "functions" not in second
+
+
+@pytest.mark.parametrize("trace_source", [None, "input.bin"])
+def test_input_taint_selects_only_physical_source_offsets(trace_source: str | None) -> None:
+    decoded: PolyfileElement = {
+        "type": "decoded", "source": "decoded:0", "offset": 0, "size": 1,
+        "subEls": [
+            {"type": "inherited", "offset": 0, "size": 1},
+            {"type": "physical", "source": "file", "offset": 0, "size": 1},
+        ],
+    }
+    header: PolyfileElement = {"type": "header", "offset": 0, "size": 1, "subEls": [decoded]}
+    trace = ProgramTrace((0, 0, 1), [FunctionInfo("header_reader", {trace_source: [0, 0]})])
+    merged = merge({"fileName": "input.bin", "struc": [header]}, trace)
+    physical = merged["struc"][0]
+    nested = physical["subEls"][0]
+    assert physical["functions"] == ["header_reader"]
+    assert "functions" not in nested
+    assert "functions" not in nested["subEls"][0]
+    assert nested["subEls"][1]["functions"] == ["header_reader"]
+    assert set(merged["best_function_matches"]) == {"header", "physical"}
