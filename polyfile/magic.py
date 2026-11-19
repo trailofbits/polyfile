@@ -233,6 +233,19 @@ class MatchedTest(TestResult):
         self.length: int = length
         self._relative_base: int | None = None
 
+    def format_value(self, message: str) -> str:
+        """Substitute this result's value into a resolved libmagic message."""
+        value = self.offset if isinstance(self, IndirectResult) else self.value
+        if "%u" in message and value < 0:
+            message = message % (value + 2**(8 * self.length),)
+        elif "%" in message.replace("%%", ""):
+            message = printf_to_python(message)
+            try:
+                message = message % (value,)
+            except ValueError as error:
+                log.error(f"Error formatting message {message!r} with value {value!r}: {error!s}")
+        return message.replace("%%", "%")
+
     @property
     def relative_base(self) -> int:
         """The absolute offset that a relative (``&``) offset in a subsequent test resolves against.
@@ -5068,20 +5081,8 @@ class _MagicMessageRenderer:
             if self.need_separator and not message.startswith("\b"):
                 self.parts.append(" ")
         if print_value:
-            self.parts.append(self._format(text, result))
+            self.parts.append(result.format_value(text))
         self.need_separator = True
-
-    def _format(self, message: str, result: MatchedTest) -> str:
-        value = result.offset if isinstance(result, IndirectResult) else result.value
-        if "%u" in message and value < 0:
-            message = message % (value + 2**(8 * result.length),)
-        elif "%" in message.replace("%%", ""):
-            message = printf_to_python(message)
-            try:
-                message = message % (value,)
-            except ValueError as error:
-                log.error(f"Error formatting message {message!r} with value {value!r}: {error!s}")
-        return message.replace("%%", "%")
 
     def _call(self, result: TestResult, match: "Match") -> None:
         assert isinstance(result, MatchedTest)
@@ -5124,7 +5125,7 @@ class _MagicMessageRenderer:
             self.render(nested)
         nested_text = "".join(self.parts)
         self.parts = parts
-        self.parts.append(self._format(self._message(result, match).removeprefix("\b"), result))
+        self.parts.append(result.format_value(self._message(result, match).removeprefix("\b")))
         self.parts.append(nested_text)
         self._emit(result, match, print_value=False)
         for child in result._message_children or ():

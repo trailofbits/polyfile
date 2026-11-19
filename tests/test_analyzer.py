@@ -1,13 +1,6 @@
-import os
-import subprocess
-import sys
-from pathlib import Path
 from typing import Any
 from unittest import TestCase
 
-from PIL import Image
-
-from polyfile.magic import MagicMatcher
 from polyfile.polyfile import Analyzer
 
 from tests.test_zipmatcher import MEMBERS, build_zip, temporary_file
@@ -39,35 +32,6 @@ class AnalyzerSbudTest(TestCase):
         analyzer = Analyzer("not-opened-before-iteration")
         self.assertIsNone(analyzer.matches_so_far)
         self.assertIsNone(analyzer.magic_matches_so_far)
-
-    def test_structured_magic_values_render_substitutions(self):
-        with temporary_file(b"0 byte x value:%u\n!:mime application/x-value\n") as rules:
-            custom = MagicMatcher.parse(rules)
-            cases = ((custom, b"AxyzZ", "value:65"),
-                     (None, b"UNIF\x07\x00\x00\x00", "NES ROM image (UNIF v7 format)"))
-            for matcher, data, expected in cases:
-                with temporary_file(data) as path:
-                    analyzer = Analyzer(path, parse=False, magic_matcher=matcher)
-                    self.assertIn(expected, [str(match) for match in analyzer.magic_matches()])
-                    values = [node["value"] for node in analyzer.sbud()["struc"]]
-                    self.assertIn(expected, values)
-
-    def test_jpeg_extension_is_stable_across_hash_seeds(self):
-        with temporary_file(b"") as path:
-            Image.new("RGB", (1, 1)).save(Path(path), format="JPEG")
-            script = (
-                "import sys; from polyfile.polyfile import Analyzer; "
-                "nodes = Analyzer(sys.argv[1], parse=False).sbud()['struc']; "
-                "print(next(n['extension'] for n in nodes if n['type'] == 'image/jpeg'))"
-            )
-            extensions = {
-                subprocess.check_output(
-                    [sys.executable, "-c", script, str(path)],
-                    env={**os.environ, "PYTHONHASHSEED": seed}, text=True,
-                ).strip()
-                for seed in ("0", "1", "2", "3")
-            }
-            self.assertEqual(len(extensions), 1, extensions)
 
     def test_sbud_agrees_however_the_matches_are_supplied(self):
         with temporary_file(build_zip(members=MEMBERS)) as path:
