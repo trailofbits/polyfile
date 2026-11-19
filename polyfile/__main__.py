@@ -544,7 +544,10 @@ def analyze_structure(args: argparse.Namespace, analyzer: Analyzer,
     """Serialize completed or retained recursive results for structured output."""
     matches, _ = collect_matches(args, analyzer, signals)
     log.status("Preparing structured output")
-    return analyzer.sbud(matches=matches, include_contents=not args.no_contents)
+    report = analyzer.sbud(matches=matches, include_contents=not args.no_contents)
+    if args.FILE == "-":
+        report["fileName"] = "STDIN"
+    return report
 
 
 def explore_analysis(args: argparse.Namespace, analyzer: Analyzer, signals: SIGTERMHandler) -> None:

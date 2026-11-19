@@ -1,4 +1,7 @@
 import base64
+import hashlib
+import json
+from pathlib import Path
 from unittest import TestCase
 from unittest.mock import patch
 
@@ -45,3 +48,24 @@ class ContentsTests(TestCase):
         """
         with patch("polyfile.polyfile.base64.b64encode", side_effect=AssertionError("encoded anyway")):
             self.assertNotIn("b64contents", sbud(include_contents=False))
+
+
+class InputIdentityTests(TestCase):
+    def test_cached_matches_and_report_describe_the_same_revision(self):
+        original = b"%PDF-1.7\n"
+        with Tempfile(original) as path:
+            analyzer = Analyzer(path, parse=False)
+            matches = list(analyzer.matches())
+            Path(path).write_bytes(b"replacement bytes")
+            for supplied in (matches, None):
+                report = analyzer.sbud(matches=supplied)
+                self.assertEqual(report["length"], len(original))
+                self.assertEqual(report["SHA256"], hashlib.sha256(original).hexdigest())
+                self.assertEqual(base64.b64decode(report["b64contents"]), original)
+                self.assertIn("application/pdf", [node["type"] for node in report["struc"]])
+
+    def test_path_inputs_have_json_serializable_names(self):
+        with Tempfile(b"data") as path:
+            for name in (str(path), Path(path)):
+                report = Analyzer(name).sbud(matches=[], include_contents=False)
+                self.assertEqual(json.loads(json.dumps(report))["fileName"], str(path))
