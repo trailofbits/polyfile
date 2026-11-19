@@ -142,6 +142,14 @@ class NoContentsTests(TestCase):
         self.assertEqual(base64.b64encode(self.zip_file).decode("utf-8"),
                          self.analyze("--format", "json")["b64contents"])
 
+    def test_stdin_has_the_documented_name(self):
+        for _ in range(2):
+            result = subprocess.run(
+                [sys.executable, "-m", "polyfile", "-q", "-r", "json", "-"],
+                input=b"hello\n", capture_output=True, check=True,
+            )
+            self.assertEqual(json.loads(result.stdout)["fileName"], "STDIN")
+
     def test_the_key_is_omitted_rather_than_emptied(self):
         self.assertNotIn("b64contents", self.analyze("--format", "json", "--no-contents"))
 

@@ -4,6 +4,7 @@ from collections import defaultdict
 import base64
 import hashlib
 from importlib.metadata import version
+from io import BytesIO
 from json import dumps
 from mimetypes import guess_extension
 from pathlib import Path
@@ -374,6 +375,7 @@ class Analyzer:
         self.limits = limits or AnalysisLimits()
         self._matcher: Matcher | None = None
         self._matches: list[Match] | None = None
+        self._input_bytes: bytes | None = None
         self._match_iterator: Iterator[Match] | None = None
         self._magic_matches: list[MagicMatch] | None = None
         self._magic_match_iterator: Iterator[MagicMatch] | None = None
@@ -413,11 +415,21 @@ class Analyzer:
     def magic_matches_so_far(self) -> list[MagicMatch] | None:
         return self._magic_matches
 
+    def _input_snapshot(self) -> bytes:
+        if self._input_bytes is None:
+            self._input_bytes = Path(self.path).read_bytes()
+        return self._input_bytes
+
+    def _match_snapshot(self) -> Iterator[Match]:
+        with BytesIO(self._input_snapshot()) as source:
+            source.name = str(self.path)
+            yield from self.matcher.match(source)
+
     def matches(self) -> Iterator[Match]:
         if self._matches is None or self._match_iterator is not None:
             if self._matches is None:
                 self._matches = []
-                self._match_iterator = iter(self.matcher.match(self.path))
+                self._match_iterator = self._match_snapshot()
             else:
                 yield from self._matches
             while self._match_iterator is not None:
@@ -489,29 +501,17 @@ class Analyzer:
         # a half-drained generator. A supplied iterable is materialized for the same reason: a
         # caller cannot know how far this needs it drained.
         matches = list(self.matches() if matches is None else matches)
-        md5 = hashlib.md5()
-        sha1 = hashlib.sha1()
-        sha256 = hashlib.sha256()
-        b64contents: str | None = None
-        with open(self.path, 'rb') as hash_file:
-            data = hash_file.read()
-            md5.update(data)
-            sha1.update(data)
-            sha256.update(data)
-            if include_contents:
-                b64contents = base64.b64encode(data).decode('utf-8')
-            file_length = len(data)
-            del data
+        data = self._input_snapshot()
         sbud: dict[str, Any] = {
-            'MD5': md5.hexdigest(),
-            'SHA1': sha1.hexdigest(),
-            'SHA256': sha256.hexdigest(),
+            'MD5': hashlib.md5(data).hexdigest(),
+            'SHA1': hashlib.sha1(data).hexdigest(),
+            'SHA256': hashlib.sha256(data).hexdigest(),
         }
-        if b64contents is not None:
-            sbud['b64contents'] = b64contents
+        if include_contents:
+            sbud['b64contents'] = base64.b64encode(data).decode('utf-8')
         sbud.update({
-            'fileName': self.path,
-            'length': file_length,
+            'fileName': str(self.path),
+            'length': len(data),
             'versions': {
                 'polyfile': __version__
             },
