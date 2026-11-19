@@ -33,7 +33,10 @@ recursive-exclude file configure aclocal.m4 compile depcomp install-sh libtool l
 recursive-exclude file missing stamp-h1 magic.h file file.1 libmagic.3 magic.4
 recursive-exclude file libtool.m4 lt~obsolete.m4 ltoptions.m4 ltsugar.m4 ltversion.m4
 graft docs
-graft tests/fixtures/sevenzip
+include tests/*.py
+include tests/msjdbc.cer.gz
+include uv.lock
+graft tests/fixtures
 graft logo
 graft hooks
 
