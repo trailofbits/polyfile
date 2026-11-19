@@ -1,8 +1,10 @@
 import base64
+from collections.abc import Iterator
 from io import BytesIO
 from typing import TYPE_CHECKING, cast
 
-from polyfile.polyfile import register_parser, InvalidMatch, Submatch
+from polyfile.fileutils import FileStream
+from polyfile.polyfile import register_parser, InvalidMatch, Match, Submatch
 
 if TYPE_CHECKING:
     from PIL import Image as PILImage
@@ -85,47 +87,53 @@ def parse_ines_header(header, parent=None):
     )
 
 
+def _rom_size(low: int, high: int, bank_size: int) -> int:
+    if high == 0x0F:
+        return (1 << (low >> 2)) * (2 * (low & 3) + 1)
+    return ((high << 8) | low) * bank_size
+
+
+def _rom_banks(header: bytes) -> Iterator[tuple[str, int, int]]:
+    if header[6] & 4:
+        yield "Trainer", 512, 512
+    high = header[9] if header[7] & 0x0C == 8 else 0
+    yield "PRGBank", _rom_size(header[4], high & 0x0F, 16384), 16384
+    yield "CHRBank", _rom_size(header[5], high >> 4, 8192), 8192
+
+
+def _chr_preview(data: bytes) -> str:
+    with BytesIO() as image:
+        render_chr(data).save(image, "PNG")
+        return "data:image/png;base64," + base64.b64encode(image.getvalue()).decode("ascii")
+
+
 @register_parser("application/x-nes-rom")
-def parse_ines(file_stream, parent):
+def parse_ines(file_stream: FileStream, parent: Match) -> Iterator[Match]:
+    """Map the trainer and ROM banks available in an iNES or NES 2.0 file."""
     header = file_stream.read(16)
     yield from parse_ines_header(header, parent)
-    has_trainer = (header[6] & 0b100) != 0
-    if has_trainer:
-        yield Submatch(
-            name='Trainer',
-            match_obj=file_stream.read(512),
-            relative_offset=16,
-            length=512,
-            parent=parent
-        )
-    prg_size = header[4]
-    for i in range(prg_size):
-        offset = file_stream.tell()
-        file_stream.read(16384)
-        yield Submatch(
-            name='PRGBank',
-            display_name=f'PRGBank{i}',
-            match_obj='',
-            relative_offset=offset,
-            length=16384,
-            parent=parent
-        )
-    chr_size = header[5]
-    for i in range(chr_size):
-        offset = file_stream.tell()
-        chr_bytes = file_stream.read(8192)
-        chr_img = render_chr(chr_bytes)
-        with BytesIO() as img_data:
-            chr_img.save(img_data, "PNG")
-            yield Submatch(
-                name='CHRBank',
-                display_name=f'CHRBank{i}',
-                match_obj='',
-                relative_offset=offset,
-                length=8192,
-                parent=parent,
-                img_data=f"data:image/png;base64,{base64.b64encode(img_data.getvalue()).decode('utf-8')}"
-            )
+    for name, size, unit in _rom_banks(header):
+        for index, start in enumerate(range(0, size, unit)):
+            expected = min(unit, size - start)
+            offset = file_stream.tell()
+            data = file_stream.read(expected)
+            complete = len(data) == expected
+            if not complete:
+                parent.analysis_status = "invalid"
+                parent.analysis_message = (
+                    f"Truncated {name}: expected {expected} bytes, got {len(data)}"
+                )
+            if data:
+                preview = None
+                if name == "CHRBank" and complete and len(data) % 16 == 0:
+                    preview = _chr_preview(data)
+                yield Submatch(
+                    name=name, display_name=name if name == "Trainer" else f"{name}{index}",
+                    match_obj=data if name == "Trainer" else "", parent=parent,
+                    relative_offset=offset, length=len(data), img_data=preview,
+                )
+            if not complete:
+                return
 
 
 def chr_values(chr_bytes: bytes):
