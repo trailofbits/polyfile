@@ -99,6 +99,29 @@ def test_redirected_stdout_follows_terminal_summary(sample):
     assert json.loads(output.getvalue())["struc"]
 
 
+def test_file_output_replays_to_multiple_destinations(sample, tmp_path):
+    first, second = tmp_path / "first.txt", tmp_path / "second.txt"
+    invoke(sample, "-r", "file", "-o", str(first), "-o", str(second))
+    assert first.read_bytes()
+    assert first.read_bytes() == second.read_bytes()
+
+
+@pytest.mark.parametrize("format", ["file", "mime", "explain"])
+def test_text_match_limits_apply_to_each_destination(tmp_path, format):
+    path = tmp_path / "both"
+    path.write_bytes(build_zip(prefix=PNG))
+    assert invoke(str(path), "-r", format, "--max-matches", "0")[0] == ""
+    with pytest.raises(SystemExit) as rejected:
+        invoke(str(path), "-r", format, "--max-matches", "0", "--require-match")
+    assert rejected.value.code == 127
+    full = invoke(str(path), "-r", format)[0]
+    one = invoke(str(path), "-r", format, "--max-matches", "1", "--require-match")[0]
+    assert one and full.startswith(one) and len(one) < len(full)
+    mixed, _ = invoke(str(path), "-r", format, "-r", "json", "--max-matches", "1")
+    assert mixed.startswith(one)
+    assert len(json.loads(mixed[len(one):])["struc"]) == 1
+
+
 def test_large_tree_precedes_sbud_output(tmp_path, monkeypatch):
     monkeypatch.setenv("TERM", "xterm-256color")
     monkeypatch.delenv("CI", raising=False)

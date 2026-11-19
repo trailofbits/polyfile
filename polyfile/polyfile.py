@@ -444,21 +444,22 @@ class Analyzer:
             yield from self._matches
 
     def magic_matches(self) -> Iterator[MagicMatch]:
-        if self._magic_matches is None or self._magic_match_iterator is not None:
-            if self._magic_matches is None:
-                self._magic_matches = []
-                self._magic_match_iterator = iter(self.matcher.identify(self.path))
-            else:
-                yield from self._magic_matches
-            while self._magic_match_iterator is not None:
+        """Replay cached identifications and continue scanning as the caller advances."""
+        if self._magic_matches is None:
+            self._magic_matches = []
+            self._magic_match_iterator = iter(self.matcher.identify(self.path))
+        index = 0
+        while True:
+            if index == len(self._magic_matches):
+                if self._magic_match_iterator is None:
+                    return
                 try:
-                    match = next(self._magic_match_iterator)
-                    yield match
+                    self._magic_matches.append(next(self._magic_match_iterator))
                 except StopIteration:
                     self._magic_match_iterator = None
-                    break
-        else:
-            yield from self._magic_matches
+                    return
+            yield self._magic_matches[index]
+            index += 1
 
     def close(self) -> None:
         """Release active scan iterators, including those stopped before exhaustion."""
