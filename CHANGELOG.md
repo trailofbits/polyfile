@@ -130,6 +130,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ent
 
 ### Fixed
 
+- **Breaking:** Label NES 2.0 header fields according to their format and report mapper,
+  memory, timing, console, and expansion device values in structured output (#3860).
 - Correct the README and development guide to describe implemented 7z parsing and recursive
   analysis of supported members. Clarify that future recursive coverage uses format parsers and
   exhaustive scanning is not planned (#3780). Thanks to @bfs2021 for submitting an earlier proposed
