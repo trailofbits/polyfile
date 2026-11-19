@@ -3526,7 +3526,7 @@ class NumericDataType(DataType["NumericValue[int] | NumericValue[float]"]):
             fmt = fmt[2:]
         else:
             endianness = Endianness.NATIVE
-        for symbol, operator in (
+        for symbol, operation in (
                 ("&", lambda a, b: a & b),
                 ("%", lambda a, b: a % b),
                 ("+", lambda a, b: a + b),
@@ -3539,7 +3539,7 @@ class NumericDataType(DataType["NumericValue[int] | NumericValue[float]"]):
             pos = fmt.find(symbol)
             if pos > 0:
                 operand = parse_numeric(fmt[pos+1:])
-                preprocess = lambda n: operator(n, operand)
+                preprocess = lambda n: operation(n, operand)
                 fmt = fmt[:pos]
                 break
         else:
