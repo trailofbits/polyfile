@@ -126,8 +126,9 @@ def test_tokens_ending_at_eof_use_the_real_source_end(data: bytes) -> None:
     assert (value.pdf_offset, value.pdf_bytes) == (0, len(data))
 
 
-def test_physical_objects_cover_their_complete_dictionary_and_endobj() -> None:
-    data = pdf_fixture(CATALOG)
+@pytest.mark.parametrize("eol", [b"\n", b"\r\n", b"\r"])
+def test_physical_objects_cover_their_complete_dictionary_and_endobj(eol: bytes) -> None:
+    data = pdf_fixture(CATALOG, eol=eol)
     parent = Match("PDF", None, length=len(data), matcher=Matcher(parse=False))
     with FileStream(data) as stream:
         nodes = list(pdf_parser(stream, parent))
@@ -135,7 +136,7 @@ def test_physical_objects_cover_their_complete_dictionary_and_endobj() -> None:
     assert len(objects) == 2
     for number, node in enumerate(objects, 1):
         start = data.index(f"{number} 0 obj".encode())
-        end = data.index(b"endobj", start) + len(b"endobj\n")
+        end = data.index(b"endobj", start) + len(b"endobj" + eol)
         assert (node.offset, node.length) == (start, end - start)
         assert all(child.offset + child.length <= end for child in node.children)
 
