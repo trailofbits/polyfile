@@ -25,6 +25,9 @@ The directory holds a byte-for-byte copy of `file/magic/Magdir/`, plus five entr
 | `json` | Declares PolyFile's `json` and `ndjson` test types, for the same reason. |
 | `polyfile_zip` | An extra backwards search for a ZIP end-of-central-directory record, which helps detect ZIP polyglots. |
 
+Git preserves the bundled files' line endings. The drift tests compare them against committed
+upstream bytes because Git settings can convert line endings in the `file` submodule checkout.
+
 `MAGIC_DEFS` in [`polyfile/magic.py`](../polyfile/magic.py) globs this directory and skips only
 `COPYING`, `magic.mgc`, `__pycache__`, and dotfiles. Adding a file is enough to load it; there is no
 list of filenames to update.
@@ -101,18 +104,21 @@ in the same commit.
 
 4. Review upstream changes to `file/COPYING` and notices in changed definitions before shipping
    them. Check added filenames against `POLYFILE_OWNED` for collisions and reconcile any overlap.
-   Mirror `Magdir` in the clean update checkout, adjusting the exclusions below to the current
-   owned entries. Inspect the itemized dry run, then repeat it without `--dry-run` and refresh
-   the license text.
+   Extract the committed definitions and license into a temporary directory, then mirror
+   `Magdir`, adjusting the exclusions below to the current owned entries. Inspect the itemized
+   dry run, then repeat it without `--dry-run` and refresh the license text.
 
    ```bash
+   mirror_dir=$(mktemp -d)
+   git -C file -c core.autocrlf=false -c core.eol=lf archive HEAD magic/Magdir COPYING \
+     | tar -xf - -C "$mirror_dir"
    rsync -a --checksum --dry-run --itemize-changes --delete \
      --exclude='__init__.py' --exclude='__pycache__' --exclude='COPYING' \
      --exclude='csv' --exclude='json' --exclude='polyfile_zip' \
-     file/magic/Magdir/ polyfile/magic_defs/
+     "$mirror_dir/magic/Magdir/" polyfile/magic_defs/
    ```
 
-   After the mirror, run `cp file/COPYING polyfile/magic_defs/COPYING`.
+   After the mirror, run `cp "$mirror_dir/COPYING" polyfile/magic_defs/COPYING`.
 
    Keep `--checksum` so files with the same size and modification time are compared by content.
    Keep `--delete` to remove retired definitions. Six such files continued matching until the

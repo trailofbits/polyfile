@@ -1,10 +1,16 @@
-from pathlib import Path
+from collections.abc import Iterable
+from io import BytesIO
+from pathlib import Path, PurePath, PurePosixPath
+import subprocess
+import tarfile
 from unittest import TestCase, skipUnless
 
 POLYFILE_DIR: Path = Path(__file__).absolute().parent.parent
 MAGIC_DEFS_DIR: Path = POLYFILE_DIR / "polyfile" / "magic_defs"
-UPSTREAM_MAGDIR: Path = POLYFILE_DIR / "file" / "magic" / "Magdir"
-UPSTREAM_COPYING: Path = POLYFILE_DIR / "file" / "COPYING"
+UPSTREAM_ROOT: Path = POLYFILE_DIR / "file"
+MAGDIR: PurePosixPath = PurePosixPath("magic/Magdir")
+COPYING: PurePosixPath = PurePosixPath("COPYING")
+UPSTREAM_MAGDIR: Path = UPSTREAM_ROOT / MAGDIR
 
 HAVE_MAGDIR: bool = UPSTREAM_MAGDIR.is_dir() and any(UPSTREAM_MAGDIR.iterdir())
 
@@ -35,13 +41,37 @@ patch lands, so the allowlist cannot stay disarmed by accident.
 """
 
 
-def definition_names(directory: Path) -> set[str]:
-    """Lists the entries of a definition directory that `MAGIC_DEFS` loads as definitions."""
-    return {
-        entry.name
-        for entry in directory.iterdir()
-        if entry.name not in IGNORED and not entry.name.startswith(".")
-    }
+def definition_names(paths: Iterable[PurePath]) -> set[str]:
+    """List the entry names that `MAGIC_DEFS` loads as definitions."""
+    return {path.name for path in paths if path.name not in IGNORED and not path.name.startswith(".")}
+
+
+def read_upstream_files() -> dict[PurePosixPath, bytes]:
+    """Read the committed bytes or their copy in the source distribution."""
+    if not (UPSTREAM_ROOT / ".git").exists():
+        files = [UPSTREAM_ROOT / COPYING, *UPSTREAM_MAGDIR.iterdir()]
+        return {
+            PurePosixPath(path.relative_to(UPSTREAM_ROOT).as_posix()): path.read_bytes()
+            for path in files
+            if path.is_file()
+        }
+
+    data = subprocess.check_output(
+        [
+            "git", "-c", "core.autocrlf=false", "-c", "core.eol=lf",
+            "archive", "--format=tar", "HEAD", str(COPYING), str(MAGDIR),
+        ],
+        cwd=UPSTREAM_ROOT,
+    )
+    files_by_path = {}
+    with tarfile.open(fileobj=BytesIO(data), mode="r:") as archive:
+        for member in archive:
+            if member.isfile():
+                source = archive.extractfile(member)
+                assert source is not None, member.name
+                with source:
+                    files_by_path[PurePosixPath(member.name)] = source.read()
+    return files_by_path
 
 
 @skipUnless(HAVE_MAGDIR, "the file submodule is not checked out")
@@ -54,10 +84,12 @@ class TestMagicDefsDrift(TestCase):
     upstream rewriting the lines a local patch touches.
     """
 
-    def setUp(self):
-        self.upstream = definition_names(UPSTREAM_MAGDIR)
-        self.bundled = definition_names(MAGIC_DEFS_DIR)
-        self.assertTrue(self.upstream, f"{UPSTREAM_MAGDIR} holds no definitions")
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.upstream_files = read_upstream_files()
+        cls.upstream = definition_names(path for path in cls.upstream_files if path.parent == MAGDIR)
+        cls.bundled = definition_names(MAGIC_DEFS_DIR.iterdir())
+        assert cls.upstream, f"{UPSTREAM_MAGDIR} holds no definitions"
 
     def test_every_upstream_definition_is_bundled(self):
         missing = self.upstream - self.bundled
@@ -89,7 +121,7 @@ class TestMagicDefsDrift(TestCase):
         allowed_to_differ = set(LOCAL_PATCHES) - PENDING_PATCHES
         for name in sorted((self.upstream & self.bundled) - allowed_to_differ):
             with self.subTest(definition=name):
-                if (UPSTREAM_MAGDIR / name).read_bytes() != (MAGIC_DEFS_DIR / name).read_bytes():
+                if self.upstream_files[MAGDIR / name] != (MAGIC_DEFS_DIR / name).read_bytes():
                     self.fail(self.drift_message(name))
 
     def test_local_patches_are_still_applied(self):
@@ -97,7 +129,7 @@ class TestMagicDefsDrift(TestCase):
             if name in PENDING_PATCHES:
                 continue
             with self.subTest(definition=name):
-                if (UPSTREAM_MAGDIR / name).read_bytes() == (MAGIC_DEFS_DIR / name).read_bytes():
+                if self.upstream_files[MAGDIR / name] == (MAGIC_DEFS_DIR / name).read_bytes():
                     self.fail(
                         f"polyfile/magic_defs/{name} is identical to file/magic/Magdir/{name}, so"
                         f" the patch from {issue} is gone. Mirroring Magdir reverts local patches;"
@@ -106,10 +138,10 @@ class TestMagicDefsDrift(TestCase):
                     )
 
     def test_copying_matches_upstream(self):
-        if UPSTREAM_COPYING.read_bytes() != (MAGIC_DEFS_DIR / "COPYING").read_bytes():
+        if self.upstream_files.get(COPYING) != (MAGIC_DEFS_DIR / COPYING).read_bytes():
             self.fail(
-                "polyfile/magic_defs/COPYING is not the license the definitions ship under."
-                " Copy it again: `cp file/COPYING polyfile/magic_defs/COPYING`"
+                "polyfile/magic_defs/COPYING differs from the upstream license."
+                f" Copy the committed license again, as {SYNC_DOC} describes."
             )
 
     @staticmethod
