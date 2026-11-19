@@ -237,12 +237,12 @@ def merge(
                     break
                 func_matches.append(best_match_func)
         # now choose the functions that are roots in the vertex-induced subgraph of the CFG dominator tree:
-        ret['best_function_matches'][elem_type] = [
+        ret['best_function_matches'][elem_type] = sorted(
             cast(polytracker.FunctionInfo, root).name
             for root in cfg.roots(
                 dominator_tree.vertex_induced_subgraph(program_trace.functions[func] for func in func_matches)
             )
-        ]
+        )
     # finally, remove redundant functions in the best matches based upon the semantic hierarchy:
     # first step in that is to build the dominator tree of the PolyFile hierarchy:
     type_dominators: cfg.DAG = polyfile_type_graph(polyfile_json_obj).dominator_forest
@@ -250,7 +250,7 @@ def merge(
     # included for any ancestor of the type in `type_dominators`
     filter_function_matches(type_dominators, ret['best_function_matches'])
     for elem, functions in matches.items():
-        elem.value['functions'] = list(functions)
+        elem.value['functions'] = sorted(functions)
     return ret
 
 

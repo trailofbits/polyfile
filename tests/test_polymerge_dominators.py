@@ -13,6 +13,13 @@ from polymerge.polytracker import FunctionInfo, ProgramTrace
         ((), (), ()),
         (("isolated",), (), ()),
         (("first", "second"), (), ()),
+        (("left", "right", "reader"), (("left", "reader"), ("right", "reader")), ()),
+        (("recursive",), (("recursive", "recursive"),), ()),
+        (
+            ("a", "b", "leaf"),
+            (("a", "b"), ("b", "a"), ("b", "leaf")),
+            (("b", "leaf"),),
+        ),
         (
             ("caller", "reader"),
             (("caller", "reader"),),
@@ -43,6 +50,38 @@ def test_dominator_forests_keep_all_component_roots(
 
     assert set(forest.nodes) == set(nodes)
     assert set(forest.edges) == set(dominator_edges)
+
+
+def test_declared_entry_in_recursive_component_dominates_its_callee() -> None:
+    graph = DiGraph()
+    graph.add_edges_from([("a", "b"), ("b", "a")])
+    graph.set_roots(["a"])
+    assert set(graph.dominator_forest.edges) == {("a", "b")}
+
+
+@pytest.mark.parametrize("callers", [("left", "right"), ("reader",)])
+def test_merge_retains_reader_reached_from_multiple_entries_or_recursion(
+    callers: tuple[str, ...],
+) -> None:
+    reader = FunctionInfo("reader", {None: [0]}, called_from=callers)
+    trace = ProgramTrace((0, 0, 1), [reader])
+    merged = merge({"struc": [{"type": "byte", "offset": 0, "size": 1}]}, trace)
+    assert merged["struc"][0]["functions"] == ["reader"]
+    assert merged["best_function_matches"] == {"byte": ["reader"]}
+
+
+def test_converging_tainted_roots_have_a_stable_order() -> None:
+    functions = [
+        FunctionInfo("b", {None: [0]}), FunctionInfo("a", {None: [0]}),
+        FunctionInfo("reader", {None: [0]}, called_from=("b", "a")),
+    ]
+    for order in (functions, reversed(functions)):
+        merged = merge(
+            {"struc": [{"type": "byte", "offset": 0, "size": 1}]},
+            ProgramTrace((0, 0, 1), order),
+        )
+        assert merged["struc"][0]["functions"] == ["a", "b", "reader"]
+        assert merged["best_function_matches"] == {"byte": ["a", "b", "reader"]}
 
 
 def test_isolated_tainted_function_matches_a_nonempty_structure() -> None:

@@ -48,22 +48,30 @@ class DiGraph(nx.DiGraph):
         return cast(set[Hashable], nx.ancestors(self, node))
 
     def descendants(self, node: Hashable) -> frozenset[Hashable]:
-        successors = cast(dict[Hashable, list[Hashable]], nx.dfs_successors(self, node))
-        return frozenset(successors)
+        return frozenset[Hashable](nx.descendants(self, node))
 
     @property
     def dominator_forest(self) -> "DAG":
-        """Return a dominator forest that retains roots without children."""
+        """Compute dominance from a common entry for all independent entry points."""
         if self._dominator_forest is not None:
             return self._dominator_forest
-        self._dominator_forest = DAG()
-        for root in self.roots:
-            self._dominator_forest.add_node(root)
-            dominators = cast(dict[Hashable, Hashable], nx.immediate_dominators(self, root))
-            for node, dominated_by in dominators.items():
-                if node != dominated_by:
-                    self._dominator_forest.add_edge(dominated_by, node)
-        return self._dominator_forest
+        entries = set(self.roots)
+        components = nx.condensation(self)
+        for group in components:
+            members = components.nodes[group]["members"]
+            if components.in_degree(group) == 0 and entries.isdisjoint(members):
+                # Any member can be the first call in a recursive component without a known entry.
+                entries.update(members)
+        graph = nx.DiGraph(self)
+        entry = object()
+        graph.add_node(entry)
+        graph.add_edges_from((entry, node) for node in self if node in entries)
+        dominators = nx.immediate_dominators(graph, entry)
+        forest = DAG()
+        forest.add_nodes_from(self)
+        forest.add_edges_from((dominators[n], n) for n in self if dominators[n] is not entry)
+        self._dominator_forest = forest
+        return forest
 
     def to_dot(
         self, comment: str | None = None, labeler: Callable[[Hashable], str] = str,
