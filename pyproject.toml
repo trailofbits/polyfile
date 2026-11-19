@@ -8,7 +8,7 @@ backend-path = ["."]
 
 [project]
 name = "polyfile"
-version = "0.6.0"
+version = "1.0.0"
 description = "A utility to recursively map the structure of a file."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -16,7 +16,7 @@ license = "Apache-2.0"
 license-files = ["LICENSE"]
 authors = [{ name = "Trail of Bits" }]
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 5 - Production/Stable",
     "Environment :: Console",
     "Intended Audience :: Science/Research",
     "Programming Language :: Python :: 3 :: Only",

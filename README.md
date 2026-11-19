@@ -25,7 +25,10 @@ as _The ALAN Parsers Project_.
 
 ## Quickstart
 
-PolyFile requires Python 3.11 or later.
+PolyFile requires Python 3.11 or later. The tested range is Python 3.11–3.14. On Python 3.15,
+the pinned `google-re2` dependency lacks compatible wheels, and clean installations fail while
+building it from source.
+[Track Python 3.15 installation support](https://github.com/trailofbits/polyfile/issues/3884).
 
 You can install the latest stable version of PolyFile from PyPI with
 [uv](https://docs.astral.sh/uv/):
