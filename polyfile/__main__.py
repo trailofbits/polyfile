@@ -450,8 +450,8 @@ def selected_matcher(filetypes: list[str] | None) -> MagicMatcher | None:
     """Select requested MIME definitions without changing scan behavior."""
     if not filetypes:
         return None
-    regex = "|".join(f"({value.replace('*', '.*').replace('?', '.?')})" for value in filetypes)
-    pattern = re.compile(regex)
+    patterns = [re.escape(value).replace(r"\*", ".*").replace(r"\?", ".") for value in filetypes]
+    pattern = re.compile("|".join(patterns))
     mimetypes = [mime for mime in MagicMatcher.DEFAULT_INSTANCE.mimetypes if pattern.fullmatch(mime)]
     if not mimetypes:
         log.error("Filetype argument(s) %s did not match any known definitions!", filetypes)

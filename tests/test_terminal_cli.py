@@ -373,3 +373,35 @@ def test_debugger_logging_disables_live_status(sample):
         assert list(log.range([1, 2])) == [1, 2]
         assert not session.live.is_started
     assert terminal.getvalue() == ""
+
+
+@pytest.mark.parametrize("data", [b"plain text\n", b"\xff\x00\xff", b"X", b""])
+def test_explicit_filetype_omits_unrequested_fallbacks(tmp_path, data):
+    path = tmp_path / "input"
+    path.write_bytes(data)
+    for output in ("file", "mime", "json"):
+        args = ("--filetype", "application/pdf", "--format", output)
+        result, _ = invoke(str(path), *args)
+        if output == "json":
+            assert json.loads(result)["struc"] == []
+        else:
+            assert result == ""
+        with pytest.raises(SystemExit) as rejected:
+            invoke(str(path), *args, "--require-match")
+        assert rejected.value.code == 127
+    assert invoke(str(path), "-r", "mime")[0]
+
+
+def test_filetype_wildcards_and_punctuation(tmp_path):
+    path = tmp_path / "input"
+    path.write_bytes(PNG)
+    for selector in ("image/png", "image/p?g", "image/p*g"):
+        assert invoke(str(path), "-f", selector, "-r", "mime")[0] == "image/png\n"
+    for selector in ("image/p??ng", "application/vndXsqlite3"):
+        with pytest.raises(SystemExit) as rejected:
+            invoke(str(path), "-f", selector)
+        assert rejected.value.code == 1
+    for selector in ("application/epub+zip", "application/vnd.sqlite3"):
+        assert invoke(str(path), "-f", selector, "-r", "mime")[0] == ""
+    path.write_text("plain text\n")
+    assert invoke(str(path), "-f", "text/plain", "-r", "mime")[0] == "text/plain\n"

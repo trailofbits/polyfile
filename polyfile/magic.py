@@ -5384,6 +5384,7 @@ class MagicMatcher:
 
     def __init__(self, tests: Iterable[MagicTest] = ()):
         self._tests: list[MagicTest] = []
+        self._fallback_mimetypes: frozenset[str] | None = None
         self.named_tests: dict[str, NamedTest] = {}
         self._tests_by_mime: dict[str, set[MagicTest]] = defaultdict(set)
         self._tests_by_ext: dict[str, set[MagicTest]] = defaultdict(set)
@@ -5507,6 +5508,7 @@ class MagicMatcher:
             if not any(True for _ in indirect_test.mimetypes)
         }
         if mimetypes is not None:
+            mimetypes = frozenset(mimetypes)
             for mime in mimetypes:
                 tests |= self.tests_by_mime[mime]
         if extensions is not None:
@@ -5516,7 +5518,10 @@ class MagicMatcher:
         required_named_tests = set()
         for test in tests:
             required_named_tests |= test.referenced_tests()
-        return MagicMatcher(tests | required_named_tests)
+        selected = MagicMatcher(tests | required_named_tests)
+        if mimetypes is not None and extensions is None:
+            selected._fallback_mimetypes = mimetypes
+        return selected
 
     def __iter__(self) -> Iterator[MagicTest]:
         """Yields the level 0 tests in the order `MagicMatcher.match` runs them."""
@@ -5696,6 +5701,11 @@ class MagicMatcher:
         return [test for test in self.text_tests
                 if test.declared_test_type() != TestType.TEXT]
 
+    def _fallback(self, match: Match) -> Iterator[Match]:
+        allowed = self._fallback_mimetypes
+        if allowed is None or not allowed.isdisjoint(match.mimetypes):
+            yield match
+
     def match(self, to_match: bytes | BinaryIO | str | Path | MatchContext) -> Iterator[Match]:
         if isinstance(to_match, bytes):
             to_match = MatchContext(to_match)
@@ -5705,7 +5715,8 @@ class MagicMatcher:
             # `file_buffer` handles short inputs before encoding and soft magic (src/funcs.c).
             test = (EmptyFileTest() if not to_match.data else
                     OctetStreamTest(message="very short file (no magic)"))
-            yield Match(matcher=self, context=to_match, results=test.match(to_match))
+            fallback = Match(matcher=self, context=to_match, results=test.match(to_match))
+            yield from self._fallback(fallback)
             return
         text_encoding = TextEncodingDescription.detect(to_match.data)
         # `file_buffer` gates both soft magic passes on the file's own bytes
@@ -5744,12 +5755,14 @@ class MagicMatcher:
                 yield m
                 yielded = True
             if diverged and not described:
-                yield text_matcher
+                yield from self._fallback(text_matcher)
         if not yielded:
             if is_text:
-                yield text_matcher
+                yield from self._fallback(text_matcher)
             else:
-                yield Match(matcher=self, context=to_match, results=OctetStreamTest().match(to_match))
+                results = OctetStreamTest().match(to_match)
+                fallback = Match(matcher=self, context=to_match, results=results)
+                yield from self._fallback(fallback)
 
     @staticmethod
     def parse_test(
