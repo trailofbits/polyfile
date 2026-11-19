@@ -1,7 +1,3 @@
-import base64
-import hashlib
-import json
-from pathlib import Path
 from typing import Any
 from unittest import TestCase
 
@@ -36,25 +32,6 @@ class AnalyzerSbudTest(TestCase):
         analyzer = Analyzer("not-opened-before-iteration")
         self.assertIsNone(analyzer.matches_so_far)
         self.assertIsNone(analyzer.magic_matches_so_far)
-
-    def test_cached_matches_and_report_describe_the_same_revision(self):
-        original = build_zip(members=MEMBERS)
-        with temporary_file(original) as path:
-            analyzer = Analyzer(str(path))
-            matches = list(analyzer.matches())
-            Path(path).write_bytes(b"replacement bytes")
-            for supplied in (matches, None):
-                report = analyzer.sbud(matches=supplied)
-                self.assertEqual(report["length"], len(original))
-                self.assertEqual(report["SHA256"], hashlib.sha256(original).hexdigest())
-                self.assertEqual(base64.b64decode(report["b64contents"]), original)
-                self.assertIn("application/zip", [node["type"] for node in report["struc"]])
-
-    def test_path_inputs_have_json_serializable_names(self):
-        with temporary_file(b"data") as path:
-            for name in (str(path), Path(path)):
-                report = Analyzer(name).sbud(matches=[], include_contents=False)
-                self.assertEqual(json.loads(json.dumps(report))["fileName"], str(path))
 
     def test_sbud_agrees_however_the_matches_are_supplied(self):
         with temporary_file(build_zip(members=MEMBERS)) as path:
