@@ -231,7 +231,21 @@ class MatchedTest(TestResult):
         super().__init__(test=test, offset=offset, parent=parent)
         self.value: Any = value
         self.length: int = length
+        self._resolved_message: str | None = None
         self._relative_base: int | None = None
+
+    def format_value(self, message: str) -> str:
+        """Substitute this result's value into a resolved libmagic message."""
+        value = self.offset if isinstance(self, IndirectResult) else self.value
+        if "%u" in message and value < 0:
+            message = message % (value + 2**(8 * self.length),)
+        elif "%" in message.replace("%%", ""):
+            message = printf_to_python(message)
+            try:
+                message = message % (value,)
+            except ValueError as error:
+                log.error(f"Error formatting message {message!r} with value {value!r}: {error!s}")
+        return message.replace("%%", "%")
 
     @property
     def relative_base(self) -> int:
@@ -275,15 +289,11 @@ class MatchedTest(TestResult):
                f"parent={self.parent!r})"
 
     def __str__(self):
+        if self._resolved_message is not None:
+            return self.format_value(self._resolved_message.removeprefix("\b"))
         if self.test.message is not None:
-            # TODO: Fix pasting our value in
             return str(self.test.message)
-            #if self.value is not None and "%" in self.test.message:
-            #    return self.test.message % (self.value,)
-            #else:
-            #    return self.test.message
-        else:
-            return f"Match[{self.offset}:{self.offset + self.length}]"
+        return f"Match[{self.offset}:{self.offset + self.length}]"
 
 
 class FailedTest(TestResult):
@@ -5068,20 +5078,8 @@ class _MagicMessageRenderer:
             if self.need_separator and not message.startswith("\b"):
                 self.parts.append(" ")
         if print_value:
-            self.parts.append(self._format(text, result))
+            self.parts.append(result.format_value(text))
         self.need_separator = True
-
-    def _format(self, message: str, result: MatchedTest) -> str:
-        value = result.offset if isinstance(result, IndirectResult) else result.value
-        if "%u" in message and value < 0:
-            message = message % (value + 2**(8 * result.length),)
-        elif "%" in message.replace("%%", ""):
-            message = printf_to_python(message)
-            try:
-                message = message % (value,)
-            except ValueError as error:
-                log.error(f"Error formatting message {message!r} with value {value!r}: {error!s}")
-        return message.replace("%%", "%")
 
     def _call(self, result: TestResult, match: "Match") -> None:
         assert isinstance(result, MatchedTest)
@@ -5124,7 +5122,7 @@ class _MagicMessageRenderer:
             self.render(nested)
         nested_text = "".join(self.parts)
         self.parts = parts
-        self.parts.append(self._format(self._message(result, match).removeprefix("\b"), result))
+        self.parts.append(result.format_value(self._message(result, match).removeprefix("\b")))
         self.parts.append(nested_text)
         self._emit(result, match, print_value=False)
         for child in result._message_children or ():
@@ -5220,6 +5218,8 @@ class Match:
             # we have not yet finished collecting the results
             try:
                 result = next(self._result_iter)
+                if isinstance(result, MatchedTest):
+                    result._resolved_message = result.test.message.resolve(self.context)
                 self._results.append(result)
                 if isinstance(result, IndirectResult):
                     indirect = self.context[result.offset:]
