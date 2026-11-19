@@ -246,11 +246,12 @@ Excluding 6 format specification(s) without a permissive license:
   GPL-3.0-or-later         scientific/nt_mdt/nt_mdt.ksy
 ```
 
-After you update the `kaitai_struct_formats` submodule, run the audit again. If a specification
-appears that you believe is permissively licensed, confirm the license is compatible with Apache
-2.0, then add it to `PERMISSIVE_LICENSES` and to the exclusion list in `MANIFEST.in`.
-`tests/test_licensing.py` fails if those two lists disagree, or if a parser generated from an
-excluded specification reaches the package.
+After you update the `kaitai_struct_formats` submodule, run the audit again. If maintainers
+approve a new license for redistribution, add its license identifier to `PERMISSIVE_LICENSES`
+and rerun the audit. In `MANIFEST.in`, add an `exclude kaitai_struct_formats/<path>` line for
+each newly excluded specification and remove lines for specifications the audit now permits or
+that upstream removed. Run `uv run pytest tests/test_licensing.py` to verify that the exclusion
+paths match the audit and that the package contains only eligible parsers.
 
 ## Struct Parsing
 

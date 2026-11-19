@@ -10,8 +10,9 @@ PolyFile is a file analysis utility that identifies and maps the semantic and sy
   non-`Constant` `bytes` fields re-matched by `structmatcher.py`, and matchers that `search` for
   their magic at any offset, such as the relaxed ZIP matcher in `zipmatcher.py`. Exhaustive
   scanning of every offset is not planned; future recursive coverage will come from format parsers.
-- Parsers for PDF, ZIP, 7z, JPEG, iNES, and 183 compiled Kaitai Struct formats (45 of the
-  specifications are dispatched, covering 67 MIME types)
+- Parsers for PDF, ZIP, 7z, JPEG, iNES, and formats registered in
+  `polyfile.kaitaimatcher.KAITAI_MIME_MAPPING` and `EXTRA_PARSERS`. The generated parser
+  inventory is in `polyfile/kaitai/parsers/manifest.json`.
 - Interactive HTML hex viewer with structure mapping
 - Drop-in replacement for Unix `file` command
 
