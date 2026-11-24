@@ -10,8 +10,8 @@
     "check:viewer": "bash scripts/check-viewer.sh"
   },
   "devDependencies": {
-    "oxfmt": "0.78.0",
-    "oxlint": "1.93.0",
+    "oxfmt": "0.79.0",
+    "oxlint": "1.94.0",
     "typescript": "7.0.2"
   }
 }
